@@ -59,7 +59,8 @@ export function TableLayoutCanvas({ tables, guestCounts, editable, onPositionsCh
               key={t.id}
               onPointerDown={() => handlePointerDown(t.id)}
               className={cn(
-                "absolute flex flex-col items-center justify-center text-primary-foreground bg-secondary shadow-sm select-none",
+                "absolute flex flex-col items-center justify-center text-secondary-foreground bg-secondary shadow-sm select-none",
+                "dark:bg-[#F9F9F7] dark:text-[#5A2025]",
                 t.shape === "round" ? "rounded-full" : "rounded-2xl",
                 editable && "cursor-move active:cursor-grabbing"
               )}

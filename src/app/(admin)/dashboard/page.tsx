@@ -4,6 +4,7 @@ import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TableLayoutCanvas } from "@/components/shared/table-layout-canvas";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { MonthlyChart } from "./monthly-chart";
 import type { BreakfastTable } from "@/lib/types";
 import { BedDouble, Coffee, AlertTriangle, Wallet } from "lucide-react";
@@ -72,7 +73,11 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Dashboard" subtitle={`Resumo de hoje, ${formatDatePt(today)}`} />
+      <PageHeader
+        title="Dashboard"
+        subtitle={`Resumo de hoje, ${formatDatePt(today)}`}
+        action={<ThemeToggle />}
+      />
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
