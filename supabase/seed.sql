@@ -44,9 +44,9 @@ with items(pos, label, description) as (
     (20, 'Liberar o quarto', 'Confirmar ausência de pertences de hóspede anterior e registrar qualquer ocorrência antes da liberação.')
 )
 insert into checklist_items (type, label, description, position)
-select 'arrumacao', label, description, pos from items
+select 'arrumacao'::checklist_type, label, description, pos from items
 union all
-select 'preparacao', label, description, pos from items;
+select 'preparacao'::checklist_type, label, description, pos from items;
 
 -- ---------- Associa todos os itens a todos os quartos ----------
 insert into room_checklist_items (room_id, checklist_item_id, position)
