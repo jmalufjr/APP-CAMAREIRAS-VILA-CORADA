@@ -56,7 +56,7 @@ function SidebarContent({
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
       <div className="flex items-center gap-2 px-5 py-6">
-        <Image src="/vila-corada-logo.svg" alt="Vila Corada" width={32} height={32} />
+        <Image src="/vila-corada-logo.svg" alt="Vila Corada" width={32} height={32} className="size-8" />
         <div>
           <p className="font-heading text-base leading-none text-primary">Vila Corada</p>
           <p className="text-[11px] text-muted-foreground tracking-wide mt-1">CAMAREIRAS</p>
@@ -115,7 +115,7 @@ export function AppSidebar({
       {/* Mobile top bar */}
       <div className="lg:hidden sticky top-0 z-40 flex items-center justify-between border-b border-sidebar-border bg-sidebar px-4 py-3">
         <div className="flex items-center gap-2">
-          <Image src="/vila-corada-logo.svg" alt="Vila Corada" width={26} height={26} />
+          <Image src="/vila-corada-logo.svg" alt="Vila Corada" width={26} height={26} className="size-[26px]" />
           <span className="font-heading text-base text-primary">Vila Corada</span>
         </div>
         <Sheet open={open} onOpenChange={setOpen}>

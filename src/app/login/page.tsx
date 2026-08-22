@@ -14,6 +14,7 @@ export default async function LoginPage() {
             alt="Vila Corada"
             width={140}
             height={140}
+            className="size-[140px]"
             priority
           />
           <div>

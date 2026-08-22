@@ -31,10 +31,10 @@ export default function LandingPage() {
     <div className="min-h-screen bg-background">
       <header className="flex items-center justify-between px-6 py-6 max-w-5xl mx-auto">
         <div className="flex items-center gap-2">
-          <Image src="/vila-corada-logo.svg" alt="Vila Corada" width={40} height={40} />
+          <Image src="/vila-corada-logo.svg" alt="Vila Corada" width={40} height={40} className="size-10" />
           <span className="font-heading text-lg text-primary">Vila Corada</span>
         </div>
-        <Button render={<Link href="/login">Entrar</Link>} />
+        <Button render={<Link href="/login">Entrar</Link>} nativeButton={false} />
       </header>
 
       <main className="max-w-5xl mx-auto px-6">
@@ -47,7 +47,12 @@ export default function LandingPage() {
             comissão da equipe em um só lugar — feito sob medida para a Vila
             Corada.
           </p>
-          <Button render={<Link href="/login">Acessar o sistema</Link>} size="lg" className="mt-2" />
+          <Button
+            render={<Link href="/login">Acessar o sistema</Link>}
+            nativeButton={false}
+            size="lg"
+            className="mt-2"
+          />
         </section>
 
         <section className="grid sm:grid-cols-2 gap-6 pb-24">
