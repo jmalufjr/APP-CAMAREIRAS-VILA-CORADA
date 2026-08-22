@@ -1,7 +1,7 @@
 import Link from "next/link";
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { BrandLogo } from "@/components/shared/brand-logo";
 import { ClipboardCheck, Coffee, LayoutDashboard, Users } from "lucide-react";
 
 const features = [
@@ -32,8 +32,11 @@ export default function LandingPage() {
     <div className="min-h-screen bg-background">
       <header className="flex items-center justify-between px-6 py-6 max-w-5xl mx-auto">
         <div className="flex items-center gap-2">
-          <Image src="/vila-corada-logo.svg" alt="Vila Corada" width={40} height={40} className="size-10" />
-          <span className="font-heading text-lg text-primary">Vila Corada</span>
+          <BrandLogo size={40} priority />
+          <div>
+            <p className="font-heading text-lg leading-none text-primary">Vila Corada</p>
+            <p className="text-[11px] text-muted-foreground tracking-wide mt-1">CAMAREIRAS</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />

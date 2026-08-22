@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -9,6 +8,7 @@ import { signOutAction } from "@/lib/actions/auth";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { BrandLogo } from "@/components/shared/brand-logo";
 import {
   LayoutDashboard,
   BedDouble,
@@ -57,7 +57,7 @@ function SidebarContent({
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
       <div className="flex items-center gap-2 px-5 py-6">
-        <Image src="/vila-corada-logo.svg" alt="Vila Corada" width={32} height={32} className="size-8" />
+        <BrandLogo size={32} />
         <div>
           <p className="font-heading text-base leading-none text-primary">Vila Corada</p>
           <p className="text-[11px] text-muted-foreground tracking-wide mt-1">CAMAREIRAS</p>
@@ -119,7 +119,7 @@ export function AppSidebar({
       {/* Mobile top bar */}
       <div className="lg:hidden sticky top-0 z-40 flex items-center justify-between border-b border-sidebar-border bg-sidebar px-4 py-3">
         <div className="flex items-center gap-2">
-          <Image src="/vila-corada-logo.svg" alt="Vila Corada" width={26} height={26} className="size-[26px]" />
+          <BrandLogo size={26} />
           <span className="font-heading text-base text-primary">Vila Corada</span>
         </div>
         <div className="flex items-center gap-1">
