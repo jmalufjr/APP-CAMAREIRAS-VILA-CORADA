@@ -37,7 +37,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${montserrat.variable} ${seasonsFallback.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          themes={["light", "dark", "dark-blue"]}
+          disableTransitionOnChange
+        >
           {children}
           <Toaster richColors position="top-center" />
         </ThemeProvider>

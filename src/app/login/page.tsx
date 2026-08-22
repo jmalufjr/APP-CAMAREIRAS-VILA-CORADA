@@ -19,12 +19,7 @@ export default async function LoginPage() {
             className="size-[140px]"
             priority
           />
-          <div>
-            <h1 className="font-heading text-3xl text-primary">Camareiras</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Vila Corada · Suítes Beira Mar
-            </p>
-          </div>
+          <h1 className="font-heading text-3xl text-primary">Camareiras</h1>
         </div>
         <LoginForm options={options} />
       </div>
