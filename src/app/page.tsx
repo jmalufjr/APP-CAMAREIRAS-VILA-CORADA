@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { ClipboardCheck, Coffee, LayoutDashboard, Users } from "lucide-react";
 
 const features = [
@@ -34,7 +35,10 @@ export default function LandingPage() {
           <Image src="/vila-corada-logo.svg" alt="Vila Corada" width={40} height={40} className="size-10" />
           <span className="font-heading text-lg text-primary">Vila Corada</span>
         </div>
-        <Button render={<Link href="/login">Entrar</Link>} nativeButton={false} />
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Button render={<Link href="/login">Entrar</Link>} nativeButton={false} />
+        </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-6">

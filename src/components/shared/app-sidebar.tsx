@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { signOutAction } from "@/lib/actions/auth";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 import {
   LayoutDashboard,
   BedDouble,
@@ -86,7 +87,10 @@ function SidebarContent({
       </nav>
 
       <div className="px-3 pb-5 pt-3 border-t border-sidebar-border">
-        <p className="px-3 text-xs text-muted-foreground mb-2 truncate">{userName}</p>
+        <div className="flex items-center justify-between px-3 mb-2">
+          <p className="text-xs text-muted-foreground truncate">{userName}</p>
+          <ThemeToggle className="size-7 -mr-1" />
+        </div>
         <form action={signOutAction}>
           <button
             type="submit"
@@ -118,12 +122,15 @@ export function AppSidebar({
           <Image src="/vila-corada-logo.svg" alt="Vila Corada" width={26} height={26} className="size-[26px]" />
           <span className="font-heading text-base text-primary">Vila Corada</span>
         </div>
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetTrigger render={<Button variant="ghost" size="icon"><Menu size={20} /></Button>} />
-          <SheetContent side="left" className="p-0 w-64">
-            <SidebarContent role={role} userName={userName} onNavigate={() => setOpen(false)} />
-          </SheetContent>
-        </Sheet>
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
+          <Sheet open={open} onOpenChange={setOpen}>
+            <SheetTrigger render={<Button variant="ghost" size="icon"><Menu size={20} /></Button>} />
+            <SheetContent side="left" className="p-0 w-64">
+              <SidebarContent role={role} userName={userName} onNavigate={() => setOpen(false)} />
+            </SheetContent>
+          </Sheet>
+        </div>
       </div>
 
       {/* Desktop sidebar */}
