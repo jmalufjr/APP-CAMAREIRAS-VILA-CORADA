@@ -1,0 +1,90 @@
+{\rtf1\ansi\ansicpg1252\deff0\nouicompat\deflang1033{\fonttbl{\f0\fnil\fcharset0 Calibri;}{\f1\fnil Calibri;}}
+{\*\generator Riched20 10.0.19041}\viewkind4\uc1 
+\pard\sa200\sl276\slmult1\f0\fs22\lang9 # PROJECT ARCHITECTURE: Camareiras Vila Corada\par
+\par
+## 1. CONTEXT & PROBLEM\par
+\par
+O trabalho das camareiras \'e9 essencial para a qualidade do servi\'e7o de hospedagem em uma pousada. Por\'e9m, quando se trata de pousadas pequenas, quando os propriet\'e1rios s\'e3o quem supervisionam eles mesmos, normalmente essa supervis\'e3o se d\'e1 de forma pouco organizada e sem um sistema de registro das atividades, que forme uma base de dados de consulta. O resultado \'e9 que, muitas vezes, pela falta de organiza\'e7\'e3o, o propriet\'e1rio se perde no controle da atividade das camareiras e, ao n\'e3o possuir uma base de dados de consulta, tamb\'e9m n\'e3o consegue fazer um an\'e1lise mais assertiva das causas de eventuais ocorr\'eancias.\par
+\par
+## 2. PROPOSED SOLUTION\par
+\par
+O QUE VAMOS CONSTRUIR\par
+Um web app de gest\'e3o do servi\'e7o das camareiras que permite ao propriet\'e1rio/admin estabelecer a ordem dos trabalhos di\'e1rios, tais como definir quais as su\'edtes que no dia seguinte necessitar\'e3o de prepara\'e7\'e3o para chegada de h\'f3spedes ou de apenas arruma\'e7\'e3o, que \'e9 uma processo mais simples de limpeza do quarto para aquelas suites que j\'e1 est\'e3o ocupadas como h\'f3spedes, bem como definir a quantidade de mesas de caf\'e9 da manh\'e3 a serem preparadas para o dia seguinte e o numero de h\'f3spedes que tomar\'e1 caf\'e9 da manh\'e3 em cada mesa, visualizando um layout edit\'e1vel das mesas.\par
+O propriet\'e1rio(admin), poder\'e1 editar, incluindo, alterando ou excluindo, a lista de quartos da pousada, que come\'e7ar\'e1 com 11 quartos, numerados de 1 a 11; poder\'e1 tamb\'e9m editar a lista de mesas dispon\'edveis para o caf\'e9 da manh\'e3, bem como o layout das meses, a lista de camareiras, o check list de prepara\'e7\'e3o de quartos, o check list de arruma\'e7\'e3o de quartos e o valor por mesa de caf\'e9 da manh\'e3 da comiss\'e3o das camareiras. \par
+O web app tamb\'e9m tem como usu\'e1rios as camareiras, que acessam a lista de quartos para arruma\'e7\'e3o e para prepara\'e7\'e3o no dia seguinte, acessando o check list em que dar\'e3o um check em cada item e ao final podem fazer alguma observa\'e7\'e3o a respeito de alguma ocorr\'eancia durante o trabalho, com bot\'e3o liberando quarto ao final, a partir do que ficar\'e1 registrado no sistema quem fez o trabalho em cada quarto em cada dia. As ocorr\'eancias devem estar predefinidas em categorias, havendo uma caixa de sele\'e7\'e3o para a escolha por parte da camareira. Elas tamb\'e9m ter\'e3o acesso apenas para visualiza\'e7\'e3o ao layout das mesas que ser\'e3o arrumadas no dia seguinte e a quantidade de h\'f3spedes por mesa. As camareiras n\'e3o ter\'e3o acesso a mais nenhum dado, nem poder\'e3o editar ou realizar qualquer tarefa a n\'e3o ser marcar como feito cada item do check list de arruma\'e7\'e3o e de prepara\'e7\'e3o, al\'e9m de poder selecionar seu login e inserir sua senha na tela de login.\par
+O propriet\'e1rio/admin poder\'e1 visualizar um dashboard com resumo do trabalho de arruma\'e7\'e3o e de prepara\'e7\'e3o de quartos do dia, quais quartos foram finalizados e se houve alguma ocorr\'eancia, e o resumo dos quartos para arruma\'e7\'e3o e para prepara\'e7\'e3o no dia seguinte, bem como o layout de mesas de caf\'e9 da manh\'e3 do dia e do dia seguinte, com informa\'e7\'e3o da quantidade de h\'f3spedes por mesa. \par
+Nesse Dashboard tamb\'e9m dever\'e1 ser mostrado uma totaliza\'e7\'e3o da quantidades de mesas de caf\'e9 da manh\'e3 desde o primeiro dia do m\'eas at\'e9 o seu \'faltimo dia, reiniciando a contagem todos os meses, bem como a totaliza\'e7\'e3o da comiss\'e3o das camareiras. Essa comiss\'e3o das camareiras \'e9 calculada multiplicando a quantidade de mesas de caf\'e9 da manh\'e3 do dia vezes o valor da comiss\'e3o das camareiras por mesa, que inicialmente ser\'e1 de R$10,00 (dez reais), mas que poder\'e1 ser alterado pelo propriet\'e1rio (admin). \par
+O propriet\'e1rio admin ter\'e1 acesso a uma tela, em formato de tabela, com todos os dados hist\'f3ricos, di\'e1rios, mensais e anuais, de: quantidade de mesas de caf\'e9 da manh\'e3, quantidade de h\'f3spedes de caf\'e9 da manh\'e3, quantidade de quartos arrumados ou preparados, total e por camareira, e o valor da comiss\'e3o das camareiras. \par
+O propriet\'e1rio/admin pode editar a lista de quartos, os itens do check list de arruma\'e7\'e3o bem como as categorias de ocorr\'eancias, criando, alterando ou excluido itens. As categorias de ocorr\'eancias iniciais ser\'e3o: cama, cortina, parede quarto, parede banheiro, porta quarto, porta banheiro, janela banheiro, janela quarto, ilumina\'e7\'e3o quarto, ilumina\'e7\'e3o banheiro, tomada quarto, tomada banheiro, aparelho de TV, ar condicionado, secador de cabelo, m\'e1quina de caf\'e9, pia, chuveiro, vaso sanit\'e1rio, vidro do box, bancadas, piso quarto, piso banheiro, forro quarto, forro banheiro, ralo, espelho. Cada quarto conter\'e1 itens pr\'f3prios de check list de arruma\'e7\'e3o/prepara\'e7\'e3o e de ocorr\'eancias, bem como dever\'e1 ser poss\'edvel ter listas de prepar\'e7\'e3o distintas das de arruma\'e7\'e3o.\par
+\par
+DIFERENCIAIS\par
+Interface moderna e minimalista com shadcn/ui, dashboard visual com gr\'e1ficos, filtros por per\'edodo, e deploy instant\'e2neo na Vercel. Todo o desenvolvimento ser\'e1 guiado pelo Claude Code como agente de codifica\'e7\'e3o.\par
+A aplica\'e7\'e3o ser\'e1 responsiva, com autentica\'e7\'e3o via Supabase Auth e dados persistidos no Supabase (PostgreSQL).\par
+\par
+## 3. FUNCTIONAL REQUIREMENTS\par
+\par
+FEATURES SELECIONADAS\par
+Login e Autentica\'e7\'e3o\par
+Dashboard\par
+Busca e Filtros\par
+CRUD de itens\par
+Categorias e itens\par
+Gr\'e1ficos (Recharts)\par
+Responsivo (Mobile)\par
+Landing Page\par
+Exportar CSV\par
+\par
+DETALHAMENTO DAS FEATURES:\par
+Login e Autentica\'e7\'e3o: Supabase Auth com nome/senha. Prote\'e7\'e3o de rotas autenticadas.\par
+Dashboard: Vis\'e3o consolidada com cards.\par
+CRUD de itens: Criar, editar e excluir camareiras, quartos, itens de check list de arruma\'e7\'e3o, itens de check list de prepara\'e7\'e3o, categorias de ocorr\'eancias, valor da comiss\'e3o das camareiras por mesa. Campos de cadastro das camareiras: nome, telefone, e-mail.\par
+\par
+## 4. USER PERSONAS\par
+\par
+Proprietario/admin (um usu\'e1rio): respons\'e1vel por organizar o trabalho, informando diariamente: os quartos que ser\'e3o arrumados, os quartos que ser\'e3o preparados, a quantidade de mesas do caf\'e9 da manh\'e3 e o layout, a quantidade de h\'f3spedes por mesa do caf\'e9 da manh\'e3, bem como ser\'e1 respons\'e1vel pela cria\'e7\'e3o de usu\'e1rios camareiras, podendo resetar a senha de acesso de cada uma delas, e da lista de quartos existentes. Far\'e1 login com a op\'e7\'e3o admin, j\'e1 predispon\'edvel no campo de usu\'e1rio da tela de login, bem como com senha pr\'f3pria. \par
+\par
+Camareiras (hum ou mais usu\'e1rios): acesso restrito para visualiza\'e7\'e3o da lista de quartos que ser\'e3o arrumados, os quartos que ser\'e3o preparados, a quantidade de mesas do caf\'e9 da manh\'e3 e o layout, a quantidade de h\'f3spedes por mesa do caf\'e9 da manh\'e3, bem como preencher\'e1 o check list de arruma\'e7\'e3o ou prepara\'e7\'e3o. Far\'e3o login com seu nome de usu\'e1rio e senha, por\'e9m o web app somente permitir\'e1 login do usu\'e1rio camareira que foi criado pelo propriet\'e1rio/admin, j\'e1 constando o nome pr\'e9 cadastrado de cada usu\'e1rio camareira na tela de login no campo usu\'e1rio, bem como no campo usu\'e1rio da tela de login tamb\'e9m j\'e1 constar\'e1 a op\'e7\'e3o admin para acesso do propriet\'e1rio/admin, apenas necessitando que o usu\'e1rio selecione seu nome e insira sua senha.\par
+\par
+## 5. TECHNICAL STACK\par
+\par
+TECNOLOGIAS SELECIONADAS:\par
+Next.js\par
+React\par
+TypeScript\par
+Tailwind CSS\par
+shadcn/ui\par
+Supabase\par
+Supabase Auth\par
+PostgreSQL\par
+Vercel\par
+Claude Code\par
+Recharts\par
+Git / GitHub\par
+\par
+DETALHES DA STACK\par
+Frontend: Next.js 14+ (App Router) com TypeScript, Tailwind CSS e shadcn/ui para componentes de UI. Gr\'e1ficos com Recharts.\par
+Backend/BaaS: Supabase (PostgreSQL + Auth + Row Level Security). Sem backend separado.\par
+Deploy: Vercel (integra\'e7\'e3o cont\'ednua via GitHub).\par
+Desenvolvimento: Claude Code como agente de codifica\'e7\'e3o. Versionamento com Git/GitHub.\par
+\par
+## 6. DESIGN LANGUAGE\par
+\par
+INSPIRA\'c7\'d5ES VISUAIS\par
+shadcn/ui Dashboard Template: Refer\'eancia para layout de dashboard moderno, minimalista e responsivo.\par
+Estilo geral: Interface clara e limpa, fontes sem serifa, cards com bordas suave.\par
+Usar os seguintes arquivos que est\'e3o no diretorio do projeto:\par
+Para o layout das telas do web app usar a paleta de cores do arquivo PDF "Vila Corada_BG" que se encontra na raiz. Para o modo claro usar cor de base #F9F9F7 e para o modo escuro usar como cor base #5A2025. N\'e3o alterar a propor\'e7\'e3o dimensional dos logos. Para o modo escuro usar o logo claro e vice-versa. Usar como fonte de titulos "The Seasons" e como fonte de textos "Montserrat". Manter a mesma propor\lang1046\'e7\'e3o entre fontes de titulo e de texto que se encontra no textos do arquivo PDF acima referido.  \lang9\par
+Para o layout das mesas usar como refer\'eancia de conteudo apenas o desenho constante do arquivo PDF "Layout das Mesas".\par
+Para os check lists de arrumacao e de prepara\'e7\'e3o usar como refer\'eancia de conteudo apenas o arquivo PDF "Check List".\par
+\par
+## 7. PROCESS\par
+\par
+- Break app build into logical milestones (steps)\par
+- Each milestone should be a deliverable increment\par
+- Prioritize core functionality first, then iterate\par
+- Test each milestone before moving to the next\par
+\par
+---\par
+> Generated by NoCodeStartup Framework \f1\emdash  optimized for Claude Code\f0\par
+}
+ 
