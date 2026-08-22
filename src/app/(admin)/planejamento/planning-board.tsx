@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { Room, Profile, DailyRoomTask, ChecklistType } from "@/lib/types";
-import { setRoomTask, assignCamareira } from "@/lib/actions/planning";
+import { setRoomTask } from "@/lib/actions/planning";
 import {
   Table,
   TableBody,
@@ -36,20 +36,12 @@ export function PlanningBoard({
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const taskByRoom = new Map(tasks.map((t) => [t.room_id, t]));
+  const camareiraById = new Map(camareiras.map((c) => [c.id, c.name]));
 
   function handleTaskTypeChange(roomId: string, value: string | null) {
     const taskType = !value || value === "none" ? null : (value as ChecklistType);
-    const existing = taskByRoom.get(roomId);
     startTransition(async () => {
-      const result = await setRoomTask(date, roomId, taskType, existing?.assigned_to ?? null);
-      if (result?.error) toast.error(result.error);
-      else router.refresh();
-    });
-  }
-
-  function handleAssignChange(taskId: string, value: string | null) {
-    startTransition(async () => {
-      const result = await assignCamareira(taskId, !value || value === "none" ? null : value);
+      const result = await setRoomTask(date, roomId, taskType);
       if (result?.error) toast.error(result.error);
       else router.refresh();
     });
@@ -69,6 +61,7 @@ export function PlanningBoard({
         <TableBody>
           {rooms.map((room) => {
             const task = taskByRoom.get(room.id);
+            const camareiraName = task?.assigned_to ? camareiraById.get(task.assigned_to) : null;
             return (
               <TableRow key={room.id}>
                 <TableCell className="font-medium">{room.number}</TableCell>
@@ -89,26 +82,15 @@ export function PlanningBoard({
                   </Select>
                 </TableCell>
                 <TableCell>
-                  {task ? (
-                    <Select
-                      value={task.assigned_to ?? "none"}
-                      onValueChange={(v) => handleAssignChange(task.id, v)}
-                      disabled={isPending}
-                    >
-                      <SelectTrigger className="w-48">
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Não atribuído</SelectItem>
-                        {camareiras.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
+                  {!task ? (
                     <span className="text-muted-foreground text-sm">—</span>
+                  ) : camareiraName ? (
+                    <Badge variant={task.status === "concluido" ? "default" : "outline"}>
+                      {camareiraName}
+                      {task.status === "concluido" && " · entregue"}
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">Aguardando escolha</span>
                   )}
                 </TableCell>
                 <TableCell>

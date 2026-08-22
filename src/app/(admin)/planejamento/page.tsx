@@ -17,7 +17,7 @@ export default async function PlanejamentoPage() {
     <div className="space-y-6">
       <PageHeader
         title="Planejamento diário"
-        subtitle={`Defina os quartos de arrumação e preparação para ${formatDatePt(date)}.`}
+        subtitle={`Defina os quartos de arrumação e preparação para ${formatDatePt(date)}. As camareiras escolhem, no próprio app, qual quarto vão realizar.`}
       />
       <PlanningBoard
         date={date}

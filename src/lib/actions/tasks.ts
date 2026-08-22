@@ -3,6 +3,30 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
+export async function claimTask(taskId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Não autenticado." };
+
+  // Só reivindica se ainda não houver responsável (evita duas camareiras pegarem o mesmo quarto).
+  const { data, error } = await supabase
+    .from("daily_room_tasks")
+    .update({ assigned_to: user.id })
+    .eq("id", taskId)
+    .is("assigned_to", null)
+    .select("id")
+    .maybeSingle();
+
+  if (error) return { error: error.message };
+  if (!data) return { error: "Este quarto já foi escolhido por outra camareira." };
+
+  revalidatePath("/tarefas", "layout");
+  revalidatePath("/planejamento");
+  return { success: true };
+}
+
 export async function toggleCheck(checkId: string, checked: boolean) {
   const supabase = await createClient();
   const { data: check } = await supabase

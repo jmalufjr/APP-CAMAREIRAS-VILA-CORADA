@@ -195,12 +195,18 @@ create policy "bt_admin_delete" on breakfast_tables for delete using (is_admin()
 create policy "cs_select_authenticated" on commission_settings for select using (auth.uid() is not null);
 create policy "cs_admin_update" on commission_settings for update using (is_admin());
 
--- daily_room_tasks: admin full; camareira can select tasks assigned to her and update status/finish own tasks
+-- daily_room_tasks: admin full; camareira can see her own tasks plus unclaimed ones (to
+-- choose from), can claim an unclaimed task, and can update/finish tasks she already owns.
 create policy "drt_admin_all" on daily_room_tasks for all using (is_admin()) with check (is_admin());
 create policy "drt_camareira_select" on daily_room_tasks for select
   using (assigned_to = auth.uid());
+create policy "drt_camareira_select_available" on daily_room_tasks for select
+  using (assigned_to is null);
 create policy "drt_camareira_update_own" on daily_room_tasks for update
   using (assigned_to = auth.uid())
+  with check (assigned_to = auth.uid());
+create policy "drt_camareira_claim" on daily_room_tasks for update
+  using (assigned_to is null)
   with check (assigned_to = auth.uid());
 
 -- daily_room_task_checks: admin full; camareira can read/update checks of her own tasks

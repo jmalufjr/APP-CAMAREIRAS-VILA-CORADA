@@ -4,12 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { ChecklistType } from "@/lib/types";
 
-export async function setRoomTask(
-  date: string,
-  roomId: string,
-  taskType: ChecklistType | null,
-  assignedTo: string | null
-) {
+export async function setRoomTask(date: string, roomId: string, taskType: ChecklistType | null) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -24,13 +19,13 @@ export async function setRoomTask(
     return { success: true };
   }
 
+  // A camareira escolhe o quarto depois; a tarefa nasce sem responsável.
   const { data: task, error } = await supabase
     .from("daily_room_tasks")
     .insert({
       date,
       room_id: roomId,
       task_type: taskType,
-      assigned_to: assignedTo,
       created_by: user?.id,
     })
     .select()
@@ -51,18 +46,6 @@ export async function setRoomTask(
     );
   }
 
-  revalidatePath("/planejamento");
-  revalidatePath("/tarefas");
-  return { success: true };
-}
-
-export async function assignCamareira(taskId: string, assignedTo: string | null) {
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("daily_room_tasks")
-    .update({ assigned_to: assignedTo })
-    .eq("id", taskId);
-  if (error) return { error: error.message };
   revalidatePath("/planejamento");
   revalidatePath("/tarefas");
   return { success: true };
