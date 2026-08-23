@@ -4,6 +4,7 @@ import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TableLayoutCanvas } from "@/components/shared/table-layout-canvas";
+import { TableNotesList } from "@/components/shared/table-notes-list";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { MonthlyChart } from "./monthly-chart";
 import type { BreakfastTable, ChecklistType } from "@/lib/types";
@@ -36,8 +37,8 @@ export default async function DashboardPage() {
     supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", today),
     supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", tomorrow),
     supabase.from("breakfast_tables").select("*").eq("active", true),
-    supabase.from("daily_breakfast").select("table_id, guest_count").eq("date", today),
-    supabase.from("daily_breakfast").select("table_id, guest_count").eq("date", tomorrow),
+    supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", today),
+    supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", tomorrow),
     supabase
       .from("daily_breakfast")
       .select("date, guest_count, value_per_table_snapshot")
@@ -76,6 +77,9 @@ export default async function DashboardPage() {
   const tomorrowGuestMap: Record<string, number> = Object.fromEntries(
     (tomorrowGuests ?? []).map((r) => [r.table_id, r.guest_count] as const)
   );
+  const tableLabelById = new Map(((tables ?? []) as BreakfastTable[]).map((t) => [t.id, t.label]));
+  const todayTableNotes = (todayGuests ?? []).filter((r) => r.notes);
+  const tomorrowTableNotes = (tomorrowGuests ?? []).filter((r) => r.notes);
 
   return (
     <div className="space-y-8">
@@ -180,16 +184,18 @@ export default async function DashboardPage() {
           <CardHeader>
             <CardTitle className="font-heading text-lg">Mesas · hoje</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <TableLayoutCanvas tables={(tables ?? []) as BreakfastTable[]} guestCounts={todayGuestMap} />
+            <TableNotesList rows={todayTableNotes} labelById={tableLabelById} />
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
             <CardTitle className="font-heading text-lg">Mesas · amanhã</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <TableLayoutCanvas tables={(tables ?? []) as BreakfastTable[]} guestCounts={tomorrowGuestMap} />
+            <TableNotesList rows={tomorrowTableNotes} labelById={tableLabelById} />
           </CardContent>
         </Card>
       </div>
