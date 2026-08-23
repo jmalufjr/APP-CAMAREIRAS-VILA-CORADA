@@ -48,6 +48,18 @@ select 'arrumacao'::checklist_type, label, description, pos from items
 union all
 select 'preparacao'::checklist_type, label, description, pos from items;
 
+-- ---------- Itens de checklist de troca (troca de roupa de cama/toalhas) ----------
+insert into checklist_items (type, label, description, position) values
+  ('troca', 'Bater na porta e aguardar autorização', 'Confirmar com o hóspede antes de entrar no quarto.', 1),
+  ('troca', 'Retirar roupa de cama usada', 'Recolher lençóis, fronhas e protetores usados.', 2),
+  ('troca', 'Repor roupa de cama limpa', 'Cama arrumada com roupa limpa, sem manchas ou cabelos.', 3),
+  ('troca', 'Retirar toalhas usadas', 'Recolher todas as toalhas do quarto e do banheiro.', 4),
+  ('troca', 'Repor toalhas limpas', 'Quantidade correta, limpas e bem dobradas.', 5),
+  ('troca', 'Retirar o lixo', 'Esvaziar lixeiras e colocar sacos novos.', 6),
+  ('troca', 'Repor amenities básicos', 'Sabonete, papel higiênico e demais itens em falta.', 7),
+  ('troca', 'Conferir organização geral', 'Ambiente arrumado, sem pertences fora do lugar.', 8),
+  ('troca', 'Liberar o quarto', 'Registrar qualquer ocorrência antes da liberação.', 9);
+
 -- ---------- Associa todos os itens a todos os quartos ----------
 insert into room_checklist_items (room_id, checklist_item_id, position)
 select r.id, ci.id, ci.position

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 import type { DailyRoomTask, Profile } from "@/lib/types";
 import { claimTask } from "@/lib/actions/tasks";
+import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -79,9 +80,7 @@ function AvailableTaskCard({ task }: { task: TaskWithRoom }) {
           </div>
           <div>
             <p className="font-medium">Quarto {task.rooms.number}</p>
-            <p className="text-xs text-muted-foreground capitalize">
-              {task.task_type === "arrumacao" ? "Arrumação" : "Preparação"}
-            </p>
+            <p className="text-xs text-muted-foreground">{TASK_TYPE_LABELS[task.task_type]}</p>
           </div>
         </div>
         <Button
@@ -115,9 +114,7 @@ function TaskCard({ task, href }: { task: TaskWithRoom; href?: string }) {
           </div>
           <div>
             <p className="font-medium">Quarto {task.rooms.number}</p>
-            <p className="text-xs text-muted-foreground capitalize">
-              {task.task_type === "arrumacao" ? "Arrumação" : "Preparação"}
-            </p>
+            <p className="text-xs text-muted-foreground">{TASK_TYPE_LABELS[task.task_type]}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">

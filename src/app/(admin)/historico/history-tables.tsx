@@ -11,6 +11,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TASK_TYPE_LABELS } from "@/lib/task-type";
+import type { ChecklistType } from "@/lib/types";
 import { Download } from "lucide-react";
 
 interface BreakfastRow {
@@ -20,9 +22,27 @@ interface BreakfastRow {
 }
 interface TaskRow {
   date: string;
-  task_type: "arrumacao" | "preparacao";
+  task_type: ChecklistType;
   camareira: string;
 }
+
+interface DayStats {
+  mesas: number;
+  hospedes: number;
+  comissao: number;
+  arrumacao: number;
+  preparacao: number;
+  troca: number;
+}
+
+const emptyDayStats = (): DayStats => ({
+  mesas: 0,
+  hospedes: 0,
+  comissao: 0,
+  arrumacao: 0,
+  preparacao: 0,
+  troca: 0,
+});
 
 function downloadCsv(filename: string, rows: (string | number)[][]) {
   const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -37,30 +57,28 @@ function downloadCsv(filename: string, rows: (string | number)[][]) {
 
 export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[]; tasks: TaskRow[] }) {
   const byDay = useMemo(() => {
-    const map = new Map<string, { mesas: number; hospedes: number; comissao: number; arrumados: number; preparados: number }>();
+    const map = new Map<string, DayStats>();
     breakfast.forEach((b) => {
       if (b.guest_count <= 0) return;
-      const entry = map.get(b.date) ?? { mesas: 0, hospedes: 0, comissao: 0, arrumados: 0, preparados: 0 };
+      const entry = map.get(b.date) ?? emptyDayStats();
       entry.mesas += 1;
       entry.hospedes += b.guest_count;
       entry.comissao += Number(b.value_per_table_snapshot);
       map.set(b.date, entry);
     });
     tasks.forEach((t) => {
-      const entry = map.get(t.date) ?? { mesas: 0, hospedes: 0, comissao: 0, arrumados: 0, preparados: 0 };
-      if (t.task_type === "arrumacao") entry.arrumados += 1;
-      else entry.preparados += 1;
+      const entry = map.get(t.date) ?? emptyDayStats();
+      entry[t.task_type] += 1;
       map.set(t.date, entry);
     });
     return Array.from(map.entries()).sort(([a], [b]) => b.localeCompare(a));
   }, [breakfast, tasks]);
 
   const byCamareira = useMemo(() => {
-    const map = new Map<string, { arrumados: number; preparados: number }>();
+    const map = new Map<string, Pick<DayStats, "arrumacao" | "preparacao" | "troca">>();
     tasks.forEach((t) => {
-      const entry = map.get(t.camareira) ?? { arrumados: 0, preparados: 0 };
-      if (t.task_type === "arrumacao") entry.arrumados += 1;
-      else entry.preparados += 1;
+      const entry = map.get(t.camareira) ?? { arrumacao: 0, preparacao: 0, troca: 0 };
+      entry[t.task_type] += 1;
       map.set(t.camareira, entry);
     });
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
@@ -71,10 +89,11 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
       mesas: acc.mesas + v.mesas,
       hospedes: acc.hospedes + v.hospedes,
       comissao: acc.comissao + v.comissao,
-      arrumados: acc.arrumados + v.arrumados,
-      preparados: acc.preparados + v.preparados,
+      arrumacao: acc.arrumacao + v.arrumacao,
+      preparacao: acc.preparacao + v.preparacao,
+      troca: acc.troca + v.troca,
     }),
-    { mesas: 0, hospedes: 0, comissao: 0, arrumados: 0, preparados: 0 }
+    emptyDayStats()
   );
 
   return (
@@ -87,8 +106,24 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
             size="sm"
             onClick={() =>
               downloadCsv("historico-diario.csv", [
-                ["Data", "Mesas café", "Hóspedes café", "Quartos arrumados", "Quartos preparados", "Comissão (R$)"],
-                ...byDay.map(([date, v]) => [date, v.mesas, v.hospedes, v.arrumados, v.preparados, v.comissao.toFixed(2)]),
+                [
+                  "Data",
+                  "Mesas café",
+                  "Hóspedes café",
+                  `Qtd. ${TASK_TYPE_LABELS.arrumacao}`,
+                  `Qtd. ${TASK_TYPE_LABELS.preparacao}`,
+                  `Qtd. ${TASK_TYPE_LABELS.troca}`,
+                  "Comissão (R$)",
+                ],
+                ...byDay.map(([date, v]) => [
+                  date,
+                  v.mesas,
+                  v.hospedes,
+                  v.arrumacao,
+                  v.preparacao,
+                  v.troca,
+                  v.comissao.toFixed(2),
+                ]),
               ])
             }
           >
@@ -102,8 +137,9 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
                 <TableHead>Data</TableHead>
                 <TableHead>Mesas café</TableHead>
                 <TableHead>Hóspedes café</TableHead>
-                <TableHead>Qtd. arrumados</TableHead>
-                <TableHead>Qtd. preparados</TableHead>
+                <TableHead>Qtd. {TASK_TYPE_LABELS.arrumacao}</TableHead>
+                <TableHead>Qtd. {TASK_TYPE_LABELS.preparacao}</TableHead>
+                <TableHead>Qtd. {TASK_TYPE_LABELS.troca}</TableHead>
                 <TableHead>Comissão (R$)</TableHead>
               </TableRow>
             </TableHeader>
@@ -113,14 +149,15 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
                   <TableCell>{date.split("-").reverse().join("/")}</TableCell>
                   <TableCell>{v.mesas}</TableCell>
                   <TableCell>{v.hospedes}</TableCell>
-                  <TableCell>{v.arrumados}</TableCell>
-                  <TableCell>{v.preparados}</TableCell>
+                  <TableCell>{v.arrumacao}</TableCell>
+                  <TableCell>{v.preparacao}</TableCell>
+                  <TableCell>{v.troca}</TableCell>
                   <TableCell>R$ {v.comissao.toFixed(2)}</TableCell>
                 </TableRow>
               ))}
               {byDay.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                     Sem dados no período.
                   </TableCell>
                 </TableRow>
@@ -131,8 +168,9 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
                 <TableCell>Total</TableCell>
                 <TableCell>{totals.mesas}</TableCell>
                 <TableCell>{totals.hospedes}</TableCell>
-                <TableCell>{totals.arrumados}</TableCell>
-                <TableCell>{totals.preparados}</TableCell>
+                <TableCell>{totals.arrumacao}</TableCell>
+                <TableCell>{totals.preparacao}</TableCell>
+                <TableCell>{totals.troca}</TableCell>
                 <TableCell>R$ {totals.comissao.toFixed(2)}</TableCell>
               </TableRow>
             )}
@@ -148,8 +186,20 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
             size="sm"
             onClick={() =>
               downloadCsv("historico-camareiras.csv", [
-                ["Camareira", "Quartos arrumados", "Quartos preparados", "Total"],
-                ...byCamareira.map(([name, v]) => [name, v.arrumados, v.preparados, v.arrumados + v.preparados]),
+                [
+                  "Camareira",
+                  TASK_TYPE_LABELS.arrumacao,
+                  TASK_TYPE_LABELS.preparacao,
+                  TASK_TYPE_LABELS.troca,
+                  "Total",
+                ],
+                ...byCamareira.map(([name, v]) => [
+                  name,
+                  v.arrumacao,
+                  v.preparacao,
+                  v.troca,
+                  v.arrumacao + v.preparacao + v.troca,
+                ]),
               ])
             }
           >
@@ -161,8 +211,9 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
             <TableHeader>
               <TableRow>
                 <TableHead>Camareira</TableHead>
-                <TableHead>Quartos arrumados</TableHead>
-                <TableHead>Quartos preparados</TableHead>
+                <TableHead>{TASK_TYPE_LABELS.arrumacao}</TableHead>
+                <TableHead>{TASK_TYPE_LABELS.preparacao}</TableHead>
+                <TableHead>{TASK_TYPE_LABELS.troca}</TableHead>
                 <TableHead>Total</TableHead>
               </TableRow>
             </TableHeader>
@@ -170,14 +221,15 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
               {byCamareira.map(([name, v]) => (
                 <TableRow key={name}>
                   <TableCell>{name}</TableCell>
-                  <TableCell>{v.arrumados}</TableCell>
-                  <TableCell>{v.preparados}</TableCell>
-                  <TableCell>{v.arrumados + v.preparados}</TableCell>
+                  <TableCell>{v.arrumacao}</TableCell>
+                  <TableCell>{v.preparacao}</TableCell>
+                  <TableCell>{v.troca}</TableCell>
+                  <TableCell>{v.arrumacao + v.preparacao + v.troca}</TableCell>
                 </TableRow>
               ))}
               {byCamareira.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                     Sem dados no período.
                   </TableCell>
                 </TableRow>

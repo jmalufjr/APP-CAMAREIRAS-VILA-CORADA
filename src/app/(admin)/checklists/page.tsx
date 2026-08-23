@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { ChecklistItem, OccurrenceCategory, Room } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import { ChecklistItemsPanel } from "./checklist-items-panel";
 import { OccurrenceCategoriesPanel } from "./occurrence-categories-panel";
 
@@ -24,17 +25,19 @@ export default async function ChecklistsPage() {
 
   const arrumacao = (items ?? []).filter((i) => i.type === "arrumacao") as ChecklistItem[];
   const preparacao = (items ?? []).filter((i) => i.type === "preparacao") as ChecklistItem[];
+  const troca = (items ?? []).filter((i) => i.type === "troca") as ChecklistItem[];
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Checklists & ocorrências"
-        subtitle="Gerencie os itens de arrumação, preparação e as categorias de ocorrências."
+        subtitle="Gerencie os itens de arrumação, preparação chegada, troca e as categorias de ocorrências."
       />
       <Tabs defaultValue="arrumacao">
         <TabsList>
-          <TabsTrigger value="arrumacao">Arrumação</TabsTrigger>
-          <TabsTrigger value="preparacao">Preparação</TabsTrigger>
+          <TabsTrigger value="arrumacao">{TASK_TYPE_LABELS.arrumacao}</TabsTrigger>
+          <TabsTrigger value="preparacao">{TASK_TYPE_LABELS.preparacao}</TabsTrigger>
+          <TabsTrigger value="troca">{TASK_TYPE_LABELS.troca}</TabsTrigger>
           <TabsTrigger value="ocorrencias">Ocorrências</TabsTrigger>
         </TabsList>
         <TabsContent value="arrumacao" className="pt-4">
@@ -49,6 +52,14 @@ export default async function ChecklistsPage() {
           <ChecklistItemsPanel
             type="preparacao"
             items={preparacao}
+            rooms={(rooms ?? []) as Room[]}
+            assignmentMap={Object.fromEntries(assignmentMap)}
+          />
+        </TabsContent>
+        <TabsContent value="troca" className="pt-4">
+          <ChecklistItemsPanel
+            type="troca"
+            items={troca}
             rooms={(rooms ?? []) as Room[]}
             assignmentMap={Object.fromEntries(assignmentMap)}
           />

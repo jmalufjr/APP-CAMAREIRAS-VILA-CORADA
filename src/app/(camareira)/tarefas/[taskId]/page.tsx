@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
+import { TASK_TYPE_LABELS } from "@/lib/task-type";
+import type { ChecklistType } from "@/lib/types";
 import { ChecklistDetail } from "./checklist-detail";
 
 export default async function TaskDetailPage({
@@ -38,7 +40,7 @@ export default async function TaskDetailPage({
     <div className="space-y-6">
       <PageHeader
         title={`Quarto ${room.number}`}
-        subtitle={task.task_type === "arrumacao" ? "Checklist de arrumação" : "Checklist de preparação"}
+        subtitle={`Checklist de ${TASK_TYPE_LABELS[task.task_type as ChecklistType].toLowerCase()}`}
       />
       <ChecklistDetail
         task={task}

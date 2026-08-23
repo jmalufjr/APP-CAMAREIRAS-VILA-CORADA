@@ -1,5 +1,5 @@
 export type UserRole = "admin" | "camareira";
-export type ChecklistType = "arrumacao" | "preparacao";
+export type ChecklistType = "arrumacao" | "preparacao" | "troca";
 export type TaskStatus = "pendente" | "em_andamento" | "concluido";
 export type TableShape = "round" | "rect";
 

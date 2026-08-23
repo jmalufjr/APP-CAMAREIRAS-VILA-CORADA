@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { TableLayoutCanvas } from "@/components/shared/table-layout-canvas";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { MonthlyChart } from "./monthly-chart";
-import type { BreakfastTable } from "@/lib/types";
+import type { BreakfastTable, ChecklistType } from "@/lib/types";
+import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import { BedDouble, Coffee, AlertTriangle, Wallet } from "lucide-react";
 
 function monthRange() {
@@ -112,7 +113,7 @@ export default async function DashboardPage() {
               <div key={t.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border last:border-0">
                 <span>
                   Quarto {(t as unknown as { rooms: { number: string } }).rooms.number} ·{" "}
-                  {t.task_type === "arrumacao" ? "Arrumação" : "Preparação"}
+                  {TASK_TYPE_LABELS[t.task_type as ChecklistType]}
                 </span>
                 <Badge variant={t.status === "concluido" ? "default" : "secondary"}>
                   {t.status === "concluido" ? "Concluído" : t.status === "em_andamento" ? "Em andamento" : "Pendente"}
@@ -133,7 +134,7 @@ export default async function DashboardPage() {
             {(tomorrowTasks ?? []).map((t) => (
               <div key={t.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border last:border-0">
                 <span>Quarto {(t as unknown as { rooms: { number: string } }).rooms.number}</span>
-                <Badge variant="outline">{t.task_type === "arrumacao" ? "Arrumação" : "Preparação"}</Badge>
+                <Badge variant="outline">{TASK_TYPE_LABELS[t.task_type as ChecklistType]}</Badge>
               </div>
             ))}
             {(tomorrowTasks ?? []).length === 0 && (

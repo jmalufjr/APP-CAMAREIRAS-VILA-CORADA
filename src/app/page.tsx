@@ -8,7 +8,7 @@ const features = [
   {
     icon: ClipboardCheck,
     title: "Checklists diários",
-    text: "Arrumação e preparação de quartos com itens específicos por suíte e registro de ocorrências.",
+    text: "Arrumação, preparação chegada e troca de roupa de cama, com itens específicos por suíte e registro de ocorrências.",
   },
   {
     icon: Coffee,

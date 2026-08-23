@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { Room, Profile, DailyRoomTask, ChecklistType } from "@/lib/types";
 import { setRoomTask } from "@/lib/actions/planning";
+import { TASK_TYPE_OPTIONS } from "@/lib/task-type";
 import {
   Table,
   TableBody,
@@ -76,8 +77,11 @@ export function PlanningBoard({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Sem trabalho</SelectItem>
-                      <SelectItem value="arrumacao">Arrumação</SelectItem>
-                      <SelectItem value="preparacao">Preparação</SelectItem>
+                      {TASK_TYPE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </TableCell>
