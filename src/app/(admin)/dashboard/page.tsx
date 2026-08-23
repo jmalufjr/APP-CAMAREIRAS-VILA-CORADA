@@ -8,7 +8,8 @@ import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { MonthlyChart } from "./monthly-chart";
 import type { BreakfastTable, ChecklistType } from "@/lib/types";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
-import { BedDouble, Coffee, AlertTriangle, Wallet } from "lucide-react";
+import { BedDouble, Coffee, AlertTriangle, Wallet, History } from "lucide-react";
+import Link from "next/link";
 
 function monthRange() {
   const now = new Date();
@@ -30,6 +31,7 @@ export default async function DashboardPage() {
     { data: todayGuests },
     { data: tomorrowGuests },
     { data: monthBreakfast },
+    { count: occurrencesToday },
   ] = await Promise.all([
     supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", today),
     supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", tomorrow),
@@ -41,11 +43,14 @@ export default async function DashboardPage() {
       .select("date, guest_count, value_per_table_snapshot")
       .gte("date", start)
       .lte("date", end),
+    supabase
+      .from("daily_room_task_occurrences")
+      .select("id, daily_room_tasks!inner(date)", { count: "exact", head: true })
+      .eq("daily_room_tasks.date", today),
   ]);
 
   const doneToday = (todayTasks ?? []).filter((t) => t.status === "concluido").length;
   const totalToday = (todayTasks ?? []).length;
-  const occurrencesToday = 0; // resumo simplificado; detalhes completos em Histórico
 
   const occupiedThisMonth = (monthBreakfast ?? []).filter((r) => r.guest_count > 0);
   const totalTablesMonth = occupiedThisMonth.length;
@@ -96,11 +101,29 @@ export default async function DashboardPage() {
           label="Comissão do mês"
           value={`R$ ${totalCommissionMonth.toFixed(2)}`}
         />
-        <StatCard
-          icon={AlertTriangle}
-          label="Ocorrências hoje"
-          value={String(occurrencesToday)}
-        />
+        <Card>
+          <CardContent className="flex items-center gap-4">
+            <div className="size-11 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
+              <AlertTriangle size={20} strokeWidth={1.75} />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Ocorrências hoje</p>
+              <p className="text-xl font-heading">{occurrencesToday ?? 0}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <Link href="/ocorrencias" className="text-xs text-secondary hover:underline">
+                  Ver detalhes
+                </Link>
+                <span className="text-xs text-muted-foreground">·</span>
+                <Link
+                  href="/ocorrencias/historico"
+                  className="text-xs text-secondary hover:underline inline-flex items-center gap-1"
+                >
+                  <History size={11} /> Histórico
+                </Link>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">

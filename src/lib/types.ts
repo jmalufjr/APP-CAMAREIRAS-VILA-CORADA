@@ -101,6 +101,7 @@ export interface DailyBreakfast {
   date: string;
   table_id: string;
   guest_count: number;
+  notes: string | null;
   value_per_table_snapshot: number;
   created_at: string;
 }

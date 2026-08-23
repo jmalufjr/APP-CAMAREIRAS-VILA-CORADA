@@ -128,6 +128,7 @@ create table daily_breakfast (
   date date not null,
   table_id uuid not null references breakfast_tables(id) on delete cascade,
   guest_count int not null default 0,
+  notes text,
   value_per_table_snapshot numeric(10,2) not null default 10.00,
   created_at timestamptz not null default now(),
   unique (date, table_id)

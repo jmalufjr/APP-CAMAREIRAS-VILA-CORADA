@@ -12,6 +12,18 @@ export function tomorrowKey(): string {
   return toDateKey(d);
 }
 
+export function yesterdayKey(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return toDateKey(d);
+}
+
+export function daysAgoKey(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return toDateKey(d);
+}
+
 export function formatDatePt(dateKey: string): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("pt-BR", {

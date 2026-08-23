@@ -95,6 +95,29 @@ export async function setGuestCount(date: string, tableId: string, guestCount: n
   return { success: true };
 }
 
+export async function setTableNotes(date: string, tableId: string, notes: string) {
+  const supabase = await createClient();
+  const { data: settings } = await supabase
+    .from("commission_settings")
+    .select("value_per_table")
+    .single();
+
+  const { error } = await supabase.from("daily_breakfast").upsert(
+    {
+      date,
+      table_id: tableId,
+      notes: notes || null,
+      value_per_table_snapshot: settings?.value_per_table ?? 10,
+    },
+    { onConflict: "date,table_id", ignoreDuplicates: false }
+  );
+
+  if (error) return { error: error.message };
+  revalidatePath("/mesas/gerenciar");
+  revalidatePath("/mesas");
+  return { success: true };
+}
+
 export async function updateCommissionValue(value: number) {
   const supabase = await createClient();
   const { error } = await supabase

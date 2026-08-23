@@ -64,6 +64,7 @@ export async function updateSession(request: NextRequest) {
       "/checklists",
       "/historico",
       "/chegadas-saidas/gerenciar",
+      "/ocorrencias",
     ];
     if (profile.role !== "admin" && adminOnlyPrefixes.some((p) => path.startsWith(p))) {
       const url = request.nextUrl.clone();

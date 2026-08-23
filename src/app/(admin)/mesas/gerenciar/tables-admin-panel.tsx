@@ -9,6 +9,7 @@ import {
   deleteBreakfastTable,
   saveTableLayout,
   setGuestCount,
+  setTableNotes,
   updateCommissionValue,
   type TablePosition,
 } from "@/lib/actions/tables";
@@ -16,6 +17,7 @@ import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
 import { TableLayoutCanvas } from "@/components/shared/table-layout-canvas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -33,11 +35,15 @@ export function TablesAdminPanel({
   commission,
   todayCounts,
   tomorrowCounts,
+  todayNotes,
+  tomorrowNotes,
 }: {
   tables: BreakfastTable[];
   commission: CommissionSettings;
   todayCounts: Record<string, number>;
   tomorrowCounts: Record<string, number>;
+  todayNotes: Record<string, string>;
+  tomorrowNotes: Record<string, string>;
 }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -86,10 +92,22 @@ export function TablesAdminPanel({
         </TabsList>
 
         <TabsContent value="hoje" className="pt-4">
-          <GuestCountEditor date={todayKey()} label={formatDatePt(todayKey())} tables={tables} counts={todayCounts} />
+          <GuestCountEditor
+            date={todayKey()}
+            label={formatDatePt(todayKey())}
+            tables={tables}
+            counts={todayCounts}
+            notesInit={todayNotes}
+          />
         </TabsContent>
         <TabsContent value="amanha" className="pt-4">
-          <GuestCountEditor date={tomorrowKey()} label={formatDatePt(tomorrowKey())} tables={tables} counts={tomorrowCounts} />
+          <GuestCountEditor
+            date={tomorrowKey()}
+            label={formatDatePt(tomorrowKey())}
+            tables={tables}
+            counts={tomorrowCounts}
+            notesInit={tomorrowNotes}
+          />
         </TabsContent>
 
         <TabsContent value="layout" className="pt-4 space-y-4">
@@ -146,18 +164,23 @@ export function TablesAdminPanel({
   );
 }
 
+const MAX_GUESTS_PER_TABLE = 10;
+
 function GuestCountEditor({
   date,
   label,
   tables,
   counts,
+  notesInit,
 }: {
   date: string;
   label: string;
   tables: BreakfastTable[];
   counts: Record<string, number>;
+  notesInit: Record<string, string>;
 }) {
   const [values, setValues] = useState(counts);
+  const [notes, setNotes] = useState(notesInit);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const total = Object.values(values).reduce((a, b) => a + (b || 0), 0);
@@ -165,23 +188,40 @@ function GuestCountEditor({
   return (
     <div className="space-y-4">
       <p className="text-sm capitalize text-muted-foreground">{label}</p>
-      <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+      <div className="grid sm:grid-cols-2 gap-3">
         {tables.filter((t) => t.active).map((t) => (
-          <div key={t.id} className="flex items-center justify-between rounded-lg border border-border p-3 bg-card gap-3">
-            <Label htmlFor={`g-${t.id}`} className="text-sm">{t.label}</Label>
-            <Input
-              id={`g-${t.id}`}
-              type="number"
-              min={0}
-              max={t.seats}
-              className="w-20"
-              value={values[t.id] ?? 0}
-              onChange={(e) =>
-                setValues((v) => ({ ...v, [t.id]: Number(e.target.value) }))
-              }
+          <div key={t.id} className="rounded-lg border border-border p-3 bg-card space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor={`g-${t.id}`} className="text-sm">{t.label}</Label>
+              <Input
+                id={`g-${t.id}`}
+                type="number"
+                min={0}
+                max={MAX_GUESTS_PER_TABLE}
+                className="w-20"
+                value={values[t.id] ?? 0}
+                onChange={(e) =>
+                  setValues((v) => ({
+                    ...v,
+                    [t.id]: Math.min(MAX_GUESTS_PER_TABLE, Number(e.target.value)),
+                  }))
+                }
+                onBlur={() =>
+                  startTransition(async () => {
+                    await setGuestCount(date, t.id, values[t.id] ?? 0);
+                    router.refresh();
+                  })
+                }
+              />
+            </div>
+            <Textarea
+              placeholder="Observações desta mesa (visível para as camareiras)"
+              className="min-h-14 text-sm"
+              value={notes[t.id] ?? ""}
+              onChange={(e) => setNotes((n) => ({ ...n, [t.id]: e.target.value }))}
               onBlur={() =>
                 startTransition(async () => {
-                  await setGuestCount(date, t.id, values[t.id] ?? 0);
+                  await setTableNotes(date, t.id, notes[t.id] ?? "");
                   router.refresh();
                 })
               }
