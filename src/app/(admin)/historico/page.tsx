@@ -30,7 +30,9 @@ export default async function HistoricoPage({
       .lte("date", to),
     supabase
       .from("daily_room_tasks")
-      .select("date, task_type, status, assigned_to, profiles!daily_room_tasks_assigned_to_fkey(name)")
+      .select(
+        "date, task_type, status, assigned_to, profiles!daily_room_tasks_assigned_to_fkey(name), daily_room_task_occurrences(id)"
+      )
       .gte("date", from)
       .lte("date", to)
       .eq("status", "concluido"),
@@ -47,6 +49,8 @@ export default async function HistoricoPage({
             date: t.date,
             task_type: t.task_type,
             camareira: (t as unknown as { profiles: { name: string } | null }).profiles?.name ?? "—",
+            occurrences: (t as unknown as { daily_room_task_occurrences: { id: string }[] })
+              .daily_room_task_occurrences.length,
           }))
         }
       />
