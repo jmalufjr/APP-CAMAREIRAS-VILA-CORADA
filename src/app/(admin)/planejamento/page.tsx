@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Room, Profile, DailyRoomTask } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
 import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
+import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import { PlanningBoard } from "./planning-board";
 import { DateSwitcher } from "./date-switcher";
 
@@ -23,7 +24,7 @@ export default async function PlanejamentoPage({
     <div className="space-y-6">
       <PageHeader
         title="Planejamento diário"
-        subtitle={`Defina os quartos de arrumação e preparação para ${formatDatePt(date)}. As camareiras escolhem, no próprio app, qual quarto vão realizar.`}
+        subtitle={`Defina os quartos de ${TASK_TYPE_LABELS.arrumacao.toLowerCase()}, ${TASK_TYPE_LABELS.preparacao.toLowerCase()} e ${TASK_TYPE_LABELS.troca.toLowerCase()} para ${formatDatePt(date)}. As camareiras escolhem, no próprio app, qual quarto vão realizar.`}
         action={<DateSwitcher current={sp.date === "hoje" ? "hoje" : "amanha"} />}
       />
       <PlanningBoard
