@@ -16,7 +16,8 @@ insert into occurrence_categories (name, position) values
   ('Aparelho de TV', 13), ('Ar condicionado', 14), ('Secador de cabelo', 15), ('Máquina de café', 16),
   ('Pia', 17), ('Chuveiro', 18), ('Vaso sanitário', 19), ('Vidro do box', 20),
   ('Bancadas', 21), ('Piso quarto', 22), ('Piso banheiro', 23), ('Forro quarto', 24),
-  ('Forro banheiro', 25), ('Ralo', 26), ('Espelho', 27);
+  ('Forro banheiro', 25), ('Ralo', 26), ('Espelho', 27),
+  ('Mau cheiro quarto', 28), ('Mau cheiro banheiro', 29);
 
 -- ---------- Itens de checklist (base: "Check List.pdf") ----------
 -- Mesma lista usada como padrão para arrumação e preparação; o admin pode diferenciar depois.
