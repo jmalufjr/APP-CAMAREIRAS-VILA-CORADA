@@ -54,9 +54,39 @@ Acesse http://localhost:3000.
 
 ## 5. Deploy na Vercel
 
-Conecte o repositório no [vercel.com](https://vercel.com), configure as
-mesmas 3 variáveis de ambiente do `.env.local` no painel do projeto e faça o
-deploy. Cada push na branch principal gera um novo deploy automaticamente.
+1. Em [vercel.com](https://vercel.com), clique em **Add New → Project** e
+   importe o repositório `jmalufjr/APP-CAMAREIRAS-VILA-CORADA` do GitHub.
+2. A Vercel detecta automaticamente que é um projeto Next.js — não precisa
+   mudar nada em build/output settings.
+3. Antes de clicar em Deploy, abra **Environment Variables** e adicione as
+   três, com os mesmos valores do seu `.env.local`:
+
+   | Nome | Valor | Environments |
+   |---|---|---|
+   | `NEXT_PUBLIC_SUPABASE_URL` | URL do projeto Supabase | Production, Preview, Development |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | publishable key (`sb_publishable_...`) | Production, Preview, Development |
+   | `SUPABASE_SERVICE_ROLE_KEY` | secret key (`sb_secret_...`) | Production, Preview, Development |
+
+4. Clique em **Deploy**. Cada push na branch `main` gera um novo deploy
+   automaticamente depois disso.
+5. Depois do primeiro deploy, copie a URL gerada (ex.:
+   `https://app-camareiras-vila-corada.vercel.app`) e cole em
+   **Supabase → Authentication → URL Configuration → Site URL**, para manter
+   a configuração de autenticação consistente com o domínio de produção.
+
+### Segurança das chaves
+
+As duas variáveis `NEXT_PUBLIC_*` são seguras para expor ao navegador por
+design — o prefixo `NEXT_PUBLIC_` é o que instrui o Next.js a incluí-las no
+bundle do cliente; sem esse prefixo, uma variável de ambiente só existe no
+servidor. `SUPABASE_SERVICE_ROLE_KEY` **não tem** esse prefixo de propósito:
+ela ignora as políticas de RLS e só pode ser usada no servidor. No código
+deste projeto ela é lida apenas dentro de `src/lib/supabase/admin.ts`, que só
+é importado por Server Actions marcadas com `"use server"` (`auth.ts` e
+`camareiras.ts`, usadas para criar/editar login das camareiras) — o Next.js
+garante que esse código nunca é enviado ao navegador. Não crie nenhum
+componente `"use client"` que importe `admin.ts` ou leia
+`process.env.SUPABASE_SERVICE_ROLE_KEY` diretamente.
 
 ## Fonte de títulos "The Seasons"
 
