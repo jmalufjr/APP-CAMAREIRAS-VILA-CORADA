@@ -106,17 +106,16 @@ export default async function DashboardPage() {
             <div className="size-11 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
               <AlertTriangle size={20} strokeWidth={1.75} />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="text-xs text-muted-foreground">Ocorrências hoje</p>
               <p className="text-xl font-heading">{occurrencesToday ?? 0}</p>
-              <div className="flex items-center gap-2 mt-1">
-                <Link href="/ocorrencias" className="text-xs text-secondary hover:underline">
+              <div className="flex flex-col gap-0.5 mt-1">
+                <Link href="/ocorrencias" className="text-xs text-primary hover:underline w-fit">
                   Ver detalhes
                 </Link>
-                <span className="text-xs text-muted-foreground">·</span>
                 <Link
                   href="/ocorrencias/historico"
-                  className="text-xs text-secondary hover:underline inline-flex items-center gap-1"
+                  className="text-xs text-primary hover:underline inline-flex items-center gap-1 w-fit"
                 >
                   <History size={11} /> Histórico
                 </Link>
@@ -213,9 +212,9 @@ function StatCard({
         <div className="size-11 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
           <Icon size={20} strokeWidth={1.75} />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="text-xl font-heading">{value}</p>
+          <p className="text-xl font-heading truncate">{value}</p>
         </div>
       </CardContent>
     </Card>

@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
+import Link from "next/link";
 
 interface TaskRow {
   date: string;
@@ -76,7 +77,11 @@ export default async function OcorrenciasHistoricoPage() {
             <TableBody>
               {byDay.map(([date, v]) => (
                 <TableRow key={date}>
-                  <TableCell>{date.split("-").reverse().join("/")}</TableCell>
+                  <TableCell>
+                    <Link href={`/ocorrencias/${date}`} className="text-primary hover:underline font-medium">
+                      {date.split("-").reverse().join("/")}
+                    </Link>
+                  </TableCell>
                   <TableCell>{v.ocorrencias}</TableCell>
                   <TableCell>{v.quartosComOcorrencia.size}</TableCell>
                   <TableCell>{v.observacoes}</TableCell>
