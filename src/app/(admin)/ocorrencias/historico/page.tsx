@@ -10,13 +10,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
+import { TopCategoriesTable, type CategoryCount } from "@/components/shared/top-categories-table";
 import Link from "next/link";
 
 interface TaskRow {
   date: string;
   notes: string | null;
   rooms: { number: string } | null;
-  daily_room_task_occurrences: { id: string }[];
+  daily_room_task_occurrences: { id: string; occurrence_categories: { name: string } | null }[];
 }
 
 export default async function OcorrenciasHistoricoPage() {
@@ -26,11 +27,23 @@ export default async function OcorrenciasHistoricoPage() {
 
   const { data: tasks } = await supabase
     .from("daily_room_tasks")
-    .select("date, notes, rooms(number), daily_room_task_occurrences(id)")
+    .select("date, notes, rooms(number), daily_room_task_occurrences(id, occurrence_categories(name))")
     .gte("date", from)
     .lte("date", to);
 
   const rows = (tasks ?? []) as unknown as TaskRow[];
+
+  const categoryTally = new Map<string, number>();
+  rows.forEach((t) => {
+    t.daily_room_task_occurrences.forEach((o) => {
+      const name = o.occurrence_categories?.name;
+      if (!name) return;
+      categoryTally.set(name, (categoryTally.get(name) ?? 0) + 1);
+    });
+  });
+  const topCategories: CategoryCount[] = Array.from(categoryTally.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
 
   const byDate = new Map<string, { ocorrencias: number; quartosComOcorrencia: Set<string>; observacoes: number }>();
   rows.forEach((t) => {
@@ -106,6 +119,11 @@ export default async function OcorrenciasHistoricoPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <TopCategoriesTable
+        title="10 categorias de ocorrências manutenção mais frequentes nos últimos 30 dias"
+        categories={topCategories}
+      />
     </div>
   );
 }
