@@ -102,7 +102,7 @@ export default async function DashboardPage() {
           value={`R$ ${totalCommissionMonth.toFixed(2)}`}
         />
         <Card>
-          <CardContent className="flex items-center gap-4">
+          <CardContent className="flex items-start gap-4">
             <div className="size-11 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
               <AlertTriangle size={20} strokeWidth={1.75} />
             </div>
@@ -208,7 +208,7 @@ function StatCard({
 }) {
   return (
     <Card>
-      <CardContent className="flex items-center gap-4">
+      <CardContent className="flex items-start gap-4">
         <div className="size-11 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
           <Icon size={20} strokeWidth={1.75} />
         </div>
