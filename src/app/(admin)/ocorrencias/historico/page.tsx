@@ -59,7 +59,7 @@ export default async function OcorrenciasHistoricoPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Histórico de ocorrências"
+        title="Histórico de ocorrências manutenção"
         subtitle="Resumo dos últimos 30 dias."
       />
 
@@ -69,7 +69,7 @@ export default async function OcorrenciasHistoricoPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Data</TableHead>
-                <TableHead>Total de ocorrências</TableHead>
+                <TableHead>Total de ocorrências manutenção</TableHead>
                 <TableHead>Quartos com ocorrência</TableHead>
                 <TableHead>Quartos com observação</TableHead>
               </TableRow>

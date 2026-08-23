@@ -16,7 +16,7 @@ export default async function OcorrenciasDatePage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Ocorrências e observações"
+        title="Ocorrências Manutenção e observações"
         subtitle={formatDatePt(date)}
         action={
           <Link

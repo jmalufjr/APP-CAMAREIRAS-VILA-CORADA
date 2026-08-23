@@ -82,7 +82,7 @@ export function ChecklistDetail({
 
       <Card>
         <CardContent className="space-y-4">
-          <h3 className="font-heading text-lg">Ocorrências</h3>
+          <h3 className="font-heading text-lg">Ocorrências Manutenção</h3>
           <div className="space-y-2">
             {occurrences.map((o) => (
               <div key={o.id} className="flex items-center justify-between rounded-lg bg-muted px-3 py-2">

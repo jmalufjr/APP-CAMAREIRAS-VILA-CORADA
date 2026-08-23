@@ -107,7 +107,7 @@ export default async function DashboardPage() {
               <AlertTriangle size={20} strokeWidth={1.75} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs text-muted-foreground">Ocorrências hoje</p>
+              <p className="text-xs text-muted-foreground">Ocorrências Manutenção hoje</p>
               <p className="text-xl font-heading">{occurrencesToday ?? 0}</p>
               <div className="flex flex-col gap-0.5 mt-1">
                 <Link href="/ocorrencias" className="text-xs text-primary hover:underline w-fit">

@@ -30,15 +30,15 @@ export default async function ChecklistsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Checklists & ocorrências"
-        subtitle="Gerencie os itens de arrumação, preparação chegada, troca e as categorias de ocorrências."
+        title="Checklists & ocorrências manutenção"
+        subtitle="Gerencie os itens de arrumação, preparação chegada, troca e as categorias de ocorrências manutenção."
       />
       <Tabs defaultValue="arrumacao">
         <TabsList>
           <TabsTrigger value="arrumacao">{TASK_TYPE_LABELS.arrumacao}</TabsTrigger>
           <TabsTrigger value="preparacao">{TASK_TYPE_LABELS.preparacao}</TabsTrigger>
           <TabsTrigger value="troca">{TASK_TYPE_LABELS.troca}</TabsTrigger>
-          <TabsTrigger value="ocorrencias">Ocorrências</TabsTrigger>
+          <TabsTrigger value="ocorrencias">Ocorrências Manutenção</TabsTrigger>
         </TabsList>
         <TabsContent value="arrumacao" className="pt-4">
           <ChecklistItemsPanel

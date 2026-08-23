@@ -20,7 +20,7 @@ export default async function OcorrenciasPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Ocorrências e observações"
+        title="Ocorrências Manutenção e observações"
         subtitle="Detalhes de hoje e de ontem, por quarto."
         action={
           <Link
