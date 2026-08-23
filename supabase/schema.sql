@@ -133,6 +133,30 @@ create table daily_breakfast (
   unique (date, table_id)
 );
 
+-- ---------- DAILY ARRIVALS (chegadas previstas do dia) ----------
+create table daily_arrivals (
+  id uuid primary key default uuid_generate_v4(),
+  date date not null,
+  room_id uuid not null references rooms(id) on delete cascade,
+  guest_name text not null,
+  expected_time time,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (date, room_id)
+);
+
+-- ---------- DAILY DEPARTURES (saídas previstas do dia) ----------
+create table daily_departures (
+  id uuid primary key default uuid_generate_v4(),
+  date date not null,
+  room_id uuid not null references rooms(id) on delete cascade,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (date, room_id)
+);
+
 -- ============================================================================
 -- ROW LEVEL SECURITY
 -- ============================================================================
@@ -147,6 +171,8 @@ alter table daily_room_tasks enable row level security;
 alter table daily_room_task_checks enable row level security;
 alter table daily_room_task_occurrences enable row level security;
 alter table daily_breakfast enable row level security;
+alter table daily_arrivals enable row level security;
+alter table daily_departures enable row level security;
 
 -- Helper: is the current user an admin?
 create or replace function is_admin() returns boolean as $$
@@ -229,3 +255,15 @@ create policy "db_select_authenticated" on daily_breakfast for select using (aut
 create policy "db_admin_write" on daily_breakfast for insert with check (is_admin());
 create policy "db_admin_update" on daily_breakfast for update using (is_admin());
 create policy "db_admin_delete" on daily_breakfast for delete using (is_admin());
+
+-- daily_arrivals: everyone authenticated reads; only admin writes
+create policy "da_select_authenticated" on daily_arrivals for select using (auth.uid() is not null);
+create policy "da_admin_write" on daily_arrivals for insert with check (is_admin());
+create policy "da_admin_update" on daily_arrivals for update using (is_admin());
+create policy "da_admin_delete" on daily_arrivals for delete using (is_admin());
+
+-- daily_departures: everyone authenticated reads; only admin writes
+create policy "dd_select_authenticated" on daily_departures for select using (auth.uid() is not null);
+create policy "dd_admin_write" on daily_departures for insert with check (is_admin());
+create policy "dd_admin_update" on daily_departures for update using (is_admin());
+create policy "dd_admin_delete" on daily_departures for delete using (is_admin());

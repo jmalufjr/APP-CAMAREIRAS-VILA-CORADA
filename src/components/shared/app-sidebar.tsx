@@ -19,6 +19,7 @@ import {
   LogOut,
   ClipboardCheck,
   Menu,
+  CalendarClock,
 } from "lucide-react";
 
 interface NavItem {
@@ -30,6 +31,7 @@ interface NavItem {
 const adminNav: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/planejamento", label: "Planejamento diário", icon: ClipboardCheck },
+  { href: "/chegadas-saidas/gerenciar", label: "Chegadas & saídas", icon: CalendarClock },
   { href: "/quartos", label: "Quartos", icon: BedDouble },
   { href: "/mesas/gerenciar", label: "Mesas do café", icon: Coffee },
   { href: "/checklists", label: "Checklists & ocorrências", icon: ClipboardList },
@@ -40,6 +42,7 @@ const adminNav: NavItem[] = [
 const camareiraNav: NavItem[] = [
   { href: "/tarefas", label: "Meus quartos", icon: ClipboardList },
   { href: "/mesas", label: "Mesas do café", icon: Coffee },
+  { href: "/chegadas-saidas", label: "Chegadas & saídas", icon: CalendarClock },
 ];
 
 function SidebarContent({

@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import { PlanningBoard } from "./planning-board";
-import { DateSwitcher } from "./date-switcher";
+import { DateSwitcher } from "@/components/shared/date-switcher";
 
 export default async function PlanejamentoPage({
   searchParams,
@@ -25,7 +25,7 @@ export default async function PlanejamentoPage({
       <PageHeader
         title="Planejamento diário"
         subtitle={`Defina os quartos de ${TASK_TYPE_LABELS.arrumacao.toLowerCase()}, ${TASK_TYPE_LABELS.preparacao.toLowerCase()} e ${TASK_TYPE_LABELS.troca.toLowerCase()} para ${formatDatePt(date)}. As camareiras escolhem, no próprio app, qual quarto vão realizar.`}
-        action={<DateSwitcher current={sp.date === "hoje" ? "hoje" : "amanha"} />}
+        action={<DateSwitcher basePath="/planejamento" current={sp.date === "hoje" ? "hoje" : "amanha"} />}
       />
       <PlanningBoard
         date={date}

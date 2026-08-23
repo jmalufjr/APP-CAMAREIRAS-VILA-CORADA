@@ -56,7 +56,15 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    const adminOnlyPrefixes = ["/dashboard", "/quartos", "/camareiras", "/mesas/gerenciar", "/checklists", "/historico"];
+    const adminOnlyPrefixes = [
+      "/dashboard",
+      "/quartos",
+      "/camareiras",
+      "/mesas/gerenciar",
+      "/checklists",
+      "/historico",
+      "/chegadas-saidas/gerenciar",
+    ];
     if (profile.role !== "admin" && adminOnlyPrefixes.some((p) => path.startsWith(p))) {
       const url = request.nextUrl.clone();
       url.pathname = "/tarefas";

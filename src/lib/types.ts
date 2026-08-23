@@ -105,6 +105,26 @@ export interface DailyBreakfast {
   created_at: string;
 }
 
+export interface DailyArrival {
+  id: string;
+  date: string;
+  room_id: string;
+  guest_name: string;
+  expected_time: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DailyDeparture {
+  id: string;
+  date: string;
+  room_id: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Minimal Database type placeholder so @supabase/ssr generics compile.
 // Replace with `supabase gen types typescript` output for full type-safety.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
