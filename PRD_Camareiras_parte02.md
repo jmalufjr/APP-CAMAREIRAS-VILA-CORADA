@@ -195,5 +195,70 @@ deve ser confirmada com o proprietário antes de codificar.
 > pelo proprietário em relação à seção 2 acima) deve ser registrada aqui,
 > em ordem cronológica, à medida que o desenvolvimento avança.
 
-_(nenhuma decisão registrada ainda — este documento foi criado antes do
-início da implementação)_
+**Status: implementação concluída e testada pelo proprietário em
+localhost** (branch `feature/manutencao`, ainda não mesclada em `main` nem
+implantada em produção no momento em que esta seção foi escrita).
+
+### 4.1 Papel "Funcionário de Manutenção" e ciclo de vida das ocorrências
+
+Implementado exatamente como especificado na seção 2.1/2.2.1: novo papel
+`manutencao`, tela "Camareiras" renomeada para "Usuários" (com seletor de
+papel no cadastro), tela `/manutencao/ocorrencias` para o funcionário
+selecionar/resolver ocorrências, e status
+pendente/selecionada/resolvida com datas/horários e responsáveis visíveis
+para o admin em `/ocorrencias`, `/ocorrencias/historico` (coluna
+"Resolvidas") e `/historico` geral (coluna "Ocorrências resolvidas").
+
+**Desvio técnico**: a primeira versão do ciclo de seleção/resolução usava
+uma única policy de RLS de UPDATE combinando os dois estados, que falhou em
+teste real (erro "new row violates row-level security policy" ao resolver
+uma ocorrência já selecionada — o Postgres não conseguia validar o `with
+check` da transição). Corrigido substituindo a policy por duas funções
+`security definer` (`select_occurrence`/`resolve_occurrence`), o mesmo
+padrão já usado por `is_admin()`/`is_manutencao()`. Esse padrão (funções
+`security definer` em vez de policies de UPDATE combinadas) foi adotado
+também para toda a manutenção preventiva a partir daí.
+
+### 4.2 Manutenção Preventiva
+
+Categorias e itens implementados conforme a seção 2.2.2, com as 9
+categorias definidas pelo proprietário e até 10 itens cada, propostos por
+boas práticas de hotelaria/administração predial (seed em
+`supabase/migrations/010_manutencao_preventiva.sql`). Modelo de dados:
+cada item guarda seu ciclo atual (`next_due_date`, status,
+selecionado por) e, ao ser concluído, grava uma linha em
+`maintenance_completions` (histórico) e agenda a próxima data pela
+periodicidade — não existe uma tabela separada de "agendamentos futuros"
+pré-gerados, o que simplificou bastante a implementação em relação à ideia
+inicial (seção 3).
+
+**Dois ajustes de UX pedidos pelo proprietário após ver a primeira versão**
+(autorizados por ele, registrados aqui como desvio da leitura inicial da
+seção 3):
+
+- O dashboard do admin (`/manutencao-preventiva`) inicialmente tinha 3
+  tabelas separadas (pendentes/selecionadas hoje-amanhã, concluídas
+  hoje-amanhã, próximos dois meses). Foi refeito para **2 seções**: uma
+  tabela única "Pendentes, selecionadas e concluídas, esta semana" (escopo:
+  semana útil corrente, segunda a sexta) juntando as duas primeiras
+  tabelas, e "Planejamento semanal" — resumo semana a semana (categorias,
+  execução técnico/não técnico/ambos, status agregado) num intervalo
+  filtrável (padrão: 6 meses atrás a 6 meses à frente), cada semana com
+  link para uma página só daquela semana.
+- A tela do funcionário de manutenção (`/manutencao/preventiva`) também foi
+  ajustada: os cards de trabalho passaram a ser por **categoria + semana**
+  (não só categoria), mostrando primeiro os cards da semana corrente e
+  depois os de semanas anteriores ainda não resolvidas (atrasadas), cada
+  card indicando a semana a que pertence. A tabela "Próximos 30 dias" foi
+  substituída por "Próximas quatro semanas", reaproveitando o mesmo
+  componente de planejamento semanal do admin, em modo somente leitura.
+
+### 4.3 Regra de segurança seguida à risca
+
+Nenhuma das novas Server Actions ou funções SQL usa a
+`SUPABASE_SERVICE_ROLE_KEY` fora de `src/lib/supabase/admin.ts`; RLS
+habilitada em todas as tabelas novas (`maintenance_categories`,
+`maintenance_items`, `maintenance_completions`); toda transição de estado
+sensível (selecionar/resolver ocorrência, selecionar/concluir manutenção
+preventiva) passa por função `security definer` com checagem explícita de
+papel, em vez de depender só de policies de RLS combinadas.
