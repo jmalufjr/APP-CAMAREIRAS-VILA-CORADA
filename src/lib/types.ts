@@ -3,6 +3,8 @@ export type ChecklistType = "arrumacao" | "preparacao" | "troca";
 export type TaskStatus = "pendente" | "em_andamento" | "concluido";
 export type TableShape = "round" | "rect";
 export type OccurrenceStatus = "pendente" | "selecionada" | "resolvida";
+export type MaintenanceExecutionType = "nao_tecnico" | "tecnico";
+export type MaintenanceItemStatus = "pendente" | "selecionada";
 
 export interface Profile {
   id: string;
@@ -130,6 +132,40 @@ export interface DailyDeparture {
   notes: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface MaintenanceCategory {
+  id: string;
+  name: string;
+  active: boolean;
+  position: number;
+  created_at: string;
+}
+
+export interface MaintenanceItem {
+  id: string;
+  category_id: string;
+  label: string;
+  description: string | null;
+  execution_type: MaintenanceExecutionType;
+  periodicity_days: number;
+  next_due_date: string;
+  status: MaintenanceItemStatus;
+  selected_by: string | null;
+  selected_at: string | null;
+  active: boolean;
+  position: number;
+  created_at: string;
+}
+
+export interface MaintenanceCompletion {
+  id: string;
+  item_id: string;
+  due_date: string;
+  completed_by: string | null;
+  completed_at: string;
+  external_technician_name: string | null;
+  created_at: string;
 }
 
 // Minimal Database type placeholder so @supabase/ssr generics compile.

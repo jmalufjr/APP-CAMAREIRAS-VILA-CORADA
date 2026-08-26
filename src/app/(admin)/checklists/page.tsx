@@ -1,20 +1,29 @@
 import { createClient } from "@/lib/supabase/server";
-import type { ChecklistItem, OccurrenceCategory, Room } from "@/lib/types";
+import type { ChecklistItem, MaintenanceCategory, MaintenanceItem, OccurrenceCategory, Room } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import { ChecklistItemsPanel } from "./checklist-items-panel";
 import { OccurrenceCategoriesPanel } from "./occurrence-categories-panel";
+import { MaintenancePreventivaPanel } from "./maintenance-preventiva-panel";
 
 export default async function ChecklistsPage() {
   const supabase = await createClient();
-  const [{ data: items }, { data: categories }, { data: rooms }, { data: assignments }] =
-    await Promise.all([
-      supabase.from("checklist_items").select("*").order("position"),
-      supabase.from("occurrence_categories").select("*").order("position"),
-      supabase.from("rooms").select("*").order("position"),
-      supabase.from("room_checklist_items").select("room_id, checklist_item_id"),
-    ]);
+  const [
+    { data: items },
+    { data: categories },
+    { data: rooms },
+    { data: assignments },
+    { data: maintenanceCategories },
+    { data: maintenanceItems },
+  ] = await Promise.all([
+    supabase.from("checklist_items").select("*").order("position"),
+    supabase.from("occurrence_categories").select("*").order("position"),
+    supabase.from("rooms").select("*").order("position"),
+    supabase.from("room_checklist_items").select("room_id, checklist_item_id"),
+    supabase.from("maintenance_categories").select("*").order("position"),
+    supabase.from("maintenance_items").select("*").order("position"),
+  ]);
 
   const assignmentMap = new Map<string, string[]>();
   (assignments ?? []).forEach((a) => {
@@ -39,6 +48,7 @@ export default async function ChecklistsPage() {
           <TabsTrigger value="preparacao">{TASK_TYPE_LABELS.preparacao}</TabsTrigger>
           <TabsTrigger value="troca">{TASK_TYPE_LABELS.troca}</TabsTrigger>
           <TabsTrigger value="ocorrencias">Ocorrências Manutenção</TabsTrigger>
+          <TabsTrigger value="manutencao-preventiva">Manutenção Preventiva</TabsTrigger>
         </TabsList>
         <TabsContent value="arrumacao" className="pt-4">
           <ChecklistItemsPanel
@@ -66,6 +76,12 @@ export default async function ChecklistsPage() {
         </TabsContent>
         <TabsContent value="ocorrencias" className="pt-4">
           <OccurrenceCategoriesPanel categories={(categories ?? []) as OccurrenceCategory[]} />
+        </TabsContent>
+        <TabsContent value="manutencao-preventiva" className="pt-4">
+          <MaintenancePreventivaPanel
+            categories={(maintenanceCategories ?? []) as MaintenanceCategory[]}
+            items={(maintenanceItems ?? []) as MaintenanceItem[]}
+          />
         </TabsContent>
       </Tabs>
     </div>

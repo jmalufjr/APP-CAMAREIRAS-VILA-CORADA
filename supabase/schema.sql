@@ -12,6 +12,8 @@ create type checklist_type as enum ('arrumacao', 'preparacao', 'troca');
 create type task_status as enum ('pendente', 'em_andamento', 'concluido');
 create type table_shape as enum ('round', 'rect');
 create type occurrence_status as enum ('pendente', 'selecionada', 'resolvida');
+create type maintenance_execution_type as enum ('nao_tecnico', 'tecnico');
+create type maintenance_item_status as enum ('pendente', 'selecionada');
 
 -- ---------- PROFILES ----------
 -- Espelha auth.users com dados de perfil e papel (admin | camareira)
@@ -164,6 +166,46 @@ create table daily_departures (
   unique (date, room_id)
 );
 
+-- ---------- MAINTENANCE CATEGORIES (categorias de manutenção preventiva) ----------
+create table maintenance_categories (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null unique,
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- ---------- MAINTENANCE ITEMS (itens de manutenção preventiva, por categoria) ----------
+-- next_due_date/status/selected_by/selected_at guardam o ciclo atual do item;
+-- ao concluir, o item volta para 'pendente' com next_due_date empurrada pela
+-- periodicidade, e a conclusão fica registrada em maintenance_completions.
+create table maintenance_items (
+  id uuid primary key default uuid_generate_v4(),
+  category_id uuid not null references maintenance_categories(id) on delete cascade,
+  label text not null,
+  description text,
+  execution_type maintenance_execution_type not null,
+  periodicity_days int not null check (periodicity_days > 0),
+  next_due_date date not null default current_date,
+  status maintenance_item_status not null default 'pendente',
+  selected_by uuid references profiles(id) on delete set null,
+  selected_at timestamptz,
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- ---------- MAINTENANCE COMPLETIONS (histórico de execuções concluídas) ----------
+create table maintenance_completions (
+  id uuid primary key default uuid_generate_v4(),
+  item_id uuid not null references maintenance_items(id) on delete cascade,
+  due_date date not null,
+  completed_by uuid references profiles(id) on delete set null,
+  completed_at timestamptz not null default now(),
+  external_technician_name text,
+  created_at timestamptz not null default now()
+);
+
 -- ============================================================================
 -- ROW LEVEL SECURITY
 -- ============================================================================
@@ -180,6 +222,9 @@ alter table daily_room_task_occurrences enable row level security;
 alter table daily_breakfast enable row level security;
 alter table daily_arrivals enable row level security;
 alter table daily_departures enable row level security;
+alter table maintenance_categories enable row level security;
+alter table maintenance_items enable row level security;
+alter table maintenance_completions enable row level security;
 
 -- Helper: is the current user an admin?
 create or replace function is_admin() returns boolean as $$
@@ -322,3 +367,100 @@ create policy "dd_select_authenticated" on daily_departures for select using (au
 create policy "dd_admin_write" on daily_departures for insert with check (is_admin());
 create policy "dd_admin_update" on daily_departures for update using (is_admin());
 create policy "dd_admin_delete" on daily_departures for delete using (is_admin());
+
+-- maintenance_categories / maintenance_items / maintenance_completions:
+-- todo autenticado lê (admin e funcionário de manutenção usam essas telas);
+-- só admin edita direto. Selecionar/concluir itens é feito por funções
+-- security definer abaixo, não por policy de UPDATE (mesmo motivo do fix
+-- aplicado às ocorrências: evita a combinação de múltiplas policies de
+-- UPDATE permissivas na mesma tabela).
+create policy "mc_select_authenticated" on maintenance_categories for select using (auth.uid() is not null);
+create policy "mc_admin_write" on maintenance_categories for insert with check (is_admin());
+create policy "mc_admin_update" on maintenance_categories for update using (is_admin());
+create policy "mc_admin_delete" on maintenance_categories for delete using (is_admin());
+
+create policy "mi_select_authenticated" on maintenance_items for select using (auth.uid() is not null);
+create policy "mi_admin_write" on maintenance_items for insert with check (is_admin());
+create policy "mi_admin_update" on maintenance_items for update using (is_admin());
+create policy "mi_admin_delete" on maintenance_items for delete using (is_admin());
+
+create policy "mcomp_select_authenticated" on maintenance_completions for select using (auth.uid() is not null);
+
+-- Seleciona (reivindica) para si todos os itens pendentes e já vencidos
+-- (hoje/amanhã ou atrasados) de uma categoria.
+create or replace function claim_maintenance_category(cat_id uuid) returns void as $$
+begin
+  if not is_manutencao() then
+    raise exception 'not authorized';
+  end if;
+
+  update maintenance_items
+  set status = 'selecionada', selected_by = auth.uid(), selected_at = now()
+  where category_id = cat_id
+    and active = true
+    and status = 'pendente'
+    and next_due_date <= (current_date + 1);
+end;
+$$ language plpgsql security definer;
+
+-- Conclui os itens não técnicos (internos) selecionados pelo próprio
+-- funcionário para a categoria; registra histórico e agenda o próximo ciclo.
+create or replace function complete_maintenance_nao_tecnico(cat_id uuid) returns void as $$
+declare
+  r record;
+begin
+  if not is_manutencao() then
+    raise exception 'not authorized';
+  end if;
+
+  for r in
+    select id, next_due_date, periodicity_days
+    from maintenance_items
+    where category_id = cat_id
+      and execution_type = 'nao_tecnico'
+      and status = 'selecionada'
+      and selected_by = auth.uid()
+  loop
+    insert into maintenance_completions (item_id, due_date, completed_by)
+    values (r.id, r.next_due_date, auth.uid());
+
+    update maintenance_items
+    set status = 'pendente', selected_by = null, selected_at = null,
+        next_due_date = current_date + r.periodicity_days
+    where id = r.id;
+  end loop;
+end;
+$$ language plpgsql security definer;
+
+-- Conclui os itens técnicos (externos) selecionados pelo próprio funcionário
+-- para a categoria; o funcionário registra apenas o nome do técnico externo
+-- e fica registrado como quem supervisionou.
+create or replace function complete_maintenance_tecnico(cat_id uuid, external_name text) returns void as $$
+declare
+  r record;
+begin
+  if not is_manutencao() then
+    raise exception 'not authorized';
+  end if;
+  if external_name is null or btrim(external_name) = '' then
+    raise exception 'external technician name is required';
+  end if;
+
+  for r in
+    select id, next_due_date, periodicity_days
+    from maintenance_items
+    where category_id = cat_id
+      and execution_type = 'tecnico'
+      and status = 'selecionada'
+      and selected_by = auth.uid()
+  loop
+    insert into maintenance_completions (item_id, due_date, completed_by, external_technician_name)
+    values (r.id, r.next_due_date, auth.uid(), btrim(external_name));
+
+    update maintenance_items
+    set status = 'pendente', selected_by = null, selected_at = null,
+        next_due_date = current_date + r.periodicity_days
+    where id = r.id;
+  end loop;
+end;
+$$ language plpgsql security definer;

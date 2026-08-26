@@ -1,16 +1,27 @@
 import { PageHeader } from "@/components/shared/page-header";
+import { getManutencaoPreventivaOverview } from "@/lib/actions/maintenance";
+import { getCurrentProfile } from "@/lib/actions/session";
+import { PreventivaWorkList } from "./preventiva-work-list";
+import { UpcomingMaintenanceTable } from "./upcoming-maintenance-table";
 
-export default function ManutencaoPreventivaPage() {
+export default async function ManutencaoPreventivaPage() {
+  const [{ dueByCategory, upcoming }, profile] = await Promise.all([
+    getManutencaoPreventivaOverview(),
+    getCurrentProfile(),
+  ]);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="Manutenção Preventiva"
-        subtitle="Trabalhos de manutenção preventiva de hoje, amanhã e dos próximos 30 dias."
+        subtitle="Trabalhos previstos para hoje e amanhã, por categoria."
       />
-      <p className="text-sm text-muted-foreground">
-        Em desenvolvimento — esta tela fará parte da próxima etapa do módulo de manutenção
-        (categorias, itens e agenda de manutenção preventiva).
-      </p>
+      <PreventivaWorkList categories={dueByCategory} currentUserId={profile.id} />
+
+      <div className="space-y-3">
+        <h2 className="font-heading text-lg text-primary">Próximos 30 dias</h2>
+        <UpcomingMaintenanceTable items={upcoming} />
+      </div>
     </div>
   );
 }

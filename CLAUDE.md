@@ -122,13 +122,13 @@ manutenção programada por categoria/item), com um novo papel de usuário
 "Funcionário de Manutenção" responsável por essas telas.
 
 **Status em 2026-08-26**: em desenvolvimento na branch `feature/manutencao`
-(ainda não mesclada em `main`, ainda não implantada). Etapas 1–5 abaixo estão
-implementadas e passam em `npm run build`/`npm run lint`; **falta rodar a
-migration em Supabase e testar em localhost antes de prosseguir** (ver
-"Como retomar" no fim desta seção). Etapas 6–11 (manutenção preventiva) ainda
-não foram iniciadas — as telas `/manutencao/preventiva` (funcionário) e
-`/manutencao-preventiva` (admin) existem apenas como placeholder "Em
-desenvolvimento".
+(ainda não mesclada em `main`, ainda não implantada). Etapas 1–10 abaixo
+estão implementadas e passam em `npm run build`/`npm run lint`. Etapas 1–5
+(ocorrências corretivas) já foram testadas em localhost pelo proprietário e
+funcionam de ponta a ponta. Etapas 6–10 (manutenção preventiva) foram
+implementadas nesta sessão mas **ainda não foram testadas em localhost** —
+falta rodar a migration 010 no Supabase (ver "Como retomar"). Falta apenas a
+etapa 11 (revisão de segurança final) antes de mesclar em `main` e implantar.
 
 ### Etapas de desenvolvimento planejadas (ordem sugerida)
 
@@ -197,20 +197,49 @@ desenvolvimento".
   `role: "camareira" | "manutencao"`).
 - Ciclo de vida das ocorrências implementado em
   `src/lib/actions/occurrences.ts` (`getManutencaoOccurrences`,
-  `selectOccurrence`, `resolveOccurrence`) + RLS em `supabase/schema.sql` e
+  `selectOccurrence`, `resolveOccurrence`), que chamam as funções SQL
+  `select_occurrence`/`resolve_occurrence` (security definer — ver nota de
+  RLS abaixo) + RLS em `supabase/schema.sql`,
   `supabase/migrations/008_funcionario_manutencao.sql` (rodar em duas
-  etapas no SQL Editor do Supabase, igual ao padrão do migration 003).
-  **Esta migration ainda não foi rodada no projeto Supabase** — é o próximo
-  passo obrigatório antes de testar em localhost, porque o app já assume
-  as colunas/policies novas em produção do schema.
-- Depois de rodar a migration: testar em localhost (`npm run dev`) o fluxo
-  completo — admin cria um "Funcionário de Manutenção" em `/usuarios`, faz
-  login como esse usuário, camareira registra uma ocorrência normalmente,
-  o funcionário a seleciona e resolve em `/manutencao/ocorrencias`, e o
-  admin confere o status/horários em `/ocorrencias`, a coluna "Resolvidas"
-  em `/ocorrencias/historico` e as colunas novas em `/historico` — só então
-  seguir para as etapas 6–11 e, ao final de tudo, mesclar em `main` e
-  implantar.
+  etapas, igual ao padrão do migration 003) e
+  `supabase/migrations/009_fix_manutencao_occurrence_rpc.sql` (rodar depois,
+  uma etapa só). **Já rodadas em produção e testadas em localhost com
+  sucesso** (fluxo completo camareira → funcionário de manutenção → admin).
+- **Lição aprendida (bug real encontrado em teste)**: uma policy de UPDATE
+  combinando dois estados (selecionar + resolver) numa única regra de RLS
+  falhou no `with check` do Postgres ao tentar resolver uma ocorrência já
+  selecionada — o erro só aparece em teste real, não em `npm run build`.
+  A correção (migration 009) trocou a policy por duas funções `security
+  definer` (`select_occurrence`/`resolve_occurrence`), o mesmo padrão já
+  usado por `is_admin()`/`is_manutencao()`. Por isso a manutenção preventiva
+  (abaixo) também usa funções `security definer`
+  (`claim_maintenance_category`, `complete_maintenance_nao_tecnico`,
+  `complete_maintenance_tecnico`) em vez de policies de UPDATE diretas —
+  **não reintroduzir policies de UPDATE combinadas nesta parte do projeto**.
+- Manutenção preventiva implementada em `src/lib/actions/maintenance.ts` +
+  `src/lib/maintenance.ts` (labels/periodicidade) + tabelas
+  `maintenance_categories`/`maintenance_items`/`maintenance_completions` em
+  `supabase/schema.sql` e `supabase/migrations/010_manutencao_preventiva.sql`
+  (uma etapa só, inclui o seed das 9 categorias × ~10 itens). Modelo:
+  `maintenance_items` guarda o ciclo atual do item (`next_due_date`,
+  `status`, `selected_by`/`selected_at`); ao concluir, grava uma linha em
+  `maintenance_completions` (histórico) e empurra `next_due_date` pela
+  periodicidade. Telas: `src/app/manutencao/preventiva/` (funcionário,
+  cards por categoria + checklist com as duas seções técnico/não técnico em
+  `[categoryId]/`), `src/app/(admin)/manutencao-preventiva/` (dashboard
+  hoje/amanhã/2 meses) e a nova aba "Manutenção Preventiva" em
+  `src/app/(admin)/checklists/maintenance-preventiva-panel.tsx` (CRUD de
+  categorias/itens). **Ainda não testado em localhost** — falta rodar a
+  migration 010.
+- **Antes de continuar**: rodar as migrations 008, 009 e 010 (nessa ordem)
+  no Supabase se ainda não estiverem todas aplicadas, depois testar em
+  localhost (`npm run dev`) o fluxo de manutenção preventiva — logar como
+  funcionário de manutenção, selecionar uma categoria em
+  `/manutencao/preventiva`, concluir o checklist não técnico e/ou técnico, e
+  conferir `/manutencao-preventiva` (admin) e a aba "Manutenção Preventiva"
+  em "Listas" (`/checklists`). Só depois disso seguir para a etapa 11
+  (revisão de segurança) e, ao final, mesclar `feature/manutencao` em
+  `main` e implantar.
 
 ### Regras específicas desta parte 02
 
