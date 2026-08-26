@@ -36,7 +36,7 @@ const adminNav: NavItem[] = [
   { href: "/chegadas-saidas/gerenciar", label: "Chegadas & saídas", icon: CalendarClock },
   { href: "/quartos", label: "Quartos", icon: BedDouble },
   { href: "/mesas/gerenciar", label: "Mesas do café", icon: Coffee },
-  { href: "/checklists", label: "Checklists & ocorrências manutenção", icon: ClipboardList },
+  { href: "/checklists", label: "Listas", icon: ClipboardList },
   { href: "/manutencao-preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
   { href: "/usuarios", label: "Usuários", icon: Users },
   { href: "/historico", label: "Histórico", icon: History },
