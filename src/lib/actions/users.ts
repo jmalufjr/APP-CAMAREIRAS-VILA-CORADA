@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import type { UserRole } from "@/lib/types";
 
 function slugify(name: string) {
   return name
@@ -13,14 +14,16 @@ function slugify(name: string) {
     .replace(/(^\.|\.$)/g, "");
 }
 
-export async function createCamareira(formData: FormData) {
+export async function createUser(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim() || null;
   const email = String(formData.get("email") ?? "").trim() || null;
   const password = String(formData.get("password") ?? "").trim();
+  const role = String(formData.get("role") ?? "camareira") as UserRole;
 
   if (!name || !password) return { error: "Nome e senha são obrigatórios." };
   if (password.length < 6) return { error: "A senha deve ter ao menos 6 caracteres." };
+  if (role !== "camareira" && role !== "manutencao") return { error: "Papel inválido." };
 
   const admin = createAdminClient();
   const loginEmail = `${slugify(name)}@camareiras.vilacorada.app`;
@@ -37,7 +40,7 @@ export async function createCamareira(formData: FormData) {
 
   const { error: profileError } = await admin.from("profiles").insert({
     id: authUser.user.id,
-    role: "camareira",
+    role,
     name,
     phone,
     email,
@@ -49,11 +52,11 @@ export async function createCamareira(formData: FormData) {
     return { error: profileError.message };
   }
 
-  revalidatePath("/camareiras");
+  revalidatePath("/usuarios");
   return { success: true };
 }
 
-export async function updateCamareira(id: string, formData: FormData) {
+export async function updateUser(id: string, formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim() || null;
   const email = String(formData.get("email") ?? "").trim() || null;
@@ -66,11 +69,11 @@ export async function updateCamareira(id: string, formData: FormData) {
     .eq("id", id);
 
   if (error) return { error: error.message };
-  revalidatePath("/camareiras");
+  revalidatePath("/usuarios");
   return { success: true };
 }
 
-export async function resetCamareiraPassword(id: string, newPassword: string) {
+export async function resetUserPassword(id: string, newPassword: string) {
   if (newPassword.length < 6) return { error: "A senha deve ter ao menos 6 caracteres." };
   const admin = createAdminClient();
   const { error } = await admin.auth.admin.updateUserById(id, { password: newPassword });
@@ -78,10 +81,10 @@ export async function resetCamareiraPassword(id: string, newPassword: string) {
   return { success: true };
 }
 
-export async function deleteCamareira(id: string) {
+export async function deleteUser(id: string) {
   const admin = createAdminClient();
   const { error } = await admin.auth.admin.deleteUser(id);
   if (error) return { error: error.message };
-  revalidatePath("/camareiras");
+  revalidatePath("/usuarios");
   return { success: true };
 }

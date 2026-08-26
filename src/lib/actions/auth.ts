@@ -3,12 +3,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
+import type { UserRole } from "@/lib/types";
 
 export interface LoginOption {
   id: string;
   name: string;
   email: string;
-  role: "admin" | "camareira";
+  role: UserRole;
 }
 
 // Lista pública (login ainda não realizado) de usuários ativos para preencher
@@ -51,7 +52,12 @@ export async function signInAction(formData: FormData) {
     .eq("id", user!.id)
     .single();
 
-  redirect(profile?.role === "admin" ? "/dashboard" : "/tarefas");
+  const roleHome: Record<string, string> = {
+    admin: "/dashboard",
+    camareira: "/tarefas",
+    manutencao: "/manutencao/ocorrencias",
+  };
+  redirect(roleHome[profile?.role ?? "camareira"] ?? "/tarefas");
 }
 
 export async function signOutAction() {

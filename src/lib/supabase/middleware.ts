@@ -50,30 +50,55 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
+    const roleHome: Record<string, string> = {
+      admin: "/dashboard",
+      camareira: "/tarefas",
+      manutencao: "/manutencao/ocorrencias",
+    };
+
     if (path === "/login") {
       const url = request.nextUrl.clone();
-      url.pathname = profile.role === "admin" ? "/dashboard" : "/tarefas";
+      url.pathname = roleHome[profile.role] ?? "/tarefas";
       return NextResponse.redirect(url);
     }
+
+    const matchesPrefix = (p: string) => path === p || path.startsWith(p + "/");
 
     const adminOnlyPrefixes = [
       "/dashboard",
       "/quartos",
-      "/camareiras",
+      "/usuarios",
       "/mesas/gerenciar",
       "/checklists",
       "/historico",
       "/chegadas-saidas/gerenciar",
       "/ocorrencias",
+      "/manutencao-preventiva",
     ];
-    if (profile.role !== "admin" && adminOnlyPrefixes.some((p) => path.startsWith(p))) {
+    const camareiraOnlyPrefixes = ["/tarefas"];
+    const manutencaoOnlyPrefixes = ["/manutencao"];
+
+    if (profile.role !== "admin" && adminOnlyPrefixes.some(matchesPrefix)) {
       const url = request.nextUrl.clone();
-      url.pathname = "/tarefas";
+      url.pathname = roleHome[profile.role] ?? "/login";
       return NextResponse.redirect(url);
     }
 
-    const camareiraOnlyPrefixes = ["/tarefas"];
-    if (profile.role === "admin" && camareiraOnlyPrefixes.some((p) => path.startsWith(p))) {
+    if (profile.role !== "camareira" && camareiraOnlyPrefixes.some(matchesPrefix)) {
+      if (profile.role !== "admin") {
+        const url = request.nextUrl.clone();
+        url.pathname = roleHome[profile.role] ?? "/login";
+        return NextResponse.redirect(url);
+      }
+      // admin can still view; no redirect needed
+    }
+
+    if (profile.role !== "manutencao" && manutencaoOnlyPrefixes.some(matchesPrefix)) {
+      if (profile.role !== "admin") {
+        const url = request.nextUrl.clone();
+        url.pathname = roleHome[profile.role] ?? "/login";
+        return NextResponse.redirect(url);
+      }
       // admin can still view; no redirect needed
     }
   }

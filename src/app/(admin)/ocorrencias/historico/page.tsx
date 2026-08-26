@@ -17,7 +17,11 @@ interface TaskRow {
   date: string;
   notes: string | null;
   rooms: { number: string } | null;
-  daily_room_task_occurrences: { id: string; occurrence_categories: { name: string } | null }[];
+  daily_room_task_occurrences: {
+    id: string;
+    status: string;
+    occurrence_categories: { name: string } | null;
+  }[];
 }
 
 export default async function OcorrenciasHistoricoPage() {
@@ -27,7 +31,9 @@ export default async function OcorrenciasHistoricoPage() {
 
   const { data: tasks } = await supabase
     .from("daily_room_tasks")
-    .select("date, notes, rooms(number), daily_room_task_occurrences(id, occurrence_categories(name))")
+    .select(
+      "date, notes, rooms(number), daily_room_task_occurrences(id, status, occurrence_categories(name))"
+    )
     .gte("date", from)
     .lte("date", to);
 
@@ -45,11 +51,21 @@ export default async function OcorrenciasHistoricoPage() {
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count);
 
-  const byDate = new Map<string, { ocorrencias: number; quartosComOcorrencia: Set<string>; observacoes: number }>();
+  const byDate = new Map<
+    string,
+    { ocorrencias: number; resolvidas: number; quartosComOcorrencia: Set<string>; observacoes: number }
+  >();
   rows.forEach((t) => {
-    const entry = byDate.get(t.date) ?? { ocorrencias: 0, quartosComOcorrencia: new Set<string>(), observacoes: 0 };
+    const entry =
+      byDate.get(t.date) ?? {
+        ocorrencias: 0,
+        resolvidas: 0,
+        quartosComOcorrencia: new Set<string>(),
+        observacoes: 0,
+      };
     if (t.daily_room_task_occurrences.length > 0) {
       entry.ocorrencias += t.daily_room_task_occurrences.length;
+      entry.resolvidas += t.daily_room_task_occurrences.filter((o) => o.status === "resolvida").length;
       entry.quartosComOcorrencia.add(t.rooms?.number ?? "");
     }
     if (t.notes) entry.observacoes += 1;
@@ -63,10 +79,11 @@ export default async function OcorrenciasHistoricoPage() {
   const totals = byDay.reduce(
     (acc, [, v]) => ({
       ocorrencias: acc.ocorrencias + v.ocorrencias,
+      resolvidas: acc.resolvidas + v.resolvidas,
       quartos: acc.quartos + v.quartosComOcorrencia.size,
       observacoes: acc.observacoes + v.observacoes,
     }),
-    { ocorrencias: 0, quartos: 0, observacoes: 0 }
+    { ocorrencias: 0, resolvidas: 0, quartos: 0, observacoes: 0 }
   );
 
   return (
@@ -83,6 +100,7 @@ export default async function OcorrenciasHistoricoPage() {
               <TableRow>
                 <TableHead>Data</TableHead>
                 <TableHead>Total de ocorrências manutenção</TableHead>
+                <TableHead>Resolvidas</TableHead>
                 <TableHead>Quartos com ocorrência</TableHead>
                 <TableHead>Quartos com observação</TableHead>
               </TableRow>
@@ -96,13 +114,14 @@ export default async function OcorrenciasHistoricoPage() {
                     </Link>
                   </TableCell>
                   <TableCell>{v.ocorrencias}</TableCell>
+                  <TableCell>{v.resolvidas}</TableCell>
                   <TableCell>{v.quartosComOcorrencia.size}</TableCell>
                   <TableCell>{v.observacoes}</TableCell>
                 </TableRow>
               ))}
               {byDay.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                     Nenhuma ocorrência ou observação nos últimos 30 dias.
                   </TableCell>
                 </TableRow>
@@ -112,6 +131,7 @@ export default async function OcorrenciasHistoricoPage() {
               <TableRow className="font-medium bg-muted/50">
                 <TableCell>Total</TableCell>
                 <TableCell>{totals.ocorrencias}</TableCell>
+                <TableCell>{totals.resolvidas}</TableCell>
                 <TableCell>{totals.quartos}</TableCell>
                 <TableCell>{totals.observacoes}</TableCell>
               </TableRow>

@@ -20,6 +20,8 @@ import {
   ClipboardCheck,
   Menu,
   CalendarClock,
+  Wrench,
+  CalendarCheck2,
 } from "lucide-react";
 
 interface NavItem {
@@ -34,8 +36,9 @@ const adminNav: NavItem[] = [
   { href: "/chegadas-saidas/gerenciar", label: "Chegadas & saídas", icon: CalendarClock },
   { href: "/quartos", label: "Quartos", icon: BedDouble },
   { href: "/mesas/gerenciar", label: "Mesas do café", icon: Coffee },
-  { href: "/checklists", label: "Checklists & ocorrências manutenção", icon: ClipboardList },
-  { href: "/camareiras", label: "Camareiras", icon: Users },
+  { href: "/checklists", label: "Listas", icon: ClipboardList },
+  { href: "/manutencao-preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
+  { href: "/usuarios", label: "Usuários", icon: Users },
   { href: "/historico", label: "Histórico", icon: History },
 ];
 
@@ -45,17 +48,22 @@ const camareiraNav: NavItem[] = [
   { href: "/chegadas-saidas", label: "Chegadas & saídas", icon: CalendarClock },
 ];
 
+const manutencaoNav: NavItem[] = [
+  { href: "/manutencao/ocorrencias", label: "Ocorrências de Manutenção", icon: Wrench },
+  { href: "/manutencao/preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
+];
+
 function SidebarContent({
   role,
   userName,
   onNavigate,
 }: {
-  role: "admin" | "camareira";
+  role: "admin" | "camareira" | "manutencao";
   userName: string;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const items = role === "admin" ? adminNav : camareiraNav;
+  const items = role === "admin" ? adminNav : role === "manutencao" ? manutencaoNav : camareiraNav;
 
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
@@ -67,7 +75,7 @@ function SidebarContent({
         </div>
       </div>
 
-      <nav className="flex-1 px-3 space-y-1">
+      <nav className="flex-1 min-h-0 overflow-y-auto px-3 space-y-1">
         {items.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
@@ -112,7 +120,7 @@ export function AppSidebar({
   role,
   userName,
 }: {
-  role: "admin" | "camareira";
+  role: "admin" | "camareira" | "manutencao";
   userName: string;
 }) {
   const [open, setOpen] = useState(false);

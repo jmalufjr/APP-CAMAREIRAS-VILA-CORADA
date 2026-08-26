@@ -3,12 +3,13 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { createCamareira, updateCamareira } from "@/lib/actions/camareiras";
-import type { Profile } from "@/lib/types";
+import { createUser, updateUser } from "@/lib/actions/users";
+import type { Profile, UserRole } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -20,11 +21,12 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Pencil } from "lucide-react";
 
-export function CamareiraFormDialog({ camareira }: { camareira?: Profile }) {
+export function UserFormDialog({ user }: { user?: Profile }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [role, setRole] = useState<UserRole>(user?.role ?? "camareira");
   const router = useRouter();
-  const isEdit = !!camareira;
+  const isEdit = !!user;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -36,31 +38,32 @@ export function CamareiraFormDialog({ camareira }: { camareira?: Profile }) {
             </Button>
           ) : (
             <Button>
-              <Plus size={16} /> Nova camareira
+              <Plus size={16} /> Novo usuário
             </Button>
           )
         }
       />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar camareira" : "Nova camareira"}</DialogTitle>
+          <DialogTitle>{isEdit ? "Editar usuário" : "Novo usuário"}</DialogTitle>
           {!isEdit && (
             <DialogDescription>
-              O login será gerado automaticamente a partir do nome; a camareira usará o
+              O login será gerado automaticamente a partir do nome; a pessoa usará o
               nome pré-cadastrado e a senha definida aqui para acessar o sistema.
             </DialogDescription>
           )}
         </DialogHeader>
         <form
           action={(formData) => {
+            formData.set("role", role);
             startTransition(async () => {
               const result = isEdit
-                ? await updateCamareira(camareira.id, formData)
-                : await createCamareira(formData);
+                ? await updateUser(user.id, formData)
+                : await createUser(formData);
               if (result?.error) {
                 toast.error(result.error);
               } else {
-                toast.success(isEdit ? "Camareira atualizada." : "Camareira cadastrada.");
+                toast.success(isEdit ? "Usuário atualizado." : "Usuário cadastrado.");
                 setOpen(false);
                 router.refresh();
               }
@@ -68,17 +71,31 @@ export function CamareiraFormDialog({ camareira }: { camareira?: Profile }) {
           }}
           className="space-y-4"
         >
+          {!isEdit && (
+            <div className="space-y-2">
+              <Label>Papel</Label>
+              <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="camareira">Camareira</SelectItem>
+                  <SelectItem value="manutencao">Funcionário de Manutenção</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="name">Nome</Label>
-            <Input id="name" name="name" defaultValue={camareira?.name} required />
+            <Input id="name" name="name" defaultValue={user?.name} required />
           </div>
           <div className="space-y-2">
             <Label htmlFor="phone">Telefone</Label>
-            <Input id="phone" name="phone" defaultValue={camareira?.phone ?? ""} />
+            <Input id="phone" name="phone" defaultValue={user?.phone ?? ""} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">E-mail</Label>
-            <Input id="email" name="email" type="email" defaultValue={camareira?.email ?? ""} />
+            <Input id="email" name="email" type="email" defaultValue={user?.email ?? ""} />
           </div>
           {!isEdit && (
             <div className="space-y-2">
@@ -88,8 +105,8 @@ export function CamareiraFormDialog({ camareira }: { camareira?: Profile }) {
           )}
           {isEdit && (
             <div className="flex items-center gap-2">
-              <Switch id="active" name="active" defaultChecked={camareira?.active ?? true} />
-              <Label htmlFor="active">Ativa</Label>
+              <Switch id="active" name="active" defaultChecked={user?.active ?? true} />
+              <Label htmlFor="active">Ativo</Label>
             </div>
           )}
           <DialogFooter>
