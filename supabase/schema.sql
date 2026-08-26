@@ -277,15 +277,33 @@ create policy "drto_camareira_insert" on daily_room_task_occurrences for insert
 -- resolvidas); some da tela assim que marcada como resolvida.
 create policy "drto_manutencao_select" on daily_room_task_occurrences for select
   using (is_manutencao() and status <> 'resolvida');
-create policy "drto_manutencao_update" on daily_room_task_occurrences for update
-  using (is_manutencao() and (status = 'pendente' or selected_by = auth.uid()))
-  with check (
-    is_manutencao()
-    and (
-      (status = 'selecionada' and selected_by = auth.uid())
-      or (status = 'resolvida' and selected_by = auth.uid() and resolved_by = auth.uid())
-    )
-  );
+
+-- Selecionar/resolver uma ocorrência é feito por funções security definer
+-- (abaixo), não por policy de UPDATE: evita depender da combinação de
+-- múltiplas policies permissivas de UPDATE na mesma tabela.
+create or replace function select_occurrence(occ_id uuid) returns void as $$
+begin
+  if not is_manutencao() then
+    raise exception 'not authorized';
+  end if;
+
+  update daily_room_task_occurrences
+  set status = 'selecionada', selected_by = auth.uid(), selected_at = now()
+  where id = occ_id and status = 'pendente';
+end;
+$$ language plpgsql security definer;
+
+create or replace function resolve_occurrence(occ_id uuid) returns void as $$
+begin
+  if not is_manutencao() then
+    raise exception 'not authorized';
+  end if;
+
+  update daily_room_task_occurrences
+  set status = 'resolvida', resolved_by = auth.uid(), resolved_at = now()
+  where id = occ_id and selected_by = auth.uid();
+end;
+$$ language plpgsql security definer;
 
 -- daily_breakfast: everyone authenticated reads; only admin writes
 create policy "db_select_authenticated" on daily_breakfast for select using (auth.uid() is not null);

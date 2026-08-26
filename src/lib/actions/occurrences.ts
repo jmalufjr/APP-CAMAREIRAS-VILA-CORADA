@@ -86,16 +86,7 @@ export async function getManutencaoOccurrences(): Promise<ManutencaoOccurrenceRo
 
 export async function selectOccurrence(occurrenceId: string) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Não autenticado." };
-
-  const { error } = await supabase
-    .from("daily_room_task_occurrences")
-    .update({ status: "selecionada", selected_by: user.id, selected_at: new Date().toISOString() })
-    .eq("id", occurrenceId)
-    .eq("status", "pendente");
+  const { error } = await supabase.rpc("select_occurrence", { occ_id: occurrenceId });
 
   if (error) return { error: error.message };
   revalidatePath("/manutencao/ocorrencias");
@@ -105,16 +96,7 @@ export async function selectOccurrence(occurrenceId: string) {
 
 export async function resolveOccurrence(occurrenceId: string) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Não autenticado." };
-
-  const { error } = await supabase
-    .from("daily_room_task_occurrences")
-    .update({ status: "resolvida", resolved_by: user.id, resolved_at: new Date().toISOString() })
-    .eq("id", occurrenceId)
-    .eq("selected_by", user.id);
+  const { error } = await supabase.rpc("resolve_occurrence", { occ_id: occurrenceId });
 
   if (error) return { error: error.message };
   revalidatePath("/manutencao/ocorrencias");
