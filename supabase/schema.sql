@@ -7,10 +7,11 @@
 create extension if not exists "uuid-ossp";
 
 -- ---------- ENUMS ----------
-create type user_role as enum ('admin', 'camareira');
+create type user_role as enum ('admin', 'camareira', 'manutencao');
 create type checklist_type as enum ('arrumacao', 'preparacao', 'troca');
 create type task_status as enum ('pendente', 'em_andamento', 'concluido');
 create type table_shape as enum ('round', 'rect');
+create type occurrence_status as enum ('pendente', 'selecionada', 'resolvida');
 
 -- ---------- PROFILES ----------
 -- Espelha auth.users com dados de perfil e papel (admin | camareira)
@@ -119,6 +120,11 @@ create table daily_room_task_occurrences (
   daily_room_task_id uuid not null references daily_room_tasks(id) on delete cascade,
   occurrence_category_id uuid not null references occurrence_categories(id),
   description text,
+  status occurrence_status not null default 'pendente',
+  selected_by uuid references profiles(id) on delete set null,
+  selected_at timestamptz,
+  resolved_by uuid references profiles(id) on delete set null,
+  resolved_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -182,11 +188,22 @@ create or replace function is_admin() returns boolean as $$
   );
 $$ language sql security definer stable;
 
+-- Helper: is the current user a funcionário de manutenção?
+create or replace function is_manutencao() returns boolean as $$
+  select exists (
+    select 1 from profiles where id = auth.uid() and role = 'manutencao' and active = true
+  );
+$$ language sql security definer stable;
+
 -- profiles: user can read own profile; admin can read/write all
 create policy "profiles_select_own_or_admin" on profiles for select
   using (id = auth.uid() or is_admin());
 create policy "profiles_admin_all" on profiles for all
   using (is_admin()) with check (is_admin());
+-- funcionário de manutenção precisa ler o nome da camareira que registrou cada
+-- ocorrência e o nome de colegas que selecionaram/resolveram outras ocorrências
+create policy "profiles_manutencao_select_camareiras" on profiles for select
+  using (is_manutencao() and role in ('camareira', 'manutencao'));
 
 -- rooms: everyone authenticated can read; only admin writes
 create policy "rooms_select_authenticated" on rooms for select using (auth.uid() is not null);
@@ -235,6 +252,10 @@ create policy "drt_camareira_update_own" on daily_room_tasks for update
 create policy "drt_camareira_claim" on daily_room_tasks for update
   using (assigned_to is null)
   with check (assigned_to = auth.uid());
+-- funcionário de manutenção só usa esta tabela para enxergar em qual quarto/dia/camareira
+-- se deu cada ocorrência (join a partir de daily_room_task_occurrences); leitura ampla.
+create policy "drt_manutencao_select" on daily_room_tasks for select
+  using (is_manutencao());
 
 -- daily_room_task_checks: admin full; camareira can read/update checks of her own tasks
 create policy "drtc_admin_all" on daily_room_task_checks for all using (is_admin()) with check (is_admin());
@@ -250,6 +271,21 @@ create policy "drto_camareira_select" on daily_room_task_occurrences for select
   using (exists (select 1 from daily_room_tasks t where t.id = daily_room_task_id and t.assigned_to = auth.uid()));
 create policy "drto_camareira_insert" on daily_room_task_occurrences for insert
   with check (exists (select 1 from daily_room_tasks t where t.id = daily_room_task_id and t.assigned_to = auth.uid()));
+
+-- daily_room_task_occurrences: funcionário de manutenção vê toda ocorrência ainda não
+-- resolvida (garante pelo menos hoje/ontem, e mantém as mais antigas até serem
+-- resolvidas); some da tela assim que marcada como resolvida.
+create policy "drto_manutencao_select" on daily_room_task_occurrences for select
+  using (is_manutencao() and status <> 'resolvida');
+create policy "drto_manutencao_update" on daily_room_task_occurrences for update
+  using (is_manutencao() and (status = 'pendente' or selected_by = auth.uid()))
+  with check (
+    is_manutencao()
+    and (
+      (status = 'selecionada' and selected_by = auth.uid())
+      or (status = 'resolvida' and selected_by = auth.uid() and resolved_by = auth.uid())
+    )
+  );
 
 -- daily_breakfast: everyone authenticated reads; only admin writes
 create policy "db_select_authenticated" on daily_breakfast for select using (auth.uid() is not null);

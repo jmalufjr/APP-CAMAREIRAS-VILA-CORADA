@@ -16,7 +16,11 @@ interface TaskWithOccurrences {
   task_type: "arrumacao" | "preparacao" | "troca";
   status: string;
   profiles: { name: string } | null;
-  daily_room_task_occurrences: { id: string; occurrence_categories: { name: string } | null }[];
+  daily_room_task_occurrences: {
+    id: string;
+    status: string;
+    occurrence_categories: { name: string } | null;
+  }[];
 }
 
 export default async function HistoricoPage({
@@ -40,7 +44,7 @@ export default async function HistoricoPage({
     supabase
       .from("daily_room_tasks")
       .select(
-        "date, task_type, status, assigned_to, profiles!daily_room_tasks_assigned_to_fkey(name), daily_room_task_occurrences(id, occurrence_categories(name))"
+        "date, task_type, status, assigned_to, profiles!daily_room_tasks_assigned_to_fkey(name), daily_room_task_occurrences(id, status, occurrence_categories(name))"
       )
       .gte("date", from)
       .lte("date", to)
@@ -72,6 +76,7 @@ export default async function HistoricoPage({
           task_type: t.task_type,
           camareira: t.profiles?.name ?? "—",
           occurrences: t.daily_room_task_occurrences.length,
+          occurrencesResolved: t.daily_room_task_occurrences.filter((o) => o.status === "resolvida").length,
         }))}
       />
       <TopCategoriesTable

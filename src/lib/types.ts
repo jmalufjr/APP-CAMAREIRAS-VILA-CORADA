@@ -1,7 +1,8 @@
-export type UserRole = "admin" | "camareira";
+export type UserRole = "admin" | "camareira" | "manutencao";
 export type ChecklistType = "arrumacao" | "preparacao" | "troca";
 export type TaskStatus = "pendente" | "em_andamento" | "concluido";
 export type TableShape = "round" | "rect";
+export type OccurrenceStatus = "pendente" | "selecionada" | "resolvida";
 
 export interface Profile {
   id: string;
@@ -93,6 +94,11 @@ export interface DailyRoomTaskOccurrence {
   daily_room_task_id: string;
   occurrence_category_id: string;
   description: string | null;
+  status: OccurrenceStatus;
+  selected_by: string | null;
+  selected_at: string | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
   created_at: string;
 }
 

@@ -25,6 +25,7 @@ interface TaskRow {
   task_type: ChecklistType;
   camareira: string;
   occurrences: number;
+  occurrencesResolved: number;
 }
 
 interface DayStats {
@@ -35,6 +36,7 @@ interface DayStats {
   preparacao: number;
   troca: number;
   ocorrencias: number;
+  ocorrenciasResolvidas: number;
 }
 
 const emptyDayStats = (): DayStats => ({
@@ -45,6 +47,7 @@ const emptyDayStats = (): DayStats => ({
   preparacao: 0,
   troca: 0,
   ocorrencias: 0,
+  ocorrenciasResolvidas: 0,
 });
 
 function downloadCsv(filename: string, rows: (string | number)[][]) {
@@ -73,17 +76,28 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
       const entry = map.get(t.date) ?? emptyDayStats();
       entry[t.task_type] += 1;
       entry.ocorrencias += t.occurrences;
+      entry.ocorrenciasResolvidas += t.occurrencesResolved;
       map.set(t.date, entry);
     });
     return Array.from(map.entries()).sort(([a], [b]) => b.localeCompare(a));
   }, [breakfast, tasks]);
 
   const byCamareira = useMemo(() => {
-    const map = new Map<string, Pick<DayStats, "arrumacao" | "preparacao" | "troca" | "ocorrencias">>();
+    const map = new Map<
+      string,
+      Pick<DayStats, "arrumacao" | "preparacao" | "troca" | "ocorrencias" | "ocorrenciasResolvidas">
+    >();
     tasks.forEach((t) => {
-      const entry = map.get(t.camareira) ?? { arrumacao: 0, preparacao: 0, troca: 0, ocorrencias: 0 };
+      const entry = map.get(t.camareira) ?? {
+        arrumacao: 0,
+        preparacao: 0,
+        troca: 0,
+        ocorrencias: 0,
+        ocorrenciasResolvidas: 0,
+      };
       entry[t.task_type] += 1;
       entry.ocorrencias += t.occurrences;
+      entry.ocorrenciasResolvidas += t.occurrencesResolved;
       map.set(t.camareira, entry);
     });
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
@@ -98,6 +112,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
       preparacao: acc.preparacao + v.preparacao,
       troca: acc.troca + v.troca,
       ocorrencias: acc.ocorrencias + v.ocorrencias,
+      ocorrenciasResolvidas: acc.ocorrenciasResolvidas + v.ocorrenciasResolvidas,
     }),
     emptyDayStats()
   );
@@ -120,6 +135,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
                   `Qtd. ${TASK_TYPE_LABELS.preparacao}`,
                   `Qtd. ${TASK_TYPE_LABELS.troca}`,
                   "Ocorrências Manutenção",
+                  "Ocorrências Manutenção resolvidas",
                   "Comissão (R$)",
                 ],
                 ...byDay.map(([date, v]) => [
@@ -130,6 +146,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
                   v.preparacao,
                   v.troca,
                   v.ocorrencias,
+                  v.ocorrenciasResolvidas,
                   v.comissao.toFixed(2),
                 ]),
               ])
@@ -149,6 +166,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
                 <TableHead>Qtd. {TASK_TYPE_LABELS.preparacao}</TableHead>
                 <TableHead>Qtd. {TASK_TYPE_LABELS.troca}</TableHead>
                 <TableHead>Ocorrências Manutenção</TableHead>
+                <TableHead>Ocorrências resolvidas</TableHead>
                 <TableHead>Comissão (R$)</TableHead>
               </TableRow>
             </TableHeader>
@@ -162,12 +180,13 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
                   <TableCell>{v.preparacao}</TableCell>
                   <TableCell>{v.troca}</TableCell>
                   <TableCell>{v.ocorrencias}</TableCell>
+                  <TableCell>{v.ocorrenciasResolvidas}</TableCell>
                   <TableCell>R$ {v.comissao.toFixed(2)}</TableCell>
                 </TableRow>
               ))}
               {byDay.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                     Sem dados no período.
                   </TableCell>
                 </TableRow>
@@ -182,6 +201,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
                 <TableCell>{totals.preparacao}</TableCell>
                 <TableCell>{totals.troca}</TableCell>
                 <TableCell>{totals.ocorrencias}</TableCell>
+                <TableCell>{totals.ocorrenciasResolvidas}</TableCell>
                 <TableCell>R$ {totals.comissao.toFixed(2)}</TableCell>
               </TableRow>
             )}
@@ -203,6 +223,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
                   TASK_TYPE_LABELS.preparacao,
                   TASK_TYPE_LABELS.troca,
                   "Ocorrências Manutenção",
+                  "Ocorrências Manutenção resolvidas",
                   "Total",
                 ],
                 ...byCamareira.map(([name, v]) => [
@@ -211,6 +232,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
                   v.preparacao,
                   v.troca,
                   v.ocorrencias,
+                  v.ocorrenciasResolvidas,
                   v.arrumacao + v.preparacao + v.troca,
                 ]),
               ])
@@ -228,6 +250,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
                 <TableHead>{TASK_TYPE_LABELS.preparacao}</TableHead>
                 <TableHead>{TASK_TYPE_LABELS.troca}</TableHead>
                 <TableHead>Ocorrências Manutenção</TableHead>
+                <TableHead>Ocorrências resolvidas</TableHead>
                 <TableHead>Total</TableHead>
               </TableRow>
             </TableHeader>
@@ -239,12 +262,13 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
                   <TableCell>{v.preparacao}</TableCell>
                   <TableCell>{v.troca}</TableCell>
                   <TableCell>{v.ocorrencias}</TableCell>
+                  <TableCell>{v.ocorrenciasResolvidas}</TableCell>
                   <TableCell>{v.arrumacao + v.preparacao + v.troca}</TableCell>
                 </TableRow>
               ))}
               {byCamareira.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                     Sem dados no período.
                   </TableCell>
                 </TableRow>

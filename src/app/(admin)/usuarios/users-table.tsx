@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { Profile } from "@/lib/types";
-import { deleteCamareira, resetCamareiraPassword } from "@/lib/actions/camareiras";
+import { deleteUser, resetUserPassword } from "@/lib/actions/users";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,10 +23,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { CamareiraFormDialog } from "./camareira-form-dialog";
+import { UserFormDialog } from "./user-form-dialog";
 import { Trash2, KeyRound } from "lucide-react";
 
-export function CamareirasTable({ camareiras }: { camareiras: Profile[] }) {
+const ROLE_LABELS: Record<string, string> = {
+  camareira: "Camareira",
+  manutencao: "Funcionário de Manutenção",
+};
+
+export function UsersTable({ users }: { users: Profile[] }) {
   const [isPending, startTransition] = useTransition();
   const [resetTarget, setResetTarget] = useState<Profile | null>(null);
   const [newPassword, setNewPassword] = useState("");
@@ -39,6 +44,7 @@ export function CamareirasTable({ camareiras }: { camareiras: Profile[] }) {
           <TableHeader>
             <TableRow>
               <TableHead>Nome</TableHead>
+              <TableHead>Papel</TableHead>
               <TableHead>Telefone</TableHead>
               <TableHead>E-mail</TableHead>
               <TableHead>Status</TableHead>
@@ -46,32 +52,33 @@ export function CamareirasTable({ camareiras }: { camareiras: Profile[] }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {camareiras.map((c) => (
-              <TableRow key={c.id}>
-                <TableCell className="font-medium">{c.name}</TableCell>
-                <TableCell>{c.phone ?? "—"}</TableCell>
-                <TableCell>{c.email ?? "—"}</TableCell>
+            {users.map((u) => (
+              <TableRow key={u.id}>
+                <TableCell className="font-medium">{u.name}</TableCell>
+                <TableCell>{ROLE_LABELS[u.role] ?? u.role}</TableCell>
+                <TableCell>{u.phone ?? "—"}</TableCell>
+                <TableCell>{u.email ?? "—"}</TableCell>
                 <TableCell>
-                  <Badge variant={c.active ? "default" : "secondary"}>
-                    {c.active ? "Ativa" : "Inativa"}
+                  <Badge variant={u.active ? "default" : "secondary"}>
+                    {u.active ? "Ativo" : "Inativo"}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right space-x-1">
-                  <Button variant="ghost" size="icon" onClick={() => setResetTarget(c)}>
+                  <Button variant="ghost" size="icon" onClick={() => setResetTarget(u)}>
                     <KeyRound size={16} />
                   </Button>
-                  <CamareiraFormDialog camareira={c} />
+                  <UserFormDialog user={u} />
                   <Button
                     variant="ghost"
                     size="icon"
                     disabled={isPending}
                     onClick={() => {
-                      if (!confirm(`Excluir a camareira ${c.name}?`)) return;
+                      if (!confirm(`Excluir o usuário ${u.name}?`)) return;
                       startTransition(async () => {
-                        const result = await deleteCamareira(c.id);
+                        const result = await deleteUser(u.id);
                         if (result?.error) toast.error(result.error);
                         else {
-                          toast.success("Camareira excluída.");
+                          toast.success("Usuário excluído.");
                           router.refresh();
                         }
                       });
@@ -82,10 +89,10 @@ export function CamareirasTable({ camareiras }: { camareiras: Profile[] }) {
                 </TableCell>
               </TableRow>
             ))}
-            {camareiras.length === 0 && (
+            {users.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                  Nenhuma camareira cadastrada.
+                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  Nenhum usuário cadastrado.
                 </TableCell>
               </TableRow>
             )}
@@ -111,7 +118,7 @@ export function CamareirasTable({ camareiras }: { camareiras: Profile[] }) {
               onClick={() => {
                 if (!resetTarget) return;
                 startTransition(async () => {
-                  const result = await resetCamareiraPassword(resetTarget.id, newPassword);
+                  const result = await resetUserPassword(resetTarget.id, newPassword);
                   if (result?.error) toast.error(result.error);
                   else {
                     toast.success("Senha redefinida.");

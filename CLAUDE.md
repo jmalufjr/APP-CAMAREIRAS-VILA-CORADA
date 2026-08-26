@@ -121,9 +121,14 @@ imediatas identificadas pelas camareiras) e preventiva (agenda de
 manutenção programada por categoria/item), com um novo papel de usuário
 "Funcionário de Manutenção" responsável por essas telas.
 
-**Status em 2026-08-26**: nenhuma etapa de código iniciada — apenas os
-documentos de requisito/planejamento (`PRD_Camareiras_parte02.md` e esta
-seção) foram criados nesta sessão.
+**Status em 2026-08-26**: em desenvolvimento na branch `feature/manutencao`
+(ainda não mesclada em `main`, ainda não implantada). Etapas 1–5 abaixo estão
+implementadas e passam em `npm run build`/`npm run lint`; **falta rodar a
+migration em Supabase e testar em localhost antes de prosseguir** (ver
+"Como retomar" no fim desta seção). Etapas 6–11 (manutenção preventiva) ainda
+não foram iniciadas — as telas `/manutencao/preventiva` (funcionário) e
+`/manutencao-preventiva` (admin) existem apenas como placeholder "Em
+desenvolvimento".
 
 ### Etapas de desenvolvimento planejadas (ordem sugerida)
 
@@ -174,6 +179,38 @@ seção) foram criados nesta sessão.
     técnico).
 11. Revisão de segurança e teste ponta a ponta (RLS por papel, chaves nunca
     expostas ao client) antes de deploy — rodar skill `security-audit`.
+
+### Como retomar (estado real do código nesta branch)
+
+- Rotas novas: `src/app/manutencao/` (pasta real, **não** route-group —
+  cuidado: um route-group `(manutencao)` foi tentado primeiro e colidiu com
+  `/ocorrencias` do admin porque parênteses não viram segmento de URL;
+  por isso as telas do funcionário de manutenção ficam em
+  `src/app/manutencao/ocorrencias` e `src/app/manutencao/preventiva`, com
+  layout próprio em `src/app/manutencao/layout.tsx`) e
+  `src/app/(admin)/manutencao-preventiva/`.
+- Tela "Camareiras" foi renomeada e movida para
+  `src/app/(admin)/usuarios/` (`page.tsx`, `users-table.tsx`,
+  `user-form-dialog.tsx`); as Server Actions foram renomeadas de
+  `src/lib/actions/camareiras.ts` para `src/lib/actions/users.ts`
+  (`createUser`/`updateUser`/`resetUserPassword`/`deleteUser`, todas aceitam
+  `role: "camareira" | "manutencao"`).
+- Ciclo de vida das ocorrências implementado em
+  `src/lib/actions/occurrences.ts` (`getManutencaoOccurrences`,
+  `selectOccurrence`, `resolveOccurrence`) + RLS em `supabase/schema.sql` e
+  `supabase/migrations/008_funcionario_manutencao.sql` (rodar em duas
+  etapas no SQL Editor do Supabase, igual ao padrão do migration 003).
+  **Esta migration ainda não foi rodada no projeto Supabase** — é o próximo
+  passo obrigatório antes de testar em localhost, porque o app já assume
+  as colunas/policies novas em produção do schema.
+- Depois de rodar a migration: testar em localhost (`npm run dev`) o fluxo
+  completo — admin cria um "Funcionário de Manutenção" em `/usuarios`, faz
+  login como esse usuário, camareira registra uma ocorrência normalmente,
+  o funcionário a seleciona e resolve em `/manutencao/ocorrencias`, e o
+  admin confere o status/horários em `/ocorrencias`, a coluna "Resolvidas"
+  em `/ocorrencias/historico` e as colunas novas em `/historico` — só então
+  seguir para as etapas 6–11 e, ao final de tudo, mesclar em `main` e
+  implantar.
 
 ### Regras específicas desta parte 02
 
