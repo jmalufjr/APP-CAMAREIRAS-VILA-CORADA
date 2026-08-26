@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { tomorrowKey, daysAgoKey, mondayKey, fridayKey } from "@/lib/date";
+import { todayKey, mondayKey, fridayKey, addDaysKey } from "@/lib/date";
 import type { MaintenanceExecutionType } from "@/lib/types";
 
 // ---------- Admin: CRUD de categorias ----------
@@ -132,75 +132,88 @@ export interface MaintenanceItemRow {
 const ITEM_SELECT =
   "id, category_id, label, description, execution_type, periodicity_days, next_due_date, status, selected_by, selected_at, maintenance_categories(name), selected_by_profile:profiles!maintenance_items_selected_by_fkey(name)";
 
+// Um "card" de trabalho é uma categoria + a semana (segunda a sexta) a que
+// pertencem seus itens vencidos ainda não resolvidos. Uma categoria pode
+// aparecer em mais de um card se tiver itens atrasados de semanas diferentes.
 export interface MaintenanceCategoryOverview {
   category_id: string;
   category_name: string;
+  weekStart: string;
+  weekEnd: string;
+  isCurrentWeek: boolean;
   items: MaintenanceItemRow[];
 }
 
 export async function getManutencaoPreventivaOverview(): Promise<{
   dueByCategory: MaintenanceCategoryOverview[];
-  upcoming: MaintenanceItemRow[];
+  nextFourWeeks: WeeklyPlanningRow[];
 }> {
   const supabase = await createClient();
-  const tomorrow = tomorrowKey();
-  const in30days = daysAgoKey(-30);
+  const currentWeekStart = mondayKey(todayKey());
+  const currentWeekEnd = fridayKey(todayKey());
 
-  const [{ data: due }, { data: upcoming }] = await Promise.all([
-    supabase
-      .from("maintenance_items")
-      .select(ITEM_SELECT)
-      .eq("active", true)
-      .lte("next_due_date", tomorrow)
-      .order("next_due_date", { ascending: true }),
-    supabase
-      .from("maintenance_items")
-      .select(ITEM_SELECT)
-      .eq("active", true)
-      .gt("next_due_date", tomorrow)
-      .lte("next_due_date", in30days)
-      .order("next_due_date", { ascending: true }),
-  ]);
+  const { data: due } = await supabase
+    .from("maintenance_items")
+    .select(ITEM_SELECT)
+    .eq("active", true)
+    .lte("next_due_date", currentWeekEnd)
+    .order("next_due_date", { ascending: true });
 
   type Raw = Omit<MaintenanceItemRow, "category_name"> & {
     maintenance_categories: { name: string } | null;
   };
 
-  const mapRow = (r: Raw): MaintenanceItemRow => ({
-    ...r,
-    category_name: r.maintenance_categories?.name ?? "—",
-  });
+  const dueRows = ((due ?? []) as unknown as Raw[]).map(
+    (r): MaintenanceItemRow => ({ ...r, category_name: r.maintenance_categories?.name ?? "—" })
+  );
 
-  const dueRows = ((due ?? []) as unknown as Raw[]).map(mapRow);
-  const upcomingRows = ((upcoming ?? []) as unknown as Raw[]).map(mapRow);
-
-  const byCategory = new Map<string, MaintenanceCategoryOverview>();
+  const byCard = new Map<string, MaintenanceCategoryOverview>();
   dueRows.forEach((item) => {
-    const entry = byCategory.get(item.category_id) ?? {
+    const weekStart = mondayKey(item.next_due_date);
+    const key = `${item.category_id}__${weekStart}`;
+    const entry = byCard.get(key) ?? {
       category_id: item.category_id,
       category_name: item.category_name,
+      weekStart,
+      weekEnd: fridayKey(weekStart),
+      isCurrentWeek: weekStart === currentWeekStart,
       items: [],
     };
     entry.items.push(item);
-    byCategory.set(item.category_id, entry);
+    byCard.set(key, entry);
   });
 
-  return {
-    dueByCategory: Array.from(byCategory.values()).sort((a, b) => a.category_name.localeCompare(b.category_name)),
-    upcoming: upcomingRows,
-  };
+  const cards = Array.from(byCard.values()).sort((a, b) => {
+    if (a.isCurrentWeek !== b.isCurrentWeek) return a.isCurrentWeek ? -1 : 1;
+    if (a.weekStart !== b.weekStart) return b.weekStart.localeCompare(a.weekStart);
+    return a.category_name.localeCompare(b.category_name);
+  });
+
+  const nextWeekStart = addDaysKey(currentWeekEnd, 3);
+  const fourWeeksEnd = fridayKey(addDaysKey(nextWeekStart, 21));
+  const nextFourWeeks = await getWeeklyPlanningSummary(nextWeekStart, fourWeeksEnd);
+
+  return { dueByCategory: cards, nextFourWeeks };
 }
 
-export async function claimMaintenanceCategory(categoryId: string) {
+export async function claimMaintenanceCategory(categoryId: string, weekStart: string, weekEnd: string) {
   const supabase = await createClient();
-  const { error } = await supabase.rpc("claim_maintenance_category", { cat_id: categoryId });
+  const { error } = await supabase.rpc("claim_maintenance_category", {
+    cat_id: categoryId,
+    due_from: weekStart,
+    due_to: weekEnd,
+  });
   if (error) return { error: error.message };
   revalidatePath("/manutencao/preventiva");
   revalidatePath("/manutencao-preventiva");
   return { success: true };
 }
 
-export async function getMaintenanceCategoryDetail(categoryId: string): Promise<{
+export async function getMaintenanceCategoryDetail(
+  categoryId: string,
+  weekStart: string,
+  weekEnd: string
+): Promise<{
   category_name: string;
   naoTecnico: MaintenanceItemRow[];
   tecnico: MaintenanceItemRow[];
@@ -216,6 +229,8 @@ export async function getMaintenanceCategoryDetail(categoryId: string): Promise<
     .eq("category_id", categoryId)
     .eq("status", "selecionada")
     .eq("selected_by", user?.id ?? "")
+    .gte("next_due_date", weekStart)
+    .lte("next_due_date", weekEnd)
     .order("position", { ascending: true });
 
   type Raw = Omit<MaintenanceItemRow, "category_name"> & {
@@ -233,9 +248,13 @@ export async function getMaintenanceCategoryDetail(categoryId: string): Promise<
   };
 }
 
-export async function completeMaintenanceNaoTecnico(categoryId: string) {
+export async function completeMaintenanceNaoTecnico(categoryId: string, weekStart: string, weekEnd: string) {
   const supabase = await createClient();
-  const { error } = await supabase.rpc("complete_maintenance_nao_tecnico", { cat_id: categoryId });
+  const { error } = await supabase.rpc("complete_maintenance_nao_tecnico", {
+    cat_id: categoryId,
+    due_from: weekStart,
+    due_to: weekEnd,
+  });
   if (error) return { error: error.message };
   revalidatePath("/manutencao/preventiva");
   revalidatePath("/manutencao-preventiva");
@@ -373,11 +392,18 @@ export async function getWeeklyPlanningSummary(from: string, to: string): Promis
     .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
 }
 
-export async function completeMaintenanceTecnico(categoryId: string, externalName: string) {
+export async function completeMaintenanceTecnico(
+  categoryId: string,
+  weekStart: string,
+  weekEnd: string,
+  externalName: string
+) {
   if (!externalName.trim()) return { error: "Informe o nome do técnico externo." };
   const supabase = await createClient();
   const { error } = await supabase.rpc("complete_maintenance_tecnico", {
     cat_id: categoryId,
+    due_from: weekStart,
+    due_to: weekEnd,
     external_name: externalName.trim(),
   });
   if (error) return { error: error.message };

@@ -386,9 +386,10 @@ create policy "mi_admin_delete" on maintenance_items for delete using (is_admin(
 
 create policy "mcomp_select_authenticated" on maintenance_completions for select using (auth.uid() is not null);
 
--- Seleciona (reivindica) para si todos os itens pendentes e já vencidos
--- (hoje/amanhã ou atrasados) de uma categoria.
-create or replace function claim_maintenance_category(cat_id uuid) returns void as $$
+-- Seleciona (reivindica) para si todos os itens pendentes de uma categoria
+-- cuja data prevista caia no intervalo informado (o "card" de uma semana
+-- específica, corrente ou atrasada).
+create or replace function claim_maintenance_category(cat_id uuid, due_from date, due_to date) returns void as $$
 begin
   if not is_manutencao() then
     raise exception 'not authorized';
@@ -399,13 +400,14 @@ begin
   where category_id = cat_id
     and active = true
     and status = 'pendente'
-    and next_due_date <= (current_date + 1);
+    and next_due_date between due_from and due_to;
 end;
 $$ language plpgsql security definer;
 
--- Conclui os itens não técnicos (internos) selecionados pelo próprio
--- funcionário para a categoria; registra histórico e agenda o próximo ciclo.
-create or replace function complete_maintenance_nao_tecnico(cat_id uuid) returns void as $$
+-- Conclui os itens não técnicos (internos), da categoria e do intervalo de
+-- datas informados, selecionados pelo próprio funcionário; registra
+-- histórico e agenda o próximo ciclo.
+create or replace function complete_maintenance_nao_tecnico(cat_id uuid, due_from date, due_to date) returns void as $$
 declare
   r record;
 begin
@@ -420,6 +422,7 @@ begin
       and execution_type = 'nao_tecnico'
       and status = 'selecionada'
       and selected_by = auth.uid()
+      and next_due_date between due_from and due_to
   loop
     insert into maintenance_completions (item_id, due_date, completed_by)
     values (r.id, r.next_due_date, auth.uid());
@@ -432,10 +435,10 @@ begin
 end;
 $$ language plpgsql security definer;
 
--- Conclui os itens técnicos (externos) selecionados pelo próprio funcionário
--- para a categoria; o funcionário registra apenas o nome do técnico externo
--- e fica registrado como quem supervisionou.
-create or replace function complete_maintenance_tecnico(cat_id uuid, external_name text) returns void as $$
+-- Conclui os itens técnicos (externos), da categoria e do intervalo de datas
+-- informados, selecionados pelo próprio funcionário; o funcionário registra
+-- apenas o nome do técnico externo e fica registrado como quem supervisionou.
+create or replace function complete_maintenance_tecnico(cat_id uuid, due_from date, due_to date, external_name text) returns void as $$
 declare
   r record;
 begin
@@ -453,6 +456,7 @@ begin
       and execution_type = 'tecnico'
       and status = 'selecionada'
       and selected_by = auth.uid()
+      and next_due_date between due_from and due_to
   loop
     insert into maintenance_completions (item_id, due_date, completed_by, external_technician_name)
     values (r.id, r.next_due_date, auth.uid(), btrim(external_name));

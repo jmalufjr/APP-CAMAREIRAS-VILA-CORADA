@@ -224,10 +224,30 @@ etapa 11 (revisão de segurança final) antes de mesclar em `main` e implantar.
   `maintenance_items` guarda o ciclo atual do item (`next_due_date`,
   `status`, `selected_by`/`selected_at`); ao concluir, grava uma linha em
   `maintenance_completions` (histórico) e empurra `next_due_date` pela
-  periodicidade. Telas do funcionário: `src/app/manutencao/preventiva/`
-  (cards por categoria + checklist com as duas seções técnico/não técnico em
-  `[categoryId]/`). CRUD do admin: nova aba "Manutenção Preventiva" em
+  periodicidade. CRUD do admin: nova aba "Manutenção Preventiva" em
   `src/app/(admin)/checklists/maintenance-preventiva-panel.tsx`.
+- Tela do funcionário (`src/app/manutencao/preventiva/`) é organizada por
+  **card = categoria + semana** (não só categoria): um card mostra
+  "Selecionar"/"Abrir checklist" para os itens vencidos de uma categoria
+  numa semana específica, e carrega a informação da semana (`isCurrentWeek`,
+  badge "Esta semana" vs. "Atrasada"). Cards da semana corrente aparecem no
+  topo, cards de semanas anteriores ainda não resolvidos (atrasados) abaixo,
+  ordenados da semana mais recente para a mais antiga. Um card só some
+  quando os itens daquela categoria+semana específica são concluídos —
+  itens atrasados de outras semanas continuam com seus próprios cards
+  separados até serem resolvidos. Por isso `claimMaintenanceCategory`,
+  `completeMaintenanceNaoTecnico`/`completeMaintenanceTecnico` e as funções
+  SQL correspondentes (`claim_maintenance_category`,
+  `complete_maintenance_nao_tecnico`, `complete_maintenance_tecnico`) agora
+  recebem `due_from`/`due_to` (a semana do card clicado) além da categoria —
+  mudança de assinatura feita na `supabase/migrations/011_manutencao_preventiva_por_semana.sql`
+  (dropa as funções antigas antes de recriar, já que o Postgres não troca
+  assinatura com `create or replace`). A rota de checklist também ganhou o
+  segmento da semana: `/manutencao/preventiva/[categoryId]/[weekStart]`.
+  A tabela "Próximas quatro semanas" (antes "Próximos 30 dias") reusa o
+  mesmo componente `src/components/shared/weekly-planning-table.tsx` do
+  admin, sem `linkToWeek` (somente leitura), para as 4 semanas seguintes à
+  corrente.
 - Dashboard do admin (`src/app/(admin)/manutencao-preventiva/`) foi refeito
   a pedido do proprietário (formato inicial de 3 tabelas separadas não
   serviu): hoje é **2 seções**. A primeira, "Pendentes, selecionadas e
@@ -247,9 +267,9 @@ etapa 11 (revisão de segurança final) antes de mesclar em `main` e implantar.
   (`monthsAgoKey` em `lib/date.ts`); cada linha tem link para
   `/manutencao-preventiva/semana/[weekStart]`, que reusa o mesmo componente
   `WeekMaintenanceTable` só que para aquela semana específica.
-- **Ainda não testado em localhost** — falta rodar a migration 010.
-- **Antes de continuar**: rodar as migrations 008, 009 e 010 (nessa ordem)
-  no Supabase se ainda não estiverem todas aplicadas, depois testar em
+- **Ainda não testado em localhost** — falta rodar as migrations 010 e 011.
+- **Antes de continuar**: rodar as migrations 008, 009, 010 e 011 (nessa
+  ordem) no Supabase se ainda não estiverem todas aplicadas, depois testar em
   localhost (`npm run dev`) o fluxo de manutenção preventiva — logar como
   funcionário de manutenção, selecionar uma categoria em
   `/manutencao/preventiva`, concluir o checklist não técnico e/ou técnico, e

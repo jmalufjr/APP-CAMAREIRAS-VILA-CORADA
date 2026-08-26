@@ -3,7 +3,7 @@ import { WeekMaintenanceTable } from "@/components/shared/week-maintenance-table
 import { getMaintenanceRangeRows, getWeeklyPlanningSummary } from "@/lib/actions/maintenance";
 import { todayKey, mondayKey, fridayKey, monthsAgoKey, formatDateRangePt } from "@/lib/date";
 import { PlanningFilters } from "./planning-filters";
-import { WeeklyPlanningTable } from "./weekly-planning-table";
+import { WeeklyPlanningTable } from "@/components/shared/weekly-planning-table";
 
 export default async function AdminManutencaoPreventivaPage({
   searchParams,
@@ -42,7 +42,7 @@ export default async function AdminManutencaoPreventivaPage({
       <div className="space-y-3">
         <h2 className="font-heading text-lg text-primary">Planejamento semanal</h2>
         <PlanningFilters from={from} to={to} />
-        <WeeklyPlanningTable rows={planningRows} />
+        <WeeklyPlanningTable rows={planningRows} linkToWeek />
       </div>
     </div>
   );

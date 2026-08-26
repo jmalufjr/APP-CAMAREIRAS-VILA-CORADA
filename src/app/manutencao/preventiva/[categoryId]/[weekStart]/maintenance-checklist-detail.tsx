@@ -13,10 +13,14 @@ import { Button } from "@/components/ui/button";
 
 export function MaintenanceChecklistDetail({
   categoryId,
+  weekStart,
+  weekEnd,
   naoTecnico,
   tecnico,
 }: {
   categoryId: string;
+  weekStart: string;
+  weekEnd: string;
   naoTecnico: MaintenanceItemRow[];
   tecnico: MaintenanceItemRow[];
 }) {
@@ -59,7 +63,7 @@ export function MaintenanceChecklistDetail({
               disabled={!allChecked || isPending}
               onClick={() => {
                 startTransition(async () => {
-                  const result = await completeMaintenanceNaoTecnico(categoryId);
+                  const result = await completeMaintenanceNaoTecnico(categoryId, weekStart, weekEnd);
                   if (result?.error) toast.error(result.error);
                   else {
                     toast.success("Manutenção não técnica concluída.");
@@ -99,7 +103,7 @@ export function MaintenanceChecklistDetail({
               disabled={!externalName.trim() || isPending}
               onClick={() => {
                 startTransition(async () => {
-                  const result = await completeMaintenanceTecnico(categoryId, externalName);
+                  const result = await completeMaintenanceTecnico(categoryId, weekStart, weekEnd, externalName);
                   if (result?.error) toast.error(result.error);
                   else {
                     toast.success("Manutenção técnica concluída.");

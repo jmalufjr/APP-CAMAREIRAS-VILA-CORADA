@@ -16,7 +16,13 @@ function formatBr(dateKey: string) {
   return dateKey.split("-").slice(1).reverse().join("/");
 }
 
-export function WeeklyPlanningTable({ rows }: { rows: WeeklyPlanningRow[] }) {
+export function WeeklyPlanningTable({
+  rows,
+  linkToWeek = false,
+}: {
+  rows: WeeklyPlanningRow[];
+  linkToWeek?: boolean;
+}) {
   return (
     <Card>
       <CardContent className="overflow-x-auto">
@@ -33,9 +39,18 @@ export function WeeklyPlanningTable({ rows }: { rows: WeeklyPlanningRow[] }) {
             {rows.map((row) => (
               <TableRow key={row.weekStart}>
                 <TableCell>
-                  <Link href={`/manutencao-preventiva/semana/${row.weekStart}`} className="text-primary hover:underline font-medium">
-                    {formatBr(row.weekStart)} a {formatBr(row.weekEnd)}
-                  </Link>
+                  {linkToWeek ? (
+                    <Link
+                      href={`/manutencao-preventiva/semana/${row.weekStart}`}
+                      className="text-primary hover:underline font-medium"
+                    >
+                      {formatBr(row.weekStart)} a {formatBr(row.weekEnd)}
+                    </Link>
+                  ) : (
+                    <span className="font-medium">
+                      {formatBr(row.weekStart)} a {formatBr(row.weekEnd)}
+                    </span>
+                  )}
                 </TableCell>
                 <TableCell>{row.categories}</TableCell>
                 <TableCell>{row.execution}</TableCell>
@@ -49,7 +64,7 @@ export function WeeklyPlanningTable({ rows }: { rows: WeeklyPlanningRow[] }) {
             {rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                  Nada previsto no período selecionado.
+                  Nada previsto no período.
                 </TableCell>
               </TableRow>
             )}
