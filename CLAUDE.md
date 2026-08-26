@@ -224,22 +224,39 @@ etapa 11 (revisão de segurança final) antes de mesclar em `main` e implantar.
   `maintenance_items` guarda o ciclo atual do item (`next_due_date`,
   `status`, `selected_by`/`selected_at`); ao concluir, grava uma linha em
   `maintenance_completions` (histórico) e empurra `next_due_date` pela
-  periodicidade. Telas: `src/app/manutencao/preventiva/` (funcionário,
-  cards por categoria + checklist com as duas seções técnico/não técnico em
-  `[categoryId]/`), `src/app/(admin)/manutencao-preventiva/` (dashboard
-  hoje/amanhã/2 meses) e a nova aba "Manutenção Preventiva" em
-  `src/app/(admin)/checklists/maintenance-preventiva-panel.tsx` (CRUD de
-  categorias/itens). **Ainda não testado em localhost** — falta rodar a
-  migration 010.
+  periodicidade. Telas do funcionário: `src/app/manutencao/preventiva/`
+  (cards por categoria + checklist com as duas seções técnico/não técnico em
+  `[categoryId]/`). CRUD do admin: nova aba "Manutenção Preventiva" em
+  `src/app/(admin)/checklists/maintenance-preventiva-panel.tsx`.
+- Dashboard do admin (`src/app/(admin)/manutencao-preventiva/`) foi refeito
+  a pedido do proprietário (formato inicial de 3 tabelas separadas não
+  serviu): hoje é **2 seções**. A primeira, "Pendentes, selecionadas e
+  concluídas, esta semana", é uma única tabela (via componente compartilhado
+  `src/components/shared/week-maintenance-table.tsx`) cujo escopo é a semana
+  útil corrente (segunda a sexta — `mondayKey`/`fridayKey` em
+  `src/lib/date.ts`), juntando itens ao vivo (pendente/selecionada) e
+  histórico de conclusões (`getMaintenanceRangeRows` em
+  `src/lib/actions/maintenance.ts`, que filtra por `due_date` — a data
+  prevista original — e não por `completed_at`, para manter cada conclusão
+  na semana em que estava agendada). A segunda, "Planejamento semanal"
+  (`getWeeklyPlanningSummary`), resume semana a semana (categorias
+  concatenadas, execução técnico/não técnico/ambos, status agregado com
+  prioridade selecionada > pendente > concluída) num intervalo filtrável
+  (`planning-filters.tsx`, padrão igual ao `history-filters.tsx` de
+  `/historico`) que por padrão vai de 6 meses atrás a 6 meses à frente
+  (`monthsAgoKey` em `lib/date.ts`); cada linha tem link para
+  `/manutencao-preventiva/semana/[weekStart]`, que reusa o mesmo componente
+  `WeekMaintenanceTable` só que para aquela semana específica.
+- **Ainda não testado em localhost** — falta rodar a migration 010.
 - **Antes de continuar**: rodar as migrations 008, 009 e 010 (nessa ordem)
   no Supabase se ainda não estiverem todas aplicadas, depois testar em
   localhost (`npm run dev`) o fluxo de manutenção preventiva — logar como
   funcionário de manutenção, selecionar uma categoria em
   `/manutencao/preventiva`, concluir o checklist não técnico e/ou técnico, e
-  conferir `/manutencao-preventiva` (admin) e a aba "Manutenção Preventiva"
-  em "Listas" (`/checklists`). Só depois disso seguir para a etapa 11
-  (revisão de segurança) e, ao final, mesclar `feature/manutencao` em
-  `main` e implantar.
+  conferir `/manutencao-preventiva` (admin, as duas seções e o link de
+  semana) e a aba "Manutenção Preventiva" em "Listas" (`/checklists`). Só
+  depois disso seguir para a etapa 11 (revisão de segurança) e, ao final,
+  mesclar `feature/manutencao` em `main` e implantar.
 
 ### Regras específicas desta parte 02
 

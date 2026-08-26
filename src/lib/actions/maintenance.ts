@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { todayKey, tomorrowKey, daysAgoKey } from "@/lib/date";
+import { tomorrowKey, daysAgoKey, mondayKey, fridayKey } from "@/lib/date";
 import type { MaintenanceExecutionType } from "@/lib/types";
 
 // ---------- Admin: CRUD de categorias ----------
@@ -244,59 +244,61 @@ export async function completeMaintenanceNaoTecnico(categoryId: string) {
 
 // ---------- Admin: visão da Manutenção Preventiva ----------
 
-export interface MaintenanceCompletionRow {
+export interface WeekMaintenanceRow {
   id: string;
-  due_date: string;
-  completed_at: string;
-  external_technician_name: string | null;
-  completed_by_profile: { name: string } | null;
-  item_label: string;
   category_name: string;
+  item_label: string;
+  item_description: string | null;
   execution_type: MaintenanceExecutionType;
+  due_date: string;
+  status: "pendente" | "selecionada" | "concluida";
+  selected_by_name: string | null;
+  selected_at: string | null;
+  completed_by_name: string | null;
+  completed_at: string | null;
+  external_technician_name: string | null;
 }
 
-export async function getAdminPreventivaOverview(): Promise<{
-  pendingTodayTomorrow: MaintenanceItemRow[];
-  completedTodayTomorrow: MaintenanceCompletionRow[];
-  nextTwoMonths: MaintenanceItemRow[];
-}> {
+// Linhas de manutenção preventiva (pendentes/selecionadas ao vivo +
+// histórico de conclusões) cuja data prevista cai dentro de [from, to].
+// Serve tanto a tabela da semana corrente quanto a página de uma semana
+// específica quanto a agregação semanal do planejamento.
+export async function getMaintenanceRangeRows(from: string, to: string): Promise<WeekMaintenanceRow[]> {
   const supabase = await createClient();
-  const today = todayKey();
-  const tomorrow = tomorrowKey();
-  const dayAfterTomorrow = daysAgoKey(-2);
-  const in60days = daysAgoKey(-60);
 
-  const [{ data: pending }, { data: completions }, { data: upcoming }] = await Promise.all([
+  const [{ data: items }, { data: completions }] = await Promise.all([
     supabase
       .from("maintenance_items")
       .select(ITEM_SELECT)
       .eq("active", true)
-      .lte("next_due_date", tomorrow)
-      .order("next_due_date", { ascending: true }),
+      .gte("next_due_date", from)
+      .lte("next_due_date", to),
     supabase
       .from("maintenance_completions")
       .select(
-        "id, due_date, completed_at, external_technician_name, completed_by_profile:profiles!maintenance_completions_completed_by_fkey(name), maintenance_items(label, execution_type, maintenance_categories(name))"
+        "id, due_date, completed_at, external_technician_name, completed_by_profile:profiles!maintenance_completions_completed_by_fkey(name), maintenance_items(label, description, execution_type, maintenance_categories(name))"
       )
-      .gte("completed_at", today)
-      .lt("completed_at", dayAfterTomorrow)
-      .order("completed_at", { ascending: false }),
-    supabase
-      .from("maintenance_items")
-      .select(ITEM_SELECT)
-      .eq("active", true)
-      .gt("next_due_date", tomorrow)
-      .lte("next_due_date", in60days)
-      .order("next_due_date", { ascending: true }),
+      .gte("due_date", from)
+      .lte("due_date", to),
   ]);
 
   type ItemRaw = Omit<MaintenanceItemRow, "category_name"> & {
     maintenance_categories: { name: string } | null;
   };
-  const mapItem = (r: ItemRaw): MaintenanceItemRow => ({
-    ...r,
+  const itemRows: WeekMaintenanceRow[] = ((items ?? []) as unknown as ItemRaw[]).map((r) => ({
+    id: r.id,
     category_name: r.maintenance_categories?.name ?? "—",
-  });
+    item_label: r.label,
+    item_description: r.description,
+    execution_type: r.execution_type,
+    due_date: r.next_due_date,
+    status: r.status,
+    selected_by_name: r.selected_by_profile?.name ?? null,
+    selected_at: r.selected_at,
+    completed_by_name: null,
+    completed_at: null,
+    external_technician_name: null,
+  }));
 
   type CompletionRaw = {
     id: string;
@@ -306,27 +308,69 @@ export async function getAdminPreventivaOverview(): Promise<{
     completed_by_profile: { name: string } | null;
     maintenance_items: {
       label: string;
+      description: string | null;
       execution_type: MaintenanceExecutionType;
       maintenance_categories: { name: string } | null;
     } | null;
   };
-
-  const mapCompletion = (r: CompletionRaw): MaintenanceCompletionRow => ({
-    id: r.id,
+  const completionRows: WeekMaintenanceRow[] = ((completions ?? []) as unknown as CompletionRaw[]).map((r) => ({
+    id: `completion-${r.id}`,
+    category_name: r.maintenance_items?.maintenance_categories?.name ?? "—",
+    item_label: r.maintenance_items?.label ?? "—",
+    item_description: r.maintenance_items?.description ?? null,
+    execution_type: r.maintenance_items?.execution_type ?? "nao_tecnico",
     due_date: r.due_date,
+    status: "concluida",
+    selected_by_name: null,
+    selected_at: null,
+    completed_by_name: r.completed_by_profile?.name ?? null,
     completed_at: r.completed_at,
     external_technician_name: r.external_technician_name,
-    completed_by_profile: r.completed_by_profile,
-    item_label: r.maintenance_items?.label ?? "—",
-    category_name: r.maintenance_items?.maintenance_categories?.name ?? "—",
-    execution_type: r.maintenance_items?.execution_type ?? "nao_tecnico",
+  }));
+
+  return [...itemRows, ...completionRows].sort((a, b) => a.due_date.localeCompare(b.due_date));
+}
+
+export interface WeeklyPlanningRow {
+  weekStart: string;
+  weekEnd: string;
+  categories: string;
+  execution: string;
+  status: "pendente" | "selecionada" | "concluida";
+}
+
+export async function getWeeklyPlanningSummary(from: string, to: string): Promise<WeeklyPlanningRow[]> {
+  const rows = await getMaintenanceRangeRows(from, to);
+
+  const byWeek = new Map<string, WeekMaintenanceRow[]>();
+  rows.forEach((row) => {
+    const weekStart = mondayKey(row.due_date);
+    const list = byWeek.get(weekStart) ?? [];
+    list.push(row);
+    byWeek.set(weekStart, list);
   });
 
-  return {
-    pendingTodayTomorrow: ((pending ?? []) as unknown as ItemRaw[]).map(mapItem),
-    completedTodayTomorrow: ((completions ?? []) as unknown as CompletionRaw[]).map(mapCompletion),
-    nextTwoMonths: ((upcoming ?? []) as unknown as ItemRaw[]).map(mapItem),
-  };
+  return Array.from(byWeek.entries())
+    .map(([weekStart, weekRows]) => {
+      const categories = Array.from(new Set(weekRows.map((r) => r.category_name))).sort();
+      const hasNaoTecnico = weekRows.some((r) => r.execution_type === "nao_tecnico");
+      const hasTecnico = weekRows.some((r) => r.execution_type === "tecnico");
+      const execution = hasNaoTecnico && hasTecnico ? "Ambos" : hasTecnico ? "Técnico" : "Não técnico";
+      const status: WeeklyPlanningRow["status"] = weekRows.some((r) => r.status === "selecionada")
+        ? "selecionada"
+        : weekRows.some((r) => r.status === "pendente")
+          ? "pendente"
+          : "concluida";
+
+      return {
+        weekStart,
+        weekEnd: fridayKey(weekStart),
+        categories: categories.join(", "),
+        execution,
+        status,
+      };
+    })
+    .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
 }
 
 export async function completeMaintenanceTecnico(categoryId: string, externalName: string) {
