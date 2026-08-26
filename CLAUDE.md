@@ -159,11 +159,11 @@ categoria/item), com um novo papel de usuário "Funcionário de Manutenção".
 
 **Status**: implementação completa, testada em localhost pelo proprietário
 com sucesso (fluxo de ocorrências corretivas e de manutenção preventiva,
-ambos ponta a ponta). Vive na branch `feature/manutencao`, alguns commits à
+ambos ponta a ponta). O banco de dados já está pronto (as migrations foram
+rodadas contra o mesmo projeto Supabase único usado por local e produção —
+ver nota abaixo). Vive na branch `feature/manutencao`, alguns commits à
 frente de `main`. **Ainda não mesclada em `main` nem implantada em
-produção** — falta apenas abrir/mesclar o PR e implantar (rodando as
-migrations pendentes na produção); código e migrations já estão prontos e
-testados.
+produção** — falta só o merge do código e o deploy.
 
 ### O que foi construído (mapa rápido de arquivos)
 
@@ -204,15 +204,14 @@ testados.
   e `src/components/shared/weekly-planning-table.tsx`.
 - Item de menu do admin "Checklists & ocorrências manutenção" renomeado
   para **"Listas"**.
-- **Migrations a rodar em produção, nesta ordem** (nenhuma foi rodada em
-  produção ainda no momento em que isto foi escrito — só testadas contra o
-  mesmo projeto Supabase que já serve produção, então já podem ser
-  aplicadas com segurança quando o deploy acontecer):
-  `008_funcionario_manutencao.sql` (duas etapas),
-  `009_fix_manutencao_occurrence_rpc.sql`,
-  `010_manutencao_preventiva.sql`,
-  `011_manutencao_preventiva_por_semana.sql` (as três últimas, uma etapa
-  cada).
+- **As migrations já estão aplicadas no banco** — `008_funcionario_manutencao.sql`,
+  `009_fix_manutencao_occurrence_rpc.sql`, `010_manutencao_preventiva.sql`
+  e `011_manutencao_preventiva_por_semana.sql` foram rodadas durante os
+  testes em localhost, e como este projeto usa **um único projeto Supabase**
+  para local e produção (mesma `NEXT_PUBLIC_SUPABASE_URL`/chaves em
+  Development, Preview e Production na Vercel — ver `README.md`), o banco
+  que a produção vai usar já está pronto. Não é preciso rodar nada de novo
+  no Supabase para o deploy desta parte — só mesclar e implantar o código.
 
 ### Lição de arquitetura (a mais importante desta parte)
 
