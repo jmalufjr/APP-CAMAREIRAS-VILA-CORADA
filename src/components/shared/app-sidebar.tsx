@@ -11,7 +11,6 @@ import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { BrandLogo } from "@/components/shared/brand-logo";
 import {
   LayoutDashboard,
-  BedDouble,
   Coffee,
   ClipboardList,
   Users,
@@ -28,14 +27,16 @@ interface NavItem {
   href: string;
   label: string;
   icon: React.ElementType;
+  // Uso diário mais frequente no fluxo de trabalho do admin — recebe um
+  // leve realce visual no menu para se destacar dos demais itens.
+  frequent?: boolean;
 }
 
 const adminNav: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/planejamento", label: "Planejamento diário", icon: ClipboardCheck },
-  { href: "/chegadas-saidas/gerenciar", label: "Chegadas & saídas", icon: CalendarClock },
-  { href: "/quartos", label: "Quartos", icon: BedDouble },
-  { href: "/mesas/gerenciar", label: "Mesas do café", icon: Coffee },
+  { href: "/planejamento", label: "Planejamento diário", icon: ClipboardCheck, frequent: true },
+  { href: "/chegadas-saidas/gerenciar", label: "Chegadas & saídas", icon: CalendarClock, frequent: true },
+  { href: "/mesas/gerenciar", label: "Mesas do café", icon: Coffee, frequent: true },
   { href: "/checklists", label: "Listas", icon: ClipboardList },
   { href: "/manutencao-preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
   { href: "/usuarios", label: "Usuários", icon: Users },
@@ -91,7 +92,10 @@ function SidebarContent({
               )}
             >
               <item.icon size={18} strokeWidth={1.75} />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.frequent && !active && (
+                <span className="size-1.5 shrink-0 rounded-full bg-sidebar-primary/55" />
+              )}
             </Link>
           );
         })}

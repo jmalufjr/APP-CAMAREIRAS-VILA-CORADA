@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Room } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
+import { BackLink } from "@/components/shared/back-link";
 import { RoomsTable } from "./rooms-table";
 import { RoomFormDialog } from "./room-form-dialog";
 
@@ -13,6 +14,7 @@ export default async function QuartosPage() {
 
   return (
     <div className="space-y-6">
+      <BackLink href="/checklists" />
       <PageHeader
         title="Quartos"
         subtitle="Gerencie a lista de suítes da pousada."

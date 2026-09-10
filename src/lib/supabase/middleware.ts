@@ -66,7 +66,6 @@ export async function updateSession(request: NextRequest) {
 
     const adminOnlyPrefixes = [
       "/dashboard",
-      "/quartos",
       "/usuarios",
       "/mesas/gerenciar",
       "/checklists",

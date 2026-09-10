@@ -1,89 +1,35 @@
-import { createClient } from "@/lib/supabase/server";
-import type { ChecklistItem, MaintenanceCategory, MaintenanceItem, OccurrenceCategory, Room } from "@/lib/types";
+import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
-import { ChecklistItemsPanel } from "./checklist-items-panel";
-import { OccurrenceCategoriesPanel } from "./occurrence-categories-panel";
-import { MaintenancePreventivaPanel } from "./maintenance-preventiva-panel";
+import { Sparkles, RefreshCw, DoorOpen, Wrench, CalendarCheck2, BedDouble, Coffee, ChevronRight } from "lucide-react";
 
-export default async function ChecklistsPage() {
-  const supabase = await createClient();
-  const [
-    { data: items },
-    { data: categories },
-    { data: rooms },
-    { data: assignments },
-    { data: maintenanceCategories },
-    { data: maintenanceItems },
-  ] = await Promise.all([
-    supabase.from("checklist_items").select("*").order("position"),
-    supabase.from("occurrence_categories").select("*").order("position"),
-    supabase.from("rooms").select("*").order("position"),
-    supabase.from("room_checklist_items").select("room_id, checklist_item_id"),
-    supabase.from("maintenance_categories").select("*").order("position"),
-    supabase.from("maintenance_items").select("*").order("position"),
-  ]);
+const menuItems = [
+  { href: "/checklists/arrumacao", label: TASK_TYPE_LABELS.arrumacao, icon: Sparkles },
+  { href: "/checklists/troca", label: TASK_TYPE_LABELS.troca, icon: RefreshCw },
+  { href: "/checklists/preparacao", label: TASK_TYPE_LABELS.preparacao, icon: DoorOpen },
+  { href: "/checklists/ocorrencias", label: "Ocorrências Manutenção", icon: Wrench },
+  { href: "/checklists/manutencao-preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
+  { href: "/checklists/quartos", label: "Quartos", icon: BedDouble },
+  { href: "/checklists/mesas", label: "Layout & mesas", icon: Coffee },
+];
 
-  const assignmentMap = new Map<string, string[]>();
-  (assignments ?? []).forEach((a) => {
-    const list = assignmentMap.get(a.checklist_item_id) ?? [];
-    list.push(a.room_id);
-    assignmentMap.set(a.checklist_item_id, list);
-  });
-
-  const arrumacao = (items ?? []).filter((i) => i.type === "arrumacao") as ChecklistItem[];
-  const preparacao = (items ?? []).filter((i) => i.type === "preparacao") as ChecklistItem[];
-  const troca = (items ?? []).filter((i) => i.type === "troca") as ChecklistItem[];
-
+export default function ChecklistsPage() {
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Checklists & ocorrências manutenção"
-        subtitle="Gerencie os itens de arrumação, preparação chegada, troca e as categorias de ocorrências manutenção."
-      />
-      <Tabs defaultValue="arrumacao">
-        <TabsList>
-          <TabsTrigger value="arrumacao">{TASK_TYPE_LABELS.arrumacao}</TabsTrigger>
-          <TabsTrigger value="preparacao">{TASK_TYPE_LABELS.preparacao}</TabsTrigger>
-          <TabsTrigger value="troca">{TASK_TYPE_LABELS.troca}</TabsTrigger>
-          <TabsTrigger value="ocorrencias">Ocorrências Manutenção</TabsTrigger>
-          <TabsTrigger value="manutencao-preventiva">Manutenção Preventiva</TabsTrigger>
-        </TabsList>
-        <TabsContent value="arrumacao" className="pt-4">
-          <ChecklistItemsPanel
-            type="arrumacao"
-            items={arrumacao}
-            rooms={(rooms ?? []) as Room[]}
-            assignmentMap={Object.fromEntries(assignmentMap)}
-          />
-        </TabsContent>
-        <TabsContent value="preparacao" className="pt-4">
-          <ChecklistItemsPanel
-            type="preparacao"
-            items={preparacao}
-            rooms={(rooms ?? []) as Room[]}
-            assignmentMap={Object.fromEntries(assignmentMap)}
-          />
-        </TabsContent>
-        <TabsContent value="troca" className="pt-4">
-          <ChecklistItemsPanel
-            type="troca"
-            items={troca}
-            rooms={(rooms ?? []) as Room[]}
-            assignmentMap={Object.fromEntries(assignmentMap)}
-          />
-        </TabsContent>
-        <TabsContent value="ocorrencias" className="pt-4">
-          <OccurrenceCategoriesPanel categories={(categories ?? []) as OccurrenceCategory[]} />
-        </TabsContent>
-        <TabsContent value="manutencao-preventiva" className="pt-4">
-          <MaintenancePreventivaPanel
-            categories={(maintenanceCategories ?? []) as MaintenanceCategory[]}
-            items={(maintenanceItems ?? []) as MaintenanceItem[]}
-          />
-        </TabsContent>
-      </Tabs>
+      <PageHeader title="Listas" subtitle="Escolha o que deseja gerenciar." />
+      <nav className="max-w-md space-y-1.5">
+        {menuItems.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            <item.icon size={18} strokeWidth={1.75} className="text-muted-foreground" />
+            <span className="flex-1">{item.label}</span>
+            <ChevronRight size={16} className="text-muted-foreground" />
+          </Link>
+        ))}
+      </nav>
     </div>
   );
 }

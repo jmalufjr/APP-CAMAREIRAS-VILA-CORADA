@@ -21,7 +21,7 @@ export async function createRoom(formData: FormData) {
     .insert({ number, name, position: (max?.position ?? 0) + 1 });
 
   if (error) return { error: error.message };
-  revalidatePath("/quartos");
+  revalidatePath("/checklists/quartos");
   return { success: true };
 }
 
@@ -34,7 +34,7 @@ export async function updateRoom(id: string, formData: FormData) {
   const { error } = await supabase.from("rooms").update({ number, name, active }).eq("id", id);
 
   if (error) return { error: error.message };
-  revalidatePath("/quartos");
+  revalidatePath("/checklists/quartos");
   return { success: true };
 }
 
@@ -42,6 +42,6 @@ export async function deleteRoom(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("rooms").delete().eq("id", id);
   if (error) return { error: error.message };
-  revalidatePath("/quartos");
+  revalidatePath("/checklists/quartos");
   return { success: true };
 }

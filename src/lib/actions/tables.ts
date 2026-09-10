@@ -21,6 +21,7 @@ export async function createBreakfastTable(formData: FormData) {
   });
 
   if (error) return { error: error.message };
+  revalidatePath("/checklists/mesas");
   revalidatePath("/mesas/gerenciar");
   revalidatePath("/mesas");
   return { success: true };
@@ -39,6 +40,7 @@ export async function updateBreakfastTable(id: string, formData: FormData) {
     .eq("id", id);
 
   if (error) return { error: error.message };
+  revalidatePath("/checklists/mesas");
   revalidatePath("/mesas/gerenciar");
   revalidatePath("/mesas");
   return { success: true };
@@ -48,6 +50,7 @@ export async function deleteBreakfastTable(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("breakfast_tables").delete().eq("id", id);
   if (error) return { error: error.message };
+  revalidatePath("/checklists/mesas");
   revalidatePath("/mesas/gerenciar");
   revalidatePath("/mesas");
   return { success: true };
@@ -66,8 +69,7 @@ export async function saveTableLayout(positions: TablePosition[]) {
       supabase.from("breakfast_tables").update({ pos_x: p.pos_x, pos_y: p.pos_y }).eq("id", p.id)
     )
   );
-  revalidatePath("/mesas/gerenciar");
-  revalidatePath("/mesas");
+  revalidatePath("/checklists/mesas");
   return { success: true };
 }
 
@@ -125,7 +127,7 @@ export async function updateCommissionValue(value: number) {
     .update({ value_per_table: value, updated_at: new Date().toISOString() })
     .eq("id", 1);
   if (error) return { error: error.message };
-  revalidatePath("/checklists");
+  revalidatePath("/mesas/gerenciar");
   revalidatePath("/dashboard");
   return { success: true };
 }

@@ -167,11 +167,16 @@ create table daily_departures (
 );
 
 -- ---------- MAINTENANCE CATEGORIES (categorias de manutenção preventiva) ----------
+-- start_date: data em que a categoria teve (ou terá) sua primeira
+-- manutenção; serve de âncora do cronograma para os itens que a seguem
+-- (ver maintenance_items.follows_category_start_date). Alterá-la recalcula
+-- next_due_date desses itens (função recompute_category_schedule).
 create table maintenance_categories (
   id uuid primary key default uuid_generate_v4(),
   name text not null unique,
   active boolean not null default true,
   position int not null default 0,
+  start_date date,
   created_at timestamptz not null default now()
 );
 
@@ -179,6 +184,11 @@ create table maintenance_categories (
 -- next_due_date/status/selected_by/selected_at guardam o ciclo atual do item;
 -- ao concluir, o item volta para 'pendente' com next_due_date empurrada pela
 -- periodicidade, e a conclusão fica registrada em maintenance_completions.
+-- follows_category_start_date/start_date: por padrão o item segue a data
+-- inicial da categoria; se um item teve sua primeira manutenção em outra
+-- data, follows_category_start_date fica false e start_date guarda a data
+-- própria dele, que passa a ser a âncora do seu cronograma (independente da
+-- categoria) — ver função recompute_item_schedule.
 create table maintenance_items (
   id uuid primary key default uuid_generate_v4(),
   category_id uuid not null references maintenance_categories(id) on delete cascade,
@@ -192,6 +202,8 @@ create table maintenance_items (
   selected_at timestamptz,
   active boolean not null default true,
   position int not null default 0,
+  follows_category_start_date boolean not null default true,
+  start_date date,
   created_at timestamptz not null default now()
 );
 
@@ -388,6 +400,39 @@ begin
 end;
 $$ language plpgsql security definer;
 
+-- Permite ao admin reordenar itens de checklist (arrumação/troca/preparação
+-- chegada) e itens de manutenção preventiva, incluindo inserir um item novo
+-- em qualquer posição (primeiro, último ou intermediária). Recebe a lista
+-- completa de ids já na ordem final desejada (escopada por type/category_id)
+-- e reescreve a coluna position de todos eles em 1 round trip.
+create or replace function reorder_checklist_items(p_type checklist_type, p_ordered_ids uuid[])
+returns void as $$
+begin
+  if not is_admin() then
+    raise exception 'not authorized';
+  end if;
+
+  update checklist_items ci
+  set position = x.idx
+  from unnest(p_ordered_ids) with ordinality as x(id, idx)
+  where ci.id = x.id and ci.type = p_type;
+end;
+$$ language plpgsql security definer;
+
+create or replace function reorder_maintenance_items(p_category_id uuid, p_ordered_ids uuid[])
+returns void as $$
+begin
+  if not is_admin() then
+    raise exception 'not authorized';
+  end if;
+
+  update maintenance_items mi
+  set position = x.idx
+  from unnest(p_ordered_ids) with ordinality as x(id, idx)
+  where mi.id = x.id and mi.category_id = p_category_id;
+end;
+$$ language plpgsql security definer;
+
 -- daily_breakfast: everyone authenticated reads; only admin writes
 create policy "db_select_authenticated" on daily_breakfast for select using (auth.uid() is not null);
 create policy "db_admin_write" on daily_breakfast for insert with check (is_admin());
@@ -504,5 +549,70 @@ begin
         next_due_date = current_date + r.periodicity_days
     where id = r.id;
   end loop;
+end;
+$$ language plpgsql security definer;
+
+-- Dada uma data de início e uma periodicidade em dias, calcula a próxima
+-- data prevista: a própria data de início, se ainda não chegou, ou a
+-- primeira ocorrência do ciclo (início + N*periodicidade) a partir de hoje.
+create or replace function compute_next_due_date(p_start_date date, p_periodicity_days int)
+returns date as $$
+  select case
+    when p_start_date >= current_date then p_start_date
+    else p_start_date + (
+      ceil((current_date - p_start_date)::numeric / p_periodicity_days) * p_periodicity_days
+    )::int
+  end;
+$$ language sql stable;
+
+-- Recalcula next_due_date de todos os itens da categoria que seguem a data
+-- inicial dela (chamada sempre que o admin define/altera essa data).
+create or replace function recompute_category_schedule(p_category_id uuid)
+returns void as $$
+declare
+  v_start_date date;
+begin
+  if not is_admin() then
+    raise exception 'not authorized';
+  end if;
+
+  select start_date into v_start_date from maintenance_categories where id = p_category_id;
+  if v_start_date is null then
+    return;
+  end if;
+
+  update maintenance_items
+  set next_due_date = compute_next_due_date(v_start_date, periodicity_days)
+  where category_id = p_category_id and follows_category_start_date = true;
+end;
+$$ language plpgsql security definer;
+
+-- Recalcula next_due_date de um único item, a partir da data inicial da
+-- categoria (se ele a segue) ou da sua própria data inicial (se não segue).
+create or replace function recompute_item_schedule(p_item_id uuid)
+returns void as $$
+declare
+  v_follows boolean;
+  v_own_start date;
+  v_cat_start date;
+  v_periodicity int;
+  v_anchor date;
+begin
+  if not is_admin() then
+    raise exception 'not authorized';
+  end if;
+
+  select mi.follows_category_start_date, mi.start_date, mi.periodicity_days, mc.start_date
+    into v_follows, v_own_start, v_periodicity, v_cat_start
+  from maintenance_items mi
+  join maintenance_categories mc on mc.id = mi.category_id
+  where mi.id = p_item_id;
+
+  v_anchor := case when v_follows then v_cat_start else v_own_start end;
+  if v_anchor is null then
+    return;
+  end if;
+
+  update maintenance_items set next_due_date = compute_next_due_date(v_anchor, v_periodicity) where id = p_item_id;
 end;
 $$ language plpgsql security definer;

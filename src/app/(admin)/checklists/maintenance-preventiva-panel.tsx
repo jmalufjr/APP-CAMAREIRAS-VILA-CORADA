@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { MaintenanceCategory, MaintenanceItem, MaintenanceExecutionType } from "@/lib/types";
 import { EXECUTION_TYPE_LABELS, periodicityLabel } from "@/lib/maintenance";
+import { formatDateShortPt } from "@/lib/date";
 import {
   createMaintenanceCategory,
   updateMaintenanceCategory,
@@ -42,6 +43,7 @@ export function MaintenancePreventivaPanel({
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const [newName, setNewName] = useState("");
+  const [newStartDate, setNewStartDate] = useState("");
 
   const selectedItems = items.filter((i) => i.category_id === selectedId);
 
@@ -49,23 +51,34 @@ export function MaintenancePreventivaPanel({
     <div className="grid md:grid-cols-[minmax(0,280px)_1fr] gap-6">
       <div className="space-y-4">
         <form
-          className="flex gap-2"
+          className="space-y-2"
           action={() => {
             if (!newName.trim()) return;
             const fd = new FormData();
             fd.set("name", newName);
+            fd.set("start_date", newStartDate);
             startTransition(async () => {
               const result = await createMaintenanceCategory(fd);
               if (result?.error) toast.error(result.error);
               else {
                 setNewName("");
+                setNewStartDate("");
                 router.refresh();
               }
             });
           }}
         >
           <Input placeholder="Nova categoria" value={newName} onChange={(e) => setNewName(e.target.value)} />
-          <Button type="submit" disabled={isPending}>Adicionar</Button>
+          <div className="flex gap-2">
+            <Input
+              type="date"
+              value={newStartDate}
+              onChange={(e) => setNewStartDate(e.target.value)}
+              title="Data da primeira manutenção (opcional)"
+              className="flex-1"
+            />
+            <Button type="submit" disabled={isPending}>Adicionar</Button>
+          </div>
         </form>
 
         <div className="space-y-2">
@@ -78,7 +91,14 @@ export function MaintenancePreventivaPanel({
               )}
               onClick={() => setSelectedId(cat.id)}
             >
-              <span className="text-sm">{cat.name}</span>
+              <div>
+                <span className="text-sm">{cat.name}</span>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {cat.start_date
+                    ? `Início: ${formatDateShortPt(cat.start_date)}`
+                    : "Início não definido"}
+                </p>
+              </div>
               <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                 <Badge variant={cat.active ? "default" : "secondary"}>{cat.active ? "Ativa" : "Inativa"}</Badge>
                 <Switch
@@ -93,6 +113,7 @@ export function MaintenancePreventivaPanel({
                     });
                   }}
                 />
+                <CategoryFormDialog category={cat} />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -121,7 +142,7 @@ export function MaintenancePreventivaPanel({
         {selectedId && (
           <>
             <div className="flex justify-end">
-              <MaintenanceItemFormDialog categoryId={selectedId} />
+              <MaintenanceItemFormDialog categoryId={selectedId} items={selectedItems} />
             </div>
             <div className="space-y-2">
               {selectedItems.map((item) => (
@@ -143,9 +164,18 @@ export function MaintenancePreventivaPanel({
                       </span>
                       {!item.active && <Badge variant="secondary">Inativo</Badge>}
                     </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {item.follows_category_start_date
+                        ? categories.find((c) => c.id === item.category_id)?.start_date
+                          ? `Início: ${formatDateShortPt(categories.find((c) => c.id === item.category_id)!.start_date!)} (data da categoria)`
+                          : "Início: segue a data da categoria (não definida)"
+                        : item.start_date
+                          ? `Início: ${formatDateShortPt(item.start_date)} (data própria)`
+                          : "Início não definido"}
+                    </p>
                   </div>
                   <div className="flex gap-1 shrink-0">
-                    <MaintenanceItemFormDialog categoryId={selectedId} item={item} />
+                    <MaintenanceItemFormDialog categoryId={selectedId} items={selectedItems} item={item} />
                     <Button
                       variant="ghost"
                       size="icon"
@@ -175,12 +205,86 @@ export function MaintenancePreventivaPanel({
   );
 }
 
-function MaintenanceItemFormDialog({ categoryId, item }: { categoryId: string; item?: MaintenanceItem }) {
+function CategoryFormDialog({ category }: { category: MaintenanceCategory }) {
+  const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={
+          <Button variant="ghost" size="icon">
+            <Pencil size={16} />
+          </Button>
+        }
+      />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Editar categoria</DialogTitle>
+        </DialogHeader>
+        <form
+          action={(formData) => {
+            startTransition(async () => {
+              const result = await updateMaintenanceCategory(category.id, formData);
+              if (result?.error) toast.error(result.error);
+              else {
+                toast.success("Categoria salva.");
+                setOpen(false);
+                router.refresh();
+              }
+            });
+          }}
+          className="space-y-4"
+        >
+          <div className="space-y-2">
+            <Label htmlFor="cat_name">Nome</Label>
+            <Input id="cat_name" name="name" defaultValue={category.name} required />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="cat_start_date">Data da primeira manutenção</Label>
+            <Input id="cat_start_date" name="start_date" type="date" defaultValue={category.start_date ?? ""} />
+            <p className="text-xs text-muted-foreground">
+              Define/recalcula o cronograma dos itens que seguem a data inicial da categoria.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch id="cat_active" name="active" defaultChecked={category.active} />
+            <Label htmlFor="cat_active">Ativa</Label>
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={isPending}>
+              {isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MaintenanceItemFormDialog({
+  categoryId,
+  items,
+  item,
+}: {
+  categoryId: string;
+  items: MaintenanceItem[];
+  item?: MaintenanceItem;
+}) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [executionType, setExecutionType] = useState<MaintenanceExecutionType>(item?.execution_type ?? "nao_tecnico");
+  const [followsCategoryStartDate, setFollowsCategoryStartDate] = useState(item?.follows_category_start_date ?? true);
+  const [itemStartDate, setItemStartDate] = useState(item?.start_date ?? "");
   const router = useRouter();
   const isEdit = !!item;
+
+  const maxPosition = isEdit ? items.length : items.length + 1;
+  const defaultPosition = isEdit
+    ? String(Math.max(items.findIndex((i) => i.id === item!.id) + 1, 1))
+    : String(maxPosition);
+  const [position, setPosition] = useState(defaultPosition);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -205,6 +309,9 @@ function MaintenanceItemFormDialog({ categoryId, item }: { categoryId: string; i
           action={(formData) => {
             formData.set("category_id", categoryId);
             formData.set("execution_type", executionType);
+            formData.set("position", position);
+            formData.set("follows_category_start_date", followsCategoryStartDate ? "on" : "");
+            formData.set("start_date", followsCategoryStartDate ? "" : itemStartDate);
             startTransition(async () => {
               const result = isEdit
                 ? await updateMaintenanceItem(item.id, formData)
@@ -249,6 +356,53 @@ function MaintenanceItemFormDialog({ categoryId, item }: { categoryId: string; i
               defaultValue={item?.periodicity_days ?? 30}
               required
             />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="follows_start_date">Segue a data inicial da categoria?</Label>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">{followsCategoryStartDate ? "Sim" : "Não"}</span>
+                <Switch
+                  id="follows_start_date"
+                  checked={followsCategoryStartDate}
+                  onCheckedChange={(checked) => setFollowsCategoryStartDate(!!checked)}
+                />
+              </div>
+            </div>
+            {!followsCategoryStartDate && (
+              <div className="space-y-1 pt-1">
+                <Label htmlFor="item_start_date">Data inicial deste item</Label>
+                <Input
+                  id="item_start_date"
+                  type="date"
+                  value={itemStartDate}
+                  onChange={(e) => setItemStartDate(e.target.value)}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Este item passa a ter cronograma próprio, a partir desta data e da periodicidade acima.
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label>Posição na lista</Label>
+            <Select value={position} onValueChange={(v) => setPosition(v ?? defaultPosition)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: maxPosition }, (_, i) => i + 1).map((p) => (
+                  <SelectItem key={p} value={String(p)}>
+                    {p}
+                    {p === 1 ? " (primeiro)" : p === maxPosition ? " (último)" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Onde este item aparece na tela do funcionário de manutenção.
+            </p>
           </div>
           {isEdit && (
             <div className="flex items-center gap-2">

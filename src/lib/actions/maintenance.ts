@@ -9,6 +9,7 @@ import type { MaintenanceExecutionType } from "@/lib/types";
 
 export async function createMaintenanceCategory(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
+  const startDate = String(formData.get("start_date") ?? "").trim() || null;
   if (!name) return { error: "Informe o nome da categoria." };
 
   const supabase = await createClient();
@@ -21,7 +22,7 @@ export async function createMaintenanceCategory(formData: FormData) {
 
   const { error } = await supabase
     .from("maintenance_categories")
-    .insert({ name, position: (max?.position ?? 0) + 1 });
+    .insert({ name, start_date: startDate, position: (max?.position ?? 0) + 1 });
 
   if (error) return { error: error.message };
   revalidatePath("/checklists");
@@ -31,10 +32,23 @@ export async function createMaintenanceCategory(formData: FormData) {
 export async function updateMaintenanceCategory(id: string, formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const active = formData.get("active") === "on";
+  // Só atualiza a data inicial quando o campo veio no formulário (o toggle
+  // rápido de "ativa" no card não envia esse campo e não deve apagá-la).
+  const hasStartDate = formData.has("start_date");
+  const startDate = String(formData.get("start_date") ?? "").trim() || null;
 
   const supabase = await createClient();
-  const { error } = await supabase.from("maintenance_categories").update({ name, active }).eq("id", id);
+  const { error } = await supabase
+    .from("maintenance_categories")
+    .update(hasStartDate ? { name, active, start_date: startDate } : { name, active })
+    .eq("id", id);
   if (error) return { error: error.message };
+
+  if (hasStartDate) {
+    const { error: recomputeError } = await supabase.rpc("recompute_category_schedule", { p_category_id: id });
+    if (recomputeError) return { error: recomputeError.message };
+  }
+
   revalidatePath("/checklists");
   return { success: true };
 }
@@ -49,16 +63,57 @@ export async function deleteMaintenanceCategory(id: string) {
 
 // ---------- Admin: CRUD de itens ----------
 
+// Reordena todos os itens de `categoryId` de acordo com `orderedIds`, o
+// array completo de ids já na ordem final desejada (compartilhada entre
+// itens técnicos e não técnicos da categoria).
+async function reorderMaintenanceItems(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  categoryId: string,
+  orderedIds: string[]
+) {
+  const { error } = await supabase.rpc("reorder_maintenance_items", {
+    p_category_id: categoryId,
+    p_ordered_ids: orderedIds,
+  });
+  return error;
+}
+
+async function buildReorderedMaintenanceIds(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  categoryId: string,
+  itemId: string,
+  desiredPosition: number
+) {
+  const { data: existing } = await supabase
+    .from("maintenance_items")
+    .select("id")
+    .eq("category_id", categoryId)
+    .order("position", { ascending: true });
+
+  const ids = (existing ?? []).map((i) => i.id).filter((id) => id !== itemId);
+  const targetIndex = Number.isFinite(desiredPosition)
+    ? Math.min(Math.max(desiredPosition - 1, 0), ids.length)
+    : ids.length;
+  ids.splice(targetIndex, 0, itemId);
+  return ids;
+}
+
 export async function createMaintenanceItem(formData: FormData) {
   const categoryId = String(formData.get("category_id") ?? "");
   const label = String(formData.get("label") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim() || null;
   const executionType = String(formData.get("execution_type") ?? "nao_tecnico") as MaintenanceExecutionType;
   const periodicityDays = Number(formData.get("periodicity_days") ?? 0);
+  const desiredPosition = Number(formData.get("position"));
+  const followsCategoryStartDate = formData.get("follows_category_start_date") === "on";
+  const itemStartDate = String(formData.get("start_date") ?? "").trim() || null;
 
   if (!categoryId) return { error: "Selecione a categoria." };
   if (!label) return { error: "Informe o texto do item." };
   if (!periodicityDays || periodicityDays <= 0) return { error: "Informe a periodicidade em dias." };
+  if (!followsCategoryStartDate && !itemStartDate) {
+    return { error: "Informe a data inicial deste item." };
+  }
 
   const supabase = await createClient();
   const { data: max } = await supabase
@@ -69,37 +124,76 @@ export async function createMaintenanceItem(formData: FormData) {
     .limit(1)
     .single();
 
-  const { error } = await supabase.from("maintenance_items").insert({
-    category_id: categoryId,
-    label,
-    description,
-    execution_type: executionType,
-    periodicity_days: periodicityDays,
-    position: (max?.position ?? 0) + 1,
-  });
+  const { data: item, error } = await supabase
+    .from("maintenance_items")
+    .insert({
+      category_id: categoryId,
+      label,
+      description,
+      execution_type: executionType,
+      periodicity_days: periodicityDays,
+      follows_category_start_date: followsCategoryStartDate,
+      start_date: followsCategoryStartDate ? null : itemStartDate,
+      position: (max?.position ?? 0) + 1,
+    })
+    .select()
+    .single();
 
-  if (error) return { error: error.message };
+  if (error || !item) return { error: error?.message ?? "Erro ao criar item." };
+
+  const { error: scheduleError } = await supabase.rpc("recompute_item_schedule", { p_item_id: item.id });
+  if (scheduleError) return { error: scheduleError.message };
+
+  const orderedIds = await buildReorderedMaintenanceIds(supabase, categoryId, item.id, desiredPosition);
+  const reorderError = await reorderMaintenanceItems(supabase, categoryId, orderedIds);
+  if (reorderError) return { error: reorderError.message };
+
   revalidatePath("/checklists");
   return { success: true };
 }
 
 export async function updateMaintenanceItem(id: string, formData: FormData) {
+  const categoryId = String(formData.get("category_id") ?? "");
   const label = String(formData.get("label") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim() || null;
   const executionType = String(formData.get("execution_type") ?? "nao_tecnico") as MaintenanceExecutionType;
   const periodicityDays = Number(formData.get("periodicity_days") ?? 0);
   const active = formData.get("active") === "on";
+  const desiredPosition = Number(formData.get("position"));
+  const followsCategoryStartDate = formData.get("follows_category_start_date") === "on";
+  const itemStartDate = String(formData.get("start_date") ?? "").trim() || null;
 
   if (!label) return { error: "Informe o texto do item." };
   if (!periodicityDays || periodicityDays <= 0) return { error: "Informe a periodicidade em dias." };
+  if (!followsCategoryStartDate && !itemStartDate) {
+    return { error: "Informe a data inicial deste item." };
+  }
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("maintenance_items")
-    .update({ label, description, execution_type: executionType, periodicity_days: periodicityDays, active })
+    .update({
+      label,
+      description,
+      execution_type: executionType,
+      periodicity_days: periodicityDays,
+      active,
+      follows_category_start_date: followsCategoryStartDate,
+      start_date: followsCategoryStartDate ? null : itemStartDate,
+    })
     .eq("id", id);
 
   if (error) return { error: error.message };
+
+  const { error: scheduleError } = await supabase.rpc("recompute_item_schedule", { p_item_id: id });
+  if (scheduleError) return { error: scheduleError.message };
+
+  if (categoryId && Number.isFinite(desiredPosition)) {
+    const orderedIds = await buildReorderedMaintenanceIds(supabase, categoryId, id, desiredPosition);
+    const reorderError = await reorderMaintenanceItems(supabase, categoryId, orderedIds);
+    if (reorderError) return { error: reorderError.message };
+  }
+
   revalidatePath("/checklists");
   return { success: true };
 }

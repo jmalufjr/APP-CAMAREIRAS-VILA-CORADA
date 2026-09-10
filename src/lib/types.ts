@@ -139,6 +139,7 @@ export interface MaintenanceCategory {
   name: string;
   active: boolean;
   position: number;
+  start_date: string | null;
   created_at: string;
 }
 
@@ -155,6 +156,8 @@ export interface MaintenanceItem {
   selected_at: string | null;
   active: boolean;
   position: number;
+  follows_category_start_date: boolean;
+  start_date: string | null;
   created_at: string;
 }
 

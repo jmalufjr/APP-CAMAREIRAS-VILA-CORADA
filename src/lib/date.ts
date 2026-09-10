@@ -57,6 +57,10 @@ export function formatDateRangePt(fromKey: string, toKey: string): string {
   return `${fmt(fromKey)} a ${fmt(toKey)}`;
 }
 
+export function formatDateShortPt(dateKey: string): string {
+  return dateKey.split("-").reverse().join("/");
+}
+
 export function formatDatePt(dateKey: string): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("pt-BR", {
