@@ -17,10 +17,12 @@ ocorrências de manutenção, layout e hóspedes das mesas do café da manhã,
 chegadas/saídas do dia e comissão da equipe. Uma segunda parte do projeto
 adicionou um módulo completo de manutenção corretiva (ocorrências,
 funcionário de manutenção) e preventiva (categorias/itens recorrentes,
-checklists) — implementada e testada em localhost, na branch
-`feature/manutencao`, ainda **não mesclada em `main` nem implantada em
-produção**. Ver seção "Parte 02 do projeto" abaixo e
-`PRD_Camareiras_parte02.md`.
+checklists) — **já mesclada em `main` e implantada em produção** (branch
+`feature/manutencao` integrada via PR #1). Ver seção "Parte 02 do projeto"
+abaixo e `PRD_Camareiras_parte02.md`. Uma terceira leva de iterações (ver
+seção 10) reorganizou a tela "Listas" em submenu, adicionou ordenação de
+itens de checklist/manutenção preventiva e datas iniciais configuráveis
+para o cronograma de manutenção preventiva.
 
 ## Onde está
 
@@ -85,8 +87,8 @@ também é feita em Server Components.
    - `PRD_Camareiras_parte01.md` criado como PRD vivo, atualizado com todo
      esse changelog.
 9. **Parte 02 — módulo de Manutenção** (branch `feature/manutencao`,
-   implementada e testada, pendente de merge/deploy — detalhada na seção
-   "Parte 02 do projeto" abaixo e em `PRD_Camareiras_parte02.md`):
+   implementada, testada e **mesclada em `main`/implantada** — detalhada na
+   seção "Parte 02 do projeto" abaixo e em `PRD_Camareiras_parte02.md`):
    - Novo papel **"Funcionário de Manutenção"**; tela "Camareiras" virou
      **"Usuários"** (cadastra os dois papéis).
    - **Ocorrências de manutenção** ganharam ciclo de vida
@@ -102,6 +104,62 @@ também é feita em Server Components.
      (selecionar/resolver/concluir) usam funções `security definer` no
      Postgres em vez de policies de RLS de UPDATE combinadas — ver
      "Regras específicas desta parte 02" abaixo.
+10. **Parte 03 — reorganização de "Listas", ordenação de itens e datas de
+    manutenção preventiva** (feita direto em `main`, pós-merge da parte 02):
+    - **Latência no checklist da camareira**: o toque num item esperava um
+      round trip completo ao servidor (1 select + até 3 updates) e depois
+      um `router.refresh()` de página inteira antes do "X" aparecer.
+      Resolvido com UI otimista no cliente (estado local atualizado no
+      clique, sem esperar o servidor) + a função `security definer`
+      `toggle_daily_room_task_check` (migration 012), que colapsa as
+      idas ao banco em 1 round trip.
+    - **"Listas" virou um submenu vertical** em vez de abas: `/checklists`
+      lista Arrumação, Troca, Preparação Chegada, Ocorrências Manutenção,
+      Manutenção Preventiva, Quartos e Layout & mesas, cada um como rota
+      própria com botão "Voltar" (`src/components/shared/back-link.tsx`).
+      **Quartos** foi movido de `/quartos` para `/checklists/quartos`, e
+      **só a aba "Layout & mesas"** (não a tela inteira "Mesas do café")
+      foi movida para `/checklists/mesas` — "Mesas do café" continua no
+      menu principal, agora só com "Hóspedes de hoje/amanhã" e o valor da
+      comissão (`src/app/(admin)/mesas/gerenciar/guests-admin-panel.tsx`).
+    - **Ordenação de itens**: o admin escolhe a posição (inclusive
+      primeira/última) de um item ao criar ou editar, tanto em
+      `checklist_items` (arrumação/troca/preparação) quanto em
+      `maintenance_items` (compartilhada entre técnico e não técnico da
+      mesma categoria). Implementado com as funções `security definer`
+      `reorder_checklist_items`/`reorder_maintenance_items` (migration
+      013), que recebem a lista completa de ids já na ordem final e
+      reescrevem `position` de todos em 1 round trip. Cada card mostra o
+      número da posição atual e anima (técnica FLIP, sem lib nova) ao
+      reordenar.
+    - **Data inicial da manutenção preventiva**: `maintenance_categories`
+      ganhou `start_date` (data da primeira manutenção da categoria); cada
+      `maintenance_items` tem `follows_category_start_date` (padrão true)
+      e seu próprio `start_date` opcional para quando um item precisa de
+      cronograma independente. `next_due_date` é recalculada a partir
+      dessas datas por `compute_next_due_date`/`recompute_category_schedule`/
+      `recompute_item_schedule` (migration 014) — **não** substitui o
+      reagendamento "flutuante" já existente ao concluir um item
+      (`next_due_date = current_date + periodicidade`), que continua
+      valendo depois da primeira conclusão.
+    - **Bug real encontrado em teste**: as chamadas `supabase.rpc(...)` de
+      reordenação/recálculo não checavam `.error` — quando a migration 013
+      ainda não tinha sido rodada no banco, a Server Action retornava
+      sucesso mesmo sem reordenar nada, e só apareceu porque o usuário
+      testou manualmente (não em `npm run build`/`lint`). Lição: **toda**
+      chamada a `supabase.rpc()` numa Server Action precisa checar
+      `.error` e devolvê-lo, nunca assumir sucesso.
+    - **`daily_room_task_checks` é um snapshot**: os itens de uma tarefa do
+      dia são copiados de `room_checklist_items` só no momento em que o
+      admin define o tipo de trabalho do quarto naquele dia
+      (`setRoomTask`); um item de checklist criado depois não aparece
+      retroativamente em tarefas já criadas. `createChecklistItem` agora
+      faz esse *backfill* automaticamente, mas só nas tarefas do mesmo
+      tipo/quarto que ainda não estão `concluido` — tarefas já concluídas
+      nunca são alteradas.
+    - Realce sutil (pontinho, não fundo colorido — fundo colorido lia como
+      "selecionado") nos 3 itens mais usados do menu do admin
+      (Planejamento diário, Chegadas & saídas, Mesas do café).
 
 ## Convenções e decisões importantes
 
@@ -136,6 +194,15 @@ também é feita em Server Components.
   seção 4.1) porque o Postgres nem sempre valida esse tipo de `with check`
   combinado do jeito esperado, e o erro só aparece em teste real, não em
   `npm run build`/`lint`.
+- **Sempre checar `.error` de `supabase.rpc(...)` em Server Actions**: um
+  `await supabase.rpc(...)` sem checar `{ error }` engole silenciosamente
+  qualquer falha (função inexistente porque a migration não rodou,
+  permissão negada etc.) e a action continua retornando `{ success: true }`
+  — a UI mostra "salvo com sucesso" mesmo sem nada ter mudado no banco. Já
+  aconteceu de verdade (reordenação de itens em Parte 03, seção 10) e só
+  apareceu em teste manual, não em `npm run build`/`lint`. Sempre capturar
+  o `error` do retorno de `.rpc()` e devolver `{ error: error.message }`
+  quando existir, igual já é feito para `.insert()`/`.update()`.
 - **Fonte de títulos**: "The Seasons" (paga, foundry My Creative Land) não
   foi licenciada ainda — o app usa Playfair Display (Google Fonts) como
   substituta. Trocar em `src/app/layout.tsx` quando os arquivos forem
@@ -145,7 +212,7 @@ também é feita em Server Components.
   manualmente uma única vez via painel do Supabase. Passo a passo no
   `README.md`.
 
-## Parte 02 do projeto: módulo de Manutenção (implementada, aguardando merge/deploy)
+## Parte 02 do projeto: módulo de Manutenção (implementada e mesclada em `main`)
 
 > Requisitos completos (texto integral do proprietário) + changelog
 > detalhado de decisões/desvios em `PRD_Camareiras_parte02.md` (seção 4) —
@@ -159,11 +226,10 @@ categoria/item), com um novo papel de usuário "Funcionário de Manutenção".
 
 **Status**: implementação completa, testada em localhost pelo proprietário
 com sucesso (fluxo de ocorrências corretivas e de manutenção preventiva,
-ambos ponta a ponta). O banco de dados já está pronto (as migrations foram
-rodadas contra o mesmo projeto Supabase único usado por local e produção —
-ver nota abaixo). Vive na branch `feature/manutencao`, alguns commits à
-frente de `main`. **Ainda não mesclada em `main` nem implantada em
-produção** — falta só o merge do código e o deploy.
+ambos ponta a ponta), **mesclada em `main` via PR #1 e implantada em
+produção**. O banco de dados já estava pronto antes do merge (as migrations
+foram rodadas contra o mesmo projeto Supabase único usado por local e
+produção — ver nota abaixo).
 
 ### O que foi construído (mapa rápido de arquivos)
 
@@ -206,12 +272,12 @@ produção** — falta só o merge do código e o deploy.
   para **"Listas"**.
 - **As migrations já estão aplicadas no banco** — `008_funcionario_manutencao.sql`,
   `009_fix_manutencao_occurrence_rpc.sql`, `010_manutencao_preventiva.sql`
-  e `011_manutencao_preventiva_por_semana.sql` foram rodadas durante os
-  testes em localhost, e como este projeto usa **um único projeto Supabase**
-  para local e produção (mesma `NEXT_PUBLIC_SUPABASE_URL`/chaves em
-  Development, Preview e Production na Vercel — ver `README.md`), o banco
-  que a produção vai usar já está pronto. Não é preciso rodar nada de novo
-  no Supabase para o deploy desta parte — só mesclar e implantar o código.
+  e `011_manutencao_preventiva_por_semana.sql`, além de
+  `012_toggle_check_rpc.sql`, `013_reorder_items.sql` e
+  `014_maintenance_start_dates.sql` da Parte 03 (seção 10) — todas rodadas
+  manualmente no SQL Editor, já que este projeto usa **um único projeto
+  Supabase** para local e produção (mesma `NEXT_PUBLIC_SUPABASE_URL`/chaves
+  em Development, Preview e Production na Vercel — ver `README.md`).
 
 ### Lição de arquitetura (a mais importante desta parte)
 
@@ -229,11 +295,12 @@ já usado por `is_admin()`/`is_manutencao()`. Ver detalhe completo em
 "Convenções e decisões importantes" acima — **vale para qualquer parte
 futura do projeto, não só esta**.
 
-### Regras específicas desta parte 02
+### Regras específicas desta parte 02 (histórico — válidas durante o desenvolvimento pré-merge)
 
 - Não mudar nada fora do escopo de manutenção sem pedir autorização antes
   ao proprietário (instrução explícita dele em `PRD_Camareiras_parte02.md`
-  seção 2.3) — regra que segue valendo até o merge/deploy estarem feitos.
+  seção 2.3) — restrição que valeu até o merge/deploy (já concluídos); não
+  se aplica mais às iterações normais pós-merge (ex.: Parte 03, seção 10).
 - Identidade visual mantida igual à parte 1 — nenhuma paleta, tema ou
   componente visual novo foi introduzido.
 
@@ -273,9 +340,18 @@ o escopo mude no futuro.
 - `supabase/schema.sql` / `supabase/seed.sql` — schema e dados iniciais.
 - `supabase/migrations/` — alterações incrementais do banco, em ordem.
 - `src/app/(admin)/` — telas do proprietário/admin.
+- `src/app/(admin)/checklists/` — submenu "Listas" (ver Parte 03, seção 10):
+  `page.tsx` é o menu vertical; `[type]/` (arrumação/troca/preparação),
+  `ocorrencias/`, `manutencao-preventiva/`, `quartos/` e `mesas/` (só a
+  aba "Layout & mesas") são as subtelas, cada uma com `<BackLink>`.
+- `src/app/(admin)/mesas/gerenciar/` — tela "Mesas do café" do menu
+  principal (hóspedes de hoje/amanhã + comissão); **não** inclui mais o
+  layout arrastável, que é `src/app/(admin)/checklists/mesas/`.
 - `src/app/(camareira)/` — telas da camareira.
 - `src/app/manutencao/` — telas do funcionário de manutenção (pasta real,
   não route-group — ver "Parte 02 do projeto").
 - `src/lib/actions/` — Server Actions (toda escrita no banco).
 - `src/lib/task-type.ts` — rótulos centralizados dos tipos de trabalho
   (Arrumação/Preparação Chegada/Troca) — mudar aqui reflete em todo o app.
+- `src/components/shared/back-link.tsx` — link "← Voltar" reutilizável,
+  usado nas subtelas de "Listas" e no detalhe de tarefa da camareira.
