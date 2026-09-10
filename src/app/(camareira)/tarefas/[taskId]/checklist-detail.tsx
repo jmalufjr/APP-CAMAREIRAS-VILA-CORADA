@@ -39,8 +39,41 @@ export function ChecklistDetail({
   const [categoryId, setCategoryId] = useState("");
   const [occDescription, setOccDescription] = useState("");
 
-  const allChecked = checks.length > 0 && checks.every((c) => c.checked);
+  // Estado local dos checks: a fonte de verdade da UI, atualizada de forma
+  // otimista no clique. Evita esperar o round trip ao servidor + um
+  // router.refresh() de página inteira só para o "xisinho" aparecer.
+  const [localChecks, setLocalChecks] = useState(checks);
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  // Ressincroniza o estado local sempre que a prop `checks` mudar de
+  // identidade (task diferente / dados recarregados do servidor), sem usar
+  // useEffect (padrão "adjusting state during render" do React).
+  const [syncedChecks, setSyncedChecks] = useState(checks);
+  if (checks !== syncedChecks) {
+    setSyncedChecks(checks);
+    setLocalChecks(checks);
+  }
+
+  const allChecked = localChecks.length > 0 && localChecks.every((c) => c.checked);
   const isReleased = task.status === "concluido";
+
+  function handleToggle(checkId: string, next: boolean) {
+    setLocalChecks((prev) => prev.map((c) => (c.id === checkId ? { ...c, checked: next } : c)));
+    setPendingIds((prev) => new Set(prev).add(checkId));
+
+    startTransition(async () => {
+      const result = await toggleCheck(checkId, next);
+      setPendingIds((prev) => {
+        const copy = new Set(prev);
+        copy.delete(checkId);
+        return copy;
+      });
+      if (result?.error) {
+        toast.error(result.error);
+        // reverte apenas este item, sem recarregar a página inteira
+        setLocalChecks((prev) => prev.map((c) => (c.id === checkId ? { ...c, checked: !next } : c)));
+      }
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -51,21 +84,15 @@ export function ChecklistDetail({
       )}
 
       <div className="space-y-2">
-        {checks.map((check) => (
+        {localChecks.map((check) => (
           <label
             key={check.id}
             className="flex items-start gap-3 rounded-lg border border-border bg-card p-3 cursor-pointer"
           >
             <Checkbox
               checked={check.checked}
-              disabled={isPending || isReleased}
-              onCheckedChange={(v) =>
-                startTransition(async () => {
-                  const result = await toggleCheck(check.id, !!v);
-                  if (result?.error) toast.error(result.error);
-                  else router.refresh();
-                })
-              }
+              disabled={pendingIds.has(check.id) || isReleased}
+              onCheckedChange={(v) => handleToggle(check.id, !!v)}
               className="mt-0.5"
             />
             <div>

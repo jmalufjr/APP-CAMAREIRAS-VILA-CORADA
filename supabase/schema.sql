@@ -350,6 +350,44 @@ begin
 end;
 $$ language plpgsql security definer;
 
+-- Marcar/desmarcar um item de checklist é feito por função security definer:
+-- colapsa em 1 round trip o que seriam 1 select + até 3 updates sequenciais
+-- (check + status da tarefa + started_at), reduzindo o delay percebido pela
+-- camareira ao clicar no item.
+create or replace function toggle_daily_room_task_check(p_check_id uuid, p_checked boolean)
+returns void as $$
+declare
+  v_task_id uuid;
+begin
+  select daily_room_task_id into v_task_id
+  from daily_room_task_checks
+  where id = p_check_id;
+
+  if v_task_id is null then
+    raise exception 'check not found';
+  end if;
+
+  if not exists (
+    select 1 from daily_room_tasks
+    where id = v_task_id and assigned_to = auth.uid()
+  ) then
+    raise exception 'not authorized';
+  end if;
+
+  update daily_room_task_checks
+  set checked = p_checked, checked_at = case when p_checked then now() else null end
+  where id = p_check_id;
+
+  update daily_room_tasks
+  set status = 'em_andamento'
+  where id = v_task_id and status = 'pendente';
+
+  update daily_room_tasks
+  set started_at = now()
+  where id = v_task_id and started_at is null;
+end;
+$$ language plpgsql security definer;
+
 -- daily_breakfast: everyone authenticated reads; only admin writes
 create policy "db_select_authenticated" on daily_breakfast for select using (auth.uid() is not null);
 create policy "db_admin_write" on daily_breakfast for insert with check (is_admin());

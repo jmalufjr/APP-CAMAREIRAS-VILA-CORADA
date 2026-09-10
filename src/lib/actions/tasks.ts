@@ -29,32 +29,12 @@ export async function claimTask(taskId: string) {
 
 export async function toggleCheck(checkId: string, checked: boolean) {
   const supabase = await createClient();
-  const { data: check } = await supabase
-    .from("daily_room_task_checks")
-    .select("daily_room_task_id")
-    .eq("id", checkId)
-    .single();
-
-  const { error } = await supabase
-    .from("daily_room_task_checks")
-    .update({ checked, checked_at: checked ? new Date().toISOString() : null })
-    .eq("id", checkId);
+  const { error } = await supabase.rpc("toggle_daily_room_task_check", {
+    p_check_id: checkId,
+    p_checked: checked,
+  });
 
   if (error) return { error: error.message };
-
-  if (check) {
-    await supabase
-      .from("daily_room_tasks")
-      .update({ status: "em_andamento" })
-      .eq("id", check.daily_room_task_id)
-      .eq("status", "pendente");
-
-    await supabase
-      .from("daily_room_tasks")
-      .update({ started_at: new Date().toISOString() })
-      .eq("id", check.daily_room_task_id)
-      .is("started_at", null);
-  }
 
   revalidatePath("/tarefas", "layout");
   return { success: true };
