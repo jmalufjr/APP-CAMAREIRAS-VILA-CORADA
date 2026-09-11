@@ -22,7 +22,10 @@ checklists) — **já mesclada em `main` e implantada em produção** (branch
 abaixo e `PRD_Camareiras_parte02.md`. Uma terceira leva de iterações (ver
 seção 10) reorganizou a tela "Listas" em submenu, adicionou ordenação de
 itens de checklist/manutenção preventiva e datas iniciais configuráveis
-para o cronograma de manutenção preventiva.
+para o cronograma de manutenção preventiva. Uma quarta leva (seção 11)
+adicionou controle de consumo de frigobar e do bar da piscina por quarto,
+com conta compartilhada entre os dois (fechar/reabrir/pagar) e cards
+equivalentes no histórico e no "Resumo executivo".
 
 ## Onde está
 
@@ -160,6 +163,59 @@ também é feita em Server Components.
     - Realce sutil (pontinho, não fundo colorido — fundo colorido lia como
       "selecionado") nos 3 itens mais usados do menu do admin
       (Planejamento diário, Chegadas & saídas, Mesas do café).
+11. **Parte 04 — Consumo de Bar e Frigobar** (feita direto em `main`, pós
+    parte 03):
+    - **Catálogos novos** geridos em "Listas": `minibar_items` (frigobar —
+      "Consumo de Frigobar", `/checklists/frigobar`, seed com 5 itens) e
+      `poolbar_items` (bar da piscina — "Bar da Piscina",
+      `/checklists/poolbar`, com `category` opcional para agrupar em
+      Petiscos/Bebidas, seed com as ~19 itens do cardápio real).
+    - **Ciclo de conta único por quarto**, compartilhado entre frigobar e
+      bar da piscina: `room_bills.status` = `aberta → fechada → reaberta →
+      paga`, com no máximo 1 conta não-paga por quarto (unique index
+      parcial). O consumo (`room_bill_minibar_items`/`room_bill_poolbar_items`)
+      não é mais vinculado a uma tarefa/dia específico — é um valor por
+      (conta, item) que qualquer camareira/admin pode somar enquanto a
+      conta estiver aberta ou reaberta; ao fechar, a camareira fica
+      bloqueada (RLS); ao marcar como paga, nasce automaticamente uma conta
+      nova `aberta` para o quarto. `src/lib/room-bills.ts` tem o helper
+      `getOrCreateCurrentBill`, que chama a função `security definer`
+      `ensure_room_bill` (necessária porque INSERT direto em `room_bills` é
+      admin-only via RLS, mas a camareira precisa poder garantir a conta de
+      um quarto novo na primeira vez que lança consumo nele).
+    - **Telas**: camareira lança frigobar dentro do checklist de cada
+      tarefa (`/tarefas/[taskId]`, mesmo componente `ChecklistDetail`) e bar
+      da piscina numa tela própria (`/bar-piscina`, menu principal dela) —
+      ambas em formato **acordeão** (`src/components/ui/accordion.tsx`,
+      novo wrapper de `@base-ui/react/accordion`), não mais cards em grid:
+      um card em grid com ~19 itens de nomes longos cortava o campo de
+      quantidade; o acordeão dá largura de tela inteira a cada quarto
+      expandido. Admin gerencia tudo em `/frigobar` ("Consumo de Bar e
+      Frigobar", também acordeão): cada quarto mostra os totais de
+      frigobar e bar da piscina, taxa de serviço de 10% sobre o bar, total
+      geral, botões "Fechar a conta" / "Pagamento efetuado" /
+      "Editar/reabrir conta" (este último libera campos de quantidade
+      editáveis ali mesmo, tanto de frigobar quanto de bar da piscina).
+    - **Histórico e "Resumo executivo" (dashboard, ex-"Dashboard")**
+      ganharam cards de frigobar e bar da piscina (nessa ordem) iguais aos
+      já existentes de mesas/comissão: tabela item×quantidade×total por
+      período/mês atual/mês anterior, e dois gráficos de pizza (% no mês /
+      % desde o início). Como o consumo não tem mais data própria, esses
+      totais somam pela data em que a conta foi **paga** (`paid_at`), não
+      pela data do lançamento.
+    - **Gráficos de pizza**: nome do item sobreposto na própria fatia
+      (fonte pequena, halo na cor do card por trás do texto para continuar
+      legível em qualquer cor de fundo), só para os 5 maiores itens; a
+      lista de nome+percentual fica só na legenda abaixo do gráfico — a
+      `<Legend>` do Recharts foi trocada por uma lista HTML própria porque
+      a legenda automática colidia com os rótulos externos quando havia
+      muitos itens pequenos.
+    - **Bug real corrigido nesta parte**: uma `<TableRow>` de totais
+      (tabela "Resumo diário" do histórico) estava fora de `<TableBody>`/
+      `<TableFooter>`, direto como filha de `<Table>` — inválido em HTML,
+      causava erro de hidratação. Corrigido envolvendo com `<TableFooter>`
+      (já existia no componente base `src/components/ui/table.tsx`, só não
+      estava sendo usado). Pré-existente, não introduzido por esta parte.
 
 ## Convenções e decisões importantes
 
@@ -342,14 +398,28 @@ o escopo mude no futuro.
 - `src/app/(admin)/` — telas do proprietário/admin.
 - `src/app/(admin)/checklists/` — submenu "Listas" (ver Parte 03, seção 10):
   `page.tsx` é o menu vertical; `[type]/` (arrumação/troca/preparação),
-  `ocorrencias/`, `manutencao-preventiva/`, `quartos/` e `mesas/` (só a
-  aba "Layout & mesas") são as subtelas, cada uma com `<BackLink>`.
+  `ocorrencias/`, `manutencao-preventiva/`, `quartos/`, `frigobar/`,
+  `poolbar/` e `mesas/` (só a aba "Layout & mesas") são as subtelas, cada
+  uma com `<BackLink>`.
 - `src/app/(admin)/mesas/gerenciar/` — tela "Mesas do café" do menu
   principal (hóspedes de hoje/amanhã + comissão); **não** inclui mais o
   layout arrastável, que é `src/app/(admin)/checklists/mesas/`.
+- `src/app/(admin)/frigobar/` — tela "Consumo de Bar e Frigobar" do menu
+  principal (ver Parte 04, seção 11): acordeão por quarto com os totais de
+  frigobar + bar da piscina e as ações de fechar/reabrir/pagar conta.
+- `src/app/(camareira)/bar-piscina/` — tela "Consumo de Bar da Piscina" da
+  camareira (ver Parte 04): acordeão com todos os quartos ativos.
 - `src/app/(camareira)/` — telas da camareira.
 - `src/app/manutencao/` — telas do funcionário de manutenção (pasta real,
   não route-group — ver "Parte 02 do projeto").
+- `src/lib/actions/minibar.ts` / `poolbar.ts` / `room-bills.ts` — Server
+  Actions do frigobar, do bar da piscina e do ciclo de conta por quarto
+  (fechar/reabrir/pagar + a consulta combinada usada em `/frigobar`).
+- `src/lib/room-bills.ts` — helper `getOrCreateCurrentBill` (não é Server
+  Action; recebe o client Supabase como parâmetro), usado pelos três
+  arquivos de actions acima.
+- `src/components/ui/accordion.tsx` — wrapper de `@base-ui/react/accordion`
+  (ver Parte 04), usado nas telas de bar/frigobar.
 - `src/lib/actions/` — Server Actions (toda escrita no banco).
 - `src/lib/task-type.ts` — rótulos centralizados dos tipos de trabalho
   (Arrumação/Preparação Chegada/Troca) — mudar aqui reflete em todo o app.
