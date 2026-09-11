@@ -103,32 +103,28 @@ function RoomAccordionItem({ room }: { room: PoolbarRoomCard }) {
               {Array.from(groups.entries()).map(([category, items]) => (
                 <div key={category} className="space-y-1.5">
                   <p className="text-xs font-medium text-muted-foreground">{category}</p>
-                  {/* Rolagem horizontal própria: em telas estreitas, se o
-                      nome do item não couber ao lado do campo de
-                      quantidade, dá pra arrastar em vez do campo ficar
-                      inacessível. */}
-                  <div className="overflow-x-auto">
-                    <div className="space-y-1.5">
-                      {items.map((item) => (
-                        <div key={item.id} className="flex items-center gap-3 w-max min-w-full">
-                          <div className="shrink-0">
-                            <p className="text-sm whitespace-nowrap">{item.name}</p>
-                            <p className="text-xs text-muted-foreground whitespace-nowrap">
-                              R$ {item.price.toFixed(2)}
-                            </p>
-                          </div>
-                          <Input
-                            type="number"
-                            min={0}
-                            className="w-16 shrink-0 ml-auto"
-                            disabled={isClosed || pendingIds.has(item.id)}
-                            value={quantities[item.id] ?? 0}
-                            onChange={(e) => handleQuantityChange(item.id, Number(e.target.value))}
-                            onBlur={() => saveQuantity(item.id, quantities[item.id] ?? 0)}
-                          />
+                  {/* Coluna do nome usa minmax(0,1fr): encolhe e quebra em
+                      várias linhas se precisar, mas a caixa de quantidade
+                      (coluna auto) fica sempre visível — sem depender de
+                      arrastar a tela pra o lado. */}
+                  <div className="space-y-1.5">
+                    {items.map((item) => (
+                      <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm">{item.name}</p>
+                          <p className="text-xs text-muted-foreground">R$ {item.price.toFixed(2)}</p>
                         </div>
-                      ))}
-                    </div>
+                        <Input
+                          type="number"
+                          min={0}
+                          className="w-16 shrink-0"
+                          disabled={isClosed || pendingIds.has(item.id)}
+                          value={quantities[item.id] ?? 0}
+                          onChange={(e) => handleQuantityChange(item.id, Number(e.target.value))}
+                          onBlur={() => saveQuantity(item.id, quantities[item.id] ?? 0)}
+                        />
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}

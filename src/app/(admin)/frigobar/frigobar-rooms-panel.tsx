@@ -84,51 +84,47 @@ function RoomAccordionItem({
             <div className="grid sm:grid-cols-2 gap-x-8 gap-y-4">
               <div className="space-y-1.5">
                 <p className="text-xs font-medium text-muted-foreground">Frigobar</p>
-                {/* Rolagem horizontal própria: em telas estreitas, se o nome
-                    não couber ao lado do campo de quantidade, dá pra
-                    arrastar em vez do campo ficar inacessível. */}
-                <div className="overflow-x-auto">
-                  <div className="space-y-1.5">
-                    {minibarItems.map((item) => (
-                      <div key={item.id} className="flex items-center gap-3 text-sm w-max min-w-full">
-                        <span className="shrink-0 whitespace-nowrap">{item.name}</span>
-                        <Input
-                          type="number"
-                          min={0}
-                          className="w-16 h-8 shrink-0 ml-auto"
-                          disabled={isPending}
-                          value={minibarQty[item.id] ?? 0}
-                          onChange={(e) => setMinibarQty((prev) => ({ ...prev, [item.id]: Number(e.target.value) }))}
-                          onBlur={() =>
-                            runAction(() => setMinibarConsumption(room.room_id, item.id, minibarQty[item.id] ?? 0))
-                          }
-                        />
-                      </div>
-                    ))}
-                  </div>
+                {/* Coluna do nome usa minmax(0,1fr): encolhe e quebra em
+                    várias linhas se precisar, mas a caixa de quantidade
+                    (coluna auto) fica sempre visível. */}
+                <div className="space-y-1.5">
+                  {minibarItems.map((item) => (
+                    <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-sm">
+                      <span className="min-w-0">{item.name}</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        className="w-16 h-8 shrink-0"
+                        disabled={isPending}
+                        value={minibarQty[item.id] ?? 0}
+                        onChange={(e) => setMinibarQty((prev) => ({ ...prev, [item.id]: Number(e.target.value) }))}
+                        onBlur={() =>
+                          runAction(() => setMinibarConsumption(room.room_id, item.id, minibarQty[item.id] ?? 0))
+                        }
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
               <div className="space-y-1.5">
                 <p className="text-xs font-medium text-muted-foreground">Bar da piscina</p>
-                <div className="overflow-x-auto">
-                  <div className="space-y-1.5">
-                    {poolbarItems.map((item) => (
-                      <div key={item.id} className="flex items-center gap-3 text-sm w-max min-w-full">
-                        <span className="shrink-0 whitespace-nowrap">{item.name}</span>
-                        <Input
-                          type="number"
-                          min={0}
-                          className="w-16 h-8 shrink-0 ml-auto"
-                          disabled={isPending}
-                          value={poolbarQty[item.id] ?? 0}
-                          onChange={(e) => setPoolbarQty((prev) => ({ ...prev, [item.id]: Number(e.target.value) }))}
-                          onBlur={() =>
-                            runAction(() => setPoolbarConsumption(room.room_id, item.id, poolbarQty[item.id] ?? 0))
-                          }
-                        />
-                      </div>
-                    ))}
-                  </div>
+                <div className="space-y-1.5">
+                  {poolbarItems.map((item) => (
+                    <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-sm">
+                      <span className="min-w-0">{item.name}</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        className="w-16 h-8 shrink-0"
+                        disabled={isPending}
+                        value={poolbarQty[item.id] ?? 0}
+                        onChange={(e) => setPoolbarQty((prev) => ({ ...prev, [item.id]: Number(e.target.value) }))}
+                        onBlur={() =>
+                          runAction(() => setPoolbarConsumption(room.room_id, item.id, poolbarQty[item.id] ?? 0))
+                        }
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
