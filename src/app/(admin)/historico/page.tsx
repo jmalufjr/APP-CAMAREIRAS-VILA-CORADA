@@ -3,6 +3,10 @@ import { PageHeader } from "@/components/shared/page-header";
 import { HistoryFilters } from "./history-filters";
 import { HistoryTables } from "./history-tables";
 import { TopCategoriesTable, type CategoryCount } from "@/components/shared/top-categories-table";
+import { MinibarSummaryTable } from "@/components/shared/minibar-summary-table";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { getMinibarConsumptionForPeriod } from "@/lib/actions/minibar";
+import { getPoolbarConsumptionForPeriod } from "@/lib/actions/poolbar";
 import { toDateKey } from "@/lib/date";
 
 function defaultRange() {
@@ -35,7 +39,7 @@ export default async function HistoricoPage({
 
   const supabase = await createClient();
 
-  const [{ data: breakfast }, { data: tasks }] = await Promise.all([
+  const [{ data: breakfast }, { data: tasks }, minibarSummary, poolbarSummary] = await Promise.all([
     supabase
       .from("daily_breakfast")
       .select("date, guest_count, value_per_table_snapshot")
@@ -49,6 +53,8 @@ export default async function HistoricoPage({
       .gte("date", from)
       .lte("date", to)
       .eq("status", "concluido"),
+    getMinibarConsumptionForPeriod(from, to),
+    getPoolbarConsumptionForPeriod(from, to),
   ]);
 
   const taskRows = (tasks ?? []) as unknown as TaskWithOccurrences[];
@@ -84,6 +90,26 @@ export default async function HistoricoPage({
         categories={topCategories}
         csvFilename="historico-categorias-ocorrencias.csv"
       />
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-lg">
+            Consumo de frigobar no período · R$ {minibarSummary.total.toFixed(2)}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <MinibarSummaryTable items={minibarSummary.items} total={minibarSummary.total} />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-lg">
+            Consumo de bar da piscina no período · R$ {poolbarSummary.total.toFixed(2)}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <MinibarSummaryTable items={poolbarSummary.items} total={poolbarSummary.total} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

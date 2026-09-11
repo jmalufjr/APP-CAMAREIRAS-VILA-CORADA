@@ -21,6 +21,8 @@ import {
   CalendarClock,
   Wrench,
   CalendarCheck2,
+  Wine,
+  Martini,
 } from "lucide-react";
 
 interface NavItem {
@@ -33,10 +35,11 @@ interface NavItem {
 }
 
 const adminNav: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Resumo executivo", icon: LayoutDashboard },
   { href: "/planejamento", label: "Planejamento diário", icon: ClipboardCheck, frequent: true },
   { href: "/chegadas-saidas/gerenciar", label: "Chegadas & saídas", icon: CalendarClock, frequent: true },
   { href: "/mesas/gerenciar", label: "Mesas do café", icon: Coffee, frequent: true },
+  { href: "/frigobar", label: "Consumo de Bar e Frigobar", icon: Wine, frequent: true },
   { href: "/checklists", label: "Listas", icon: ClipboardList },
   { href: "/manutencao-preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
   { href: "/usuarios", label: "Usuários", icon: Users },
@@ -47,6 +50,7 @@ const camareiraNav: NavItem[] = [
   { href: "/tarefas", label: "Meus quartos", icon: ClipboardList },
   { href: "/mesas", label: "Mesas do café", icon: Coffee },
   { href: "/chegadas-saidas", label: "Chegadas & saídas", icon: CalendarClock },
+  { href: "/bar-piscina", label: "Consumo de Bar da Piscina", icon: Martini },
 ];
 
 const manutencaoNav: NavItem[] = [

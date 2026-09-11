@@ -5,11 +5,15 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { DailyRoomTask, DailyRoomTaskCheck, DailyRoomTaskOccurrence, OccurrenceCategory } from "@/lib/types";
 import { toggleCheck, addOccurrence, removeOccurrence, releaseTask } from "@/lib/actions/tasks";
+import { setMinibarConsumption, type MinibarRoomConsumption } from "@/lib/actions/minibar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -27,11 +31,13 @@ export function ChecklistDetail({
   checks,
   occurrences,
   categories,
+  minibar,
 }: {
   task: DailyRoomTask;
   checks: CheckRow[];
   occurrences: OccurrenceRow[];
   categories: OccurrenceCategory[];
+  minibar: MinibarRoomConsumption;
 }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -55,6 +61,41 @@ export function ChecklistDetail({
 
   const allChecked = localChecks.length > 0 && localChecks.every((c) => c.checked);
   const isReleased = task.status === "concluido";
+
+  // Consumo de frigobar: quantidade por item, iniciada a partir do que já
+  // está lançado na conta corrente deste quarto (compartilhada entre
+  // qualquer camareira/tarefa). O toggle "houve consumo?" é só uma
+  // conveniência de UI (default "Sim" se já existir alguma quantidade > 0
+  // salva), não precisa de uma coluna própria no banco.
+  const minibarItems = minibar.items;
+  const isMinibarClosed = minibar.billStatus === "fechada";
+  const initialQuantities = Object.fromEntries(minibarItems.map((item) => [item.id, item.quantity]));
+  const [minibarQuantities, setMinibarQuantities] = useState<Record<string, number>>(initialQuantities);
+  const [hasMinibarConsumption, setHasMinibarConsumption] = useState(
+    Object.values(initialQuantities).some((q) => q > 0)
+  );
+  const [minibarPendingIds, setMinibarPendingIds] = useState<Set<string>>(new Set());
+
+  function handleMinibarQuantityChange(itemId: string, quantity: number) {
+    const safeQuantity = Math.max(0, Math.floor(quantity) || 0);
+    setMinibarQuantities((prev) => ({ ...prev, [itemId]: safeQuantity }));
+  }
+
+  // Recebe a quantidade explicitamente (em vez de reler o estado) para
+  // evitar salvar um valor obsoleto quando chamada logo após uma mudança de
+  // estado ainda não aplicada (ex.: zerar tudo ao desligar o toggle).
+  function saveMinibarQuantity(itemId: string, quantity: number) {
+    setMinibarPendingIds((prev) => new Set(prev).add(itemId));
+    startTransition(async () => {
+      const result = await setMinibarConsumption(task.room_id, itemId, quantity);
+      setMinibarPendingIds((prev) => {
+        const copy = new Set(prev);
+        copy.delete(itemId);
+        return copy;
+      });
+      if (result?.error) toast.error(result.error);
+    });
+  }
 
   function handleToggle(checkId: string, next: boolean) {
     setLocalChecks((prev) => prev.map((c) => (c.id === checkId ? { ...c, checked: next } : c)));
@@ -106,6 +147,64 @@ export function ChecklistDetail({
           </label>
         ))}
       </div>
+
+      <Card>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-heading text-lg">Consumo de frigobar</h3>
+            <div className="flex items-center gap-2">
+              {isMinibarClosed && <Badge variant="secondary">Conta fechada</Badge>}
+              <Label htmlFor="minibar-consumption" className="text-sm font-normal">
+                Houve consumo de frigobar?
+              </Label>
+              <Switch
+                id="minibar-consumption"
+                checked={hasMinibarConsumption}
+                disabled={isReleased || isMinibarClosed}
+                onCheckedChange={(checked) => {
+                  setHasMinibarConsumption(!!checked);
+                  if (!checked) {
+                    // Zera e salva todas as quantidades ao responder "Não".
+                    minibarItems.forEach((item) => {
+                      if ((minibarQuantities[item.id] ?? 0) > 0) {
+                        handleMinibarQuantityChange(item.id, 0);
+                        saveMinibarQuantity(item.id, 0);
+                      }
+                    });
+                  }
+                }}
+              />
+            </div>
+          </div>
+          {hasMinibarConsumption && (
+            <div className="space-y-2">
+              {minibarItems.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3"
+                >
+                  <div>
+                    <p className="text-sm font-medium">{item.name}</p>
+                    <p className="text-xs text-muted-foreground">R$ {item.price.toFixed(2)}</p>
+                  </div>
+                  <Input
+                    type="number"
+                    min={0}
+                    className="w-20"
+                    disabled={minibarPendingIds.has(item.id) || isReleased || isMinibarClosed}
+                    value={minibarQuantities[item.id] ?? 0}
+                    onChange={(e) => handleMinibarQuantityChange(item.id, Number(e.target.value))}
+                    onBlur={() => saveMinibarQuantity(item.id, minibarQuantities[item.id] ?? 0)}
+                  />
+                </div>
+              ))}
+              {minibarItems.length === 0 && (
+                <p className="text-sm text-muted-foreground">Nenhum item de frigobar cadastrado.</p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="space-y-4">

@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { BackLink } from "@/components/shared/back-link";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import type { ChecklistType } from "@/lib/types";
+import { getMinibarConsumptionForRoom } from "@/lib/actions/minibar";
 import { ChecklistDetail } from "./checklist-detail";
 
 export default async function TaskDetailPage({
@@ -22,7 +23,7 @@ export default async function TaskDetailPage({
 
   if (!task) notFound();
 
-  const [{ data: checks }, { data: occurrences }, { data: categories }] = await Promise.all([
+  const [{ data: checks }, { data: occurrences }, { data: categories }, minibar] = await Promise.all([
     supabase
       .from("daily_room_task_checks")
       .select("*, checklist_items(label, description, position)")
@@ -33,6 +34,7 @@ export default async function TaskDetailPage({
       .select("*, occurrence_categories(name)")
       .eq("daily_room_task_id", taskId),
     supabase.from("occurrence_categories").select("*").eq("active", true).order("position"),
+    getMinibarConsumptionForRoom(task.room_id),
   ]);
 
   const room = (task as unknown as { rooms: { number: string; name: string | null } }).rooms;
@@ -49,6 +51,7 @@ export default async function TaskDetailPage({
         checks={checks ?? []}
         occurrences={occurrences ?? []}
         categories={categories ?? []}
+        minibar={minibar}
       />
     </div>
   );

@@ -5,6 +5,7 @@ export type TableShape = "round" | "rect";
 export type OccurrenceStatus = "pendente" | "selecionada" | "resolvida";
 export type MaintenanceExecutionType = "nao_tecnico" | "tecnico";
 export type MaintenanceItemStatus = "pendente" | "selecionada";
+export type RoomBillStatus = "aberta" | "fechada" | "reaberta" | "paga";
 
 export interface Profile {
   id: string;
@@ -169,6 +170,56 @@ export interface MaintenanceCompletion {
   completed_at: string;
   external_technician_name: string | null;
   created_at: string;
+}
+
+export interface MinibarItem {
+  id: string;
+  name: string;
+  price: number;
+  active: boolean;
+  position: number;
+  created_at: string;
+}
+
+export interface PoolbarItem {
+  id: string;
+  category: string | null;
+  name: string;
+  price: number;
+  active: boolean;
+  position: number;
+  created_at: string;
+}
+
+export interface RoomBill {
+  id: string;
+  room_id: string;
+  status: RoomBillStatus;
+  opened_at: string;
+  closed_at: string | null;
+  closed_by: string | null;
+  reopened_at: string | null;
+  reopened_by: string | null;
+  paid_at: string | null;
+  paid_by: string | null;
+}
+
+export interface RoomBillMinibarItem {
+  id: string;
+  bill_id: string;
+  minibar_item_id: string;
+  quantity: number;
+  price_snapshot: number;
+  updated_at: string;
+}
+
+export interface RoomBillPoolbarItem {
+  id: string;
+  bill_id: string;
+  poolbar_item_id: string;
+  quantity: number;
+  price_snapshot: number;
+  updated_at: string;
 }
 
 // Minimal Database type placeholder so @supabase/ssr generics compile.

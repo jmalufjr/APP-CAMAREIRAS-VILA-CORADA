@@ -1,7 +1,18 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
-import { Sparkles, RefreshCw, DoorOpen, Wrench, CalendarCheck2, BedDouble, Coffee, ChevronRight } from "lucide-react";
+import {
+  Sparkles,
+  RefreshCw,
+  DoorOpen,
+  Wrench,
+  CalendarCheck2,
+  BedDouble,
+  Coffee,
+  Wine,
+  Martini,
+  ChevronRight,
+} from "lucide-react";
 
 const menuItems = [
   { href: "/checklists/arrumacao", label: TASK_TYPE_LABELS.arrumacao, icon: Sparkles },
@@ -10,6 +21,8 @@ const menuItems = [
   { href: "/checklists/ocorrencias", label: "Ocorrências Manutenção", icon: Wrench },
   { href: "/checklists/manutencao-preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
   { href: "/checklists/quartos", label: "Quartos", icon: BedDouble },
+  { href: "/checklists/frigobar", label: "Consumo de Frigobar", icon: Wine },
+  { href: "/checklists/poolbar", label: "Bar da Piscina", icon: Martini },
   { href: "/checklists/mesas", label: "Layout & mesas", icon: Coffee },
 ];
 

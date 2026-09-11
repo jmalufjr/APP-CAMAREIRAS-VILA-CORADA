@@ -6,6 +6,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -193,17 +194,19 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
               )}
             </TableBody>
             {byDay.length > 0 && (
-              <TableRow className="font-medium bg-muted/50">
-                <TableCell>Total</TableCell>
-                <TableCell>{totals.mesas}</TableCell>
-                <TableCell>{totals.hospedes}</TableCell>
-                <TableCell>{totals.arrumacao}</TableCell>
-                <TableCell>{totals.preparacao}</TableCell>
-                <TableCell>{totals.troca}</TableCell>
-                <TableCell>{totals.ocorrencias}</TableCell>
-                <TableCell>{totals.ocorrenciasResolvidas}</TableCell>
-                <TableCell>R$ {totals.comissao.toFixed(2)}</TableCell>
-              </TableRow>
+              <TableFooter>
+                <TableRow>
+                  <TableCell>Total</TableCell>
+                  <TableCell>{totals.mesas}</TableCell>
+                  <TableCell>{totals.hospedes}</TableCell>
+                  <TableCell>{totals.arrumacao}</TableCell>
+                  <TableCell>{totals.preparacao}</TableCell>
+                  <TableCell>{totals.troca}</TableCell>
+                  <TableCell>{totals.ocorrencias}</TableCell>
+                  <TableCell>{totals.ocorrenciasResolvidas}</TableCell>
+                  <TableCell>R$ {totals.comissao.toFixed(2)}</TableCell>
+                </TableRow>
+              </TableFooter>
             )}
           </Table>
         </CardContent>

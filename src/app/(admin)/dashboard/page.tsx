@@ -7,6 +7,10 @@ import { TableLayoutCanvas } from "@/components/shared/table-layout-canvas";
 import { TableNotesList } from "@/components/shared/table-notes-list";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { MonthlyChart } from "./monthly-chart";
+import { MinibarPieChart } from "./minibar-pie-chart";
+import { MinibarSummaryTable } from "@/components/shared/minibar-summary-table";
+import { getMinibarMonthlySummary } from "@/lib/actions/minibar";
+import { getPoolbarMonthlySummary } from "@/lib/actions/poolbar";
 import type { BreakfastTable, ChecklistType } from "@/lib/types";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import { BedDouble, Coffee, AlertTriangle, Wallet, History } from "lucide-react";
@@ -33,6 +37,8 @@ export default async function DashboardPage() {
     { data: tomorrowGuests },
     { data: monthBreakfast },
     { count: occurrencesToday },
+    minibarSummary,
+    poolbarSummary,
   ] = await Promise.all([
     supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", today),
     supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", tomorrow),
@@ -48,6 +54,8 @@ export default async function DashboardPage() {
       .from("daily_room_task_occurrences")
       .select("id, daily_room_tasks!inner(date)", { count: "exact", head: true })
       .eq("daily_room_tasks.date", today),
+    getMinibarMonthlySummary(),
+    getPoolbarMonthlySummary(),
   ]);
 
   const doneToday = (todayTasks ?? []).filter((t) => t.status === "concluido").length;
@@ -84,7 +92,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Dashboard"
+        title="Resumo executivo"
         subtitle={`Resumo de hoje, ${formatDatePt(today)}`}
         action={<ThemeToggle />}
       />
@@ -176,6 +184,80 @@ export default async function DashboardPage() {
         </CardHeader>
         <CardContent>
           <MonthlyChart data={chartData} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-lg">
+            Consumo de frigobar · mês atual R$ {minibarSummary.currentMonth.total.toFixed(2)} · mês
+            anterior R$ {minibarSummary.previousMonth.total.toFixed(2)}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <p className="text-sm font-medium mb-2">Mês atual</p>
+              <MinibarSummaryTable
+                items={minibarSummary.currentMonth.items}
+                total={minibarSummary.currentMonth.total}
+              />
+            </div>
+            <div>
+              <p className="text-sm font-medium mb-2">Mês anterior</p>
+              <MinibarSummaryTable
+                items={minibarSummary.previousMonth.items}
+                total={minibarSummary.previousMonth.total}
+              />
+            </div>
+          </div>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <p className="text-sm font-medium mb-2 text-center">% de consumo no mês</p>
+              <MinibarPieChart items={minibarSummary.currentMonth.items} />
+            </div>
+            <div>
+              <p className="text-sm font-medium mb-2 text-center">% de consumo desde o início</p>
+              <MinibarPieChart items={minibarSummary.allTime.items} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-lg">
+            Consumo de bar da piscina · mês atual R$ {poolbarSummary.currentMonth.total.toFixed(2)} · mês
+            anterior R$ {poolbarSummary.previousMonth.total.toFixed(2)}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <p className="text-sm font-medium mb-2">Mês atual</p>
+              <MinibarSummaryTable
+                items={poolbarSummary.currentMonth.items}
+                total={poolbarSummary.currentMonth.total}
+              />
+            </div>
+            <div>
+              <p className="text-sm font-medium mb-2">Mês anterior</p>
+              <MinibarSummaryTable
+                items={poolbarSummary.previousMonth.items}
+                total={poolbarSummary.previousMonth.total}
+              />
+            </div>
+          </div>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <p className="text-sm font-medium mb-2 text-center">% de consumo no mês</p>
+              <MinibarPieChart items={poolbarSummary.currentMonth.items} />
+            </div>
+            <div>
+              <p className="text-sm font-medium mb-2 text-center">% de consumo desde o início</p>
+              <MinibarPieChart items={poolbarSummary.allTime.items} />
+            </div>
+          </div>
         </CardContent>
       </Card>
 
