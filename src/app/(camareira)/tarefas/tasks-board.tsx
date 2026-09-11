@@ -74,17 +74,18 @@ function AvailableTaskCard({ task }: { task: TaskWithRoom }) {
   return (
     <Card>
       <CardContent className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="size-10 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
             <BedDouble size={18} />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="font-medium">Quarto {task.rooms.number}</p>
             <p className="text-xs text-muted-foreground">{TASK_TYPE_LABELS[task.task_type]}</p>
           </div>
         </div>
         <Button
           size="sm"
+          className="h-5 gap-1 rounded-4xl px-2 py-0.5 text-xs [&_svg:not([class*='size-'])]:size-3"
           disabled={isPending}
           onClick={() =>
             startTransition(async () => {
@@ -97,7 +98,7 @@ function AvailableTaskCard({ task }: { task: TaskWithRoom }) {
             })
           }
         >
-          <Hand size={14} /> Escolher
+          <Hand size={12} /> Escolher
         </Button>
       </CardContent>
     </Card>
@@ -108,16 +109,16 @@ function TaskCard({ task, href }: { task: TaskWithRoom; href?: string }) {
   const content = (
     <Card className={href ? "hover:border-primary transition-colors" : undefined}>
       <CardContent className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="size-10 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
             <BedDouble size={18} />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="font-medium">Quarto {task.rooms.number}</p>
             <p className="text-xs text-muted-foreground">{TASK_TYPE_LABELS[task.task_type]}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Badge variant={task.status === "concluido" ? "default" : "secondary"}>
             {task.status === "concluido"
               ? "Concluído"
