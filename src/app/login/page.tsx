@@ -3,6 +3,12 @@ import { LoginForm } from "./login-form";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { BrandLogo } from "@/components/shared/brand-logo";
 
+// A lista de usuários vem do banco e muda sempre que o admin cadastra/edita
+// alguém em "Usuários" — sem nada aqui que force renderização dinâmica, o
+// Next prerenderizava esta página como estática no build e só atualizava a
+// lista no próximo deploy, escondendo usuários criados depois.
+export const dynamic = "force-dynamic";
+
 export default async function LoginPage() {
   const options = await getLoginOptions();
 
