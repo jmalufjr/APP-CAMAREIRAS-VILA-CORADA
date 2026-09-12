@@ -2,25 +2,59 @@ export function toDateKey(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+const BRAZIL_TIME_ZONE = "America/Sao_Paulo";
+
+// "Agora", mas nos valores de calendário/relógio de Brasília — não os do
+// processo que executa o código (a Vercel roda em UTC; localhost pode estar
+// em qualquer fuso do sistema). Sem isso, todo lugar que partia de
+// `new Date()` para achar "hoje" trocava de dia à meia-noite UTC (21h em
+// Brasília, UTC-3) — "hoje"/"amanhã" e os fechamentos de mês viravam cedo
+// demais.
+//
+// Construído com `Date.UTC(...)` (não o construtor local `new Date(y,m,d)`)
+// para que o resultado seja o mesmo não importa o fuso do sistema: os
+// valores de Brasília são "carimbados" diretamente como se fossem UTC, sem
+// nenhuma reinterpretação de fuso. Por isso, todo código que deriva algo
+// a partir do valor retornado (`tomorrowKey`, `monthRange` etc.) **precisa
+// usar os métodos `getUTC*`/`setUTC*`**, nunca os locais (`getDate`,
+// `getMonth`...) — misturar os dois quebra a garantia de novo.
+export function nowInBrazil(): Date {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: BRAZIL_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return new Date(
+    Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"))
+  );
+}
+
 export function todayKey(): string {
-  return toDateKey(new Date());
+  return toDateKey(nowInBrazil());
 }
 
 export function tomorrowKey(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
+  const d = nowInBrazil();
+  d.setUTCDate(d.getUTCDate() + 1);
   return toDateKey(d);
 }
 
 export function yesterdayKey(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
+  const d = nowInBrazil();
+  d.setUTCDate(d.getUTCDate() - 1);
   return toDateKey(d);
 }
 
 export function daysAgoKey(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
+  const d = nowInBrazil();
+  d.setUTCDate(d.getUTCDate() - n);
   return toDateKey(d);
 }
 
@@ -32,8 +66,8 @@ export function addDaysKey(dateKey: string, days: number): string {
 }
 
 export function monthsAgoKey(months: number): string {
-  const d = new Date();
-  d.setMonth(d.getMonth() - months);
+  const d = nowInBrazil();
+  d.setUTCMonth(d.getUTCMonth() - months);
   return toDateKey(d);
 }
 

@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/shared/page-header";
-import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
+import { todayKey, tomorrowKey, formatDatePt, nowInBrazil } from "@/lib/date";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TableLayoutCanvas } from "@/components/shared/table-layout-canvas";
@@ -17,9 +17,9 @@ import { BedDouble, Coffee, AlertTriangle, Wallet, History } from "lucide-react"
 import Link from "next/link";
 
 function monthRange() {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const now = nowInBrazil();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
   return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
 }
 

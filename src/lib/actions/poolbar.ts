@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { toDateKey } from "@/lib/date";
+import { toDateKey, nowInBrazil } from "@/lib/date";
 import { getOrCreateCurrentBill } from "@/lib/room-bills";
 
 // ---------- Admin: CRUD do catálogo de itens do bar da piscina ----------
@@ -218,11 +218,11 @@ export interface PoolbarMonthlySummary {
 
 export async function getPoolbarMonthlySummary(): Promise<PoolbarMonthlySummary> {
   const supabase = await createClient();
-  const now = new Date();
-  const currentStart = toDateKey(new Date(now.getFullYear(), now.getMonth(), 1));
-  const currentEnd = toDateKey(new Date(now.getFullYear(), now.getMonth() + 1, 0));
-  const prevStart = toDateKey(new Date(now.getFullYear(), now.getMonth() - 1, 1));
-  const prevEnd = toDateKey(new Date(now.getFullYear(), now.getMonth(), 0));
+  const now = nowInBrazil();
+  const currentStart = toDateKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)));
+  const currentEnd = toDateKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)));
+  const prevStart = toDateKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)));
+  const prevEnd = toDateKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)));
 
   const rows = await getPaidPoolbarRows(supabase);
 

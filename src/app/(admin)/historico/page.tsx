@@ -7,11 +7,11 @@ import { MinibarSummaryTable } from "@/components/shared/minibar-summary-table";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { getMinibarConsumptionForPeriod } from "@/lib/actions/minibar";
 import { getPoolbarConsumptionForPeriod } from "@/lib/actions/poolbar";
-import { toDateKey } from "@/lib/date";
+import { toDateKey, nowInBrazil } from "@/lib/date";
 
 function defaultRange() {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const now = nowInBrazil();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   return { from: toDateKey(start), to: toDateKey(now) };
 }
 
