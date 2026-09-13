@@ -402,13 +402,16 @@ também é feita em Server Components.
   contagem de `alter table ... enable row level security` em
   `supabase/schema.sql`) — admin tem acesso total, cada papel só ao que é
   seu/disponível.
-- **Pendência de segurança conhecida, ainda não resolvida**: ao instalar
-  `@react-pdf/renderer`/`resend` (Parte 06), `npm audit` acusou uma
-  vulnerabilidade **crítica** já existente no Next.js (execução remota de
-  código não autenticada — corrigida na versão 16.3.5; o projeto está na
-  16.3.2). Não foi introduzida por nenhuma parte deste projeto, mas segue
-  pendente porque o proprietário ainda não decidiu se quer atualizar agora
-  ou depois — perguntar/lembrar antes de considerar o assunto encerrado.
+- **Vulnerabilidade crítica do Next.js corrigida** (não introduzida por
+  nenhuma parte deste projeto — só detectada ao instalar
+  `@react-pdf/renderer`/`resend` na Parte 06, via `npm audit`): execução
+  remota de código não autenticada, presente até a 16.3.2. Atualizado para
+  `next@16.3.5` / `eslint-config-next@16.3.5` (pin exato, sem `^`, mesmo
+  padrão já usado para `react`/`react-dom`) logo em seguida, mais
+  `npm audit fix` para as demais vulnerabilidades restantes (todas em
+  dependências transitivas de ferramentas de desenvolvimento — CLI do
+  shadcn e ESLint —, nunca no bundle do app). `npm audit` limpo
+  (0 vulnerabilidades) depois disso.
 - **Transições de estado sensíveis via função `security definer`, não via
   policy de UPDATE combinada**: sempre que uma linha precisa passar por mais
   de um estado (ex.: pendente → selecionada → resolvida/concluída) e mais de
