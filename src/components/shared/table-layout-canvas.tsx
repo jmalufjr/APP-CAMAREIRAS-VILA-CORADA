@@ -61,7 +61,7 @@ export function TableLayoutCanvas({ tables, guestCounts, editable, onPositionsCh
               className={cn(
                 "absolute flex flex-col items-center justify-center text-secondary-foreground bg-secondary shadow-sm select-none",
                 "dark:bg-[#F9F9F7] dark:text-primary-foreground",
-                t.shape === "round" ? "rounded-full" : "rounded-2xl",
+                t.shape === "round" ? "rounded-full" : t.shape === "square" ? "rounded-md" : "rounded-2xl",
                 editable && "cursor-move active:cursor-grabbing"
               )}
               style={{ left: pos.x, top: pos.y, width: t.width, height: t.height }}

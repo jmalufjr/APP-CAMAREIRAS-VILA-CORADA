@@ -5,9 +5,13 @@ import { revalidatePath } from "next/cache";
 
 export async function createBreakfastTable(formData: FormData) {
   const label = String(formData.get("label") ?? "").trim();
-  const shape = String(formData.get("shape") ?? "round") as "round" | "rect";
+  const shape = String(formData.get("shape") ?? "round") as "round" | "rect" | "square";
   const seats = Number(formData.get("seats") ?? 2);
   if (!label) return { error: "Informe o nome da mesa." };
+
+  // Quadrada usa o mesmo tamanho fixo da redonda (lado = diâmetro): só o
+  // retângulo tem uma altura diferente da largura.
+  const { width, height } = shape === "rect" ? { width: 70, height: 200 } : { width: 70, height: 70 };
 
   const supabase = await createClient();
   const { error } = await supabase.from("breakfast_tables").insert({
@@ -16,8 +20,8 @@ export async function createBreakfastTable(formData: FormData) {
     seats,
     pos_x: 40,
     pos_y: 40,
-    width: shape === "rect" ? 70 : 70,
-    height: shape === "rect" ? 200 : 70,
+    width,
+    height,
   });
 
   if (error) return { error: error.message };
@@ -29,7 +33,7 @@ export async function createBreakfastTable(formData: FormData) {
 
 export async function updateBreakfastTable(id: string, formData: FormData) {
   const label = String(formData.get("label") ?? "").trim();
-  const shape = String(formData.get("shape") ?? "round") as "round" | "rect";
+  const shape = String(formData.get("shape") ?? "round") as "round" | "rect" | "square";
   const seats = Number(formData.get("seats") ?? 2);
   const active = formData.get("active") === "on";
 

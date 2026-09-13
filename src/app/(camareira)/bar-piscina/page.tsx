@@ -1,17 +1,23 @@
+import { createClient } from "@/lib/supabase/server";
+import type { MinibarItem } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
-import { getPoolbarRoomsForCamareira } from "@/lib/actions/poolbar";
-import { BarPiscinaPanel } from "./bar-piscina-panel";
+import { getRoomBillsOverview } from "@/lib/actions/room-bills";
+import { ConsumoQuartosPanel } from "./consumo-quartos-panel";
 
-export default async function BarPiscinaPage() {
-  const rooms = await getPoolbarRoomsForCamareira();
+export default async function ConsumoQuartosPage() {
+  const supabase = await createClient();
+  const [overview, { data: minibarItems }] = await Promise.all([
+    getRoomBillsOverview(),
+    supabase.from("minibar_items").select("*").eq("active", true).order("position"),
+  ]);
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Consumo de Bar da Piscina"
-        subtitle="Registre o consumo do bar da piscina de cada quarto."
+        title="Consumo por quartos"
+        subtitle="Consumo de frigobar e do bar da piscina por quarto, com taxa de serviço de 10% sobre o bar."
       />
-      <BarPiscinaPanel rooms={rooms} />
+      <ConsumoQuartosPanel overview={overview} minibarItems={(minibarItems ?? []) as MinibarItem[]} />
     </div>
   );
 }

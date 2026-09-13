@@ -10,11 +10,12 @@ create extension if not exists "uuid-ossp";
 create type user_role as enum ('admin', 'camareira', 'manutencao');
 create type checklist_type as enum ('arrumacao', 'preparacao', 'troca');
 create type task_status as enum ('pendente', 'em_andamento', 'concluido');
-create type table_shape as enum ('round', 'rect');
+create type table_shape as enum ('round', 'rect', 'square');
 create type occurrence_status as enum ('pendente', 'selecionada', 'resolvida');
 create type maintenance_execution_type as enum ('nao_tecnico', 'tecnico');
 create type maintenance_item_status as enum ('pendente', 'selecionada');
 create type room_bill_status as enum ('aberta', 'fechada', 'reaberta', 'paga');
+create type comanda_status as enum ('original', 'cancelada', 'editada');
 
 -- ---------- PROFILES ----------
 -- Espelha auth.users com dados de perfil e papel (admin | camareira)
@@ -89,6 +90,15 @@ create table commission_settings (
   constraint single_row check (id = 1)
 );
 insert into commission_settings (id, value_per_table) values (1, 10.00);
+
+-- ---------- RECEIPT SETTINGS (e-mail da contabilidade p/ recibo em PDF) ----------
+create table receipt_settings (
+  id int primary key default 1,
+  accounting_email text,
+  updated_at timestamptz not null default now(),
+  constraint single_row check (id = 1)
+);
+insert into receipt_settings (id, accounting_email) values (1, null);
 
 -- ---------- DAILY ROOM TASKS (tarefas diárias de arrumação/preparação) ----------
 create table daily_room_tasks (
@@ -255,7 +265,10 @@ create table room_bills (
   reopened_at timestamptz,
   reopened_by uuid references profiles(id) on delete set null,
   paid_at timestamptz,
-  paid_by uuid references profiles(id) on delete set null
+  paid_by uuid references profiles(id) on delete set null,
+  -- Se o recibo em PDF daquela conta paga foi mandado com sucesso por
+  -- e-mail (ver pay_room_bill/mark_receipt_email_sent mais abaixo).
+  receipt_email_sent boolean not null default false
 );
 create unique index room_bills_one_active_per_room on room_bills(room_id) where status <> 'paga';
 
@@ -273,15 +286,33 @@ create table room_bill_minibar_items (
   unique (bill_id, minibar_item_id)
 );
 
--- ---------- ROOM BILL POOLBAR ITEMS (lançamentos do bar da piscina por conta) ----------
-create table room_bill_poolbar_items (
+-- ---------- BAR COMANDAS (pedidos de bar da piscina, um por vez, por quarto) ----------
+-- O consumo de bar da piscina passa a ser controlado por comandas em vez de
+-- um valor acumulado editado diretamente por item (era assim que
+-- room_bill_poolbar_items funcionava, removida nesta parte). Uma comanda
+-- sempre pertence à conta corrente (room_bills) do quarto no momento em
+-- que foi criada/editada; sequence_number é por conta (bill_id),
+-- reiniciando em 1 sempre que uma conta nova nasce (ao pagar a anterior).
+create table bar_comandas (
   id uuid primary key default uuid_generate_v4(),
+  room_id uuid not null references rooms(id) on delete cascade,
   bill_id uuid not null references room_bills(id) on delete cascade,
+  sequence_number int not null,
+  status comanda_status not null default 'original',
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  last_action_by uuid references profiles(id) on delete set null,
+  last_action_at timestamptz not null default now(),
+  unique (bill_id, sequence_number)
+);
+
+create table bar_comanda_items (
+  id uuid primary key default uuid_generate_v4(),
+  comanda_id uuid not null references bar_comandas(id) on delete cascade,
   poolbar_item_id uuid not null references poolbar_items(id) on delete cascade,
-  quantity int not null default 0 check (quantity >= 0),
+  quantity int not null check (quantity > 0),
   price_snapshot numeric(10,2) not null,
-  updated_at timestamptz not null default now(),
-  unique (bill_id, poolbar_item_id)
+  unique (comanda_id, poolbar_item_id)
 );
 
 -- ============================================================================
@@ -294,6 +325,7 @@ alter table room_checklist_items enable row level security;
 alter table occurrence_categories enable row level security;
 alter table breakfast_tables enable row level security;
 alter table commission_settings enable row level security;
+alter table receipt_settings enable row level security;
 alter table daily_room_tasks enable row level security;
 alter table daily_room_task_checks enable row level security;
 alter table daily_room_task_occurrences enable row level security;
@@ -307,7 +339,8 @@ alter table minibar_items enable row level security;
 alter table poolbar_items enable row level security;
 alter table room_bills enable row level security;
 alter table room_bill_minibar_items enable row level security;
-alter table room_bill_poolbar_items enable row level security;
+alter table bar_comandas enable row level security;
+alter table bar_comanda_items enable row level security;
 
 -- Helper: is the current user an admin?
 create or replace function is_admin() returns boolean as $$
@@ -323,6 +356,13 @@ create or replace function is_manutencao() returns boolean as $$
   );
 $$ language sql security definer stable;
 
+-- Helper: is the current user a camareira?
+create or replace function is_camareira() returns boolean as $$
+  select exists (
+    select 1 from profiles where id = auth.uid() and role = 'camareira' and active = true
+  );
+$$ language sql security definer stable;
+
 -- profiles: user can read own profile; admin can read/write all
 create policy "profiles_select_own_or_admin" on profiles for select
   using (id = auth.uid() or is_admin());
@@ -332,6 +372,10 @@ create policy "profiles_admin_all" on profiles for all
 -- ocorrência e o nome de colegas que selecionaram/resolveram outras ocorrências
 create policy "profiles_manutencao_select_camareiras" on profiles for select
   using (is_manutencao() and role in ('camareira', 'manutencao'));
+-- camareira precisa ver o nome de qual colega registrou/editou/cancelou uma
+-- comanda (tela "Comanda"), mesmo quando não foi ela mesma
+create policy "profiles_camareira_select_camareiras" on profiles for select
+  using (is_camareira() and role = 'camareira');
 
 -- rooms: everyone authenticated can read; only admin writes
 create policy "rooms_select_authenticated" on rooms for select using (auth.uid() is not null);
@@ -366,6 +410,10 @@ create policy "bt_admin_delete" on breakfast_tables for delete using (is_admin()
 -- commission_settings
 create policy "cs_select_authenticated" on commission_settings for select using (auth.uid() is not null);
 create policy "cs_admin_update" on commission_settings for update using (is_admin());
+
+-- receipt_settings
+create policy "rs_select_authenticated" on receipt_settings for select using (auth.uid() is not null);
+create policy "rs_admin_update" on receipt_settings for update using (is_admin());
 
 -- daily_room_tasks: admin full; camareira can see her own tasks plus unclaimed ones (to
 -- choose from), can claim an unclaimed task, and can update/finish tasks she already owns.
@@ -718,17 +766,14 @@ create policy "rbmi_camareira_update" on room_bill_minibar_items for update
   using (exists (select 1 from room_bills b where b.id = bill_id and b.status in ('aberta', 'reaberta')))
   with check (exists (select 1 from room_bills b where b.id = bill_id and b.status in ('aberta', 'reaberta')));
 
--- room_bill_poolbar_items: mesmo padrão do frigobar
-create policy "rbpi_select_authenticated" on room_bill_poolbar_items for select using (auth.uid() is not null);
-create policy "rbpi_admin_all" on room_bill_poolbar_items for all using (is_admin()) with check (is_admin());
-create policy "rbpi_camareira_insert" on room_bill_poolbar_items for insert
-  with check (
-    exists (select 1 from profiles where id = auth.uid() and role = 'camareira' and active = true)
-    and exists (select 1 from room_bills b where b.id = bill_id and b.status in ('aberta', 'reaberta'))
-  );
-create policy "rbpi_camareira_update" on room_bill_poolbar_items for update
-  using (exists (select 1 from room_bills b where b.id = bill_id and b.status in ('aberta', 'reaberta')))
-  with check (exists (select 1 from room_bills b where b.id = bill_id and b.status in ('aberta', 'reaberta')));
+-- bar_comandas/bar_comanda_items: leitura para qualquer autenticado; escrita
+-- só via funções security definer (submit_comanda/edit_comanda/cancel_comanda
+-- etc.), nunca INSERT/UPDATE direto pela camareira.
+create policy "bc_select_authenticated" on bar_comandas for select using (auth.uid() is not null);
+create policy "bc_admin_all" on bar_comandas for all using (is_admin()) with check (is_admin());
+
+create policy "bci_select_authenticated" on bar_comanda_items for select using (auth.uid() is not null);
+create policy "bci_admin_all" on bar_comanda_items for all using (is_admin()) with check (is_admin());
 
 insert into minibar_items (name, price, position) values
   ('Água sem gás', 5.00, 1),
@@ -756,7 +801,12 @@ insert into poolbar_items (category, name, price, position) values
   ('Bebidas', 'Caipifruta Smirnoff', 40.00, 16),
   ('Bebidas', 'Gim Tônica à moda da casa (Tanqueray)', 50.00, 17),
   ('Bebidas', 'Campari', 15.00, 18),
-  ('Bebidas', 'Água de Coco', 8.00, 19);
+  ('Bebidas', 'Água de Coco', 8.00, 19),
+  ('Bebidas', 'Água sem gás', 5.00, 20),
+  ('Bebidas', 'Água com gás', 6.00, 21),
+  ('Bebidas', 'Refrigerante', 10.00, 22),
+  ('Bebidas', 'Cerveja', 12.00, 23),
+  ('Bebidas', 'Café expresso', 7.00, 24);
 
 -- Não há seed de room_bills aqui porque rooms só é populado depois, por
 -- seed.sql: a conta 'aberta' de cada quarto é criada sob demanda pelo
@@ -783,5 +833,243 @@ begin
 
   insert into room_bills (room_id, status) values (p_room_id, 'aberta') returning * into v_bill;
   return v_bill;
+end;
+$$ language plpgsql security definer;
+
+-- Cria uma comanda nova para o quarto informado, na conta corrente dele.
+-- p_items: jsonb tipo [{"item_id": "uuid", "quantity": 2}, ...] (itens com
+-- quantidade 0 são ignorados). Bloqueia se a conta do quarto está fechada.
+create or replace function submit_comanda(p_room_id uuid, p_items jsonb)
+returns uuid as $$
+declare
+  v_bill_id uuid;
+  v_bill_status room_bill_status;
+  v_comanda_id uuid;
+  v_next_seq int;
+  v_item jsonb;
+begin
+  if not is_camareira() then
+    raise exception 'not authorized';
+  end if;
+
+  select id, status into v_bill_id, v_bill_status
+  from room_bills where room_id = p_room_id and status <> 'paga'
+  for update;
+
+  if v_bill_id is null then
+    insert into room_bills (room_id, status) values (p_room_id, 'aberta')
+    returning id, status into v_bill_id, v_bill_status;
+  end if;
+
+  if v_bill_status = 'fechada' then
+    raise exception 'A conta deste quarto está fechada.';
+  end if;
+
+  select coalesce(max(sequence_number), 0) + 1 into v_next_seq
+  from bar_comandas where bill_id = v_bill_id;
+
+  insert into bar_comandas (room_id, bill_id, sequence_number, status, created_by, last_action_by)
+  values (p_room_id, v_bill_id, v_next_seq, 'original', auth.uid(), auth.uid())
+  returning id into v_comanda_id;
+
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    if (v_item->>'quantity')::int > 0 then
+      insert into bar_comanda_items (comanda_id, poolbar_item_id, quantity, price_snapshot)
+      select v_comanda_id, (v_item->>'item_id')::uuid, (v_item->>'quantity')::int, pi.price
+      from poolbar_items pi where pi.id = (v_item->>'item_id')::uuid;
+    end if;
+  end loop;
+
+  return v_comanda_id;
+end;
+$$ language plpgsql security definer;
+
+-- Edita uma comanda existente: pode trocar o quarto (e, com ele, a conta e
+-- a numeração passam a ser as do novo quarto) e substitui todos os itens
+-- pelos informados. Bloqueia se a comanda já foi cancelada, se a conta
+-- atual da comanda está fechada ou já foi paga, ou se a conta de destino
+-- está fechada.
+create or replace function edit_comanda(p_comanda_id uuid, p_room_id uuid, p_items jsonb)
+returns void as $$
+declare
+  v_old_bill_id uuid;
+  v_old_bill_status room_bill_status;
+  v_old_comanda_status comanda_status;
+  v_old_seq int;
+  v_new_bill_id uuid;
+  v_new_bill_status room_bill_status;
+  v_next_seq int;
+  v_item jsonb;
+begin
+  if not is_camareira() then
+    raise exception 'not authorized';
+  end if;
+
+  select c.bill_id, c.status, c.sequence_number, b.status
+    into v_old_bill_id, v_old_comanda_status, v_old_seq, v_old_bill_status
+  from bar_comandas c
+  join room_bills b on b.id = c.bill_id
+  where c.id = p_comanda_id
+  for update of c;
+
+  if v_old_bill_id is null then
+    raise exception 'Comanda não encontrada.';
+  end if;
+  if v_old_comanda_status = 'cancelada' then
+    raise exception 'Comanda cancelada não pode ser editada.';
+  end if;
+  if v_old_bill_status not in ('aberta', 'reaberta') then
+    raise exception 'A conta deste quarto está fechada ou já foi paga.';
+  end if;
+
+  select id, status into v_new_bill_id, v_new_bill_status
+  from room_bills where room_id = p_room_id and status <> 'paga'
+  for update;
+
+  if v_new_bill_id is null then
+    insert into room_bills (room_id, status) values (p_room_id, 'aberta')
+    returning id, status into v_new_bill_id, v_new_bill_status;
+  end if;
+
+  if v_new_bill_status = 'fechada' then
+    raise exception 'A conta deste quarto está fechada.';
+  end if;
+
+  if v_new_bill_id <> v_old_bill_id then
+    select coalesce(max(sequence_number), 0) + 1 into v_next_seq
+    from bar_comandas where bill_id = v_new_bill_id;
+  else
+    v_next_seq := v_old_seq;
+  end if;
+
+  update bar_comandas
+  set room_id = p_room_id,
+      bill_id = v_new_bill_id,
+      sequence_number = v_next_seq,
+      status = 'editada',
+      last_action_by = auth.uid(),
+      last_action_at = now()
+  where id = p_comanda_id;
+
+  delete from bar_comanda_items where comanda_id = p_comanda_id;
+
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    if (v_item->>'quantity')::int > 0 then
+      insert into bar_comanda_items (comanda_id, poolbar_item_id, quantity, price_snapshot)
+      select p_comanda_id, (v_item->>'item_id')::uuid, (v_item->>'quantity')::int, pi.price
+      from poolbar_items pi where pi.id = (v_item->>'item_id')::uuid;
+    end if;
+  end loop;
+end;
+$$ language plpgsql security definer;
+
+create or replace function cancel_comanda(p_comanda_id uuid)
+returns void as $$
+declare
+  v_bill_status room_bill_status;
+begin
+  if not is_camareira() then
+    raise exception 'not authorized';
+  end if;
+
+  select b.status into v_bill_status
+  from bar_comandas c
+  join room_bills b on b.id = c.bill_id
+  where c.id = p_comanda_id
+  for update of c;
+
+  if v_bill_status is null then
+    raise exception 'Comanda não encontrada.';
+  end if;
+  if v_bill_status not in ('aberta', 'reaberta') then
+    raise exception 'A conta deste quarto está fechada ou já foi paga.';
+  end if;
+
+  update bar_comandas
+  set status = 'cancelada', last_action_by = auth.uid(), last_action_at = now()
+  where id = p_comanda_id and status <> 'cancelada';
+end;
+$$ language plpgsql security definer;
+
+-- Fechar/reabrir/marcar como paga a conta do quarto: agora ação da
+-- camareira (antes era do admin).
+create or replace function close_room_bill(p_room_id uuid)
+returns void as $$
+declare
+  v_bill_id uuid;
+  v_status room_bill_status;
+begin
+  if not is_camareira() then
+    raise exception 'not authorized';
+  end if;
+
+  select id, status into v_bill_id, v_status from room_bills where room_id = p_room_id and status <> 'paga' for update;
+  if v_bill_id is null then
+    insert into room_bills (room_id, status) values (p_room_id, 'aberta') returning id, status into v_bill_id, v_status;
+  end if;
+  if v_status = 'fechada' then
+    raise exception 'A conta deste quarto já está fechada.';
+  end if;
+
+  update room_bills set status = 'fechada', closed_at = now(), closed_by = auth.uid() where id = v_bill_id;
+end;
+$$ language plpgsql security definer;
+
+create or replace function reopen_room_bill(p_room_id uuid)
+returns void as $$
+declare
+  v_bill_id uuid;
+  v_status room_bill_status;
+begin
+  if not is_camareira() then
+    raise exception 'not authorized';
+  end if;
+
+  select id, status into v_bill_id, v_status from room_bills where room_id = p_room_id and status <> 'paga' for update;
+  if v_status is distinct from 'fechada' then
+    raise exception 'Só é possível reabrir uma conta fechada.';
+  end if;
+
+  update room_bills set status = 'reaberta', reopened_at = now(), reopened_by = auth.uid() where id = v_bill_id;
+end;
+$$ language plpgsql security definer;
+
+-- Devolve o id da conta recém-paga: o código usa isso pra gerar e mandar
+-- por e-mail o recibo em PDF daquela conta específica logo em seguida.
+create or replace function pay_room_bill(p_room_id uuid)
+returns uuid as $$
+declare
+  v_bill_id uuid;
+  v_status room_bill_status;
+begin
+  if not is_camareira() then
+    raise exception 'not authorized';
+  end if;
+
+  select id, status into v_bill_id, v_status from room_bills where room_id = p_room_id and status <> 'paga' for update;
+  if v_status is distinct from 'fechada' then
+    raise exception 'Feche a conta antes de registrar o pagamento.';
+  end if;
+
+  update room_bills set status = 'paga', paid_at = now(), paid_by = auth.uid() where id = v_bill_id;
+  insert into room_bills (room_id, status) values (p_room_id, 'aberta');
+
+  return v_bill_id;
+end;
+$$ language plpgsql security definer;
+
+-- Grava se o e-mail do recibo (PDF da conta paga) foi enviado com sucesso —
+-- o envio em si é "melhor esforço" e nunca bloqueia o pagamento; isso só
+-- registra o resultado pra o admin ver e poder reenviar manualmente.
+create or replace function mark_receipt_email_sent(p_bill_id uuid, p_sent boolean)
+returns void as $$
+begin
+  if not (is_camareira() or is_admin()) then
+    raise exception 'not authorized';
+  end if;
+
+  update room_bills set receipt_email_sent = p_sent where id = p_bill_id;
 end;
 $$ language plpgsql security definer;

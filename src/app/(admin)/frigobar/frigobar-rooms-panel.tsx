@@ -3,71 +3,221 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type { RoomBillOverview } from "@/lib/actions/room-bills";
-import { closeRoomBill, reopenRoomBill, markRoomBillPaid } from "@/lib/actions/room-bills";
-import { setMinibarConsumption } from "@/lib/actions/minibar";
-import { setPoolbarConsumption } from "@/lib/actions/poolbar";
-import type { MinibarItem, PoolbarItem } from "@/lib/types";
+import type { RoomBillOverview, RecentlyPaidBill } from "@/lib/actions/room-bills";
+import { resendRoomBillReceipt, updateAccountingEmail } from "@/lib/actions/room-bills";
+import type { ReceiptSettings } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
-import { formatDateShortPt } from "@/lib/date";
+import { formatDateShortPt, formatDateTimePt } from "@/lib/date";
 
+// Somente leitura: fechar/reabrir/pagamento passaram a ser ações da
+// camareira, na tela "Consumo por quartos" dela (ver Parte 05 do CLAUDE.md).
 export function FrigobarRoomsPanel({
   overview,
-  minibarItems,
-  poolbarItems,
+  recentlyPaid,
+  receiptSettings,
 }: {
   overview: RoomBillOverview[];
-  minibarItems: MinibarItem[];
-  poolbarItems: PoolbarItem[];
+  recentlyPaid: RecentlyPaidBill[];
+  receiptSettings: ReceiptSettings;
 }) {
-  if (overview.length === 0) {
-    return <p className="text-sm text-muted-foreground py-8 text-center">Nenhum quarto ativo cadastrado.</p>;
-  }
-
   return (
-    <Accordion className="space-y-2">
-      {overview.map((room) => (
-        <RoomAccordionItem key={room.room_id} room={room} minibarItems={minibarItems} poolbarItems={poolbarItems} />
-      ))}
-    </Accordion>
+    <div className="space-y-8">
+      <div className="space-y-2">
+        <p className="text-sm font-medium">Contas em aberto ou fechadas</p>
+        {overview.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">Nenhum quarto ativo cadastrado.</p>
+        ) : (
+          <Accordion className="space-y-2">
+            {overview.map((room) => (
+              <RoomAccordionItem key={room.room_id} room={room} />
+            ))}
+          </Accordion>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-sm font-medium">Contas pagas (últimos 7 dias)</p>
+        {recentlyPaid.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma conta paga nos últimos 7 dias.</p>
+        ) : (
+          <Accordion className="space-y-2">
+            {recentlyPaid.map((bill) => (
+              <PaidBillAccordionItem key={bill.bill_id} bill={bill} />
+            ))}
+          </Accordion>
+        )}
+      </div>
+
+      <AccountingEmailSettings receiptSettings={receiptSettings} />
+    </div>
   );
 }
 
-function RoomAccordionItem({
-  room,
-  minibarItems,
-  poolbarItems,
-}: {
-  room: RoomBillOverview;
-  minibarItems: MinibarItem[];
-  poolbarItems: PoolbarItem[];
-}) {
+function AccountingEmailSettings({ receiptSettings }: { receiptSettings: ReceiptSettings }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+  const [email, setEmail] = useState(receiptSettings.accounting_email ?? "");
 
-  const initialMinibarQty = Object.fromEntries(
-    minibarItems.map((item) => [item.id, room.minibarItems.find((i) => i.id === item.id)?.quantity ?? 0])
-  );
-  const initialPoolbarQty = Object.fromEntries(
-    poolbarItems.map((item) => [item.id, room.poolbarItems.find((i) => i.id === item.id)?.quantity ?? 0])
-  );
-  const [minibarQty, setMinibarQty] = useState<Record<string, number>>(initialMinibarQty);
-  const [poolbarQty, setPoolbarQty] = useState<Record<string, number>>(initialPoolbarQty);
-
-  function runAction(action: () => Promise<{ error?: string } | undefined>, successMessage?: string) {
+  function handleSave() {
     startTransition(async () => {
-      const result = await action();
+      const result = await updateAccountingEmail(email);
       if (result?.error) toast.error(result.error);
       else {
-        if (successMessage) toast.success(successMessage);
+        toast.success("E-mail atualizado.");
         router.refresh();
       }
     });
   }
 
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="font-heading text-lg">E-mail da contabilidade</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-wrap items-center gap-3">
+        <Input
+          type="email"
+          className="w-full sm:w-72"
+          placeholder="contabilidade@exemplo.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={isPending}
+        />
+        <Button disabled={isPending} onClick={handleSave}>
+          Salvar
+        </Button>
+        <p className="text-xs text-muted-foreground basis-full">
+          É pra este e-mail que o recibo em PDF de cada conta é enviado automaticamente assim que a camareira
+          informa o pagamento.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PaidBillAccordionItem({ bill }: { bill: RecentlyPaidBill }) {
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+
+  function handleResend() {
+    startTransition(async () => {
+      const result = await resendRoomBillReceipt(bill.bill_id);
+      if (result?.error) toast.error(result.error);
+      else {
+        toast.success("E-mail reenviado.");
+        router.refresh();
+      }
+    });
+  }
+
+  return (
+    <AccordionItem value={bill.bill_id}>
+      <AccordionTrigger>
+        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <span className="font-heading text-base">Quarto {bill.room_number}</span>
+          <span className="text-xs text-muted-foreground">Paga em {formatDateTimePt(bill.paid_at)}</span>
+          {!bill.receiptEmailSent && <Badge variant="destructive">E-mail não enviado</Badge>}
+        </span>
+        <span className="text-xs text-muted-foreground mr-2">R$ {bill.grandTotal.toFixed(2)}</span>
+      </AccordionTrigger>
+      <AccordionPanel>
+        <div className="space-y-3 pt-3">
+          <div className="grid sm:grid-cols-2 gap-x-8 gap-y-4">
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Frigobar</p>
+              <div className="space-y-1.5">
+                {bill.minibarItems.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between text-sm">
+                    <span>
+                      {item.name} <span className="text-muted-foreground">× {item.quantity}</span>
+                    </span>
+                    <span>R$ {item.subtotal.toFixed(2)}</span>
+                  </div>
+                ))}
+                {bill.minibarItems.length === 0 && (
+                  <p className="text-sm text-muted-foreground py-2">Sem consumo.</p>
+                )}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Bar da piscina</p>
+              <div className="space-y-1.5">
+                {bill.poolbarItems.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between text-sm">
+                    <span>
+                      {item.name} <span className="text-muted-foreground">× {item.quantity}</span>
+                    </span>
+                    <span>R$ {item.subtotal.toFixed(2)}</span>
+                  </div>
+                ))}
+                {bill.poolbarItems.length === 0 && (
+                  <p className="text-sm text-muted-foreground py-2">Sem consumo.</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-border pt-2 space-y-1 text-sm max-w-md">
+            <div className="flex items-center justify-between">
+              <span>Total frigobar</span>
+              <span>R$ {bill.minibarTotal.toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Total bar da piscina</span>
+              <span>R$ {bill.poolbarSubtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between text-muted-foreground text-xs">
+              <span>Taxa de serviço (10% sobre o bar)</span>
+              <span>R$ {bill.serviceCharge.toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between text-muted-foreground text-xs">
+              <span>Bar da piscina com taxa</span>
+              <span>R$ {bill.poolbarTotalWithCharge.toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between font-medium pt-1">
+              <span>Total bar e frigobar</span>
+              <span>R$ {bill.grandTotal.toFixed(2)}</span>
+            </div>
+          </div>
+
+          {bill.paidByName && (
+            <p className="text-xs text-muted-foreground">Pagamento informado por: {bill.paidByName}</p>
+          )}
+
+          {!bill.receiptEmailSent && (
+            <p className="text-sm font-medium text-destructive">
+              O envio automático do PDF por e-mail para a contabilidade não foi concluído.
+            </p>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              render={
+                <a href={`/api/room-bills/${bill.bill_id}/receipt`} target="_blank" rel="noopener noreferrer" />
+              }
+              nativeButton={false}
+            >
+              Ver PDF
+            </Button>
+            {!bill.receiptEmailSent && (
+              <Button size="sm" disabled={isPending} onClick={handleResend}>
+                Reenviar e-mail
+              </Button>
+            )}
+          </div>
+        </div>
+      </AccordionPanel>
+    </AccordionItem>
+  );
+}
+
+function RoomAccordionItem({ room }: { room: RoomBillOverview }) {
   return (
     <AccordionItem value={room.room_id}>
       <AccordionTrigger>
@@ -80,77 +230,40 @@ function RoomAccordionItem({
       </AccordionTrigger>
       <AccordionPanel>
         <div className="space-y-3 pt-3">
-          {room.status === "reaberta" ? (
-            <div className="grid sm:grid-cols-2 gap-x-8 gap-y-4">
-              <div className="space-y-1.5">
-                <p className="text-xs font-medium text-muted-foreground">Frigobar</p>
-                {/* Coluna do nome usa minmax(0,1fr): encolhe e quebra em
-                    várias linhas se precisar, mas a caixa de quantidade
-                    (coluna auto) fica sempre visível. */}
-                <div className="space-y-1.5">
-                  {minibarItems.map((item) => (
-                    <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-sm">
-                      <span className="min-w-0">{item.name}</span>
-                      <Input
-                        type="number"
-                        min={0}
-                        className="w-16 h-8 shrink-0"
-                        disabled={isPending}
-                        value={minibarQty[item.id] ?? 0}
-                        onChange={(e) => setMinibarQty((prev) => ({ ...prev, [item.id]: Number(e.target.value) }))}
-                        onBlur={() =>
-                          runAction(() => setMinibarConsumption(room.room_id, item.id, minibarQty[item.id] ?? 0))
-                        }
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <p className="text-xs font-medium text-muted-foreground">Bar da piscina</p>
-                <div className="space-y-1.5">
-                  {poolbarItems.map((item) => (
-                    <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-sm">
-                      <span className="min-w-0">{item.name}</span>
-                      <Input
-                        type="number"
-                        min={0}
-                        className="w-16 h-8 shrink-0"
-                        disabled={isPending}
-                        value={poolbarQty[item.id] ?? 0}
-                        onChange={(e) => setPoolbarQty((prev) => ({ ...prev, [item.id]: Number(e.target.value) }))}
-                        onBlur={() =>
-                          runAction(() => setPoolbarConsumption(room.room_id, item.id, poolbarQty[item.id] ?? 0))
-                        }
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : (
+          <div className="grid sm:grid-cols-2 gap-x-8 gap-y-4">
             <div className="space-y-1.5">
-              {room.minibarItems.map((item) => (
-                <div key={item.id} className="flex items-center justify-between text-sm">
-                  <span>
-                    {item.name} <span className="text-muted-foreground">× {item.quantity}</span>
-                  </span>
-                  <span>R$ {item.subtotal.toFixed(2)}</span>
-                </div>
-              ))}
-              {room.poolbarItems.map((item) => (
-                <div key={item.id} className="flex items-center justify-between text-sm">
-                  <span>
-                    {item.name} <span className="text-muted-foreground">× {item.quantity}</span>
-                  </span>
-                  <span>R$ {item.subtotal.toFixed(2)}</span>
-                </div>
-              ))}
-              {room.minibarItems.length === 0 && room.poolbarItems.length === 0 && (
-                <p className="text-sm text-muted-foreground py-2">Sem consumo em aberto.</p>
-              )}
+              <p className="text-xs font-medium text-muted-foreground">Frigobar</p>
+              <div className="space-y-1.5">
+                {room.minibarItems.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between text-sm">
+                    <span>
+                      {item.name} <span className="text-muted-foreground">× {item.quantity}</span>
+                    </span>
+                    <span>R$ {item.subtotal.toFixed(2)}</span>
+                  </div>
+                ))}
+                {room.minibarItems.length === 0 && (
+                  <p className="text-sm text-muted-foreground py-2">Sem consumo em aberto.</p>
+                )}
+              </div>
             </div>
-          )}
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Bar da piscina</p>
+              <div className="space-y-1.5">
+                {room.poolbarItems.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between text-sm">
+                    <span>
+                      {item.name} <span className="text-muted-foreground">× {item.quantity}</span>
+                    </span>
+                    <span>R$ {item.subtotal.toFixed(2)}</span>
+                  </div>
+                ))}
+                {room.poolbarItems.length === 0 && (
+                  <p className="text-sm text-muted-foreground py-2">Sem consumo em aberto.</p>
+                )}
+              </div>
+            </div>
+          </div>
 
           <div className="border-t border-border pt-2 space-y-1 text-sm max-w-md">
             <div className="flex items-center justify-between">
@@ -175,45 +288,16 @@ function RoomAccordionItem({
             </div>
           </div>
 
-          <div className="max-w-md space-y-2">
-            {room.status === "fechada" && (
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Button
-                  size="sm"
-                  disabled={isPending}
-                  onClick={() => runAction(() => markRoomBillPaid(room.room_id), "Pagamento registrado.")}
-                >
-                  Pagamento efetuado
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={isPending}
-                  onClick={() => runAction(() => reopenRoomBill(room.room_id), "Conta reaberta.")}
-                >
-                  Editar/reabrir conta
-                </Button>
-              </div>
-            )}
+          {room.lastPaidBill && (
+            <p className="text-xs text-muted-foreground">
+              Última conta paga: R$ {room.lastPaidBill.total.toFixed(2)} em{" "}
+              {formatDateShortPt(room.lastPaidBill.paid_at.slice(0, 10))}
+            </p>
+          )}
 
-            {(room.status === "aberta" || room.status === "reaberta") && (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={isPending}
-                onClick={() => runAction(() => closeRoomBill(room.room_id), "Conta fechada.")}
-              >
-                Fechar a conta
-              </Button>
-            )}
-
-            {room.lastPaidBill && (
-              <p className="text-xs text-muted-foreground">
-                Última conta paga: R$ {room.lastPaidBill.total.toFixed(2)} em{" "}
-                {formatDateShortPt(room.lastPaidBill.paid_at.slice(0, 10))}
-              </p>
-            )}
-          </div>
+          {room.closedByName && (
+            <p className="text-xs text-muted-foreground">Fechada por: {room.closedByName}</p>
+          )}
         </div>
       </AccordionPanel>
     </AccordionItem>

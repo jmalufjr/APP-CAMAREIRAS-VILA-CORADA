@@ -95,6 +95,21 @@ export function formatDateShortPt(dateKey: string): string {
   return dateKey.split("-").reverse().join("/");
 }
 
+// Formata um timestamp ISO (timestamptz do banco) como "dd/mm hh:mm" no
+// horário de Brasília, independentemente do fuso do processo que roda o código.
+export function formatDateTimePt(isoString: string): string {
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: BRAZIL_TIME_ZONE,
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(isoString));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("day")}/${get("month")} ${get("hour")}:${get("minute")}`;
+}
+
 export function formatDatePt(dateKey: string): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("pt-BR", {

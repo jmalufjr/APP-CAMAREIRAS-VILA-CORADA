@@ -25,7 +25,15 @@ itens de checklist/manutenção preventiva e datas iniciais configuráveis
 para o cronograma de manutenção preventiva. Uma quarta leva (seção 11)
 adicionou controle de consumo de frigobar e do bar da piscina por quarto,
 com conta compartilhada entre os dois (fechar/reabrir/pagar) e cards
-equivalentes no histórico e no "Resumo executivo".
+equivalentes no histórico e no "Resumo executivo". Uma quinta leva (seção 12)
+substituiu o lançamento direto de consumo do bar da piscina por um sistema
+de comandas (pedidos por quarto, numerados, editáveis/canceláveis) e passou
+o fechamento/reabertura/pagamento da conta do quarto do admin para a
+camareira — o admin passou a só visualizar. Uma sexta leva (seção 13)
+adicionou o envio automático por e-mail (Resend) do recibo em PDF de uma
+conta de quarto ao ser paga, com reenvio manual pelo admin em caso de
+falha, e uma tela de pagamento por PIX (QR code estático) acionada pela
+camareira quando a conta está fechada.
 
 ## Onde está
 
@@ -216,6 +224,162 @@ também é feita em Server Components.
       causava erro de hidratação. Corrigido envolvendo com `<TableFooter>`
       (já existia no componente base `src/components/ui/table.tsx`, só não
       estava sendo usado). Pré-existente, não introduzido por esta parte.
+12. **Parte 05 — Comandas de bar da piscina** (feita direto em `main`, pós
+    parte 04; requisitos completos em `PRD-comandas.md`):
+    - **Consumo de bar deixou de ser um valor editado por item** e passou a
+      vir de **comandas** (pedidos por quarto): `bar_comandas` (numeração
+      `sequence_number` sequencial **por conta** — reinicia em 1 sempre que
+      o quarto ganha uma conta nova ao ser paga — e status `original` /
+      `cancelada` / `editada`; não existe um quarto estado "em edição"
+      persistido, foi decisão explícita do proprietário não gravá-lo) e
+      `bar_comanda_items` (item + quantidade + preço no momento do pedido).
+      Substituem `room_bill_poolbar_items` (migration 016), removida nesta
+      parte (migration 018). Frigobar não mudou em nada.
+    - **Todas as transições passam por funções `security definer`**
+      (`submit_comanda`/`edit_comanda`/`cancel_comanda`), seguindo o padrão
+      já estabelecido — nunca INSERT/UPDATE direto pela camareira. Editar
+      uma comanda também permite trocar o quarto (decisão explícita do
+      proprietário, ao contrário da minha recomendação inicial): a comanda
+      passa a pertencer à conta corrente do novo quarto, com nova
+      numeração se for uma conta diferente.
+    - **Fechar/reabrir/marcar como paga a conta do quarto virou ação da
+      camareira**, não mais do admin: `close_room_bill`/`reopen_room_bill`/
+      `pay_room_bill` (também `security definer`) substituíram os UPDATEs
+      diretos que existiam em `src/lib/actions/room-bills.ts` desde a parte
+      04 — mesma lógica de antes, só a checagem de papel muda de
+      `is_admin()` para a nova `is_camareira()`.
+    - **Telas novas da camareira**: "Comanda" (`/comanda` — lista de
+      comandas ativas + botão "Novo pedido") e o formulário de pedido
+      (`/comanda/novo` e `/comanda/[id]/editar`, mesmo componente
+      `comanda-form.tsx` para criar e editar), com seletor de quantidade em
+      stepper (+/-) em vez de campo numérico — exigência explícita do
+      proprietário para não deixar a camareira digitar números. A antiga
+      tela "Consumo de Bar da Piscina" da camareira (`/bar-piscina`) virou
+      "Consumo por quartos": mesmo acordeão e mesmas ações que a extinta
+      tela do admin (fechar/reabrir/pagar), com a diferença de que a seção
+      de bar agora é só leitura (soma das comandas ativas do quarto) e só o
+      frigobar continua editável ali.
+    - **Tela do admin `/frigobar` virou só leitura**, com duas abas
+      (`src/components/ui/tabs.tsx`): "Lista de comandas do bar"
+      (`comandas-list-panel.tsx`, mesmo componente de detalhe
+      `src/components/shared/comanda-detail-dialog.tsx` reaproveitado da
+      tela da camareira) e "Consumo por quartos" (`frigobar-rooms-panel.tsx`,
+      sem nenhum botão de ação nem campo editável).
+    - **Lição de eficiência**: o modal de "ver itens da comanda" não busca
+      dados sob demanda ao clicar — `getActiveComandas()` já traz os itens
+      de cada comanda embutidos na mesma consulta da lista. Uma primeira
+      versão buscava os itens num `useEffect` ao abrir o modal, mas isso
+      cai na regra de lint `react-hooks/set-state-in-effect` (evitar
+      `setState` direto dentro de um efeito) e, mais importante, introduz
+      um round trip extra por clique — evitado ao carregar tudo de uma vez
+      no primeiro carregamento da página, coerente com o requisito de
+      "processamento rápido, sem delays".
+    - **Bug real encontrado em teste manual**: `edit_comanda` já bloqueava
+      editar uma comanda quando a conta do quarto de **destino** estava
+      fechada, mas `cancel_comanda` não checava status nenhum — permitia
+      cancelar uma comanda de um quarto com a conta fechada, contrariando a
+      regra de que nada pode ser feito numa comanda depois que a conta é
+      fechada. Corrigido na migration `019_comanda_closed_bill_guard.sql`:
+      `cancel_comanda` passou a checar o status da conta atual da comanda, e
+      `edit_comanda` passou a checar também o status da conta **original**
+      da comanda (antes só olhava a de destino) — assim trocar de quarto na
+      edição não vira uma forma de contornar o bloqueio. A tela também
+      passou a travar proativamente (steppers, seletor de quarto e os dois
+      botões desabilitados + aviso) assim que a comanda editada pertence a
+      uma conta fechada, em vez de só mostrar o erro depois de tentar
+      salvar/cancelar.
+    - **Bug encontrado em teste manual, RLS de `profiles`**: a tela
+      "Comanda" da camareira mostrava "—" no lugar do nome de quem fez a
+      última ação sempre que essa ação foi de OUTRA camareira. Causa: a
+      única policy de select em `profiles` era "própria linha ou admin" — o
+      join embutido pro nome de created_by/last_action_by falha
+      silenciosamente (volta null) quando o dono da linha é outra
+      camareira. Corrigido com a policy `profiles_camareira_select_camareiras`
+      (migration `022`), mesmo padrão já usado para o funcionário de
+      manutenção ver colegas camareiras.
+13. **Parte 06 — Recibo em PDF por e-mail e pagamento por PIX** (feita
+    direto em `main`, pós parte 05):
+    - **PDF do recibo gerado sob demanda, sem persistir arquivo nenhum**:
+      `src/lib/receipt-pdf.tsx` usa `@react-pdf/renderer` (`renderToBuffer`)
+      pra montar o PDF a partir dos dados já existentes no banco (itens de
+      frigobar/bar, totais) toda vez que é preciso — tanto pro link "Ver
+      PDF" do admin quanto pro anexo do e-mail (envio automático e
+      reenvio). Decisão deliberada de não usar nenhum serviço de storage
+      (Supabase Storage/Vercel Blob): como os dados de uma conta paga são
+      imutáveis, reconstruir o PDF sempre a partir do banco é mais simples
+      e sempre fiel, sem arquivo órfão pra gerenciar.
+    - **E-mail só no pagamento, nunca no fechamento**: `pay_room_bill`
+      (migration `023`) passou a devolver o id da conta paga (antes era
+      `void`) pra `markRoomBillPaid` conseguir gerar e mandar o recibo
+      daquela conta específica por e-mail (via Resend) logo em seguida — só
+      pro e-mail fixo da contabilidade, nunca por quarto/hóspede. Envio é
+      **melhor esforço**: nunca lança erro nem bloqueia a confirmação de
+      pagamento pra camareira — o resultado (sucesso/falha) fica gravado em
+      `room_bills.receipt_email_sent` via a função `mark_receipt_email_sent`
+      (checa `is_camareira() or is_admin()`, já que tanto o envio
+      automático quanto o reenvio manual do admin passam por ela).
+    - **E-mail de destino configurável pelo admin, não fixo por variável de
+      ambiente** (adicionado logo depois, ainda dentro desta parte):
+      migration `024_receipt_settings.sql` criou a tabela singleton
+      `receipt_settings` (mesmo padrão de `commission_settings`) com a
+      coluna `accounting_email`; um card "E-mail da contabilidade" no final
+      da aba "Consumo por quartos" do admin (dentro de
+      `frigobar-rooms-panel.tsx`) deixa esse e-mail editável ali mesmo, sem
+      precisar mexer em variável de ambiente nenhuma.
+    - **Domínio de envio verificado no Resend**: `consumos.vilacorada.com.br`
+      — um subdomínio dedicado (não o domínio raiz do site nem `www`),
+      registrado como domínio próprio no Resend com os registros DKIM (TXT)
+      e SPF (2 CNAME) adicionados manualmente no painel DNS do Registro.br
+      (o domínio já roda nos servidores DNS do próprio Registro.br). Escolha
+      deliberada de subdomínio em vez do domínio raiz: isola a reputação de
+      envio deste sistema automatizado de um futuro e-mail "de verdade" da
+      pousada no domínio principal. Remetente padrão
+      `recibos@consumos.vilacorada.com.br` (`src/lib/actions/room-bills.ts`,
+      função `sendReceiptEmail`), sobrescrevível pela variável de ambiente
+      opcional `RECEIPT_FROM_EMAIL` caso precise trocar no futuro.
+    - **Admin vê e reenvia, camareira nunca vê o PDF**: a aba "Consumo por
+      quartos" do admin, na seção "Contas pagas (últimos 7 dias)"
+      (`frigobar-rooms-panel.tsx`), ganhou um botão "Ver PDF" (aponta pra
+      `/api/room-bills/[billId]/receipt`, uma Route Handler que gera o PDF
+      na hora e checa `role === "admin"` manualmente — rotas de API não
+      passam pelo middleware de proteção por papel, que só olha caminhos de
+      página) e, quando `receipt_email_sent` é `false`, um badge vermelho
+      "E-mail não enviado" já visível no card fechado do acordeão + um
+      aviso destacado + botão "Reenviar e-mail". A camareira não tem acesso
+      a nada disso — nem o link do PDF nem o resultado do envio aparecem em
+      nenhuma tela dela.
+    - **Pagamento por PIX é uma imagem estática, não um QR dinâmico**: a
+      camareira, com a conta fechada, tem um botão "Pagar com PIX" que abre
+      `/bar-piscina/pix/[roomId]` — mostra a imagem `public/pix-qrcode.png`
+      (chave PIX fixa da pousada, sem valor embutido) + o valor total da
+      conta como texto ao lado, pro hóspede digitar manualmente ao pagar. A
+      imagem fica num fundo branco fixo (não segue o tema escuro do app) e é
+      renderizada com `<img>` simples, não `next/image` — de propósito,
+      pra não passar pelo otimizador de imagem do Next.js (recompressão/
+      reamostragem que poderia degradar a nitidez de um QR code, que precisa
+      de bordas nítidas pra ser lido pela câmera).
+    - **Lição de teste**: `@react-pdf/renderer` (via sua dependência
+      `@react-pdf/hyphenate`) falha com `ERR_PACKAGE_PATH_NOT_EXPORTED`
+      quando rodado fora do bundler do Next.js (testado isoladamente via
+      `npx tsx`) — o pacote é ESM-only e algo no caminho de resolução do
+      `tsx` tenta um `require()` CJS num subpath que só tem condição
+      `import`. **Isso não é um bug real** (o bundler do Next.js resolve
+      normalmente); a forma correta de testar geração de PDF nesta stack é
+      sempre através de uma rota/Server Action real rodando no `next dev`,
+      nunca isolado via `tsx`/`ts-node`.
+14. **Parte 07 — Mesa quadrada no layout de mesas** (feita direto em
+    `main`, pós parte 06): novo formato de mesa `table_shape` = `'square'`
+    (migration `025_mesa_quadrada.sql`), ao lado dos já existentes `round`/
+    `rect`. O lado da quadrada usa o mesmo tamanho fixo 70×70 já usado pela
+    redonda (só o retângulo tem largura/altura diferentes entre si) — a
+    diferença entre as três é só visual: círculo (`rounded-full`), quadrado
+    de cantos discretamente arredondados (`rounded-md`) e retângulo de
+    cantos mais arredondados (`rounded-2xl`, como antes). Como
+    `TableLayoutCanvas` (`src/components/shared/table-layout-canvas.tsx`)
+    é o único componente que desenha o formato — reaproveitado tanto no
+    editor de layout do admin (`/checklists/mesas`) quanto na visão da
+    camareira (`/mesas`) — bastou uma mudança nesse componente para
+    impactar as duas telas ao mesmo tempo, sem duplicação.
 
 ## Convenções e decisões importantes
 
@@ -238,6 +402,13 @@ também é feita em Server Components.
   contagem de `alter table ... enable row level security` em
   `supabase/schema.sql`) — admin tem acesso total, cada papel só ao que é
   seu/disponível.
+- **Pendência de segurança conhecida, ainda não resolvida**: ao instalar
+  `@react-pdf/renderer`/`resend` (Parte 06), `npm audit` acusou uma
+  vulnerabilidade **crítica** já existente no Next.js (execução remota de
+  código não autenticada — corrigida na versão 16.3.5; o projeto está na
+  16.3.2). Não foi introduzida por nenhuma parte deste projeto, mas segue
+  pendente porque o proprietário ainda não decidiu se quer atualizar agora
+  ou depois — perguntar/lembrar antes de considerar o assunto encerrado.
 - **Transições de estado sensíveis via função `security definer`, não via
   policy de UPDATE combinada**: sempre que uma linha precisa passar por mais
   de um estado (ex.: pendente → selecionada → resolvida/concluída) e mais de
@@ -267,6 +438,17 @@ também é feita em Server Components.
   cria camareiras e funcionários de manutenção) — precisa ser criado
   manualmente uma única vez via painel do Supabase. Passo a passo no
   `README.md`.
+- **Recibo por e-mail** (Parte 06, ver `src/lib/actions/room-bills.ts`):
+  `RESEND_API_KEY` é obrigatória por variável de ambiente — sem ela o
+  envio automático falha silenciosamente (é "melhor esforço" por design) e
+  fica marcado como não enviado. O e-mail de destino (contabilidade) **não**
+  é variável de ambiente — é configurável pelo admin na própria tela
+  "Consumo por quartos" (tabela `receipt_settings`, singleton). Domínio de
+  envio verificado no Resend: `consumos.vilacorada.com.br` (subdomínio
+  dedicado, separado do domínio principal do site, seguindo a prática
+  recomendada de isolar a reputação de envio de e-mail transacional);
+  remetente padrão `recibos@consumos.vilacorada.com.br`, sobrescrevível por
+  `RECEIPT_FROM_EMAIL` se precisar trocar.
 
 ## Parte 02 do projeto: módulo de Manutenção (implementada e mesclada em `main`)
 
@@ -405,21 +587,47 @@ o escopo mude no futuro.
   principal (hóspedes de hoje/amanhã + comissão); **não** inclui mais o
   layout arrastável, que é `src/app/(admin)/checklists/mesas/`.
 - `src/app/(admin)/frigobar/` — tela "Consumo de Bar e Frigobar" do menu
-  principal (ver Parte 04, seção 11): acordeão por quarto com os totais de
-  frigobar + bar da piscina e as ações de fechar/reabrir/pagar conta.
-- `src/app/(camareira)/bar-piscina/` — tela "Consumo de Bar da Piscina" da
-  camareira (ver Parte 04): acordeão com todos os quartos ativos.
+  principal, **só leitura desde a Parte 05** (seção 12): duas abas, "Lista
+  de comandas do bar" (`comandas-list-panel.tsx`) e "Consumo por quartos"
+  (`frigobar-rooms-panel.tsx`, acordeão por quarto, sem ações).
+- `src/app/(camareira)/comanda/` — tela "Comanda" da camareira (ver Parte
+  05): lista de comandas ativas (`page.tsx` + `comandas-list.tsx`) e o
+  formulário de pedido, compartilhado entre criar e editar
+  (`comanda-form.tsx`, usado por `novo/page.tsx` e `[id]/editar/page.tsx`).
+- `src/app/(camareira)/bar-piscina/` — tela "Consumo por quartos" da
+  camareira (renomeada na Parte 05; era "Consumo de Bar da Piscina" na
+  Parte 04): acordeão por quarto com os totais de frigobar (editável) e bar
+  da piscina (só leitura, vem das comandas) e as ações de
+  fechar/reabrir/pagar conta, que passaram do admin para a camareira nesta
+  mesma parte.
 - `src/app/(camareira)/` — telas da camareira.
 - `src/app/manutencao/` — telas do funcionário de manutenção (pasta real,
   não route-group — ver "Parte 02 do projeto").
 - `src/lib/actions/minibar.ts` / `poolbar.ts` / `room-bills.ts` — Server
-  Actions do frigobar, do bar da piscina e do ciclo de conta por quarto
-  (fechar/reabrir/pagar + a consulta combinada usada em `/frigobar`).
+  Actions do frigobar, dos relatórios de bar da piscina e do ciclo de conta
+  por quarto (fechar/reabrir/pagar, agora via RPC `security definer`
+  checando `is_camareira()` — ver Parte 05 — + a consulta combinada usada
+  em `/frigobar` e `/bar-piscina`).
+- `src/lib/actions/comandas.ts` — Server Actions das comandas de bar da
+  piscina (Parte 05): `submitComanda`/`editComanda`/`cancelComanda` (via
+  RPC `security definer`) e as consultas de leitura `getActiveComandas`
+  (lista, com itens já embutidos), `getComandaForEdit`,
+  `getRoomsForComandaSelector`.
 - `src/lib/room-bills.ts` — helper `getOrCreateCurrentBill` (não é Server
-  Action; recebe o client Supabase como parâmetro), usado pelos três
-  arquivos de actions acima.
+  Action; recebe o client Supabase como parâmetro), usado pelos arquivos de
+  actions acima.
 - `src/components/ui/accordion.tsx` — wrapper de `@base-ui/react/accordion`
   (ver Parte 04), usado nas telas de bar/frigobar.
+- `src/components/shared/comanda-detail-dialog.tsx` — modal de
+  visualização dos itens de uma comanda (Parte 05), reaproveitado pela
+  tela da camareira e pela aba "Lista de comandas do bar" do admin.
+- `src/lib/receipt-pdf.tsx` — gera o PDF do recibo de uma conta paga sob
+  demanda, sem persistir arquivo (Parte 06), usado tanto pelo e-mail
+  automático quanto pela rota `/api/room-bills/[billId]/receipt` ("Ver
+  PDF" do admin).
+- `src/app/(camareira)/bar-piscina/pix/[roomId]/` — tela de pagamento por
+  PIX da camareira (Parte 06): QR code estático (`public/pix-qrcode.png`)
+  + valor total da conta.
 - `src/lib/actions/` — Server Actions (toda escrita no banco).
 - `src/lib/task-type.ts` — rótulos centralizados dos tipos de trabalho
   (Arrumação/Preparação Chegada/Troca) — mudar aqui reflete em todo o app.

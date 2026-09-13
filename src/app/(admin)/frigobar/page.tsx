@@ -1,28 +1,37 @@
-import { createClient } from "@/lib/supabase/server";
-import type { MinibarItem, PoolbarItem } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
-import { getRoomBillsOverview } from "@/lib/actions/room-bills";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { getRoomBillsOverview, getRecentlyPaidRoomBills, getReceiptSettings } from "@/lib/actions/room-bills";
+import { getActiveComandas, getInactiveComandas } from "@/lib/actions/comandas";
 import { FrigobarRoomsPanel } from "./frigobar-rooms-panel";
+import { ComandasListPanel } from "./comandas-list-panel";
 
 export default async function FrigobarPage() {
-  const supabase = await createClient();
-  const [overview, { data: minibarItems }, { data: poolbarItems }] = await Promise.all([
+  const [overview, recentlyPaid, activeComandas, inactiveComandas, receiptSettings] = await Promise.all([
     getRoomBillsOverview(),
-    supabase.from("minibar_items").select("*").eq("active", true).order("position"),
-    supabase.from("poolbar_items").select("*").eq("active", true).order("position"),
+    getRecentlyPaidRoomBills(),
+    getActiveComandas(),
+    getInactiveComandas(),
+    getReceiptSettings(),
   ]);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Consumo de Bar e Frigobar"
-        subtitle="Consumo de frigobar e do bar da piscina por quarto, com taxa de serviço de 10% sobre o bar."
+        subtitle="Consulta de consumo de frigobar e do bar da piscina por quarto — fechar conta, reabrir e registrar pagamento agora são ações da camareira."
       />
-      <FrigobarRoomsPanel
-        overview={overview}
-        minibarItems={(minibarItems ?? []) as MinibarItem[]}
-        poolbarItems={(poolbarItems ?? []) as PoolbarItem[]}
-      />
+      <Tabs defaultValue="comandas">
+        <TabsList>
+          <TabsTrigger value="comandas">Lista de comandas do bar</TabsTrigger>
+          <TabsTrigger value="quartos">Consumo por quartos</TabsTrigger>
+        </TabsList>
+        <TabsContent value="comandas" className="pt-4">
+          <ComandasListPanel activeComandas={activeComandas} inactiveComandas={inactiveComandas} />
+        </TabsContent>
+        <TabsContent value="quartos" className="pt-4">
+          <FrigobarRoomsPanel overview={overview} recentlyPaid={recentlyPaid} receiptSettings={receiptSettings} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -52,7 +52,8 @@ export function TableLayoutPanel({ tables }: { tables: BreakfastTable[] }) {
             <div>
               <p className="font-medium text-sm">{t.label}</p>
               <p className="text-xs text-muted-foreground">
-                {t.shape === "round" ? "Redonda" : "Retangular"} · {t.seats} lugares
+                {t.shape === "round" ? "Redonda" : t.shape === "square" ? "Quadrada" : "Retangular"} · {t.seats}{" "}
+                lugares
               </p>
             </div>
             <Button
@@ -110,6 +111,7 @@ function NewTableForm() {
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="round">Redonda</SelectItem>
+          <SelectItem value="square">Quadrada</SelectItem>
           <SelectItem value="rect">Retangular</SelectItem>
         </SelectContent>
       </Select>

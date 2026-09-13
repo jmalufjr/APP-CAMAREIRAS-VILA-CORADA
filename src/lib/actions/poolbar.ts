@@ -3,7 +3,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { toDateKey, nowInBrazil } from "@/lib/date";
-import { getOrCreateCurrentBill } from "@/lib/room-bills";
 
 // ---------- Admin: CRUD do catálogo de itens do bar da piscina ----------
 
@@ -62,98 +61,12 @@ export async function deletePoolbarItem(id: string) {
   return { success: true };
 }
 
-// ---------- Camareira/admin: registrar consumo do bar da piscina na conta corrente do quarto ----------
-
-export async function setPoolbarConsumption(roomId: string, itemId: string, quantity: number) {
-  const supabase = await createClient();
-
-  const bill = await getOrCreateCurrentBill(supabase, roomId);
-  if (bill.status === "fechada") {
-    return { error: "A conta deste quarto está fechada. Não é possível registrar consumo." };
-  }
-
-  const { data: item } = await supabase.from("poolbar_items").select("price").eq("id", itemId).single();
-  if (!item) return { error: "Item de bar não encontrado." };
-
-  const { error } = await supabase.from("room_bill_poolbar_items").upsert(
-    {
-      bill_id: bill.id,
-      poolbar_item_id: itemId,
-      quantity: Math.max(0, Math.floor(quantity)),
-      price_snapshot: item.price,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "bill_id,poolbar_item_id" }
-  );
-
-  if (error) return { error: error.message };
-  revalidatePath("/bar-piscina");
-  revalidatePath("/frigobar");
-  return { success: true };
-}
-
-// ---------- Camareira: cards de consumo de bar por quarto ----------
-
-export interface PoolbarRoomCard {
-  room_id: string;
-  room_number: string;
-  billStatus: "aberta" | "fechada" | "reaberta" | "paga";
-  items: { id: string; category: string | null; name: string; price: number; quantity: number }[];
-}
-
-export async function getPoolbarRoomsForCamareira(): Promise<PoolbarRoomCard[]> {
-  const supabase = await createClient();
-  const [{ data: rooms }, { data: items }, { data: bills }] = await Promise.all([
-    supabase.from("rooms").select("id, number").eq("active", true).order("position"),
-    supabase.from("poolbar_items").select("*").eq("active", true).order("position"),
-    supabase.from("room_bills").select("*").neq("status", "paga"),
-  ]);
-
-  const roomList = rooms ?? [];
-  const itemList = items ?? [];
-  const billByRoom = new Map((bills ?? []).map((b) => [b.room_id, b]));
-
-  // garante que toda sala tenha uma conta corrente antes de buscar os lançamentos
-  const billIdByRoom = new Map<string, string>();
-  const billStatusByRoom = new Map<string, PoolbarRoomCard["billStatus"]>();
-  for (const room of roomList) {
-    let bill = billByRoom.get(room.id);
-    if (!bill) {
-      bill = await getOrCreateCurrentBill(supabase, room.id);
-    }
-    billIdByRoom.set(room.id, bill.id);
-    billStatusByRoom.set(room.id, bill.status);
-  }
-
-  const billIds = Array.from(billIdByRoom.values());
-  const { data: lines } = billIds.length
-    ? await supabase.from("room_bill_poolbar_items").select("bill_id, poolbar_item_id, quantity").in("bill_id", billIds)
-    : { data: [] as { bill_id: string; poolbar_item_id: string; quantity: number }[] };
-
-  return roomList.map((room) => {
-    const billId = billIdByRoom.get(room.id)!;
-    const quantityByItem = new Map(
-      (lines ?? []).filter((l) => l.bill_id === billId).map((l) => [l.poolbar_item_id, l.quantity])
-    );
-    return {
-      room_id: room.id,
-      room_number: room.number,
-      billStatus: billStatusByRoom.get(room.id)!,
-      items: itemList.map((item) => ({
-        id: item.id,
-        category: item.category,
-        name: item.name,
-        price: item.price,
-        quantity: quantityByItem.get(item.id) ?? 0,
-      })),
-    };
-  });
-}
-
 // ---------- Relatórios: histórico (por período) e dashboard (mensal) ----------
-// Mesmo critério do frigobar: soma pela data em que a conta foi PAGA
-// (paid_at), já que o consumo não tem mais uma data própria (é lançado
-// contra a conta corrente do quarto, que pode ficar aberta por vários dias).
+// O consumo de bar agora vem das comandas (bar_comanda_items através de
+// bar_comandas não canceladas), somado pela data em que a conta do quarto
+// foi PAGA (paid_at) — mesmo critério já usado para o frigobar, já que o
+// consumo não tem uma data própria (fica contra a conta corrente do quarto,
+// que pode acumular comandas por vários dias até ser paga).
 
 export interface PoolbarItemTotal {
   name: string;
@@ -180,24 +93,27 @@ function summarizePoolbarRows(
 
 async function getPaidPoolbarRows(supabase: Awaited<ReturnType<typeof createClient>>) {
   const { data } = await supabase
-    .from("room_bill_poolbar_items")
-    .select("quantity, price_snapshot, poolbar_items(name), room_bills!inner(status, paid_at)")
-    .eq("room_bills.status", "paga")
+    .from("bar_comanda_items")
+    .select(
+      "quantity, price_snapshot, poolbar_items(name), bar_comandas!inner(status, room_bills!inner(status, paid_at))"
+    )
+    .neq("bar_comandas.status", "cancelada")
+    .eq("bar_comandas.room_bills.status", "paga")
     .gt("quantity", 0);
 
   type Row = {
     quantity: number;
     price_snapshot: number;
     poolbar_items: { name: string } | null;
-    room_bills: { status: string; paid_at: string | null };
+    bar_comandas: { status: string; room_bills: { status: string; paid_at: string | null } };
   };
   return ((data ?? []) as unknown as Row[])
-    .filter((r) => r.room_bills.paid_at)
+    .filter((r) => r.bar_comandas.room_bills.paid_at)
     .map((r) => ({
       quantity: r.quantity,
       price_snapshot: r.price_snapshot,
       name: r.poolbar_items?.name ?? "—",
-      date: (r.room_bills.paid_at as string).slice(0, 10),
+      date: (r.bar_comandas.room_bills.paid_at as string).slice(0, 10),
     }));
 }
 

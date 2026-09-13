@@ -1,11 +1,12 @@
 export type UserRole = "admin" | "camareira" | "manutencao";
 export type ChecklistType = "arrumacao" | "preparacao" | "troca";
 export type TaskStatus = "pendente" | "em_andamento" | "concluido";
-export type TableShape = "round" | "rect";
+export type TableShape = "round" | "rect" | "square";
 export type OccurrenceStatus = "pendente" | "selecionada" | "resolvida";
 export type MaintenanceExecutionType = "nao_tecnico" | "tecnico";
 export type MaintenanceItemStatus = "pendente" | "selecionada";
 export type RoomBillStatus = "aberta" | "fechada" | "reaberta" | "paga";
+export type ComandaStatus = "original" | "cancelada" | "editada";
 
 export interface Profile {
   id: string;
@@ -66,6 +67,12 @@ export interface BreakfastTable {
 export interface CommissionSettings {
   id: number;
   value_per_table: number;
+  updated_at: string;
+}
+
+export interface ReceiptSettings {
+  id: number;
+  accounting_email: string | null;
   updated_at: string;
 }
 
@@ -202,6 +209,7 @@ export interface RoomBill {
   reopened_by: string | null;
   paid_at: string | null;
   paid_by: string | null;
+  receipt_email_sent: boolean;
 }
 
 export interface RoomBillMinibarItem {
@@ -213,13 +221,24 @@ export interface RoomBillMinibarItem {
   updated_at: string;
 }
 
-export interface RoomBillPoolbarItem {
+export interface BarComanda {
   id: string;
+  room_id: string;
   bill_id: string;
+  sequence_number: number;
+  status: ComandaStatus;
+  created_by: string | null;
+  created_at: string;
+  last_action_by: string | null;
+  last_action_at: string;
+}
+
+export interface BarComandaItem {
+  id: string;
+  comanda_id: string;
   poolbar_item_id: string;
   quantity: number;
   price_snapshot: number;
-  updated_at: string;
 }
 
 // Minimal Database type placeholder so @supabase/ssr generics compile.
