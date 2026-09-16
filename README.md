@@ -45,12 +45,89 @@ das camareiras cadastradas (nada precisa ser digitado, só selecionado).
 
 ## 4. Rodar localmente
 
+O app em produção usa o projeto Supabase da nuvem (seção 5). Para
+desenvolver/testar em `localhost` **sem gravar nada no banco real**, este
+projeto usa o Supabase rodando localmente via Docker (Supabase CLI) —
+configurado uma vez, setembro/2026 (ver `supabase/config.toml`).
+
+### 4.1 Pré-requisito: Docker Desktop
+
+Instale o [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+e deixe-o aberto (ícone da baleia parado na bandeja do Windows = motor
+rodando). No Windows, ele usa o WSL2 por baixo; se aparecer erro de
+"Virtualization support not detected", a virtualização (Intel VT-x/AMD-V)
+está desligada na BIOS/UEFI do computador e precisa ser habilitada lá antes
+(fora do alcance do Docker/Windows resolver sozinho).
+
+### 4.2 Subir o banco local (só na primeira vez, ou depois de `supabase stop`)
+
+```bash
+npx supabase start
+```
+
+Isso sobe um Postgres + Auth completos, isolados, na sua máquina (baixa as
+imagens Docker na primeira vez — demora alguns minutos). **Importante**:
+`supabase/config.toml` tem `[db.migrations] enabled = false` e
+`[db.seed] enabled = false` de propósito — `supabase/migrations/` começa em
+`002` (não existe uma migration `001`, porque o schema inicial deste projeto
+foi aplicado direto no painel da nuvem antes de existir o CLI), então
+replay automático de migrations quebraria num banco vazio. Por isso o schema
+é aplicado manualmente, só uma vez, direto no Postgres do container:
+
+```bash
+docker exec -i supabase_db_APP_Camareiras_Vila_Corada psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f - < supabase/schema.sql
+docker exec -i supabase_db_APP_Camareiras_Vila_Corada psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f - < supabase/seed.sql
+```
+
+(`supabase start` já imprime as credenciais locais — `.env.local` já está
+configurado com elas, não precisa copiar de novo.)
+
+Crie o usuário admin local (equivalente ao passo 3, mas no banco local — as
+credenciais abaixo já valem tanto para o Studio local quanto para logar no
+app; troque a senha se quiser):
+
+```bash
+curl -s -X POST 'http://127.0.0.1:54321/auth/v1/admin/users' \
+  -H "apikey: SUPABASE_SERVICE_ROLE_KEY-do-.env.local" \
+  -H "Authorization: Bearer SUPABASE_SERVICE_ROLE_KEY-do-.env.local" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@camareiras.vilacorada.app","password":"admin123","email_confirm":true}'
+```
+
+e depois insira o perfil (substitua `SEU-UID-AQUI` pelo `id` retornado
+acima):
+
+```bash
+docker exec -i supabase_db_APP_Camareiras_Vila_Corada psql -U postgres -d postgres -c "insert into profiles (id, role, name, login_email) values ('SEU-UID-AQUI', 'admin', 'admin', 'admin@camareiras.vilacorada.app');"
+```
+
+### 4.3 Rodar o app
+
 ```bash
 npm install
 npm run dev
 ```
 
-Acesse http://localhost:3000.
+Acesse http://localhost:3000 — login **admin**, senha `admin123` (a que foi
+definida acima). Painel do Studio local (equivalente ao painel do Supabase
+na nuvem, pra ver tabelas visualmente): http://127.0.0.1:54323. E-mails que
+o app tentaria mandar localmente (recibo de PDF) ficam capturados em
+http://127.0.0.1:54324 em vez de saírem de verdade — `.env.local` local
+propositalmente não tem `RESEND_API_KEY` configurada, então o envio
+automático apenas falha silenciosamente (por design, nunca bloqueia o
+pagamento) em vez de mandar e-mail de teste pra conta real da contabilidade.
+
+### 4.4 Zerar os dados de teste / parar
+
+```bash
+npx supabase stop          # desliga os containers (dados locais ficam salvos)
+npx supabase stop --no-backup && npx supabase start   # zera tudo e sobe de novo vazio (precisa reaplicar 4.2)
+```
+
+`.env.local` aponta para o banco local por padrão agora. As credenciais do
+projeto de produção ficam guardadas em `.env.local.cloud` (nunca versionado)
+só para o caso raro de precisar rodar localmente contra o banco real —
+copie o conteúdo por cima de `.env.local` temporariamente e desfaça depois.
 
 ## 5. Deploy na Vercel
 

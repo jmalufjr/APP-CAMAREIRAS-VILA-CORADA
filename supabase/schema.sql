@@ -8,7 +8,7 @@ create extension if not exists "uuid-ossp";
 
 -- ---------- ENUMS ----------
 create type user_role as enum ('admin', 'camareira', 'manutencao');
-create type checklist_type as enum ('arrumacao', 'preparacao', 'troca');
+create type checklist_type as enum ('arrumacao', 'preparacao', 'troca', 'somente_chegada', 'somente_saida');
 create type task_status as enum ('pendente', 'em_andamento', 'concluido');
 create type table_shape as enum ('round', 'rect', 'square');
 create type occurrence_status as enum ('pendente', 'selecionada', 'resolvida');

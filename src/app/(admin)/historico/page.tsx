@@ -8,6 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { getMinibarConsumptionForPeriod } from "@/lib/actions/minibar";
 import { getPoolbarConsumptionForPeriod } from "@/lib/actions/poolbar";
 import { toDateKey, nowInBrazil } from "@/lib/date";
+import type { ChecklistType } from "@/lib/types";
 
 function defaultRange() {
   const now = nowInBrazil();
@@ -17,7 +18,7 @@ function defaultRange() {
 
 interface TaskWithOccurrences {
   date: string;
-  task_type: "arrumacao" | "preparacao" | "troca";
+  task_type: ChecklistType;
   status: string;
   profiles: { name: string } | null;
   daily_room_task_occurrences: {

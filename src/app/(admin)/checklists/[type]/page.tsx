@@ -6,7 +6,7 @@ import { BackLink } from "@/components/shared/back-link";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import { ChecklistItemsPanel } from "../checklist-items-panel";
 
-const VALID_TYPES: ChecklistType[] = ["arrumacao", "preparacao", "troca"];
+const VALID_TYPES: ChecklistType[] = ["arrumacao", "preparacao", "troca", "somente_saida", "somente_chegada"];
 
 export default async function ChecklistTypePage({
   params,

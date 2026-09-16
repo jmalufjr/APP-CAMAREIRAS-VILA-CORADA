@@ -8,7 +8,7 @@ import { closeRoomBill, reopenRoomBill, markRoomBillPaid } from "@/lib/actions/r
 import { setMinibarConsumption } from "@/lib/actions/minibar";
 import type { MinibarItem } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { QuantityStepper } from "@/components/shared/quantity-stepper";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
 import { formatDateShortPt } from "@/lib/date";
@@ -73,16 +73,13 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
                   {minibarItems.map((item) => (
                     <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-sm">
                       <span className="min-w-0">{item.name}</span>
-                      <Input
-                        type="number"
-                        min={0}
-                        className="w-16 h-8 shrink-0"
-                        disabled={isPending}
+                      <QuantityStepper
                         value={minibarQty[item.id] ?? 0}
-                        onChange={(e) => setMinibarQty((prev) => ({ ...prev, [item.id]: Number(e.target.value) }))}
-                        onBlur={() =>
-                          runAction(() => setMinibarConsumption(room.room_id, item.id, minibarQty[item.id] ?? 0))
-                        }
+                        disabled={isPending}
+                        onChange={(v) => {
+                          setMinibarQty((prev) => ({ ...prev, [item.id]: v }));
+                          runAction(() => setMinibarConsumption(room.room_id, item.id, v));
+                        }}
                       />
                     </div>
                   ))}

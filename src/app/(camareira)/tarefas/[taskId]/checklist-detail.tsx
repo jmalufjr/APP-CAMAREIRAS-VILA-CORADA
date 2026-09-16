@@ -8,12 +8,13 @@ import { toggleCheck, addOccurrence, removeOccurrence, releaseTask } from "@/lib
 import { setMinibarConsumption, type MinibarRoomConsumption } from "@/lib/actions/minibar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { QuantityStepper } from "@/components/shared/quantity-stepper";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -21,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { X, CheckCircle2 } from "lucide-react";
+import { X, CheckCircle2, Info } from "lucide-react";
 
 type CheckRow = DailyRoomTaskCheck & { checklist_items: { label: string; description: string | null } };
 type OccurrenceRow = DailyRoomTaskOccurrence & { occurrence_categories: { name: string } };
@@ -76,11 +77,6 @@ export function ChecklistDetail({
   );
   const [minibarPendingIds, setMinibarPendingIds] = useState<Set<string>>(new Set());
 
-  function handleMinibarQuantityChange(itemId: string, quantity: number) {
-    const safeQuantity = Math.max(0, Math.floor(quantity) || 0);
-    setMinibarQuantities((prev) => ({ ...prev, [itemId]: safeQuantity }));
-  }
-
   // Recebe a quantidade explicitamente (em vez de reler o estado) para
   // evitar salvar um valor obsoleto quando chamada logo após uma mudança de
   // estado ainda não aplicada (ex.: zerar tudo ao desligar o toggle).
@@ -95,6 +91,14 @@ export function ChecklistDetail({
       });
       if (result?.error) toast.error(result.error);
     });
+  }
+
+  // Cada clique no stepper (+/-) já é a ação final do usuário (não há
+  // "blur" como num campo de texto), então atualiza e salva no mesmo passo.
+  function handleMinibarQuantityChange(itemId: string, quantity: number) {
+    const safeQuantity = Math.max(0, Math.floor(quantity) || 0);
+    setMinibarQuantities((prev) => ({ ...prev, [itemId]: safeQuantity }));
+    saveMinibarQuantity(itemId, safeQuantity);
   }
 
   function handleToggle(checkId: string, next: boolean) {
@@ -126,25 +130,33 @@ export function ChecklistDetail({
 
       <div className="space-y-2">
         {localChecks.map((check) => (
-          <label
+          <div
             key={check.id}
-            className="flex items-start gap-3 rounded-lg border border-border bg-card p-3 cursor-pointer"
+            className="flex items-center gap-2 rounded-lg border border-border bg-card p-3"
           >
-            <Checkbox
-              checked={check.checked}
-              disabled={pendingIds.has(check.id) || isReleased}
-              onCheckedChange={(v) => handleToggle(check.id, !!v)}
-              className="mt-0.5"
-            />
-            <div>
-              <p className="text-sm font-medium">{check.checklist_items.label}</p>
-              {check.checklist_items.description && (
-                <p className="text-xs text-muted-foreground mt-0.5">
+            <label className="flex min-w-0 flex-1 items-center gap-3 cursor-pointer">
+              <Checkbox
+                checked={check.checked}
+                disabled={pendingIds.has(check.id) || isReleased}
+                onCheckedChange={(v) => handleToggle(check.id, !!v)}
+              />
+              <span className="text-base font-medium">{check.checklist_items.label}</span>
+            </label>
+            {check.checklist_items.description && (
+              <Popover>
+                <PopoverTrigger
+                  render={
+                    <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground">
+                      <Info size={18} />
+                    </Button>
+                  }
+                />
+                <PopoverContent className="w-[min(20rem,85vw)] text-base" align="end">
                   {check.checklist_items.description}
-                </p>
-              )}
-            </div>
-          </label>
+                </PopoverContent>
+              </Popover>
+            )}
+          </div>
         ))}
       </div>
 
@@ -187,14 +199,10 @@ export function ChecklistDetail({
                     <p className="text-sm font-medium">{item.name}</p>
                     <p className="text-xs text-muted-foreground">R$ {item.price.toFixed(2)}</p>
                   </div>
-                  <Input
-                    type="number"
-                    min={0}
-                    className="w-20"
-                    disabled={minibarPendingIds.has(item.id) || isReleased || isMinibarClosed}
+                  <QuantityStepper
                     value={minibarQuantities[item.id] ?? 0}
-                    onChange={(e) => handleMinibarQuantityChange(item.id, Number(e.target.value))}
-                    onBlur={() => saveMinibarQuantity(item.id, minibarQuantities[item.id] ?? 0)}
+                    disabled={minibarPendingIds.has(item.id) || isReleased || isMinibarClosed}
+                    onChange={(v) => handleMinibarQuantityChange(item.id, v)}
                   />
                 </div>
               ))}

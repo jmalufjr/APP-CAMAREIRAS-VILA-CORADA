@@ -19,8 +19,7 @@ insert into occurrence_categories (name, position) values
   ('Forro banheiro', 25), ('Ralo', 26), ('Espelho', 27),
   ('Mau cheiro quarto', 28), ('Mau cheiro banheiro', 29);
 
--- ---------- Itens de checklist (base: "Check List.pdf") ----------
--- Mesma lista usada como padrão para arrumação e preparação; o admin pode diferenciar depois.
+-- ---------- Itens de checklist de arrumação (base: "Check List.pdf") ----------
 with items(pos, label, description) as (
   values
     (1, 'Ventilar o quarto', 'Eliminar odores e deixar o ambiente arejado durante a arrumação.'),
@@ -45,9 +44,95 @@ with items(pos, label, description) as (
     (20, 'Liberar o quarto', 'Confirmar ausência de pertences de hóspede anterior e registrar qualquer ocorrência antes da liberação.')
 )
 insert into checklist_items (type, label, description, position)
-select 'arrumacao'::checklist_type, label, description, pos from items
-union all
-select 'preparacao'::checklist_type, label, description, pos from items;
+select 'arrumacao'::checklist_type, label, description, pos from items;
+
+-- ---------- Itens de checklist "Saída com Chegada" (type = preparacao) ----------
+-- Quarto passa por giro completo: hóspede sai e outro chega no mesmo dia.
+-- Baseado na mesma lista de arrumação, com 2 itens extras no início sobre
+-- pertences esquecidos/itens do quarto que não podem ter sido levados.
+insert into checklist_items (type, label, description, position) values
+  ('preparacao', 'Verificar pertences esquecidos', 'Conferir armários, gavetas, cofre, banheiro e criados-mudos em busca de objetos esquecidos pelo hóspede que saiu.', 1),
+  ('preparacao', 'Conferir itens do quarto', 'Confirmar que chaves, controles remotos, adaptadores e demais itens do quarto não foram levados pelo hóspede.', 2),
+  ('preparacao', 'Ventilar o quarto', 'Eliminar odores e deixar o ambiente arejado durante a arrumação.', 3),
+  ('preparacao', 'Retirar o lixo', 'Esvaziar todas as lixeiras e colocar sacos novos.', 4),
+  ('preparacao', 'Limpar superfícies', 'Criados-mudos, mesas, bancada, cabeceira, prateleiras e demais superfícies.', 5),
+  ('preparacao', 'Limpar espelhos e vidros', 'Verificar marcas, manchas e resíduos.', 6),
+  ('preparacao', 'Limpar o piso', 'Remover cabelos, areia, poeira e demais resíduos; limpar conforme o piso.', 7),
+  ('preparacao', 'Arrumar a cama', 'Roupa limpa, sem manchas ou cabelos; cama bem esticada e apresentação padronizada.', 8),
+  ('preparacao', 'Conferir travesseiros e protetores', 'Limpeza, odor, conservação e quantidade adequada.', 9),
+  ('preparacao', 'Conferir cortinas e tecidos', 'Verificar poeira, manchas, cabelos e funcionamento.', 10),
+  ('preparacao', 'Higienizar o banheiro', 'Vaso, pia, bancada, metais, box, chuveiro e demais superfícies.', 11),
+  ('preparacao', 'Conferir toalhas', 'Quantidade correta, limpeza, manchas, fios soltos e conservação.', 12),
+  ('preparacao', 'Repor amenities', 'Sabonete, shampoo, condicionador, papel higiênico e demais itens.', 13),
+  ('preparacao', 'Conferir água e metais', 'Chuveiro, torneiras e descarga: funcionamento, vazamentos, pressão e temperatura.', 14),
+  ('preparacao', 'Conferir iluminação', 'Testar lâmpadas, luminárias, abajures e interruptores.', 15),
+  ('preparacao', 'Testar ar-condicionado', 'Funcionamento, controle remoto, temperatura e ruídos anormais.', 16),
+  ('preparacao', 'Conferir minibar', 'Limpeza, funcionamento, temperatura, estoque e validade.', 17),
+  ('preparacao', 'Conferir equipamentos', 'TV, controle, secador, tomadas e demais equipamentos do quarto.', 18),
+  ('preparacao', 'Procurar problemas de manutenção', 'Mofo, infiltração, vazamentos, pintura, ferragens, trincas, cupins ou danos.', 19),
+  ('preparacao', 'Conferir varanda/área externa', 'Piso, móveis, portas, vidros e ausência de folhas, areia ou insetos.', 20),
+  ('preparacao', 'Inspeção final', 'Quarto visualmente impecável, organizado e conforme o padrão da pousada.', 21),
+  ('preparacao', 'Liberar o quarto', 'Confirmar que o quarto está pronto para ficar disponível e registrar qualquer ocorrência antes da liberação.', 22);
+
+-- ---------- Itens de checklist "Somente Saída" ----------
+-- Hóspede sai e não há chegada confirmada no mesmo dia (quarto pode ficar
+-- vago); mesmo assim recebe limpeza completa (pode receber reserva de
+-- última hora) e os mesmos itens de "Saída com Chegada" — só não ganha
+-- itens de boas-vindas, que dependem de uma chegada com data certa.
+insert into checklist_items (type, label, description, position) values
+  ('somente_saida', 'Verificar pertences esquecidos', 'Conferir armários, gavetas, cofre, banheiro e criados-mudos em busca de objetos esquecidos pelo hóspede que saiu.', 1),
+  ('somente_saida', 'Conferir itens do quarto', 'Confirmar que chaves, controles remotos, adaptadores e demais itens do quarto não foram levados pelo hóspede.', 2),
+  ('somente_saida', 'Ventilar o quarto', 'Eliminar odores e deixar o ambiente arejado durante a arrumação.', 3),
+  ('somente_saida', 'Retirar o lixo', 'Esvaziar todas as lixeiras e colocar sacos novos.', 4),
+  ('somente_saida', 'Limpar superfícies', 'Criados-mudos, mesas, bancada, cabeceira, prateleiras e demais superfícies.', 5),
+  ('somente_saida', 'Limpar espelhos e vidros', 'Verificar marcas, manchas e resíduos.', 6),
+  ('somente_saida', 'Limpar o piso', 'Remover cabelos, areia, poeira e demais resíduos; limpar conforme o piso.', 7),
+  ('somente_saida', 'Arrumar a cama', 'Roupa limpa, sem manchas ou cabelos; cama bem esticada e apresentação padronizada.', 8),
+  ('somente_saida', 'Conferir travesseiros e protetores', 'Limpeza, odor, conservação e quantidade adequada.', 9),
+  ('somente_saida', 'Conferir cortinas e tecidos', 'Verificar poeira, manchas, cabelos e funcionamento.', 10),
+  ('somente_saida', 'Higienizar o banheiro', 'Vaso, pia, bancada, metais, box, chuveiro e demais superfícies.', 11),
+  ('somente_saida', 'Conferir toalhas', 'Quantidade correta, limpeza, manchas, fios soltos e conservação.', 12),
+  ('somente_saida', 'Repor amenities', 'Sabonete, shampoo, condicionador, papel higiênico e demais itens.', 13),
+  ('somente_saida', 'Conferir água e metais', 'Chuveiro, torneiras e descarga: funcionamento, vazamentos, pressão e temperatura.', 14),
+  ('somente_saida', 'Conferir iluminação', 'Testar lâmpadas, luminárias, abajures e interruptores.', 15),
+  ('somente_saida', 'Testar ar-condicionado', 'Funcionamento, controle remoto, temperatura e ruídos anormais.', 16),
+  ('somente_saida', 'Conferir minibar', 'Limpeza, funcionamento, temperatura, estoque e validade.', 17),
+  ('somente_saida', 'Conferir equipamentos', 'TV, controle, secador, tomadas e demais equipamentos do quarto.', 18),
+  ('somente_saida', 'Procurar problemas de manutenção', 'Mofo, infiltração, vazamentos, pintura, ferragens, trincas, cupins ou danos.', 19),
+  ('somente_saida', 'Conferir varanda/área externa', 'Piso, móveis, portas, vidros e ausência de folhas, areia ou insetos.', 20),
+  ('somente_saida', 'Inspeção final', 'Quarto visualmente impecável, organizado e conforme o padrão da pousada.', 21),
+  ('somente_saida', 'Liberar o quarto', 'Confirmar que o quarto está pronto para ficar disponível e registrar qualquer ocorrência antes da liberação.', 22);
+
+-- ---------- Itens de checklist "Somente Chegada" ----------
+-- Quarto já foi limpo por completo numa "Somente Saída" anterior (ou ficou
+-- vago), então os itens de limpeza viram uma revisão mais leve; sem itens
+-- de pertences esquecidos (ninguém está saindo); ganha itens de boas-vindas
+-- (chocolate, flor, cheirinho) e ênfase em testar o funcionamento dos
+-- aparelhos antes da chegada.
+insert into checklist_items (type, label, description, position) values
+  ('somente_chegada', 'Ventilar o quarto', 'Eliminar odores e deixar o ambiente arejado antes da chegada.', 1),
+  ('somente_chegada', 'Revisar lixeiras', 'Conferir se estão vazias e com sacos novos.', 2),
+  ('somente_chegada', 'Revisar superfícies', 'Criados-mudos, mesas, bancada, cabeceira e prateleiras; o quarto já foi limpo na saída, repassar um pano se necessário.', 3),
+  ('somente_chegada', 'Revisar espelhos e vidros', 'Conferir manchas ou resíduos; repassar se necessário.', 4),
+  ('somente_chegada', 'Revisar o piso', 'Conferir resíduos; passar pano ou aspirador rapidamente se necessário.', 5),
+  ('somente_chegada', 'Revisar arrumação da cama', 'Conferir se a cama está bem apresentada; ajustar se necessário.', 6),
+  ('somente_chegada', 'Conferir travesseiros e protetores', 'Limpeza, odor, conservação e quantidade adequada.', 7),
+  ('somente_chegada', 'Conferir cortinas e tecidos', 'Verificar poeira, manchas, cabelos e funcionamento.', 8),
+  ('somente_chegada', 'Revisar o banheiro', 'Conferir limpeza geral de vaso, pia, box e chuveiro; repassar detalhes se necessário.', 9),
+  ('somente_chegada', 'Conferir toalhas', 'Quantidade correta, limpeza, manchas, fios soltos e conservação.', 10),
+  ('somente_chegada', 'Repor amenities', 'Sabonete, shampoo, condicionador, papel higiênico e demais itens.', 11),
+  ('somente_chegada', 'Conferir água e metais', 'Chuveiro, torneiras e descarga: funcionamento, vazamentos, pressão e temperatura.', 12),
+  ('somente_chegada', 'Conferir iluminação', 'Testar lâmpadas, luminárias, abajures e interruptores.', 13),
+  ('somente_chegada', 'Testar ar-condicionado', 'Funcionamento, controle remoto, temperatura e ruídos anormais.', 14),
+  ('somente_chegada', 'Conferir minibar', 'Limpeza, funcionamento, temperatura, estoque e validade.', 15),
+  ('somente_chegada', 'Conferir equipamentos', 'TV, controle, secador, tomadas e demais equipamentos; testar o funcionamento de cada um antes da chegada.', 16),
+  ('somente_chegada', 'Procurar problemas de manutenção', 'Mofo, infiltração, vazamentos, pintura, ferragens, trincas, cupins ou danos surgidos durante o período vago.', 17),
+  ('somente_chegada', 'Conferir varanda/área externa', 'Piso, móveis, portas, vidros e ausência de folhas, areia ou insetos.', 18),
+  ('somente_chegada', 'Colocar chocolates de boas-vindas', 'Dispor os chocolates sobre a cama ou criado-mudo.', 19),
+  ('somente_chegada', 'Colocar flor no quarto', 'Dispor a flor de boas-vindas em local visível do quarto.', 20),
+  ('somente_chegada', 'Passar cheirinho no quarto', 'Borrifar o aromatizador padrão da pousada para deixar o ambiente agradável para a chegada.', 21),
+  ('somente_chegada', 'Inspeção final', 'Quarto visualmente impecável, organizado e conforme o padrão da pousada.', 22),
+  ('somente_chegada', 'Liberar o quarto', 'Confirmar que o quarto está pronto para receber o hóspede e registrar qualquer ocorrência antes da liberação.', 23);
 
 -- ---------- Itens de checklist de troca (troca de roupa de cama/toalhas) ----------
 insert into checklist_items (type, label, description, position) values

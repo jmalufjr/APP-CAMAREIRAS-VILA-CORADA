@@ -33,7 +33,13 @@ camareira — o admin passou a só visualizar. Uma sexta leva (seção 13)
 adicionou o envio automático por e-mail (Resend) do recibo em PDF de uma
 conta de quarto ao ser paga, com reenvio manual pelo admin em caso de
 falha, e uma tela de pagamento por PIX (QR code estático) acionada pela
-camareira quando a conta está fechada.
+camareira quando a conta está fechada. Uma sétima leva (seção 14)
+acrescentou o formato de mesa "Quadrada" ao layout do café. Em
+15/09/2026 o app entrou em uso real ("Parte 08", seção 15): os dados de
+teste foram zerados do banco de produção, o lançamento de quantidade de
+frigobar pela camareira passou a usar o mesmo seletor +/- já usado nas
+comandas de bar, e o ambiente de desenvolvimento local passou a rodar num
+Supabase isolado via Docker em vez de compartilhar o banco de produção.
 
 ## Onde está
 
@@ -380,12 +386,76 @@ também é feita em Server Components.
     editor de layout do admin (`/checklists/mesas`) quanto na visão da
     camareira (`/mesas`) — bastou uma mudança nesse componente para
     impactar as duas telas ao mesmo tempo, sem duplicação.
+15. **Parte 08 — Início do uso real: limpeza de dados de teste, stepper de
+    frigobar e ambiente local isolado** (15/09/2026, feita direto em
+    `main`, pós parte 07):
+    - **Zeramos os dados de teste do banco de produção** no dia em que o
+      app começou a ser usado de verdade: apagadas todas as linhas de
+      `daily_room_tasks` (com `daily_room_task_checks`/
+      `daily_room_task_occurrences` em cascata), `daily_breakfast`,
+      `daily_arrivals`, `daily_departures`, `maintenance_completions` e
+      `room_bills` (com `room_bill_minibar_items`/`bar_comandas`/
+      `bar_comanda_items` em cascata) — todas datadas antes de hoje.
+      **Preservado**: `rooms`, `breakfast_tables` (layout atual),
+      catálogos (`checklist_items`, `minibar_items`, `poolbar_items`,
+      `occurrence_categories`, `maintenance_categories`) e `profiles`
+      (usuários, incluindo uma conta `admin-camareira` de origem
+      duvidosa que o proprietário optou por não mexer por enquanto). Os
+      94 `maintenance_items` que tinham `status = 'selecionada'` presa de
+      teste voltaram para `'pendente'`, e `next_due_date` de todos foi
+      recalculada (hoje, para quem não tem `start_date` real configurada;
+      preservada para os poucos itens/categorias que já tinham uma data
+      real própria) — sem isso o funcionário de manutenção veria itens
+      "já selecionados" por ninguém de verdade.
+    - **Quantidade de frigobar lançada pela camareira virou seletor +/-**
+      (igual à comanda de bar), em vez de campo de texto numérico —
+      exigência explícita do proprietário, igual ao motivo já documentado
+      para a comanda (evitar a camareira precisar digitar números). O
+      stepper foi extraído para um componente compartilhado,
+      `src/components/shared/quantity-stepper.tsx` (antes só existia
+      dentro de `comanda-form.tsx`), e passou a ser usado nos dois lugares
+      onde a camareira lança frigobar: o checklist do quarto
+      (`checklist-detail.tsx`) e a tela "Consumo por quartos"
+      (`consumo-quartos-panel.tsx`, ao reabrir uma conta fechada pra
+      editar). Cada clique no `+`/`-` já salva na hora (não existe
+      "blur"/confirmação separada como no campo de texto antigo).
+    - **Ambiente de desenvolvimento local deixou de compartilhar o banco
+      de produção** — decisão tomada porque o app entrou em uso real e
+      testes locais não podem mais poluir dados/estatísticas reais. Ver
+      `README.md` seção 4 para o passo a passo completo. Resumo: Supabase
+      rodando localmente via Docker (`npx supabase start`), configurado
+      em `supabase/config.toml` (criado por `npx supabase init`, sem
+      precisar instalar o CLI globalmente). **Detalhe técnico
+      importante**: `[db.migrations]` e `[db.seed]` estão **desabilitados**
+      nesse config — `supabase/migrations/` começa em `002` (não existe
+      uma migration `001`; o schema inicial foi aplicado direto no painel
+      da nuvem antes deste projeto usar o CLI), então o replay automático
+      de migrations que `supabase start`/`db reset` fariam por padrão
+      quebra contra um banco vazio. Por isso o bootstrap do banco local é
+      manual, sempre `schema.sql` **antes** de `seed.sql`, direto via
+      `docker exec -i supabase_db_APP_Camareiras_Vila_Corada psql -U
+      postgres -d postgres -f -` (não via `supabase db query -f`, que não
+      aceita arquivos com múltiplos comandos SQL). `.env.local` agora
+      aponta para o Supabase local por padrão; as credenciais reais da
+      nuvem foram movidas para `.env.local.cloud` (nunca versionado, só
+      para o caso raro de precisar testar contra produção). De propósito,
+      `.env.local` local **não** tem `RESEND_API_KEY` configurada — sem
+      ela, o envio de recibo por e-mail falha silenciosamente (já é
+      "melhor esforço" por design) em vez de mandar e-mail de teste de
+      verdade pra conta real da contabilidade.
 
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de
   antecedência (admin usa a aba "Amanhã"); a aba "Hoje" existe para ajustes
   de última hora e testes. Camareiras sempre veem/atuam em "Hoje".
+- **Ambiente local de teste (desde a Parte 08, seção 15)**: `npm run dev`
+  na máquina do proprietário roda contra um Supabase **local via Docker**
+  (`npx supabase start`), não contra o banco de produção — testar não polui
+  mais dados/estatísticas reais. Passo a passo completo em `README.md`
+  seção 4. Login admin local: `admin@camareiras.vilacorada.app` /
+  `admin123`. As credenciais da nuvem ficam em `.env.local.cloud` (não
+  versionado) só para o caso raro de precisar rodar local contra produção.
 - **Migrações do banco**: todo schema novo é adicionado em
   `supabase/schema.sql` (para instalações novas) **e** em um arquivo
   numerado sequencialmente em `supabase/migrations/00N_*.sql` (para rodar no
@@ -516,9 +586,20 @@ produção — ver nota abaixo).
   e `011_manutencao_preventiva_por_semana.sql`, além de
   `012_toggle_check_rpc.sql`, `013_reorder_items.sql` e
   `014_maintenance_start_dates.sql` da Parte 03 (seção 10) — todas rodadas
-  manualmente no SQL Editor, já que este projeto usa **um único projeto
-  Supabase** para local e produção (mesma `NEXT_PUBLIC_SUPABASE_URL`/chaves
-  em Development, Preview e Production na Vercel — ver `README.md`).
+  manualmente no SQL Editor. **Nota (atualizada na Parte 08, seção 15)**:
+  isso valia porque, até 15/09/2026, este projeto usava **um único
+  projeto Supabase** para local e produção (mesma `NEXT_PUBLIC_SUPABASE_URL`/
+  chaves em Development, Preview e Production na Vercel). Migrations
+  rodadas manualmente no SQL Editor da nuvem continuam sendo o processo
+  para **produção** (Development/Preview/Production na Vercel continuam
+  compartilhando o projeto Supabase da nuvem entre si — isso não mudou).
+  O que mudou foi só o **dev local fora da Vercel** (`npm run dev` na
+  máquina do proprietário): passou a rodar contra um Supabase isolado via
+  Docker (ver Parte 08 e `README.md` seção 4), não mais contra o banco de
+  produção — então uma migration nova agora precisa ser aplicada nos dois
+  lugares: no SQL Editor da nuvem (produção) e manualmente no Postgres
+  local (`docker exec ... psql ... -f - < supabase/migrations/0NN_*.sql`),
+  se quiser testá-la localmente antes.
 
 ### Lição de arquitetura (a mais importante desta parte)
 
@@ -577,9 +658,14 @@ o escopo mude no futuro.
 - `PRD_Camareiras_parte02.md` — requisitos completos do módulo de
   Manutenção (parte 2, implementada e testada, ver seção acima) +
   changelog de decisões/desvios (seção 4).
-- `README.md` — setup local, deploy na Vercel, variáveis de ambiente.
+- `README.md` — setup local (Docker/Supabase local desde a Parte 08, seção
+  15), deploy na Vercel, variáveis de ambiente.
 - `supabase/schema.sql` / `supabase/seed.sql` — schema e dados iniciais.
-- `supabase/migrations/` — alterações incrementais do banco, em ordem.
+- `supabase/migrations/` — alterações incrementais do banco, em ordem
+  (aplicadas manualmente na nuvem; começam em `002`, não existe `001`).
+- `supabase/config.toml` — config do Supabase CLI para o banco local
+  (Parte 08); `[db.migrations]`/`[db.seed]` ficam desabilitados de
+  propósito, ver nota na Parte 08 (seção 15).
 - `src/app/(admin)/` — telas do proprietário/admin.
 - `src/app/(admin)/checklists/` — submenu "Listas" (ver Parte 03, seção 10):
   `page.tsx` é o menu vertical; `[type]/` (arrumação/troca/preparação),
@@ -624,6 +710,10 @@ o escopo mude no futuro.
 - `src/components/shared/comanda-detail-dialog.tsx` — modal de
   visualização dos itens de uma comanda (Parte 05), reaproveitado pela
   tela da camareira e pela aba "Lista de comandas do bar" do admin.
+- `src/components/shared/quantity-stepper.tsx` — seletor de quantidade
+  +/- (Parte 05, extraído como componente compartilhado na Parte 08):
+  usado na comanda de bar e em todo lançamento de frigobar pela camareira
+  (`checklist-detail.tsx` e `consumo-quartos-panel.tsx`).
 - `src/lib/receipt-pdf.tsx` — gera o PDF do recibo de uma conta paga sob
   demanda, sem persistir arquivo (Parte 06), usado tanto pelo e-mail
   automático quanto pela rota `/api/room-bills/[billId]/receipt` ("Ver

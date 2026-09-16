@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { Room, Profile, DailyRoomTask, ChecklistType } from "@/lib/types";
 import { setRoomTask } from "@/lib/actions/planning";
-import { TASK_TYPE_OPTIONS } from "@/lib/task-type";
+import { TASK_TYPE_LABELS, TASK_TYPE_OPTIONS } from "@/lib/task-type";
 import {
   Table,
   TableBody,
@@ -73,7 +73,9 @@ export function PlanningBoard({
                     disabled={isPending}
                   >
                     <SelectTrigger className="w-44">
-                      <SelectValue />
+                      <SelectValue>
+                        {(v: string) => (v === "none" ? "Sem trabalho" : TASK_TYPE_LABELS[v as ChecklistType])}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Sem trabalho</SelectItem>
