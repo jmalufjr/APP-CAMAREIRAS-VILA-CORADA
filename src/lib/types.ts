@@ -70,6 +70,13 @@ export interface CommissionSettings {
   updated_at: string;
 }
 
+export interface DailyBreakfastSettings {
+  date: string;
+  total_tables: number;
+  notes: string | null;
+  updated_at: string;
+}
+
 export interface ReceiptSettings {
   id: number;
   accounting_email: string | null;

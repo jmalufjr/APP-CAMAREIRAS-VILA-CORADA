@@ -153,6 +153,16 @@ create table daily_breakfast (
   unique (date, table_id)
 );
 
+-- ---------- DAILY BREAKFAST SETTINGS (total de mesas + observação geral do dia) ----------
+-- Configuração de dia inteiro (não por mesa), definida pelo admin e exibida
+-- para a camareira acima do layout de mesas; complementa daily_breakfast.
+create table daily_breakfast_settings (
+  date date primary key,
+  total_tables int not null default 0,
+  notes text,
+  updated_at timestamptz not null default now()
+);
+
 -- ---------- DAILY ARRIVALS (chegadas previstas do dia) ----------
 create table daily_arrivals (
   id uuid primary key default uuid_generate_v4(),
@@ -330,6 +340,7 @@ alter table daily_room_tasks enable row level security;
 alter table daily_room_task_checks enable row level security;
 alter table daily_room_task_occurrences enable row level security;
 alter table daily_breakfast enable row level security;
+alter table daily_breakfast_settings enable row level security;
 alter table daily_arrivals enable row level security;
 alter table daily_departures enable row level security;
 alter table maintenance_categories enable row level security;
@@ -557,6 +568,12 @@ create policy "db_select_authenticated" on daily_breakfast for select using (aut
 create policy "db_admin_write" on daily_breakfast for insert with check (is_admin());
 create policy "db_admin_update" on daily_breakfast for update using (is_admin());
 create policy "db_admin_delete" on daily_breakfast for delete using (is_admin());
+
+-- daily_breakfast_settings: everyone authenticated reads; only admin writes
+create policy "dbs_select_authenticated" on daily_breakfast_settings for select using (auth.uid() is not null);
+create policy "dbs_admin_write" on daily_breakfast_settings for insert with check (is_admin());
+create policy "dbs_admin_update" on daily_breakfast_settings for update using (is_admin());
+create policy "dbs_admin_delete" on daily_breakfast_settings for delete using (is_admin());
 
 -- daily_arrivals: everyone authenticated reads; only admin writes
 create policy "da_select_authenticated" on daily_arrivals for select using (auth.uid() is not null);

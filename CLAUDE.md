@@ -443,6 +443,70 @@ também é feita em Server Components.
       ela, o envio de recibo por e-mail falha silenciosamente (já é
       "melhor esforço" por design) em vez de mandar e-mail de teste de
       verdade pra conta real da contabilidade.
+16. **Parte 09 — Novos checklists de saída/chegada e configuração diária de
+    mesas do café** (16/09/2026, feita direto em `main`, pós parte 08;
+    testada primeiro no ambiente local via Docker antes de aplicar em
+    produção, seguindo o fluxo descrito na Parte 08):
+    - **"Preparação Chegada" renomeado para "Saída com Chegada"** (só o
+      rótulo — o valor do enum continua `preparacao`) e dois checklists
+      novos: **"Somente Saída"** e **"Somente Chegada"**, cobrindo os três
+      cenários possíveis de giro de quarto — arrumação/troca não mudaram.
+      "Saída com Chegada" e "Somente Saída" compartilham a mesma lista de
+      22 itens (limpeza completa, já que mesmo um quarto só com saída pode
+      receber reserva de última hora) mais 2 itens novos de conferência
+      (pertences esquecidos do hóspede que saiu / itens do quarto como
+      chaves e controles que não podem ter sido levados); só não têm
+      itens de boas-vindas, que dependem de uma chegada com data certa.
+      "Somente Chegada" (23 itens) parte da mesma base mas os itens de
+      limpeza viram uma revisão mais leve (quarto já foi limpo numa
+      "Somente Saída" anterior), sem os itens de pertences esquecidos, e
+      ganha itens de boas-vindas (chocolate, flor, cheirinho) e ênfase em
+      testar o funcionamento dos aparelhos. Migration
+      `026_checklists_saida_chegada.sql` (enum novo + conteúdo dos itens
+      + associação a todos os quartos) e `schema.sql`/`seed.sql`
+      atualizados para instalações novas. A tela de planejamento diário,
+      o menu "Listas", a tela da camareira e o histórico já eram
+      genéricos o bastante (dirigidos por `TASK_TYPE_OPTIONS`/
+      `TASK_TYPE_LABELS` em `src/lib/task-type.ts`) pra aceitar os tipos
+      novos sem mudança — só `src/app/(admin)/historico/history-tables.tsx`
+      precisou ser generalizado (tinha 3 colunas de tipo de trabalho
+      fixas no código, viraram um loop sobre `TASK_TYPE_OPTIONS`).
+    - **Bug real corrigido nesta parte**: o seletor de tipo de trabalho no
+      planejamento diário (`planning-board.tsx`) voltava a mostrar o valor
+      cru do enum (ex.: "preparacao") em vez do rótulo assim que uma opção
+      era selecionada — o componente `Select` do Base UI só "adivinha" o
+      rótulo a partir do item quando o menu está montado; ao fechar, sem
+      um jeito explícito de resolver o rótulo, ele cai pro valor cru.
+      Corrigido passando uma função pro `<SelectValue>` (`children` como
+      `(value) => label`), o padrão oficialmente documentado pelo Base UI
+      pra esse caso — não testado nos outros `<SelectValue>` do app, então
+      se o mesmo sintoma aparecer em outra tela, aplicar a mesma correção.
+    - **Descrição dos itens de checklist da camareira virou um popover**:
+      antes aparecia sempre abaixo do nome do item, em fonte pequena
+      (`checklist-detail.tsx`); ocupava espaço demais no celular. Agora só
+      o nome do item aparece (fonte maior, `text-base`), com um botão de
+      informação (ícone "i") que abre a descrição — mesmo tamanho de
+      fonte do nome — num popover ancorado no próprio item (não cobre a
+      tela, não navega, fecha ao clicar de novo no mesmo lugar). Vale para
+      todos os checklists da camareira, que passam pelo mesmo componente.
+    - **Configuração diária de mesas do café, separada do controle por
+      mesa**: nova tabela `daily_breakfast_settings` (uma linha por dia,
+      `total_tables` + `notes`, migration `027_daily_breakfast_settings.sql`)
+      — complementa, não substitui, `daily_breakfast` (que continua
+      controlando hóspedes/observação por mesa individual). Na tela do
+      admin (`/mesas/gerenciar`, agora com abas "Mesas de hoje"/"Mesas de
+      amanhã" em vez de "Hóspedes de hoje"/"Hóspedes de amanhã"), logo
+      abaixo da data aparecem um seletor de "Total de mesas" (0 até o
+      número de mesas ativas — valor manual do admin, independente da
+      contagem "Total de mesas ocupadas" já existente, calculada a partir
+      do hóspede lançado por mesa) e uma caixa de "Observação do dia". Os
+      dois valores aparecem pra camareira em `/mesas`, cada um no seu
+      próprio card, acima do layout de mesas — a observação usa
+      `whitespace-pre-wrap` pra preservar exatamente as quebras de linha
+      que o admin digitou (sem isso, texto em lista virava uma linha só).
+      Os cards de mesa na tela do admin passaram a ser ordenados em ordem
+      crescente pelo número extraído do rótulo (`"Mesa 3"` → `3`), não
+      mais pela ordem de criação no banco.
 
 ## Convenções e decisões importantes
 

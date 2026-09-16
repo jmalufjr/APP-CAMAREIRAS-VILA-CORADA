@@ -1,17 +1,26 @@
 import { createClient } from "@/lib/supabase/server";
-import type { BreakfastTable } from "@/lib/types";
+import type { BreakfastTable, DailyBreakfastSettings } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
 import { TableLayoutCanvas } from "@/components/shared/table-layout-canvas";
 import { TableNotesList } from "@/components/shared/table-notes-list";
 import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default async function MesasViewPage() {
   const supabase = await createClient();
-  const [{ data: tables }, { data: todayRows }, { data: tomorrowRows }] = await Promise.all([
+  const [
+    { data: tables },
+    { data: todayRows },
+    { data: tomorrowRows },
+    { data: todaySettings },
+    { data: tomorrowSettings },
+  ] = await Promise.all([
     supabase.from("breakfast_tables").select("*").eq("active", true).order("created_at"),
     supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", todayKey()),
     supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", tomorrowKey()),
+    supabase.from("daily_breakfast_settings").select("*").eq("date", todayKey()).maybeSingle(),
+    supabase.from("daily_breakfast_settings").select("*").eq("date", tomorrowKey()).maybeSingle(),
   ]);
 
   const tableList = (tables ?? []) as BreakfastTable[];
@@ -32,15 +41,36 @@ export default async function MesasViewPage() {
         </TabsList>
         <TabsContent value="hoje" className="pt-4 space-y-4">
           <p className="text-sm capitalize text-muted-foreground">{formatDatePt(todayKey())}</p>
+          <DaySettingsInfo settings={todaySettings as DailyBreakfastSettings | null} />
           <TableLayoutCanvas tables={tableList} guestCounts={todayMap} />
           <TableNotesList rows={todayNotes} labelById={labelById} />
         </TabsContent>
         <TabsContent value="amanha" className="pt-4 space-y-4">
           <p className="text-sm capitalize text-muted-foreground">{formatDatePt(tomorrowKey())}</p>
+          <DaySettingsInfo settings={tomorrowSettings as DailyBreakfastSettings | null} />
           <TableLayoutCanvas tables={tableList} guestCounts={tomorrowMap} />
           <TableNotesList rows={tomorrowNotes} labelById={labelById} />
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function DaySettingsInfo({ settings }: { settings: DailyBreakfastSettings | null }) {
+  return (
+    <div className="space-y-3">
+      <Card>
+        <CardContent>
+          <p className="text-sm font-medium">Total de mesas do café: {settings?.total_tables ?? 0}</p>
+        </CardContent>
+      </Card>
+      {settings?.notes && (
+        <Card>
+          <CardContent>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{settings.notes}</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

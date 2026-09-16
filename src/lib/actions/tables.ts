@@ -124,6 +124,19 @@ export async function setTableNotes(date: string, tableId: string, notes: string
   return { success: true };
 }
 
+export async function setBreakfastDaySettings(date: string, totalTables: number, notes: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("daily_breakfast_settings").upsert(
+    { date, total_tables: totalTables, notes: notes.trim() || null, updated_at: new Date().toISOString() },
+    { onConflict: "date" }
+  );
+
+  if (error) return { error: error.message };
+  revalidatePath("/mesas/gerenciar");
+  revalidatePath("/mesas");
+  return { success: true };
+}
+
 export async function updateCommissionValue(value: number) {
   const supabase = await createClient();
   const { error } = await supabase

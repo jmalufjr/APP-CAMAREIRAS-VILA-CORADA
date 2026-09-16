@@ -1,18 +1,26 @@
 import { createClient } from "@/lib/supabase/server";
-import type { BreakfastTable, CommissionSettings } from "@/lib/types";
+import type { BreakfastTable, CommissionSettings, DailyBreakfastSettings } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
 import { todayKey, tomorrowKey } from "@/lib/date";
 import { GuestsAdminPanel } from "./guests-admin-panel";
 
 export default async function GerenciarMesasPage() {
   const supabase = await createClient();
-  const [{ data: tables }, { data: settings }, { data: todayRows }, { data: tomorrowRows }] =
-    await Promise.all([
-      supabase.from("breakfast_tables").select("*").order("created_at", { ascending: true }),
-      supabase.from("commission_settings").select("*").single(),
-      supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", todayKey()),
-      supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", tomorrowKey()),
-    ]);
+  const [
+    { data: tables },
+    { data: settings },
+    { data: todayRows },
+    { data: tomorrowRows },
+    { data: todaySettings },
+    { data: tomorrowSettings },
+  ] = await Promise.all([
+    supabase.from("breakfast_tables").select("*").order("created_at", { ascending: true }),
+    supabase.from("commission_settings").select("*").single(),
+    supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", todayKey()),
+    supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", tomorrowKey()),
+    supabase.from("daily_breakfast_settings").select("*").eq("date", todayKey()).maybeSingle(),
+    supabase.from("daily_breakfast_settings").select("*").eq("date", tomorrowKey()).maybeSingle(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -27,6 +35,8 @@ export default async function GerenciarMesasPage() {
         tomorrowCounts={Object.fromEntries((tomorrowRows ?? []).map((r) => [r.table_id, r.guest_count]))}
         todayNotes={Object.fromEntries((todayRows ?? []).map((r) => [r.table_id, r.notes ?? ""]))}
         tomorrowNotes={Object.fromEntries((tomorrowRows ?? []).map((r) => [r.table_id, r.notes ?? ""]))}
+        todaySettings={todaySettings as DailyBreakfastSettings | null}
+        tomorrowSettings={tomorrowSettings as DailyBreakfastSettings | null}
       />
     </div>
   );
