@@ -9,7 +9,7 @@ export default async function ComandaPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Comanda" subtitle="Registre e acompanhe os pedidos do bar da piscina por quarto." />
+      <PageHeader title="Comanda" subtitle="Registre e acompanhe os pedidos do bar da piscina por suíte." />
       <Button render={<Link href="/comanda/novo">Novo pedido</Link>} nativeButton={false} />
       <div className="space-y-3">
         <p className="text-sm font-medium">Lista de comandas</p>

@@ -49,7 +49,7 @@ export default async function AdminTaskDetailPage({
     <div className="space-y-6">
       <BackLink href="/dashboard" />
       <PageHeader
-        title={`Quarto ${room.number} — ${formatDatePt(task.date)}`}
+        title={`Suíte ${room.number} — ${formatDatePt(task.date)}`}
         subtitle={`Checklist de ${TASK_TYPE_LABELS[task.task_type as ChecklistType].toLowerCase()} · ${camareiraName}`}
       />
       <ChecklistDetail

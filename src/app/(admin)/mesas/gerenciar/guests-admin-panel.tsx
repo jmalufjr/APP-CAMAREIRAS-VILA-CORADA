@@ -3,8 +3,15 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type { BreakfastTable, CommissionSettings, DailyBreakfastSettings } from "@/lib/types";
-import { setGuestCount, setTableNotes, setBreakfastDaySettings, updateCommissionValue } from "@/lib/actions/tables";
+import type { BreakfastTable, CommissionSettings, DailyBreakfastSettings, DailyBreakfastRoomAssignment, Room } from "@/lib/types";
+import {
+  setGuestCount,
+  setTableNotes,
+  setBreakfastDaySettings,
+  setTableRoomAssignment,
+  removeTableRoomAssignment,
+  updateCommissionValue,
+} from "@/lib/actions/tables";
 import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +19,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { TableLayoutCanvas } from "@/components/shared/table-layout-canvas";
+import { TableLayoutCanvas, type TableRoomAssignment } from "@/components/shared/table-layout-canvas";
 import { TableNotesList } from "@/components/shared/table-notes-list";
+import { X, Plus } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -29,8 +37,23 @@ function tableNumber(label: string): number {
   return match ? parseInt(match[0], 10) : Number.MAX_SAFE_INTEGER;
 }
 
+function toTableRooms(
+  assignments: DailyBreakfastRoomAssignment[],
+  rooms: Room[]
+): Record<string, TableRoomAssignment[]> {
+  const numberByRoomId = new Map(rooms.map((r) => [r.id, r.number]));
+  const map: Record<string, TableRoomAssignment[]> = {};
+  assignments.forEach((a) => {
+    const list = map[a.table_id] ?? [];
+    list.push({ roomNumber: numberByRoomId.get(a.room_id) ?? "—", guestCount: a.guest_count });
+    map[a.table_id] = list;
+  });
+  return map;
+}
+
 export function GuestsAdminPanel({
   tables,
+  rooms,
   commission,
   todayCounts,
   tomorrowCounts,
@@ -38,8 +61,11 @@ export function GuestsAdminPanel({
   tomorrowNotes,
   todaySettings,
   tomorrowSettings,
+  todayAssignments,
+  tomorrowAssignments,
 }: {
   tables: BreakfastTable[];
+  rooms: Room[];
   commission: CommissionSettings;
   todayCounts: Record<string, number>;
   tomorrowCounts: Record<string, number>;
@@ -47,6 +73,8 @@ export function GuestsAdminPanel({
   tomorrowNotes: Record<string, string>;
   todaySettings: DailyBreakfastSettings | null;
   tomorrowSettings: DailyBreakfastSettings | null;
+  todayAssignments: DailyBreakfastRoomAssignment[];
+  tomorrowAssignments: DailyBreakfastRoomAssignment[];
 }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -104,9 +132,11 @@ export function GuestsAdminPanel({
             date={todayKey()}
             label={formatDatePt(todayKey())}
             tables={tables}
+            rooms={rooms}
             counts={todayCounts}
             notesInit={todayNotes}
             daySettings={todaySettings}
+            assignments={todayAssignments}
           />
         </TabsContent>
         <TabsContent value="amanha" className="pt-4">
@@ -114,9 +144,11 @@ export function GuestsAdminPanel({
             date={tomorrowKey()}
             label={formatDatePt(tomorrowKey())}
             tables={tables}
+            rooms={rooms}
             counts={tomorrowCounts}
             notesInit={tomorrowNotes}
             daySettings={tomorrowSettings}
+            assignments={tomorrowAssignments}
           />
         </TabsContent>
       </Tabs>
@@ -127,7 +159,11 @@ export function GuestsAdminPanel({
             <CardTitle className="font-heading text-lg">Mesas · hoje</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <TableLayoutCanvas tables={activeTables} guestCounts={todayCounts} />
+            <TableLayoutCanvas
+              tables={activeTables}
+              guestCounts={todayCounts}
+              tableRooms={toTableRooms(todayAssignments, rooms)}
+            />
             <TableNotesList rows={notesToRows(todayNotes)} labelById={labelById} />
           </CardContent>
         </Card>
@@ -136,7 +172,11 @@ export function GuestsAdminPanel({
             <CardTitle className="font-heading text-lg">Mesas · amanhã</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <TableLayoutCanvas tables={activeTables} guestCounts={tomorrowCounts} />
+            <TableLayoutCanvas
+              tables={activeTables}
+              guestCounts={tomorrowCounts}
+              tableRooms={toTableRooms(tomorrowAssignments, rooms)}
+            />
             <TableNotesList rows={notesToRows(tomorrowNotes)} labelById={labelById} />
           </CardContent>
         </Card>
@@ -151,16 +191,20 @@ function GuestCountEditor({
   date,
   label,
   tables,
+  rooms,
   counts,
   notesInit,
   daySettings,
+  assignments,
 }: {
   date: string;
   label: string;
   tables: BreakfastTable[];
+  rooms: Room[];
   counts: Record<string, number>;
   notesInit: Record<string, string>;
   daySettings: DailyBreakfastSettings | null;
+  assignments: DailyBreakfastRoomAssignment[];
 }) {
   const [values, setValues] = useState(counts);
   const [notes, setNotes] = useState(notesInit);
@@ -250,6 +294,7 @@ function GuestCountEditor({
                 }
               />
             </div>
+            <TableRoomAssignments date={date} tableId={t.id} rooms={rooms} assignments={assignments} />
             <Textarea
               placeholder="Observações desta mesa (visível para as camareiras)"
               className="min-h-14 text-sm"
@@ -269,6 +314,116 @@ function GuestCountEditor({
         Total de mesas ocupadas: {Object.values(values).filter((v) => v > 0).length} · Total de hóspedes: {total}
         {isPending && " · salvando..."}
       </p>
+    </div>
+  );
+}
+
+// Escolhe quais suítes estão sentadas numa mesa, cada uma com sua
+// quantidade de hóspedes — a Mesa 7 (maior capacidade) pode receber mais de
+// uma suíte (ver PRD_regrasdenegocio.md seção 4). Uma suíte só pode estar
+// numa mesa por vez: já alocada em outra mesa neste dia não aparece na
+// lista de opções.
+function TableRoomAssignments({
+  date,
+  tableId,
+  rooms,
+  assignments,
+}: {
+  date: string;
+  tableId: string;
+  rooms: Room[];
+  assignments: DailyBreakfastRoomAssignment[];
+}) {
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  const [newRoomId, setNewRoomId] = useState("");
+  const [newGuestCount, setNewGuestCount] = useState("1");
+
+  const roomById = new Map(rooms.map((r) => [r.id, r]));
+  const forThisTable = assignments.filter((a) => a.table_id === tableId);
+  const assignedElsewhere = new Set(assignments.map((a) => a.room_id));
+  const availableRooms = rooms.filter((r) => !assignedElsewhere.has(r.id));
+
+  function handleAdd() {
+    if (!newRoomId) return;
+    startTransition(async () => {
+      const result = await setTableRoomAssignment(date, tableId, newRoomId, Number(newGuestCount) || 0);
+      if (result?.error) toast.error(result.error);
+      else {
+        setNewRoomId("");
+        setNewGuestCount("1");
+        router.refresh();
+      }
+    });
+  }
+
+  function handleRemove(roomId: string) {
+    startTransition(async () => {
+      const result = await removeTableRoomAssignment(date, roomId);
+      if (result?.error) toast.error(result.error);
+      else router.refresh();
+    });
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">Suítes nesta mesa</Label>
+      {forThisTable.length > 0 && (
+        <div className="space-y-1">
+          {forThisTable.map((a) => (
+            <div
+              key={a.room_id}
+              className="flex items-center justify-between gap-2 rounded bg-muted px-2 py-1 text-xs"
+            >
+              <span>
+                Suíte {roomById.get(a.room_id)?.number ?? "—"} · {a.guest_count} hóspede
+                {a.guest_count === 1 ? "" : "s"}
+              </span>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => handleRemove(a.room_id)}
+                className="text-muted-foreground hover:text-destructive"
+                aria-label="Remover suíte desta mesa"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {availableRooms.length > 0 && (
+        <div className="flex items-center gap-1.5">
+          <Select value={newRoomId} onValueChange={(v) => setNewRoomId(v ?? "")} disabled={isPending}>
+            <SelectTrigger className="h-7 flex-1 text-xs">
+              <SelectValue placeholder="Suíte" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableRooms.map((r) => (
+                <SelectItem key={r.id} value={r.id}>
+                  Suíte {r.number}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            type="number"
+            min={0}
+            className="h-7 w-14 text-xs"
+            value={newGuestCount}
+            onChange={(e) => setNewGuestCount(e.target.value)}
+          />
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="outline"
+            disabled={isPending || !newRoomId}
+            onClick={handleAdd}
+          >
+            <Plus size={12} />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

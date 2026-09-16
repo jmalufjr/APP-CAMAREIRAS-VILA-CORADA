@@ -20,6 +20,9 @@ export async function setRoomTask(date: string, roomId: string, taskType: Checkl
   }
 
   // A camareira escolhe o quarto depois; a tarefa nasce sem responsável.
+  // stays_locked = true: escolha manual do admin tem preferência sobre a
+  // sincronização com a Stays para esse quarto/dia (PRD_regrasdenegocio.md
+  // seção 1) — a rotina de sincronização não sobrescreve esta linha.
   const { data: task, error } = await supabase
     .from("daily_room_tasks")
     .insert({
@@ -27,6 +30,7 @@ export async function setRoomTask(date: string, roomId: string, taskType: Checkl
       room_id: roomId,
       task_type: taskType,
       created_by: user?.id,
+      stays_locked: true,
     })
     .select()
     .single();

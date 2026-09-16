@@ -16,7 +16,7 @@ export default async function QuartosPage() {
     <div className="space-y-6">
       <BackLink href="/checklists" />
       <PageHeader
-        title="Quartos"
+        title="Suítes"
         subtitle="Gerencie a lista de suítes da pousada."
         action={<RoomFormDialog />}
       />

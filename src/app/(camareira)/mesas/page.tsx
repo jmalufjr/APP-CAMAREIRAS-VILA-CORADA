@@ -1,29 +1,50 @@
 import { createClient } from "@/lib/supabase/server";
-import type { BreakfastTable, DailyBreakfastSettings } from "@/lib/types";
+import type { BreakfastTable, DailyBreakfastSettings, DailyBreakfastRoomAssignment, Room } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
-import { TableLayoutCanvas } from "@/components/shared/table-layout-canvas";
+import { TableLayoutCanvas, type TableRoomAssignment } from "@/components/shared/table-layout-canvas";
 import { TableNotesList } from "@/components/shared/table-notes-list";
 import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 
+function toTableRooms(
+  assignments: DailyBreakfastRoomAssignment[],
+  rooms: Room[]
+): Record<string, TableRoomAssignment[]> {
+  const numberByRoomId = new Map(rooms.map((r) => [r.id, r.number]));
+  const map: Record<string, TableRoomAssignment[]> = {};
+  assignments.forEach((a) => {
+    const list = map[a.table_id] ?? [];
+    list.push({ roomNumber: numberByRoomId.get(a.room_id) ?? "—", guestCount: a.guest_count });
+    map[a.table_id] = list;
+  });
+  return map;
+}
+
 export default async function MesasViewPage() {
   const supabase = await createClient();
   const [
     { data: tables },
+    { data: rooms },
     { data: todayRows },
     { data: tomorrowRows },
     { data: todaySettings },
     { data: tomorrowSettings },
+    { data: todayAssignments },
+    { data: tomorrowAssignments },
   ] = await Promise.all([
     supabase.from("breakfast_tables").select("*").eq("active", true).order("created_at"),
+    supabase.from("rooms").select("*").eq("active", true).order("position"),
     supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", todayKey()),
     supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", tomorrowKey()),
     supabase.from("daily_breakfast_settings").select("*").eq("date", todayKey()).maybeSingle(),
     supabase.from("daily_breakfast_settings").select("*").eq("date", tomorrowKey()).maybeSingle(),
+    supabase.from("daily_breakfast_room_assignments").select("*").eq("date", todayKey()),
+    supabase.from("daily_breakfast_room_assignments").select("*").eq("date", tomorrowKey()),
   ]);
 
   const tableList = (tables ?? []) as BreakfastTable[];
+  const roomList = (rooms ?? []) as Room[];
   const labelById = new Map(tableList.map((t) => [t.id, t.label]));
 
   const todayMap = Object.fromEntries((todayRows ?? []).map((r) => [r.table_id, r.guest_count]));
@@ -42,13 +63,21 @@ export default async function MesasViewPage() {
         <TabsContent value="hoje" className="pt-4 space-y-4">
           <p className="text-sm capitalize text-muted-foreground">{formatDatePt(todayKey())}</p>
           <DaySettingsInfo settings={todaySettings as DailyBreakfastSettings | null} />
-          <TableLayoutCanvas tables={tableList} guestCounts={todayMap} />
+          <TableLayoutCanvas
+            tables={tableList}
+            guestCounts={todayMap}
+            tableRooms={toTableRooms((todayAssignments ?? []) as DailyBreakfastRoomAssignment[], roomList)}
+          />
           <TableNotesList rows={todayNotes} labelById={labelById} />
         </TabsContent>
         <TabsContent value="amanha" className="pt-4 space-y-4">
           <p className="text-sm capitalize text-muted-foreground">{formatDatePt(tomorrowKey())}</p>
           <DaySettingsInfo settings={tomorrowSettings as DailyBreakfastSettings | null} />
-          <TableLayoutCanvas tables={tableList} guestCounts={tomorrowMap} />
+          <TableLayoutCanvas
+            tables={tableList}
+            guestCounts={tomorrowMap}
+            tableRooms={toTableRooms((tomorrowAssignments ?? []) as DailyBreakfastRoomAssignment[], roomList)}
+          />
           <TableNotesList rows={tomorrowNotes} labelById={labelById} />
         </TabsContent>
       </Tabs>

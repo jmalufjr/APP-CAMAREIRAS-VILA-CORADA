@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 export async function createRoom(formData: FormData) {
   const number = String(formData.get("number") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim() || null;
-  if (!number) return { error: "Informe o número do quarto." };
+  if (!number) return { error: "Informe o número da suíte." };
 
   const supabase = await createClient();
   const { data: max } = await supabase

@@ -37,7 +37,10 @@ create table rooms (
   name text,
   active boolean not null default true,
   position int not null default 0,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Mapeamento pro "listing" correspondente na API da Stays (ver
+  -- README.md seção 6.3 e PRD_regrasdenegocio.md).
+  stays_listing_id text unique
 );
 
 -- ---------- CHECKLIST ITEMS (catálogo global de itens) ----------
@@ -116,6 +119,10 @@ create table daily_room_tasks (
   created_by uuid references profiles(id),
   cancelled_by uuid references profiles(id) on delete set null,
   cancelled_at timestamptz,
+  -- true quando o admin definiu/alterou manualmente o tipo de trabalho
+  -- deste quarto neste dia: a sincronização com a Stays não sobrescreve
+  -- (PRD_regrasdenegocio.md seção 1).
+  stays_locked boolean not null default false,
   unique (date, room_id, task_type)
 );
 
@@ -152,20 +159,47 @@ create table daily_breakfast (
   notes text,
   value_per_table_snapshot numeric(10,2) not null default 10.00,
   created_at timestamptz not null default now(),
+  stays_locked boolean not null default false,
   unique (date, table_id)
+);
+
+-- ---------- DAILY BREAKFAST ROOM ASSIGNMENTS (suíte(s) alocada(s) em cada mesa) ----------
+-- Uma suíte só pode estar em uma mesa por dia; a Mesa 7 (maior capacidade)
+-- pode receber mais de uma suíte — ver PRD_regrasdenegocio.md seção 4.
+-- Complementa daily_breakfast (guest_count da mesa continua manual, não
+-- somado automaticamente a partir daqui nesta primeira versão).
+create table daily_breakfast_room_assignments (
+  id uuid primary key default uuid_generate_v4(),
+  date date not null,
+  table_id uuid not null references breakfast_tables(id) on delete cascade,
+  room_id uuid not null references rooms(id) on delete cascade,
+  guest_count int not null default 0 check (guest_count >= 0),
+  created_at timestamptz not null default now(),
+  unique (date, room_id)
 );
 
 -- ---------- DAILY BREAKFAST SETTINGS (total de mesas + observação geral do dia) ----------
 -- Configuração de dia inteiro (não por mesa), definida pelo admin e exibida
 -- para a camareira acima do layout de mesas; complementa daily_breakfast.
+-- Campos "tables_*"/"guests_table_07" e stays_locked: ver integração com a
+-- Stays em PRD_regrasdenegocio.md seção 4 — total_tables continua o valor
+-- oficial, os quatro campos "tables_*"/"guests_table_07" são o detalhamento
+-- calculado pela regra de distribuição de mesas.
 create table daily_breakfast_settings (
   date date primary key,
   total_tables int not null default 0,
   notes text,
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  tables_1_guest int not null default 0,
+  tables_2_guest int not null default 0,
+  tables_3_guest int not null default 0,
+  guests_table_07 int not null default 0,
+  stays_locked boolean not null default false
 );
 
 -- ---------- DAILY ARRIVALS (chegadas previstas do dia) ----------
+-- nights/guest_count: sincronizáveis com a Stays (PRD seção 3);
+-- expected_time/notes nunca são tocados pela sincronização, de propósito.
 create table daily_arrivals (
   id uuid primary key default uuid_generate_v4(),
   date date not null,
@@ -175,10 +209,14 @@ create table daily_arrivals (
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  nights int,
+  guest_count int,
+  stays_locked boolean not null default false,
   unique (date, room_id)
 );
 
 -- ---------- DAILY DEPARTURES (saídas previstas do dia) ----------
+-- notes nunca é tocado pela sincronização, de propósito.
 create table daily_departures (
   id uuid primary key default uuid_generate_v4(),
   date date not null,
@@ -186,6 +224,7 @@ create table daily_departures (
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  stays_locked boolean not null default false,
   unique (date, room_id)
 );
 
@@ -342,6 +381,7 @@ alter table daily_room_tasks enable row level security;
 alter table daily_room_task_checks enable row level security;
 alter table daily_room_task_occurrences enable row level security;
 alter table daily_breakfast enable row level security;
+alter table daily_breakfast_room_assignments enable row level security;
 alter table daily_breakfast_settings enable row level security;
 alter table daily_arrivals enable row level security;
 alter table daily_departures enable row level security;
@@ -587,6 +627,12 @@ create policy "db_select_authenticated" on daily_breakfast for select using (aut
 create policy "db_admin_write" on daily_breakfast for insert with check (is_admin());
 create policy "db_admin_update" on daily_breakfast for update using (is_admin());
 create policy "db_admin_delete" on daily_breakfast for delete using (is_admin());
+
+-- daily_breakfast_room_assignments: everyone authenticated reads; only admin writes
+create policy "dbra_select_authenticated" on daily_breakfast_room_assignments for select using (auth.uid() is not null);
+create policy "dbra_admin_write" on daily_breakfast_room_assignments for insert with check (is_admin());
+create policy "dbra_admin_update" on daily_breakfast_room_assignments for update using (is_admin());
+create policy "dbra_admin_delete" on daily_breakfast_room_assignments for delete using (is_admin());
 
 -- daily_breakfast_settings: everyone authenticated reads; only admin writes
 create policy "dbs_select_authenticated" on daily_breakfast_settings for select using (auth.uid() is not null);

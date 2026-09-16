@@ -36,7 +36,7 @@ export default async function TarefasPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Meus quartos" subtitle={`Trabalhos de hoje, ${formatDatePt(date)}`} />
+      <PageHeader title="Minhas suítes" subtitle={`Trabalhos de hoje, ${formatDatePt(date)}`} />
       <TasksBoard
         profile={profile}
         today={date}

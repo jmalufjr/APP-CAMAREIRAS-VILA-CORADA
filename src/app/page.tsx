@@ -18,7 +18,7 @@ const features = [
   {
     icon: LayoutDashboard,
     title: "Dashboard",
-    text: "Resumo do dia, totais mensais e histórico completo de quartos, mesas e comissões.",
+    text: "Resumo do dia, totais mensais e histórico completo de suítes, mesas e comissões.",
   },
   {
     icon: Users,

@@ -47,11 +47,11 @@ const adminNav: NavItem[] = [
 ];
 
 const camareiraNav: NavItem[] = [
-  { href: "/tarefas", label: "Meus quartos", icon: ClipboardList },
+  { href: "/tarefas", label: "Minhas suítes", icon: ClipboardList },
   { href: "/mesas", label: "Mesas do café", icon: Coffee },
   { href: "/chegadas-saidas", label: "Chegadas & saídas", icon: CalendarClock },
   { href: "/comanda", label: "Comanda", icon: Martini },
-  { href: "/bar-piscina", label: "Consumo por quartos", icon: Wine },
+  { href: "/bar-piscina", label: "Consumo por suítes", icon: Wine },
 ];
 
 const manutencaoNav: NavItem[] = [

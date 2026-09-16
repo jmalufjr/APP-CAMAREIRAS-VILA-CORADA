@@ -78,7 +78,7 @@ function DayLists({
                 <Card key={a.id}>
                   <CardContent>
                     <p className="font-medium text-sm">
-                      Quarto {roomMap.get(a.room_id) ?? "—"} · {a.guest_name}
+                      Suíte {roomMap.get(a.room_id) ?? "—"} · {a.guest_name}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {a.expected_time ? `Previsto para ${a.expected_time.slice(0, 5)}` : "Horário não informado"}
@@ -102,7 +102,7 @@ function DayLists({
               {departures.map((d) => (
                 <Card key={d.id}>
                   <CardContent>
-                    <p className="font-medium text-sm">Quarto {roomMap.get(d.room_id) ?? "—"}</p>
+                    <p className="font-medium text-sm">Suíte {roomMap.get(d.room_id) ?? "—"}</p>
                     {d.notes && <p className="text-xs text-muted-foreground mt-1">{d.notes}</p>}
                   </CardContent>
                 </Card>

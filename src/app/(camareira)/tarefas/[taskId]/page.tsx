@@ -43,7 +43,7 @@ export default async function TaskDetailPage({
     <div className="space-y-6">
       <BackLink href="/tarefas" />
       <PageHeader
-        title={`Quarto ${room.number}`}
+        title={`Suíte ${room.number}`}
         subtitle={`Checklist de ${TASK_TYPE_LABELS[task.task_type as ChecklistType].toLowerCase()}`}
       />
       <ChecklistDetail

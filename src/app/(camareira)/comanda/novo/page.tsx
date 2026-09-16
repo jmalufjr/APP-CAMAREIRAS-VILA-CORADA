@@ -15,7 +15,7 @@ export default async function NovoPedidoPage() {
   return (
     <div className="space-y-6">
       <BackLink href="/comanda" />
-      <PageHeader title="Novo pedido" subtitle="Selecione o quarto e as quantidades de cada item." />
+      <PageHeader title="Novo pedido" subtitle="Selecione a suíte e as quantidades de cada item." />
       <ComandaForm mode="create" poolbarItems={(poolbarItems ?? []) as PoolbarItem[]} rooms={rooms} />
     </div>
   );

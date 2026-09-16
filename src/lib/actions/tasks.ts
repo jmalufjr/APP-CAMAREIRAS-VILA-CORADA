@@ -20,7 +20,7 @@ export async function claimTask(taskId: string) {
     .maybeSingle();
 
   if (error) return { error: error.message };
-  if (!data) return { error: "Este quarto já foi escolhido por outra camareira." };
+  if (!data) return { error: "Esta suíte já foi escolhida por outra camareira." };
 
   revalidatePath("/tarefas", "layout");
   revalidatePath("/planejamento");

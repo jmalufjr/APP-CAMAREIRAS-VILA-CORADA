@@ -53,7 +53,7 @@ export function PlanningBoard({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Quarto</TableHead>
+            <TableHead>Suíte</TableHead>
             <TableHead>Trabalho do dia</TableHead>
             <TableHead>Camareira responsável</TableHead>
             <TableHead>Status</TableHead>

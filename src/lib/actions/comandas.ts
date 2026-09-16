@@ -16,7 +16,7 @@ function revalidateComandaPaths() {
 }
 
 export async function submitComanda(roomId: string, items: ComandaItemInput[]) {
-  if (!roomId) return { error: "Selecione o quarto." };
+  if (!roomId) return { error: "Selecione a suíte." };
   const validItems = items.filter((i) => i.quantity > 0);
   if (validItems.length === 0) return { error: "Selecione ao menos um item com quantidade." };
 
@@ -32,7 +32,7 @@ export async function submitComanda(roomId: string, items: ComandaItemInput[]) {
 }
 
 export async function editComanda(comandaId: string, roomId: string, items: ComandaItemInput[]) {
-  if (!roomId) return { error: "Selecione o quarto." };
+  if (!roomId) return { error: "Selecione a suíte." };
   const validItems = items.filter((i) => i.quantity > 0);
   if (validItems.length === 0) return { error: "Selecione ao menos um item com quantidade." };
 

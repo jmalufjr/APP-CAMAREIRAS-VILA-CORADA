@@ -21,7 +21,7 @@ export default async function OcorrenciasPage() {
     <div className="space-y-6">
       <PageHeader
         title="Ocorrências Manutenção e observações"
-        subtitle="Detalhes de hoje e de ontem, por quarto."
+        subtitle="Detalhes de hoje e de ontem, por suíte."
         action={
           <Link
             href="/ocorrencias/historico"

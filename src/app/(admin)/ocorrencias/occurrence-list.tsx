@@ -30,7 +30,7 @@ export function OccurrenceList({ items }: { items: DayTaskRow[] }) {
         <Card key={t.id}>
           <CardContent className="space-y-2">
             <p className="font-medium text-sm">
-              Quarto {t.rooms?.number ?? "—"} · {TASK_TYPE_LABELS[t.task_type]}
+              Suíte {t.rooms?.number ?? "—"} · {TASK_TYPE_LABELS[t.task_type]}
             </p>
             <p className="text-xs text-muted-foreground">Camareira: {t.profiles?.name ?? "—"}</p>
             {t.daily_room_task_occurrences?.length > 0 && (

@@ -25,6 +25,7 @@ export interface Room {
   active: boolean;
   position: number;
   created_at: string;
+  stays_listing_id: string | null;
 }
 
 export interface ChecklistItem {
@@ -70,11 +71,25 @@ export interface CommissionSettings {
   updated_at: string;
 }
 
+export interface DailyBreakfastRoomAssignment {
+  id: string;
+  date: string;
+  table_id: string;
+  room_id: string;
+  guest_count: number;
+  created_at: string;
+}
+
 export interface DailyBreakfastSettings {
   date: string;
   total_tables: number;
   notes: string | null;
   updated_at: string;
+  tables_1_guest: number;
+  tables_2_guest: number;
+  tables_3_guest: number;
+  guests_table_07: number;
+  stays_locked: boolean;
 }
 
 export interface ReceiptSettings {
@@ -98,6 +113,7 @@ export interface DailyRoomTask {
   created_by: string | null;
   cancelled_by: string | null;
   cancelled_at: string | null;
+  stays_locked: boolean;
 }
 
 export interface DailyRoomTaskCheck {
@@ -129,6 +145,7 @@ export interface DailyBreakfast {
   notes: string | null;
   value_per_table_snapshot: number;
   created_at: string;
+  stays_locked: boolean;
 }
 
 export interface DailyArrival {
@@ -140,6 +157,9 @@ export interface DailyArrival {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  nights: number | null;
+  guest_count: number | null;
+  stays_locked: boolean;
 }
 
 export interface DailyDeparture {
@@ -149,6 +169,7 @@ export interface DailyDeparture {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  stays_locked: boolean;
 }
 
 export interface MaintenanceCategory {

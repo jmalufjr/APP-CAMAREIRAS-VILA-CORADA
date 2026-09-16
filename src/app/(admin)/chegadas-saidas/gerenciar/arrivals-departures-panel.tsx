@@ -57,7 +57,7 @@ export function ArrivalsDeparturesPanel({
             <div key={a.id} className="rounded-lg border border-border p-3 flex items-start justify-between gap-3">
               <div>
                 <p className="font-medium text-sm">
-                  Quarto {roomById.get(a.room_id)?.number ?? "—"} · {a.guest_name}
+                  Suíte {roomById.get(a.room_id)?.number ?? "—"} · {a.guest_name}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {a.expected_time ? `Previsto para ${a.expected_time.slice(0, 5)}` : "Horário não informado"}
@@ -90,7 +90,7 @@ export function ArrivalsDeparturesPanel({
           {departures.map((d) => (
             <div key={d.id} className="rounded-lg border border-border p-3 flex items-start justify-between gap-3">
               <div>
-                <p className="font-medium text-sm">Quarto {roomById.get(d.room_id)?.number ?? "—"}</p>
+                <p className="font-medium text-sm">Suíte {roomById.get(d.room_id)?.number ?? "—"}</p>
                 {d.notes && <p className="text-xs text-muted-foreground mt-1">{d.notes}</p>}
               </div>
               <div className="flex gap-1 shrink-0">
@@ -159,7 +159,7 @@ function ArrivalFormDialog({
         >
           {!isEdit && (
             <div className="space-y-2">
-              <Label htmlFor="room_id">Quarto</Label>
+              <Label htmlFor="room_id">Suíte</Label>
               <select
                 id="room_id"
                 name="room_id"
@@ -168,14 +168,14 @@ function ArrivalFormDialog({
               >
                 {rooms.map((r) => (
                   <option key={r.id} value={r.id}>
-                    Quarto {r.number}
+                    Suíte {r.number}
                   </option>
                 ))}
               </select>
             </div>
           )}
           {isEdit && (
-            <p className="text-sm text-muted-foreground">Quarto {rooms.find((r) => r.id === arrival.room_id)?.number}</p>
+            <p className="text-sm text-muted-foreground">Suíte {rooms.find((r) => r.id === arrival.room_id)?.number}</p>
           )}
           <div className="space-y-2">
             <Label htmlFor="guest_name">Nome do hóspede</Label>
@@ -256,7 +256,7 @@ function DepartureFormDialog({
         >
           {!isEdit && (
             <div className="space-y-2">
-              <Label htmlFor="room_id_dep">Quarto</Label>
+              <Label htmlFor="room_id_dep">Suíte</Label>
               <select
                 id="room_id_dep"
                 name="room_id"
@@ -265,7 +265,7 @@ function DepartureFormDialog({
               >
                 {rooms.map((r) => (
                   <option key={r.id} value={r.id}>
-                    Quarto {r.number}
+                    Suíte {r.number}
                   </option>
                 ))}
               </select>
@@ -273,7 +273,7 @@ function DepartureFormDialog({
           )}
           {isEdit && (
             <p className="text-sm text-muted-foreground">
-              Quarto {rooms.find((r) => r.id === departure.room_id)?.number}
+              Suíte {rooms.find((r) => r.id === departure.room_id)?.number}
             </p>
           )}
           <div className="space-y-2">

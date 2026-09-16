@@ -128,7 +128,7 @@ export function ChecklistDetail({
     <div className="space-y-6">
       {isReleased && (
         <div className="flex items-center gap-2 rounded-lg bg-accent text-accent-foreground px-4 py-3 text-sm">
-          <CheckCircle2 size={18} /> Quarto liberado.
+          <CheckCircle2 size={18} /> Suíte liberada.
         </div>
       )}
 
@@ -305,13 +305,13 @@ export function ChecklistDetail({
                   const result = await releaseTask(task.id, notes);
                   if (result?.error) toast.error(result.error);
                   else {
-                    toast.success("Quarto liberado.");
+                    toast.success("Suíte liberada.");
                     router.refresh();
                   }
                 })
               }
             >
-              {allChecked ? "Liberar quarto" : "Marque todos os itens para liberar"}
+              {allChecked ? "Liberar suíte" : "Marque todos os itens para liberar"}
             </Button>
           </CardContent>
         </Card>

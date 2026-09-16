@@ -21,7 +21,7 @@ export function ConsumoQuartosPanel({
   minibarItems: MinibarItem[];
 }) {
   if (overview.length === 0) {
-    return <p className="text-sm text-muted-foreground py-8 text-center">Nenhum quarto ativo cadastrado.</p>;
+    return <p className="text-sm text-muted-foreground py-8 text-center">Nenhuma suíte ativa cadastrada.</p>;
   }
 
   return (
@@ -57,7 +57,7 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
     <AccordionItem value={room.room_id}>
       <AccordionTrigger>
         <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <span className="font-heading text-base">Quarto {room.room_number}</span>
+          <span className="font-heading text-base">Suíte {room.room_number}</span>
           {room.status === "fechada" && <Badge variant="secondary">Conta fechada</Badge>}
           {room.status === "reaberta" && <Badge variant="outline">Conta reaberta</Badge>}
         </span>
@@ -114,7 +114,7 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
                   </div>
                 ))}
                 {room.poolbarItems.length === 0 && (
-                  <p className="text-sm text-muted-foreground py-2">Nenhuma comanda ativa para este quarto.</p>
+                  <p className="text-sm text-muted-foreground py-2">Nenhuma comanda ativa para esta suíte.</p>
                 )}
               </div>
             </div>

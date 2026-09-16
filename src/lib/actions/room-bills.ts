@@ -324,9 +324,9 @@ async function sendReceiptEmail(billId: string): Promise<boolean> {
     const { error } = await resend.emails.send({
       from: process.env.RECEIPT_FROM_EMAIL ?? "Vila Corada <recibos@consumos.vilacorada.com.br>",
       to: accountingEmail,
-      subject: `Conta paga — Quarto ${data.room_number}`,
-      text: `Segue em anexo o recibo da conta paga do quarto ${data.room_number}.`,
-      attachments: [{ filename: `conta-quarto-${data.room_number}.pdf`, content: pdfBuffer }],
+      subject: `Conta paga — Suíte ${data.room_number}`,
+      text: `Segue em anexo o recibo da conta paga da suíte ${data.room_number}.`,
+      attachments: [{ filename: `conta-suite-${data.room_number}.pdf`, content: pdfBuffer }],
     });
     return !error;
   } catch {

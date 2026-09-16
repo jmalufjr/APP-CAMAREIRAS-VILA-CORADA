@@ -14,7 +14,7 @@ export async function createArrival(date: string, formData: FormData) {
   const expected_time = String(formData.get("expected_time") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
-  if (!room_id || !guest_name) return { error: "Selecione o quarto e informe o nome do hóspede." };
+  if (!room_id || !guest_name) return { error: "Selecione a suíte e informe o nome do hóspede." };
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -23,7 +23,7 @@ export async function createArrival(date: string, formData: FormData) {
 
   if (error) {
     if (error.code === "23505") {
-      return { error: "Já existe uma chegada cadastrada para este quarto nesta data. Edite-a." };
+      return { error: "Já existe uma chegada cadastrada para esta suíte nesta data. Edite-a." };
     }
     return { error: error.message };
   }
@@ -61,14 +61,14 @@ export async function createDeparture(date: string, formData: FormData) {
   const room_id = String(formData.get("room_id") ?? "");
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
-  if (!room_id) return { error: "Selecione o quarto." };
+  if (!room_id) return { error: "Selecione a suíte." };
 
   const supabase = await createClient();
   const { error } = await supabase.from("daily_departures").insert({ date, room_id, notes });
 
   if (error) {
     if (error.code === "23505") {
-      return { error: "Já existe uma saída cadastrada para este quarto nesta data. Edite-a." };
+      return { error: "Já existe uma saída cadastrada para esta suíte nesta data. Edite-a." };
     }
     return { error: error.message };
   }

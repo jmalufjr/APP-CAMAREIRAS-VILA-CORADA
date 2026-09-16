@@ -165,6 +165,57 @@ garante que esse código nunca é enviado ao navegador. Não crie nenhum
 componente `"use client"` que importe `admin.ts` ou leia
 `process.env.SUPABASE_SERVICE_ROLE_KEY` diretamente.
 
+## 6. Integração com a Stays (reservas)
+
+A partir de setembro/2026 o app passou a consumir dados de reserva da API
+externa da Stays (sistema de reservas da pousada) — ver
+`PRD_regrasdenegocio.md` pras regras completas de como esses dados viram
+planejamento diário, chegadas/saídas e mesas do café.
+
+### 6.1 Obter as credenciais
+
+No painel da Stays (`https://SUA-CONTA.stays.net`):
+**App Center → Todos os Apps Disponíveis → API Externo → Chaves da API**.
+Essa tela mostra:
+
+- **URL do sistema** — o subdomínio da própria conta (ex.:
+  `https://jmj.stays.net`). A API é acessada em
+  `{URL do sistema}/external/v1/...` — **não** existe um host genérico
+  compartilhado da Stays, cada conta usa o próprio subdomínio.
+- **Login** e **Senha**, na seção "Autorização" — são o `client_id`/
+  `client_secret` usados na autenticação Basic Auth da API (`curl -u
+  "login:senha" ...`), apesar do nome "Login/Senha" sugerir outra coisa.
+
+### 6.2 Variáveis de ambiente
+
+```
+STAYS_BASE_URL=https://sua-conta.stays.net
+STAYS_CLIENT_ID=login-mostrado-na-tela-de-chaves-da-api
+STAYS_CLIENT_SECRET=senha-mostrada-na-tela-de-chaves-da-api
+```
+
+Mesmas três variáveis em `.env.local` (dev local) e `.env.local.cloud`
+(backup de produção) — a conta Stays é a mesma independente de qual
+Supabase o app está usando. Quando a integração for pro ar, essas três
+também precisam ser adicionadas na Vercel (seção 5, mesmo processo das
+demais).
+
+### 6.3 Mapeamento quarto ↔ listing da Stays
+
+Cada quarto do app corresponde a um "listing" na Stays. A conta da pousada
+tem exatamente 11 listings, nomeados "Suite 01" a "Suite 11" — o número já
+bate exatamente com o número do quarto no app (`rooms.number`), sem
+ambiguidade. O identificador usado (`rooms.stays_listing_id`, coluna
+adicionada por `supabase/migrations/029_stays_listing_ids.sql`) é o campo
+`_id` retornado por `GET /external/v1/content/listings` (formato longo,
+tipo `678819a8124ceee95d3c8cbb`) — é esse mesmo valor que aparece no campo
+`_idlisting` de cada reserva. **Não** confundir com o campo curto `id`
+(tipo `RI01I`), que é só um código interno da Stays.
+
+Se a pousada adicionar/remover uma suíte no futuro, é preciso repetir essa
+consulta e atualizar `stays_listing_id` do quarto correspondente
+manualmente (não há descoberta automática desse mapeamento).
+
 ## Fonte de títulos "The Seasons"
 
 O PRD pede a fonte paga **The Seasons** para títulos. Como o arquivo da fonte

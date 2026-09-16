@@ -101,8 +101,8 @@ export default async function OcorrenciasHistoricoPage() {
                 <TableHead>Data</TableHead>
                 <TableHead>Total de ocorrências manutenção</TableHead>
                 <TableHead>Resolvidas</TableHead>
-                <TableHead>Quartos com ocorrência</TableHead>
-                <TableHead>Quartos com observação</TableHead>
+                <TableHead>Suítes com ocorrência</TableHead>
+                <TableHead>Suítes com observação</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

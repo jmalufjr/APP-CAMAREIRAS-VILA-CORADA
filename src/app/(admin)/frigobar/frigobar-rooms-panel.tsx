@@ -29,7 +29,7 @@ export function FrigobarRoomsPanel({
       <div className="space-y-2">
         <p className="text-sm font-medium">Contas em aberto ou fechadas</p>
         {overview.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4 text-center">Nenhum quarto ativo cadastrado.</p>
+          <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma suíte ativa cadastrada.</p>
         ) : (
           <Accordion className="space-y-2">
             {overview.map((room) => (
@@ -118,7 +118,7 @@ function PaidBillAccordionItem({ bill }: { bill: RecentlyPaidBill }) {
     <AccordionItem value={bill.bill_id}>
       <AccordionTrigger>
         <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <span className="font-heading text-base">Quarto {bill.room_number}</span>
+          <span className="font-heading text-base">Suíte {bill.room_number}</span>
           <span className="text-xs text-muted-foreground">Paga em {formatDateTimePt(bill.paid_at)}</span>
           {!bill.receiptEmailSent && <Badge variant="destructive">E-mail não enviado</Badge>}
         </span>
@@ -222,7 +222,7 @@ function RoomAccordionItem({ room }: { room: RoomBillOverview }) {
     <AccordionItem value={room.room_id}>
       <AccordionTrigger>
         <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <span className="font-heading text-base">Quarto {room.room_number}</span>
+          <span className="font-heading text-base">Suíte {room.room_number}</span>
           {room.status === "fechada" && <Badge variant="secondary">Conta fechada</Badge>}
           {room.status === "reaberta" && <Badge variant="outline">Conta reaberta</Badge>}
         </span>

@@ -28,7 +28,7 @@ export function ComandasList({ comandas }: { comandas: ComandaListItem[] }) {
           >
             <div className="min-w-0">
               <p className="text-sm font-medium">
-                Comanda #{c.sequence_number} · Quarto {c.room_number}
+                Comanda #{c.sequence_number} · Suíte {c.room_number}
               </p>
               <p className="text-xs text-muted-foreground truncate">Última ação: {c.last_action_by_name}</p>
             </div>

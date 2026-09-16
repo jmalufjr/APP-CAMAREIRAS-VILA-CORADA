@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { BreakfastTable, CommissionSettings, DailyBreakfastSettings } from "@/lib/types";
+import type { BreakfastTable, CommissionSettings, DailyBreakfastSettings, Room } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
 import { todayKey, tomorrowKey } from "@/lib/date";
 import { GuestsAdminPanel } from "./guests-admin-panel";
@@ -8,18 +8,24 @@ export default async function GerenciarMesasPage() {
   const supabase = await createClient();
   const [
     { data: tables },
+    { data: rooms },
     { data: settings },
     { data: todayRows },
     { data: tomorrowRows },
     { data: todaySettings },
     { data: tomorrowSettings },
+    { data: todayAssignments },
+    { data: tomorrowAssignments },
   ] = await Promise.all([
     supabase.from("breakfast_tables").select("*").order("created_at", { ascending: true }),
+    supabase.from("rooms").select("*").eq("active", true).order("position"),
     supabase.from("commission_settings").select("*").single(),
     supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", todayKey()),
     supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", tomorrowKey()),
     supabase.from("daily_breakfast_settings").select("*").eq("date", todayKey()).maybeSingle(),
     supabase.from("daily_breakfast_settings").select("*").eq("date", tomorrowKey()).maybeSingle(),
+    supabase.from("daily_breakfast_room_assignments").select("*").eq("date", todayKey()),
+    supabase.from("daily_breakfast_room_assignments").select("*").eq("date", tomorrowKey()),
   ]);
 
   return (
@@ -30,6 +36,7 @@ export default async function GerenciarMesasPage() {
       />
       <GuestsAdminPanel
         tables={(tables ?? []) as BreakfastTable[]}
+        rooms={(rooms ?? []) as Room[]}
         commission={settings as CommissionSettings}
         todayCounts={Object.fromEntries((todayRows ?? []).map((r) => [r.table_id, r.guest_count]))}
         tomorrowCounts={Object.fromEntries((tomorrowRows ?? []).map((r) => [r.table_id, r.guest_count]))}
@@ -37,6 +44,8 @@ export default async function GerenciarMesasPage() {
         tomorrowNotes={Object.fromEntries((tomorrowRows ?? []).map((r) => [r.table_id, r.notes ?? ""]))}
         todaySettings={todaySettings as DailyBreakfastSettings | null}
         tomorrowSettings={tomorrowSettings as DailyBreakfastSettings | null}
+        todayAssignments={todayAssignments ?? []}
+        tomorrowAssignments={tomorrowAssignments ?? []}
       />
     </div>
   );

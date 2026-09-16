@@ -62,7 +62,7 @@ function ReceiptDocument({ data }: { data: ReceiptData }) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <Text style={styles.title}>Vila Corada — Conta do Quarto {data.room_number}</Text>
+        <Text style={styles.title}>Vila Corada — Conta da Suíte {data.room_number}</Text>
         <Text style={styles.subtitle}>Pagamento registrado em {formatDateTimePt(data.paid_at)}</Text>
 
         <Text style={styles.sectionTitle}>Frigobar</Text>

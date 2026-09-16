@@ -64,7 +64,7 @@ export async function setMinibarConsumption(roomId: string, itemId: string, quan
 
   const bill = await getOrCreateCurrentBill(supabase, roomId);
   if (bill.status === "fechada") {
-    return { error: "A conta deste quarto está fechada. Não é possível registrar consumo." };
+    return { error: "A conta desta suíte está fechada. Não é possível registrar consumo." };
   }
 
   const { data: item } = await supabase.from("minibar_items").select("price").eq("id", itemId).single();

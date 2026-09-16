@@ -4,14 +4,24 @@ import { useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { BreakfastTable } from "@/lib/types";
 
+export interface TableRoomAssignment {
+  roomNumber: string;
+  guestCount: number;
+}
+
 interface Props {
   tables: BreakfastTable[];
   guestCounts?: Record<string, number>;
+  // Suíte(s) alocada(s) em cada mesa (Mesa 7 pode ter mais de uma — ver
+  // PRD_regrasdenegocio.md seção 4). Quando ausente para uma mesa, cai de
+  // volta pro total simples de `guestCounts` (compatibilidade com dias/
+  // mesas que ainda não têm suíte associada).
+  tableRooms?: Record<string, TableRoomAssignment[]>;
   editable?: boolean;
   onPositionsChange?: (positions: { id: string; pos_x: number; pos_y: number }[]) => void;
 }
 
-export function TableLayoutCanvas({ tables, guestCounts, editable, onPositionsChange }: Props) {
+export function TableLayoutCanvas({ tables, guestCounts, tableRooms, editable, onPositionsChange }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>(() =>
     Object.fromEntries(tables.map((t) => [t.id, { x: t.pos_x, y: t.pos_y }]))
@@ -54,22 +64,40 @@ export function TableLayoutCanvas({ tables, guestCounts, editable, onPositionsCh
         {tables.map((t) => {
           const pos = positions[t.id] ?? { x: t.pos_x, y: t.pos_y };
           const count = guestCounts?.[t.id] ?? 0;
+          const rooms = tableRooms?.[t.id] ?? [];
+          const occupied = count > 0;
           return (
             <div
               key={t.id}
               onPointerDown={() => handlePointerDown(t.id)}
               className={cn(
-                "absolute flex flex-col items-center justify-center text-secondary-foreground bg-secondary shadow-sm select-none",
-                "dark:bg-[#F9F9F7] dark:text-primary-foreground",
+                "absolute flex flex-col items-center justify-center gap-0.5 shadow-sm select-none overflow-hidden",
+                // Mesas ocupadas ficam na tonalidade mais clara possível,
+                // em contraste com as vagas (mais escuras) — pedido do
+                // proprietário para identificar ocupação de relance.
+                occupied
+                  ? "bg-secondary/30 text-secondary-foreground dark:bg-[#F9F9F7] dark:text-primary-foreground"
+                  : "bg-secondary text-secondary-foreground dark:bg-secondary dark:text-secondary-foreground",
                 t.shape === "round" ? "rounded-full" : t.shape === "square" ? "rounded-md" : "rounded-2xl",
                 editable && "cursor-move active:cursor-grabbing"
               )}
               style={{ left: pos.x, top: pos.y, width: t.width, height: t.height }}
             >
               <span className="text-xs font-medium">{t.label}</span>
-              {guestCounts && (
-                <span className="text-[11px] opacity-90">{count} hóspede{count === 1 ? "" : "s"}</span>
-              )}
+              {rooms.length > 0
+                ? rooms.map((r) => (
+                    <div key={r.roomNumber} className="flex flex-col items-center leading-tight">
+                      <span className="text-[11px] font-medium opacity-90">Suíte {r.roomNumber}</span>
+                      <span className="text-[10px] opacity-80">
+                        {r.guestCount} hóspede{r.guestCount === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                  ))
+                : guestCounts && (
+                    <span className="text-[11px] opacity-90">
+                      {count} hóspede{count === 1 ? "" : "s"}
+                    </span>
+                  )}
             </div>
           );
         })}

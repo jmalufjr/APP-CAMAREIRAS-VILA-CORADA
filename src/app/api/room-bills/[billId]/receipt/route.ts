@@ -25,7 +25,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ bil
   return new NextResponse(new Uint8Array(pdf), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="conta-quarto-${data.room_number}.pdf"`,
+      "Content-Disposition": `inline; filename="conta-suite-${data.room_number}.pdf"`,
     },
   });
 }

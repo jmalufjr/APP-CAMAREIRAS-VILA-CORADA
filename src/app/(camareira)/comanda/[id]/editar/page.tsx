@@ -19,7 +19,7 @@ export default async function EditarComandaPage({ params }: { params: Promise<{ 
   return (
     <div className="space-y-6">
       <BackLink href="/comanda" />
-      <PageHeader title="Editar comanda" subtitle="Altere as quantidades, o quarto ou cancele o pedido." />
+      <PageHeader title="Editar comanda" subtitle="Altere as quantidades, a suíte ou cancele o pedido." />
       <ComandaForm
         mode="edit"
         comandaId={id}

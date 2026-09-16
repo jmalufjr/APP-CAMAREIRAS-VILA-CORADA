@@ -124,6 +124,38 @@ export async function setTableNotes(date: string, tableId: string, notes: string
   return { success: true };
 }
 
+// Associa uma suíte a uma mesa do café num dia (com sua quantidade de
+// hóspedes) — a Mesa 7 pode receber mais de uma suíte (ver
+// PRD_regrasdenegocio.md seção 4). Uma suíte só pode estar em uma mesa por
+// dia (upsert por date+room_id: escolher a suíte de novo, numa mesa
+// diferente, move-a em vez de duplicar).
+export async function setTableRoomAssignment(date: string, tableId: string, roomId: string, guestCount: number) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("daily_breakfast_room_assignments").upsert(
+    { date, table_id: tableId, room_id: roomId, guest_count: Math.max(0, Math.floor(guestCount) || 0) },
+    { onConflict: "date,room_id" }
+  );
+
+  if (error) return { error: error.message };
+  revalidatePath("/mesas/gerenciar");
+  revalidatePath("/mesas");
+  return { success: true };
+}
+
+export async function removeTableRoomAssignment(date: string, roomId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("daily_breakfast_room_assignments")
+    .delete()
+    .eq("date", date)
+    .eq("room_id", roomId);
+
+  if (error) return { error: error.message };
+  revalidatePath("/mesas/gerenciar");
+  revalidatePath("/mesas");
+  return { success: true };
+}
+
 export async function setBreakfastDaySettings(date: string, totalTables: number, notes: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("daily_breakfast_settings").upsert(

@@ -50,12 +50,12 @@ export function RoomsTable({ rooms }: { rooms: Room[] }) {
                   size="icon"
                   disabled={isPending}
                   onClick={() => {
-                    if (!confirm(`Excluir o quarto ${room.number}?`)) return;
+                    if (!confirm(`Excluir a suíte ${room.number}?`)) return;
                     startTransition(async () => {
                       const result = await deleteRoom(room.id);
                       if (result?.error) toast.error(result.error);
                       else {
-                        toast.success("Quarto excluído.");
+                        toast.success("Suíte excluída.");
                         router.refresh();
                       }
                     });
@@ -69,7 +69,7 @@ export function RoomsTable({ rooms }: { rooms: Room[] }) {
           {rooms.length === 0 && (
             <TableRow>
               <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                Nenhum quarto cadastrado.
+                Nenhuma suíte cadastrada.
               </TableCell>
             </TableRow>
           )}

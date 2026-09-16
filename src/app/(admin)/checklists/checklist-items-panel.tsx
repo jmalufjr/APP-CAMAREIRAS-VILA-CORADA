@@ -93,7 +93,7 @@ export function ChecklistItemsPanel({
                   <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
                 )}
                 <p className="text-xs text-muted-foreground mt-1">
-                  {(assignmentMap[item.id]?.length ?? 0)} de {rooms.length} quartos
+                  {(assignmentMap[item.id]?.length ?? 0)} de {rooms.length} suítes
                 </p>
               </div>
             </div>
@@ -210,7 +210,7 @@ function ItemFormDialog({
             </div>
           )}
           <div className="space-y-2">
-            <Label>Quartos que usam este item</Label>
+            <Label>Suítes que usam este item</Label>
             <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto border border-border rounded-lg p-3">
               {rooms.map((room) => (
                 <label key={room.id} className="flex items-center gap-1.5 text-sm">

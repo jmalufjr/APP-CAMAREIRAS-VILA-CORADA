@@ -67,7 +67,7 @@ export function ComandaForm({
   function handleSubmit() {
     if (isLocked) return;
     if (!roomId) {
-      toast.error("Selecione o quarto.");
+      toast.error("Selecione a suíte.");
       return;
     }
     if (!hasAnyQuantity) {
@@ -148,15 +148,15 @@ export function ComandaForm({
 
       <div className="sticky bottom-0 -mx-4 border-t border-border bg-background px-4 py-3 space-y-3 sm:mx-0 sm:rounded-lg sm:border">
         <div className="max-w-xs space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Quarto</label>
+          <label className="text-xs font-medium text-muted-foreground">Suíte</label>
           <Select value={roomId} onValueChange={(v) => setRoomId(v ?? "")} disabled={isPending || isLocked}>
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Selecione o quarto" />
+              <SelectValue placeholder="Selecione a suíte" />
             </SelectTrigger>
             <SelectContent>
               {rooms.map((room) => (
                 <SelectItem key={room.room_id} value={room.room_id} disabled={room.billStatus === "fechada"}>
-                  Quarto {room.room_number}
+                  Suíte {room.room_number}
                   {room.billStatus === "fechada" ? " (conta fechada)" : ""}
                 </SelectItem>
               ))}

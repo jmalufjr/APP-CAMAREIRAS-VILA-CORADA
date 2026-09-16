@@ -124,7 +124,7 @@ export default async function DashboardPage() {
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           icon={BedDouble}
-          label="Quartos concluídos hoje"
+          label="Suítes concluídas hoje"
           value={`${doneToday} / ${totalToday}`}
         />
         <StatCard
@@ -164,13 +164,13 @@ export default async function DashboardPage() {
       <div className="grid lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle className="font-heading text-lg">Quartos de hoje</CardTitle>
+            <CardTitle className="font-heading text-lg">Suítes de hoje</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {(todayTasks ?? []).map((t) => (
               <div key={t.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border last:border-0">
                 <span>
-                  Quarto {(t as unknown as { rooms: { number: string } }).rooms.number} ·{" "}
+                  Suíte {(t as unknown as { rooms: { number: string } }).rooms.number} ·{" "}
                   {TASK_TYPE_LABELS[t.task_type as ChecklistType]}
                 </span>
                 <Badge variant={t.status === "concluido" ? "default" : "secondary"}>
@@ -179,19 +179,19 @@ export default async function DashboardPage() {
               </div>
             ))}
             {(todayTasks ?? []).length === 0 && (
-              <p className="text-sm text-muted-foreground py-4">Nenhum quarto planejado para hoje.</p>
+              <p className="text-sm text-muted-foreground py-4">Nenhuma suíte planejada para hoje.</p>
             )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="font-heading text-lg">Quartos de amanhã</CardTitle>
+            <CardTitle className="font-heading text-lg">Suítes de amanhã</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {(tomorrowTasks ?? []).map((t) => (
               <div key={t.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border last:border-0">
-                <span>Quarto {(t as unknown as { rooms: { number: string } }).rooms.number}</span>
+                <span>Suíte {(t as unknown as { rooms: { number: string } }).rooms.number}</span>
                 <Badge variant="outline">{TASK_TYPE_LABELS[t.task_type as ChecklistType]}</Badge>
               </div>
             ))}

@@ -18,12 +18,12 @@ export default async function FrigobarPage() {
     <div className="space-y-6">
       <PageHeader
         title="Consumo de Bar e Frigobar"
-        subtitle="Consulta de consumo de frigobar e do bar da piscina por quarto — fechar conta, reabrir e registrar pagamento agora são ações da camareira."
+        subtitle="Consulta de consumo de frigobar e do bar da piscina por suíte — fechar conta, reabrir e registrar pagamento agora são ações da camareira."
       />
       <Tabs defaultValue="comandas">
         <TabsList>
           <TabsTrigger value="comandas">Lista de comandas do bar</TabsTrigger>
-          <TabsTrigger value="quartos">Consumo por quartos</TabsTrigger>
+          <TabsTrigger value="quartos">Consumo por suítes</TabsTrigger>
         </TabsList>
         <TabsContent value="comandas" className="pt-4">
           <ComandasListPanel activeComandas={activeComandas} inactiveComandas={inactiveComandas} />

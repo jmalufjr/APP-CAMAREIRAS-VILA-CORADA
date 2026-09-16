@@ -48,7 +48,7 @@ export function OccurrenceWorkList({
             <CardContent className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <p className="font-medium text-sm">
-                  Quarto {o.room_number} · {TASK_TYPE_LABELS[o.task_type]}
+                  Suíte {o.room_number} · {TASK_TYPE_LABELS[o.task_type]}
                 </p>
                 <Badge variant={o.status === "pendente" ? "secondary" : "default"}>
                   {STATUS_LABELS[o.status]}

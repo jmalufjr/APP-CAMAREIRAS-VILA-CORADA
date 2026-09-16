@@ -24,7 +24,7 @@ export function ServiceLogTable({ rows }: { rows: ServiceLogRow[] }) {
       <TableHeader>
         <TableRow>
           <TableHead>Data</TableHead>
-          <TableHead>Quarto</TableHead>
+          <TableHead>Suíte</TableHead>
           <TableHead>Tipo</TableHead>
           <TableHead>Camareira</TableHead>
         </TableRow>

@@ -37,7 +37,7 @@ export function TasksBoard({
         ))}
         {todayTasks.length === 0 && (
           <p className="text-muted-foreground text-sm py-8 col-span-2 text-center">
-            Nenhum quarto planejado para hoje.
+            Nenhuma suíte planejada para hoje.
           </p>
         )}
       </div>
@@ -53,7 +53,7 @@ export function TasksBoard({
         <h2 className="font-heading text-lg text-primary">Disponíveis para escolher</h2>
         {availableToday.length === 0 && pastAvailableTasks.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Nenhum quarto disponível no momento — todos já foram escolhidos.
+            Nenhuma suíte disponível no momento — todas já foram escolhidas.
           </p>
         ) : (
           <div className="space-y-6">
@@ -82,9 +82,9 @@ export function TasksBoard({
       </section>
 
       <section className="space-y-3">
-        <h2 className="font-heading text-lg text-primary">Meus quartos</h2>
+        <h2 className="font-heading text-lg text-primary">Minhas suítes</h2>
         {mine.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Você ainda não escolheu nenhum quarto hoje.</p>
+          <p className="text-sm text-muted-foreground">Você ainda não escolheu nenhuma suíte hoje.</p>
         ) : (
           <div className="grid sm:grid-cols-2 gap-4">
             {mine.map((task) => (
@@ -109,7 +109,7 @@ function AvailableTaskCard({ task, isPast }: { task: TaskWithRoom; isPast?: bool
             <BedDouble size={18} />
           </div>
           <div className="min-w-0">
-            <p className="font-medium">Quarto {task.rooms.number}</p>
+            <p className="font-medium">Suíte {task.rooms.number}</p>
             <p className="text-xs text-muted-foreground">
               {TASK_TYPE_LABELS[task.task_type]}
               {isPast && ` · ${formatDateShortPt(task.date)}`}
@@ -146,7 +146,7 @@ function AvailableTaskCard({ task, isPast }: { task: TaskWithRoom; isPast?: bool
                 const result = await claimTask(task.id);
                 if (result?.error) toast.error(result.error);
                 else {
-                  toast.success("Quarto escolhido!");
+                  toast.success("Suíte escolhida!");
                   router.push(`/tarefas/${task.id}`);
                 }
               })
@@ -170,7 +170,7 @@ function TaskCard({ task, today, href }: { task: TaskWithRoom; today: string; hr
             <BedDouble size={18} />
           </div>
           <div className="min-w-0">
-            <p className="font-medium">Quarto {task.rooms.number}</p>
+            <p className="font-medium">Suíte {task.rooms.number}</p>
             <p className="text-xs text-muted-foreground">
               {TASK_TYPE_LABELS[task.task_type]}
               {isPast && ` · ${formatDateShortPt(task.date)}`}

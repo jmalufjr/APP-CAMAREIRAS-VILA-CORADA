@@ -35,14 +35,14 @@ export function RoomFormDialog({ room }: { room?: Room }) {
             </Button>
           ) : (
             <Button>
-              <Plus size={16} /> Novo quarto
+              <Plus size={16} /> Nova suíte
             </Button>
           )
         }
       />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar quarto" : "Novo quarto"}</DialogTitle>
+          <DialogTitle>{isEdit ? "Editar suíte" : "Nova suíte"}</DialogTitle>
         </DialogHeader>
         <form
           action={(formData) => {
@@ -53,7 +53,7 @@ export function RoomFormDialog({ room }: { room?: Room }) {
               if (result?.error) {
                 toast.error(result.error);
               } else {
-                toast.success(isEdit ? "Quarto atualizado." : "Quarto criado.");
+                toast.success(isEdit ? "Suíte atualizada." : "Suíte criada.");
                 setOpen(false);
                 router.refresh();
               }

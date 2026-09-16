@@ -24,7 +24,7 @@ const menuItems = [
   { href: "/checklists/somente_chegada", label: TASK_TYPE_LABELS.somente_chegada, icon: LogIn },
   { href: "/checklists/ocorrencias", label: "Ocorrências Manutenção", icon: Wrench },
   { href: "/checklists/manutencao-preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
-  { href: "/checklists/quartos", label: "Quartos", icon: BedDouble },
+  { href: "/checklists/quartos", label: "Suítes", icon: BedDouble },
   { href: "/checklists/frigobar", label: "Consumo de Frigobar", icon: Wine },
   { href: "/checklists/poolbar", label: "Bar da Piscina", icon: Martini },
   { href: "/checklists/mesas", label: "Layout & mesas", icon: Coffee },
