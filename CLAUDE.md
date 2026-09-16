@@ -47,9 +47,13 @@ Resumo Executivo (Parte 10); a primeira fase da integração com a API de
 reservas da Stays, sincronizando o Planejamento Diário (Parte 11,
 `PRD_regrasdenegocio.md`); a renomeação "Quarto" → "Suíte" em todo o app e
 a alocação de suítes por mesa no layout do café, com tonalidade mais clara
-para mesas ocupadas (Parte 12); e a extensão da sincronização com a Stays
+para mesas ocupadas (Parte 12); a extensão da sincronização com a Stays
 para Chegadas & Saídas (com busca do nome do hóspede) e Mesas do Café (com
-o algoritmo de distribuição por proximidade da vista do mar) — Parte 13.
+o algoritmo de distribuição por proximidade da vista do mar) — Parte 13; e,
+por fim, a automação por Vercel Cron (sincronização automática diária, sem
+sobrescrever edições do admin), a transformação dos três botões manuais em
+sincronização **forçada** (ignora as edições do admin de propósito) e a
+tela dos 4 campos de contagem por tamanho de mesa — Parte 14.
 
 ## Onde está
 
@@ -764,6 +768,74 @@ também é feita em Server Components.
       `daily_breakfast_settings` (quantidade de mesas de 1/2/3 hóspedes,
       hóspedes na Mesa 07) — as colunas já existem (Parte 11) mas ainda não
       têm sincronização nem tela de edição própria.
+21. **Parte 14 — Cron de sincronização automática, sincronização manual
+    forçada e UI dos 4 campos de contagem de mesas** (16/09/2026, feita
+    direto em `main`, pós parte 13):
+    - **Sincronização automática por Vercel Cron**: novo endpoint
+      `src/app/api/cron/stays-sync/route.ts` (GET) chama, em sequência,
+      `syncStaysPlanning`, `syncStaysArrivalsDepartures` e
+      `syncStaysBreakfastTables` **sem** `force` — ou seja, respeita a
+      regra de preferência normalmente, exatamente como se fosse mais um
+      clique nos três botões antigos. Configurado em `vercel.json`
+      (`crons: [{ path: "/api/cron/stays-sync", schedule: "0 9 * * *" }]`
+      — todo dia às 9h UTC, ~6h em Brasília, antes do início do
+      expediente). Protegido pelo padrão recomendado pela própria Vercel:
+      checa `Authorization: Bearer ${CRON_SECRET}`, responde 401 sem essa
+      variável configurada ou com valor errado — nunca roda "aberto".
+      **Assumido plano Hobby** (nenhum "team" encontrado na conta Vercel
+      via API): só 1 execução por dia é garantida nesse plano; se o
+      proprietário estiver num plano Pro, pode editar `vercel.json` pra
+      rodar com mais frequência (ex.: `"0 * * * *"`, de hora em hora).
+    - **`src/lib/supabase/middleware.ts` (proxy)**: `/api/cron/*`
+      adicionado ao `isPublic` — sem isso, o proxy redirecionaria a
+      chamada do Vercel Cron (que não manda cookie de sessão nenhum) pra
+      `/login` antes mesmo de chegar no endpoint. A autenticação de quem
+      pode chamar essa rota passa a ser inteiramente o `CRON_SECRET`, não
+      mais a sessão do Supabase.
+    - **`CRON_SECRET` gerado e gravado** em `.env.local`/`.env.local.cloud`
+      (valor aleatório de 32 bytes) — **ainda precisa ser adicionado
+      manualmente nas variáveis de ambiente do projeto na Vercel**
+      (Settings → Environment Variables → Production, e Redeploy depois),
+      do contrário o cron sempre vai falhar com 401 em produção (o app
+      local/testes continuam funcionando normalmente sem isso, já que só
+      afeta esse endpoint específico).
+    - **Os três botões "Sincronizar com a Stays" viraram "Forçar
+      sincronização com a Stays"**: agora chamam as três Server Actions
+      com `{ force: true }` (novo parâmetro `SyncOptions` em
+      `src/lib/actions/stays-sync.ts`) — passam a **ignorar**
+      `stays_locked` em vez de respeitá-lo, sobrescrevendo qualquer edição
+      manual do admin com os dados atuais da Stays. Cada botão tem um
+      `confirm()` explicando isso antes de executar (mesmo padrão já usado
+      pelo `DeleteButton` de Chegadas & Saídas). **O que `force` nunca
+      ignora**: um serviço do Planejamento Diário já reivindicado
+      (`assigned_to` preenchido) ou fora do status `pendente` — isso é
+      trabalho em curso de uma camareira, não a "preferência de edição do
+      admin" que o botão força; continua protegido em qualquer cenário.
+    - **Os 4 campos de contagem por tamanho de mesa ganharam sincronização
+      e tela** (pendência apontada na Parte 13): `syncStaysBreakfastTables`
+      agora também calcula, a partir do mesmo resultado do algoritmo de
+      distribuição, quantas mesas ficaram com exatamente 1/2/3 hóspedes e
+      quantos hóspedes têm na Mesa 07 (`tableNumber`, exportada de
+      `derive-breakfast.ts`, identifica a Mesa 07 pelo rótulo), e grava em
+      `daily_breakfast_settings` respeitando o `stays_locked` da própria
+      linha de configurações do dia. Nova Server Action
+      `setBreakfastTableCounts` (`src/lib/actions/tables.ts`) grava a
+      edição manual do admin, marcando `stays_locked = true` — diferente
+      de `setBreakfastDaySettings` (total de mesas + observação do dia),
+      que nunca toca esse campo, pois nenhum dos dois vem da Stays. Na UI
+      (`guests-admin-panel.tsx`), os 4 campos aparecem exatamente na
+      ordem pedida: logo abaixo de "Total de mesas", logo acima de
+      "Observação do dia". Na tela da camareira (`(camareira)/mesas/page.tsx`),
+      aparecem só leitura, na mesma posição.
+    - **Testado localmente**: sincronização forçada sobre um valor travado
+      manualmente (`stays_locked = true` + valor divergente gravado direto
+      no banco) confirmou que uma chamada sem `force` preserva o valor
+      travado, e a mesma chamada com `force: true` sobrescreve com o valor
+      correto e destrava a linha (`stays_locked` volta a `false`) — mesmo
+      truque de rota de API temporária já usado nas partes anteriores,
+      removida depois do teste. O endpoint de cron também foi testado
+      diretamente (401 sem `Authorization`/com valor errado, 200 com o
+      `CRON_SECRET` certo, sincronizando as três telas numa só chamada).
 
 ## Convenções e decisões importantes
 
@@ -1077,8 +1149,13 @@ o escopo mude no futuro.
   `src/lib/actions/stays-sync.ts` é quem efetivamente grava no banco:
   `syncStaysPlanning` (Planejamento Diário), `syncStaysArrivalsDepartures`
   (Chegadas & Saídas) e `syncStaysBreakfastTables` (Mesas do Café), todas
-  via cliente admin/service-role — cada uma com seu próprio botão
-  "Sincronizar com a Stays" na tela correspondente.
+  via cliente admin/service-role, todas aceitando `{ force?: boolean }`
+  (Parte 14) — sem `force`, respeitam `stays_locked` normalmente; com
+  `force: true`, ignoram (mas nunca ignoram um serviço já reivindicado por
+  uma camareira). Cada uma tem seu próprio botão "Forçar sincronização com
+  a Stays" na tela correspondente (sempre `force: true`) **e** roda
+  automaticamente 1x/dia via `src/app/api/cron/stays-sync/route.ts` +
+  `vercel.json` (sempre sem `force`) — ver Parte 14.
 - `src/lib/task-type.ts` — rótulos centralizados dos tipos de trabalho
   (Arrumação/Preparação Chegada/Troca) — mudar aqui reflete em todo o app.
 - `src/components/shared/back-link.tsx` — link "← Voltar" reutilizável,

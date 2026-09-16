@@ -8,9 +8,11 @@ import {
   setGuestCount,
   setTableNotes,
   setBreakfastDaySettings,
+  setBreakfastTableCounts,
   setTableRoomAssignment,
   removeTableRoomAssignment,
   updateCommissionValue,
+  type BreakfastTableCounts,
 } from "@/lib/actions/tables";
 import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
 import { Button } from "@/components/ui/button";
@@ -216,10 +218,23 @@ function GuestCountEditor({
 
   const [totalTables, setTotalTables] = useState(String(daySettings?.total_tables ?? 0));
   const [dayNotes, setDayNotes] = useState(daySettings?.notes ?? "");
+  const [tableCounts, setTableCounts] = useState<BreakfastTableCounts>({
+    tables_1_guest: daySettings?.tables_1_guest ?? 0,
+    tables_2_guest: daySettings?.tables_2_guest ?? 0,
+    tables_3_guest: daySettings?.tables_3_guest ?? 0,
+    guests_table_07: daySettings?.guests_table_07 ?? 0,
+  });
 
   function saveDaySettings(nextTotal: string, nextNotes: string) {
     startTransition(async () => {
       const result = await setBreakfastDaySettings(date, Number(nextTotal), nextNotes);
+      if (result?.error) toast.error(result.error);
+    });
+  }
+
+  function saveTableCounts(next: BreakfastTableCounts) {
+    startTransition(async () => {
+      const result = await setBreakfastTableCounts(date, next);
       if (result?.error) toast.error(result.error);
     });
   }
@@ -252,6 +267,34 @@ function GuestCountEditor({
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="max-w-sm space-y-3">
+        {(
+          [
+            ["tables_1_guest", "Quantidade de mesas de 1 hóspede"],
+            ["tables_2_guest", "Quantidade de mesas de 2 hóspedes"],
+            ["tables_3_guest", "Quantidade de mesas de 3 hóspedes"],
+            ["guests_table_07", "Quantidade de hóspedes na Mesa 07"],
+          ] as const
+        ).map(([field, fieldLabel]) => (
+          <div key={field} className="space-y-1.5">
+            <Label htmlFor={`${field}-${date}`} className="text-sm">
+              {fieldLabel}
+            </Label>
+            <Input
+              id={`${field}-${date}`}
+              type="number"
+              min={0}
+              className="w-24"
+              value={tableCounts[field]}
+              onChange={(e) =>
+                setTableCounts((c) => ({ ...c, [field]: Math.max(0, Number(e.target.value) || 0) }))
+              }
+              onBlur={() => saveTableCounts(tableCounts)}
+            />
+          </div>
+        ))}
       </div>
 
       <div className="max-w-sm space-y-1.5">

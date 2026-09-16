@@ -24,6 +24,17 @@ a que ele se refere**, voltando a sincronizar no dia seguinte a esse dia.
 "Amanhã", o padrão de visualização é sempre a aba **"Hoje"**, exceto na
 tela de **Mesas do Café**, cujo padrão é a aba **"Amanhã"**.
 
+**Sincronização automática e forçada** *(implementado em 16/09/2026 — ver
+CLAUDE.md Parte 14)*: além da sincronização automática por cron (que
+sempre respeita a regra de preferência acima), cada uma das três telas
+(Planejamento Diário, Chegadas & Saídas, Mesas do Café) tem um botão
+"Forçar sincronização com a Stays" — uma sincronização manual que
+**ignora** a regra de preferência e sobrescreve qualquer edição do admin
+com os dados atuais da Stays. Esse botão nunca sobrescreve, porém, um
+serviço do Planejamento Diário já reivindicado, em andamento, concluído ou
+cancelado por uma camareira — isso é trabalho em curso, não uma
+preferência de edição do admin, e nunca é descartado.
+
 ## 2. Planejamento Diário
 
 Regras para definir qual dos cinco tipos de trabalho se aplica a cada
@@ -120,12 +131,13 @@ usando o `_idclient` da reserva — ver CLAUDE.md Parte 13.)*
 O campo **"Observação"** de cada card de mesa é de edição exclusiva do
 admin, sem comprometer a sincronização dos demais campos.
 
-*(Nota de implementação, 16/09/2026: as colunas desses quatro campos já
-existem no banco (`daily_breakfast_settings`), mas a sincronização
-automática e a edição manual deles ainda não têm tela própria — só a
-alocação suíte↔mesa e o total de hóspedes por mesa sincronizam por
-enquanto, ver seção 5 e CLAUDE.md Parte 13. Pendente para uma próxima
-iteração, sem urgência identificada até aqui.)*
+*(Implementado em 16/09/2026 — ver CLAUDE.md Parte 14. Os quatro campos
+aparecem, nessa ordem, logo abaixo de "Total de mesas" e logo acima de
+"Observação do dia", tanto na tela do admin (editáveis) quanto na da
+camareira (somente leitura). Editar qualquer um deles trava a
+sincronização desse dia (regra de preferência da seção 1); editar "Total
+de mesas" ou "Observação do dia" nunca trava, pois nenhum dos dois vem da
+Stays.)*
 
 ### Regra de preenchimento das mesas (distribuição por suíte)
 

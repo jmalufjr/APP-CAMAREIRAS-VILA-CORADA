@@ -3,17 +3,28 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaysReservationsIncluding, getStaysClientName, type StaysReservationRaw } from "@/lib/stays/client";
 import { deriveWorkType, daysBetween } from "@/lib/stays/derive-planning";
-import { assignRoomsToTables, type RoomGuestCount } from "@/lib/stays/derive-breakfast";
+import { assignRoomsToTables, tableNumber, type RoomGuestCount } from "@/lib/stays/derive-breakfast";
 import { todayKey, tomorrowKey } from "@/lib/date";
 import { revalidatePath } from "next/cache";
+
+export interface SyncOptions {
+  // Sincronização forçada (botão manual): ignora a trava `stays_locked`
+  // (regra de preferência do admin, PRD_regrasdenegocio.md seção 1) e
+  // sobrescreve com os dados da Stays mesmo assim. Nunca ignora, porém, um
+  // serviço já reivindicado/em andamento/concluído/cancelado por uma
+  // camareira — isso não é "preferência de edição", é trabalho em curso.
+  force?: boolean;
+}
 
 // Sincroniza o Planejamento Diário (hoje + amanhã) com as reservas da
 // Stays — ver PRD_regrasdenegocio.md seções 1 e 2. Usa o client
 // admin/service-role de propósito: precisa gravar em daily_room_tasks
-// independente de sessão de usuário (essencial pra quando isso rodar via
-// cron, sem ninguém logado). Só a Server Action que chama esta função é
-// exposta pra UI — nenhum componente "use client" importa isto direto.
-export async function syncStaysPlanning() {
+// independente de sessão de usuário (essencial pro cron, que roda sem
+// ninguém logado — ver src/app/api/cron/stays-sync/route.ts). O cron
+// chama sem `force` (respeita a regra de preferência); o botão manual de
+// cada tela chama com `force: true`.
+export async function syncStaysPlanning(options?: SyncOptions) {
+  const force = options?.force ?? false;
   const supabase = createAdminClient();
   const dates = [todayKey(), tomorrowKey()];
 
@@ -57,9 +68,11 @@ export async function syncStaysPlanning() {
         .eq("room_id", room.id)
         .maybeSingle();
 
-      // Preferência do admin (stays_locked), ou quarto já escolhido/em
-      // andamento/concluído/cancelado por uma camareira: não mexe.
-      if (existing && (existing.stays_locked || existing.assigned_to || existing.status !== "pendente")) {
+      // Preferência do admin (stays_locked, ignorada se `force`), ou
+      // quarto já escolhido/em andamento/concluído/cancelado por uma
+      // camareira (nunca ignorado, nem com `force`): não mexe.
+      const lockedByAdmin = Boolean(existing?.stays_locked) && !force;
+      if (existing && (lockedByAdmin || existing.assigned_to || existing.status !== "pendente")) {
         skipped++;
         continue;
       }
@@ -112,7 +125,9 @@ export async function syncStaysPlanning() {
 // da reserva, precisa de uma chamada extra por cliente (com cache local
 // pra não repetir a mesma chamada quando o mesmo hóspede aparece em mais de
 // um quarto/dia, o que não deveria acontecer mas é barato de evitar).
-export async function syncStaysArrivalsDepartures() {
+// `force` (ver `SyncOptions`) ignora `stays_locked` em ambas as tabelas.
+export async function syncStaysArrivalsDepartures(options?: SyncOptions) {
+  const force = options?.force ?? false;
   const supabase = createAdminClient();
   const dates = [todayKey(), tomorrowKey()];
 
@@ -168,7 +183,7 @@ export async function syncStaysArrivalsDepartures() {
         .eq("room_id", room.id)
         .maybeSingle();
 
-      if (existingArrival?.stays_locked) {
+      if (existingArrival?.stays_locked && !force) {
         skipped++;
       } else if (checkingIn) {
         const guestName = await resolveGuestName(checkingIn._idclient);
@@ -199,7 +214,7 @@ export async function syncStaysArrivalsDepartures() {
         .eq("room_id", room.id)
         .maybeSingle();
 
-      if (existingDeparture?.stays_locked) {
+      if (existingDeparture?.stays_locked && !force) {
         skipped++;
       } else if (checkingOut) {
         if (!existingDeparture) {
@@ -220,14 +235,17 @@ export async function syncStaysArrivalsDepartures() {
   return { success: true, updated, skipped };
 }
 
-// Sincroniza a alocação suíte<->mesa e o total de hóspedes por mesa do café
-// (hoje + amanhã) com as reservas da Stays — ver PRD_regrasdenegocio.md
-// seção 4 (regra de preenchimento por proximidade da vista do mar,
-// implementada em src/lib/stays/derive-breakfast.ts). Suíte ocupada num dia
-// = reserva cujo check-in é antes desse dia e cujo check-out é nesse dia ou
-// depois (inclui quem sai naquele dia, já que ainda toma café antes de ir
-// embora; exclui quem chega naquele dia, que só terá café no dia seguinte).
-export async function syncStaysBreakfastTables() {
+// Sincroniza a alocação suíte<->mesa, o total de hóspedes por mesa e os 4
+// campos de contagem por tamanho de mesa (hoje + amanhã) com as reservas da
+// Stays — ver PRD_regrasdenegocio.md seção 4 (regra de preenchimento por
+// proximidade da vista do mar, implementada em
+// src/lib/stays/derive-breakfast.ts). Suíte ocupada num dia = reserva cujo
+// check-in é antes desse dia e cujo check-out é nesse dia ou depois (inclui
+// quem sai naquele dia, já que ainda toma café antes de ir embora; exclui
+// quem chega naquele dia, que só terá café no dia seguinte). `force` (ver
+// `SyncOptions`) ignora `stays_locked` nas três tabelas envolvidas.
+export async function syncStaysBreakfastTables(options?: SyncOptions) {
+  const force = options?.force ?? false;
   const supabase = createAdminClient();
   const dates = [todayKey(), tomorrowKey()];
 
@@ -278,14 +296,19 @@ export async function syncStaysBreakfastTables() {
     }
 
     // Suítes já travadas manualmente (admin reatribuiu) nesse dia: preserva
-    // a alocação delas e não as considera disponíveis pro algoritmo.
-    const { data: lockedAssignments } = await supabase
-      .from("daily_breakfast_room_assignments")
-      .select("room_id, table_id, guest_count")
-      .eq("date", date)
-      .eq("stays_locked", true);
+    // a alocação delas e não as considera disponíveis pro algoritmo — a
+    // menos que `force`, que trata como se nada estivesse travado.
+    let lockedAssignments: { room_id: string; table_id: string; guest_count: number }[] = [];
+    if (!force) {
+      const { data } = await supabase
+        .from("daily_breakfast_room_assignments")
+        .select("room_id, table_id, guest_count")
+        .eq("date", date)
+        .eq("stays_locked", true);
+      lockedAssignments = data ?? [];
+    }
 
-    const lockedRoomIds = new Set((lockedAssignments ?? []).map((a) => a.room_id));
+    const lockedRoomIds = new Set(lockedAssignments.map((a) => a.room_id));
     const roomsToAssign = occupied.filter((o) => !lockedRoomIds.has(o.roomId));
     skipped += lockedRoomIds.size;
 
@@ -294,20 +317,22 @@ export async function syncStaysBreakfastTables() {
       tables as { id: string; label: string; seats: number }[]
     );
 
-    // Remove alocações antigas não travadas que não fazem mais sentido hoje
-    // (suíte não está mais ocupada, ou o algoritmo mudou a mesa dela).
-    const { data: existingUnlocked } = await supabase
+    // Remove alocações antigas que não fazem mais sentido hoje (suíte não
+    // está mais ocupada, ou o algoritmo mudou a mesa dela) — só entre as
+    // não travadas, exceto com `force`, que reconsidera todas.
+    const existingQuery = supabase
       .from("daily_breakfast_room_assignments")
       .select("id, room_id, table_id")
-      .eq("date", date)
-      .eq("stays_locked", false);
+      .eq("date", date);
+    if (!force) existingQuery.eq("stays_locked", false);
+    const { data: existingRows } = await existingQuery;
 
     const desired = new Map<string, string>(); // room_id -> table_id
     assignment.forEach((roomsAtTable, tableId) => {
       roomsAtTable.forEach((r) => desired.set(r.roomId, tableId));
     });
 
-    for (const row of existingUnlocked ?? []) {
+    for (const row of existingRows ?? []) {
       if (desired.get(row.room_id) !== row.table_id) {
         await supabase.from("daily_breakfast_room_assignments").delete().eq("id", row.id);
       }
@@ -326,16 +351,28 @@ export async function syncStaysBreakfastTables() {
     // Total de hóspedes por mesa (soma das suítes ali, incluindo as
     // travadas) -> daily_breakfast.guest_count, respeitando seu próprio
     // stays_locked (edição manual direta do campo, sem passar pela
-    // alocação por suíte).
+    // alocação por suíte) — e os 4 campos de contagem por tamanho de mesa
+    // (PRD seção 4) em daily_breakfast_settings, do mesmo jeito.
     const totalsByTable = new Map<string, number>();
     assignment.forEach((roomsAtTable, tableId) => {
       totalsByTable.set(tableId, roomsAtTable.reduce((s, r) => s + r.guestCount, 0));
     });
-    (lockedAssignments ?? []).forEach((a) => {
+    lockedAssignments.forEach((a) => {
       totalsByTable.set(a.table_id, (totalsByTable.get(a.table_id) ?? 0) + a.guest_count);
     });
 
-    for (const table of tables as { id: string }[]) {
+    let tables1Guest = 0;
+    let tables2Guest = 0;
+    let tables3Guest = 0;
+    let guestsTable07 = 0;
+
+    for (const table of tables as { id: string; label: string }[]) {
+      const total = totalsByTable.get(table.id) ?? 0;
+      if (total === 1) tables1Guest++;
+      else if (total === 2) tables2Guest++;
+      else if (total === 3) tables3Guest++;
+      if (tableNumber(table.label) === 7) guestsTable07 = total;
+
       const { data: existingBreakfast } = await supabase
         .from("daily_breakfast")
         .select("id, stays_locked")
@@ -343,12 +380,35 @@ export async function syncStaysBreakfastTables() {
         .eq("table_id", table.id)
         .maybeSingle();
 
-      if (existingBreakfast?.stays_locked) continue;
+      if (existingBreakfast?.stays_locked && !force) continue;
 
-      const total = totalsByTable.get(table.id) ?? 0;
       const { error } = await supabase.from("daily_breakfast").upsert(
         { date, table_id: table.id, guest_count: total, stays_locked: false },
         { onConflict: "date,table_id" }
+      );
+      if (!error) updated++;
+    }
+
+    const { data: existingSettings } = await supabase
+      .from("daily_breakfast_settings")
+      .select("stays_locked")
+      .eq("date", date)
+      .maybeSingle();
+
+    if (existingSettings?.stays_locked && !force) {
+      skipped++;
+    } else {
+      const { error } = await supabase.from("daily_breakfast_settings").upsert(
+        {
+          date,
+          tables_1_guest: tables1Guest,
+          tables_2_guest: tables2Guest,
+          tables_3_guest: tables3Guest,
+          guests_table_07: guestsTable07,
+          stays_locked: false,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "date" }
       );
       if (!error) updated++;
     }

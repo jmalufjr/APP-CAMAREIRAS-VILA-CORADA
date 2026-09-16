@@ -23,7 +23,7 @@ const FILL_ORDER = [5, 9, 3, 4, 8, 2, 6];
 const MESA_1 = 1;
 const MESA_7 = 7;
 
-function tableNumber(label: string): number {
+export function tableNumber(label: string): number {
   const match = label.match(/\d+/);
   return match ? parseInt(match[0], 10) : -1;
 }

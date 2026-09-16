@@ -93,6 +93,14 @@ function DaySettingsInfo({ settings }: { settings: DailyBreakfastSettings | null
           <p className="text-sm font-medium">Total de mesas do café: {settings?.total_tables ?? 0}</p>
         </CardContent>
       </Card>
+      <Card>
+        <CardContent className="space-y-1">
+          <p className="text-sm">Quantidade de mesas de 1 hóspede: {settings?.tables_1_guest ?? 0}</p>
+          <p className="text-sm">Quantidade de mesas de 2 hóspedes: {settings?.tables_2_guest ?? 0}</p>
+          <p className="text-sm">Quantidade de mesas de 3 hóspedes: {settings?.tables_3_guest ?? 0}</p>
+          <p className="text-sm">Quantidade de hóspedes na Mesa 07: {settings?.guests_table_07 ?? 0}</p>
+        </CardContent>
+      </Card>
       {settings?.notes && (
         <Card>
           <CardContent>
