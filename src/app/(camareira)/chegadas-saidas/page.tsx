@@ -82,6 +82,10 @@ function DayLists({
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {a.expected_time ? `Previsto para ${a.expected_time.slice(0, 5)}` : "Horário não informado"}
+                      {(a.nights || a.guest_count) && " · "}
+                      {a.nights ? `${a.nights} noite${a.nights === 1 ? "" : "s"}` : null}
+                      {a.nights && a.guest_count ? " · " : null}
+                      {a.guest_count ? `${a.guest_count} hóspede${a.guest_count === 1 ? "" : "s"}` : null}
                     </p>
                     {a.notes && <p className="text-xs text-muted-foreground mt-1">{a.notes}</p>}
                   </CardContent>

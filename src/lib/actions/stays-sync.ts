@@ -1,8 +1,9 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getStaysReservationsIncluding, type StaysReservationRaw } from "@/lib/stays/client";
-import { deriveWorkType } from "@/lib/stays/derive-planning";
+import { getStaysReservationsIncluding, getStaysClientName, type StaysReservationRaw } from "@/lib/stays/client";
+import { deriveWorkType, daysBetween } from "@/lib/stays/derive-planning";
+import { assignRoomsToTables, type RoomGuestCount } from "@/lib/stays/derive-breakfast";
 import { todayKey, tomorrowKey } from "@/lib/date";
 import { revalidatePath } from "next/cache";
 
@@ -102,6 +103,259 @@ export async function syncStaysPlanning() {
 
   revalidatePath("/planejamento");
   revalidatePath("/tarefas");
+  revalidatePath("/dashboard");
+  return { success: true, updated, skipped };
+}
+
+// Sincroniza Chegadas & Saídas (hoje + amanhã) com as reservas da Stays —
+// ver PRD_regrasdenegocio.md seção 3. O nome do hóspede não vem no payload
+// da reserva, precisa de uma chamada extra por cliente (com cache local
+// pra não repetir a mesma chamada quando o mesmo hóspede aparece em mais de
+// um quarto/dia, o que não deveria acontecer mas é barato de evitar).
+export async function syncStaysArrivalsDepartures() {
+  const supabase = createAdminClient();
+  const dates = [todayKey(), tomorrowKey()];
+
+  const { data: rooms, error: roomsError } = await supabase
+    .from("rooms")
+    .select("id, stays_listing_id")
+    .eq("active", true)
+    .not("stays_listing_id", "is", null);
+
+  if (roomsError) return { error: roomsError.message };
+  if (!rooms || rooms.length === 0) {
+    return { error: "Nenhuma suíte com stays_listing_id configurado (ver README.md seção 6.3)." };
+  }
+
+  let reservations: StaysReservationRaw[];
+  try {
+    reservations = await getStaysReservationsIncluding(dates[0], dates[dates.length - 1]);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erro ao consultar a API da Stays." };
+  }
+
+  const byListing = new Map<string, StaysReservationRaw[]>();
+  reservations.forEach((r) => {
+    const list = byListing.get(r._idlisting) ?? [];
+    list.push(r);
+    byListing.set(r._idlisting, list);
+  });
+
+  const clientNameCache = new Map<string, string>();
+  async function resolveGuestName(clientId: string): Promise<string> {
+    const cached = clientNameCache.get(clientId);
+    if (cached) return cached;
+    const name = (await getStaysClientName(clientId).catch(() => null)) ?? "Hóspede";
+    clientNameCache.set(clientId, name);
+    return name;
+  }
+
+  let updated = 0;
+  let skipped = 0;
+
+  for (const date of dates) {
+    for (const room of rooms as { id: string; stays_listing_id: string }[]) {
+      const roomReservations = byListing.get(room.stays_listing_id) ?? [];
+      const checkingIn = roomReservations.find((r) => r.checkInDate === date);
+      const checkingOut = roomReservations.find((r) => r.checkOutDate === date);
+
+      // Chegadas: nome, noites e hóspedes vêm da Stays; horário
+      // previsto/observações nunca são tocados (upsert não os inclui).
+      const { data: existingArrival } = await supabase
+        .from("daily_arrivals")
+        .select("id, stays_locked")
+        .eq("date", date)
+        .eq("room_id", room.id)
+        .maybeSingle();
+
+      if (existingArrival?.stays_locked) {
+        skipped++;
+      } else if (checkingIn) {
+        const guestName = await resolveGuestName(checkingIn._idclient);
+        const nights = daysBetween(checkingIn.checkInDate, checkingIn.checkOutDate);
+        const { error } = await supabase.from("daily_arrivals").upsert(
+          {
+            date,
+            room_id: room.id,
+            guest_name: guestName,
+            nights,
+            guest_count: checkingIn.guests,
+            stays_locked: false,
+          },
+          { onConflict: "date,room_id" }
+        );
+        if (!error) updated++;
+      } else if (existingArrival) {
+        await supabase.from("daily_arrivals").delete().eq("id", existingArrival.id);
+        updated++;
+      }
+
+      // Saídas: só a existência da linha (a "suíte" com saída) é
+      // sincronizada — observações nunca são tocadas.
+      const { data: existingDeparture } = await supabase
+        .from("daily_departures")
+        .select("id, stays_locked")
+        .eq("date", date)
+        .eq("room_id", room.id)
+        .maybeSingle();
+
+      if (existingDeparture?.stays_locked) {
+        skipped++;
+      } else if (checkingOut) {
+        if (!existingDeparture) {
+          const { error } = await supabase
+            .from("daily_departures")
+            .insert({ date, room_id: room.id, stays_locked: false });
+          if (!error) updated++;
+        }
+      } else if (existingDeparture) {
+        await supabase.from("daily_departures").delete().eq("id", existingDeparture.id);
+        updated++;
+      }
+    }
+  }
+
+  revalidatePath("/chegadas-saidas/gerenciar");
+  revalidatePath("/chegadas-saidas");
+  return { success: true, updated, skipped };
+}
+
+// Sincroniza a alocação suíte<->mesa e o total de hóspedes por mesa do café
+// (hoje + amanhã) com as reservas da Stays — ver PRD_regrasdenegocio.md
+// seção 4 (regra de preenchimento por proximidade da vista do mar,
+// implementada em src/lib/stays/derive-breakfast.ts). Suíte ocupada num dia
+// = reserva cujo check-in é antes desse dia e cujo check-out é nesse dia ou
+// depois (inclui quem sai naquele dia, já que ainda toma café antes de ir
+// embora; exclui quem chega naquele dia, que só terá café no dia seguinte).
+export async function syncStaysBreakfastTables() {
+  const supabase = createAdminClient();
+  const dates = [todayKey(), tomorrowKey()];
+
+  const [
+    { data: rooms, error: roomsError },
+    { data: tables, error: tablesError },
+  ] = await Promise.all([
+    supabase
+      .from("rooms")
+      .select("id, stays_listing_id")
+      .eq("active", true)
+      .not("stays_listing_id", "is", null),
+    supabase.from("breakfast_tables").select("id, label, seats").eq("active", true),
+  ]);
+
+  if (roomsError) return { error: roomsError.message };
+  if (tablesError) return { error: tablesError.message };
+  if (!rooms || rooms.length === 0) {
+    return { error: "Nenhuma suíte com stays_listing_id configurado (ver README.md seção 6.3)." };
+  }
+  if (!tables || tables.length === 0) {
+    return { error: "Nenhuma mesa ativa cadastrada." };
+  }
+
+  let reservations: StaysReservationRaw[];
+  try {
+    reservations = await getStaysReservationsIncluding(dates[0], dates[dates.length - 1]);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erro ao consultar a API da Stays." };
+  }
+
+  const byListing = new Map<string, StaysReservationRaw[]>();
+  reservations.forEach((r) => {
+    const list = byListing.get(r._idlisting) ?? [];
+    list.push(r);
+    byListing.set(r._idlisting, list);
+  });
+
+  let updated = 0;
+  let skipped = 0;
+
+  for (const date of dates) {
+    const occupied: RoomGuestCount[] = [];
+    for (const room of rooms as { id: string; stays_listing_id: string }[]) {
+      const roomReservations = byListing.get(room.stays_listing_id) ?? [];
+      const staying = roomReservations.find((r) => r.checkInDate < date && date <= r.checkOutDate);
+      if (staying) occupied.push({ roomId: room.id, guestCount: staying.guests });
+    }
+
+    // Suítes já travadas manualmente (admin reatribuiu) nesse dia: preserva
+    // a alocação delas e não as considera disponíveis pro algoritmo.
+    const { data: lockedAssignments } = await supabase
+      .from("daily_breakfast_room_assignments")
+      .select("room_id, table_id, guest_count")
+      .eq("date", date)
+      .eq("stays_locked", true);
+
+    const lockedRoomIds = new Set((lockedAssignments ?? []).map((a) => a.room_id));
+    const roomsToAssign = occupied.filter((o) => !lockedRoomIds.has(o.roomId));
+    skipped += lockedRoomIds.size;
+
+    const assignment = assignRoomsToTables(
+      roomsToAssign,
+      tables as { id: string; label: string; seats: number }[]
+    );
+
+    // Remove alocações antigas não travadas que não fazem mais sentido hoje
+    // (suíte não está mais ocupada, ou o algoritmo mudou a mesa dela).
+    const { data: existingUnlocked } = await supabase
+      .from("daily_breakfast_room_assignments")
+      .select("id, room_id, table_id")
+      .eq("date", date)
+      .eq("stays_locked", false);
+
+    const desired = new Map<string, string>(); // room_id -> table_id
+    assignment.forEach((roomsAtTable, tableId) => {
+      roomsAtTable.forEach((r) => desired.set(r.roomId, tableId));
+    });
+
+    for (const row of existingUnlocked ?? []) {
+      if (desired.get(row.room_id) !== row.table_id) {
+        await supabase.from("daily_breakfast_room_assignments").delete().eq("id", row.id);
+      }
+    }
+
+    for (const [tableId, roomsAtTable] of assignment) {
+      for (const r of roomsAtTable) {
+        const { error } = await supabase.from("daily_breakfast_room_assignments").upsert(
+          { date, table_id: tableId, room_id: r.roomId, guest_count: r.guestCount, stays_locked: false },
+          { onConflict: "date,room_id" }
+        );
+        if (!error) updated++;
+      }
+    }
+
+    // Total de hóspedes por mesa (soma das suítes ali, incluindo as
+    // travadas) -> daily_breakfast.guest_count, respeitando seu próprio
+    // stays_locked (edição manual direta do campo, sem passar pela
+    // alocação por suíte).
+    const totalsByTable = new Map<string, number>();
+    assignment.forEach((roomsAtTable, tableId) => {
+      totalsByTable.set(tableId, roomsAtTable.reduce((s, r) => s + r.guestCount, 0));
+    });
+    (lockedAssignments ?? []).forEach((a) => {
+      totalsByTable.set(a.table_id, (totalsByTable.get(a.table_id) ?? 0) + a.guest_count);
+    });
+
+    for (const table of tables as { id: string }[]) {
+      const { data: existingBreakfast } = await supabase
+        .from("daily_breakfast")
+        .select("id, stays_locked")
+        .eq("date", date)
+        .eq("table_id", table.id)
+        .maybeSingle();
+
+      if (existingBreakfast?.stays_locked) continue;
+
+      const total = totalsByTable.get(table.id) ?? 0;
+      const { error } = await supabase.from("daily_breakfast").upsert(
+        { date, table_id: table.id, guest_count: total, stays_locked: false },
+        { onConflict: "date,table_id" }
+      );
+      if (!error) updated++;
+    }
+  }
+
+  revalidatePath("/mesas/gerenciar");
+  revalidatePath("/mesas");
   revalidatePath("/dashboard");
   return { success: true, updated, skipped };
 }

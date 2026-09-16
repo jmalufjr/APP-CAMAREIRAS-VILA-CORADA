@@ -45,9 +45,11 @@ Chegada" e configuração diária de mesas (Parte 09); serviços atrasados
 não somem mais da tela da camareira, cancelamento e um log de 7 dias no
 Resumo Executivo (Parte 10); a primeira fase da integração com a API de
 reservas da Stays, sincronizando o Planejamento Diário (Parte 11,
-`PRD_regrasdenegocio.md`); e, por fim, a renomeação "Quarto" → "Suíte" em
-todo o app e a alocação de suítes por mesa no layout do café, com
-tonalidade mais clara para mesas ocupadas (Parte 12).
+`PRD_regrasdenegocio.md`); a renomeação "Quarto" → "Suíte" em todo o app e
+a alocação de suítes por mesa no layout do café, com tonalidade mais clara
+para mesas ocupadas (Parte 12); e a extensão da sincronização com a Stays
+para Chegadas & Saídas (com busca do nome do hóspede) e Mesas do Café (com
+o algoritmo de distribuição por proximidade da vista do mar) — Parte 13.
 
 ## Onde está
 
@@ -654,14 +656,10 @@ também é feita em Server Components.
       camareira foi corretamente preservado (`skipped`), e os demais
       quartos receberam o tipo de trabalho certo, batendo com o cálculo
       feito à parte num script isolado antes da integração.
-    - **Ainda não implementado** (fases seguintes do PRD): sincronização
-      de Chegadas & Saídas (precisa também do nome do hóspede, que não vem
-      no payload da reserva — precisa de uma chamada extra em
-      `_idclient`/`GET .../booking/clients/{id}`, ainda não investigada),
-      Mesas do Café (total de mesas + a regra de distribuição por
-      proximidade da vista do mar), e automação por cron (Vercel Cron) —
-      por ora a sincronização do Planejamento Diário é sempre manual, via
-      o botão.
+    - **Sincronização de Chegadas & Saídas e Mesas do Café implementadas
+      na Parte 13** (ver abaixo). **Ainda não implementado**: automação por
+      cron (Vercel Cron) — por ora toda sincronização é sempre manual, via
+      botão em cada tela.
 19. **Parte 12 — Renomeação "Quarto" → "Suíte" e alocação de suítes no
     layout de mesas** (16/09/2026, feita direto em `main`, pós parte 11):
     - **Todo texto visível ao usuário que dizia "Quarto"/"quarto" virou
@@ -704,6 +702,68 @@ também é feita em Server Components.
       todas as `assignments` do dia, não só as da mesa em questão), pra
       não deixar duplicar uma suíte em duas mesas ao mesmo tempo (também
       garantido no banco pela constraint `unique(date, room_id)`).
+20. **Parte 13 — Sincronização de Chegadas & Saídas e Mesas do Café com a
+    Stays** (16/09/2026, feita direto em `main`, pós parte 12): completa as
+    duas peças que a Parte 11 tinha deixado pendentes, cada uma com seu
+    próprio botão "Sincronizar com a Stays" na respectiva tela do admin
+    (mesmo padrão do Planejamento Diário).
+    - **Chegadas & Saídas** (`syncStaysArrivalsDepartures`, em
+      `src/lib/actions/stays-sync.ts`): o nome do hóspede não vem no
+      payload da reserva — precisa de uma chamada extra por reserva a
+      `GET /external/v1/booking/clients/{_idclient}` (`getStaysClientName`
+      em `src/lib/stays/client.ts`), cujo campo `name` já vem pronto como
+      "Nome Sobrenome". As respostas são cacheadas em memória durante a
+      sincronização (por `_idclient`) pra não repetir a chamada à toa.
+      Noites e hóspedes vêm direto da reserva (`checkInDate`/`checkOutDate`/
+      `guests`). Chegada sincroniza quando `checkInDate === data`; saída
+      quando `checkOutDate === data` — só a existência da linha é
+      sincronizada pro caso de saída (não há outro campo). `stays_locked`
+      grava true sempre que o admin cria manualmente (`createArrival`/
+      `createDeparture`) ou edita um campo sincronizável (`updateArrival`
+      só trava se nome/noites/hóspedes mudou — editar só horário
+      previsto/observações nunca trava, conforme a exceção do PRD seção 3).
+    - **Mesas do Café** (`syncStaysBreakfastTables`, mesmo arquivo): decide
+      quais suítes estão ocupadas num dia (`checkInDate < data <=
+      checkOutDate` — inclui quem sai naquele dia, já que toma café antes
+      de ir embora; exclui quem chega naquele dia, que só terá café no dia
+      seguinte) e roda o algoritmo de distribuição por
+      proximidade da vista do mar (`src/lib/stays/derive-breakfast.ts`,
+      função pura `assignRoomsToTables`, verificada com casos sintéticos
+      antes de integrar — mesmo rigor já usado para `trocaNights` na Parte
+      11): suítes de 3 hóspedes vão pra Mesa 1 (a primeira) e Mesa 7 (as
+      demais); suítes de 1-2 hóspedes preenchem as "mesas normais" (2, 3,
+      4, 5, 6, 8, 9) na ordem 5→9→3→4→8→2→6; qualquer sobra que não coube
+      em lugar nenhum vai pra Mesa 7 como última alternativa. Grava o
+      resultado em `daily_breakfast_room_assignments` **e** soma os
+      hóspedes por mesa pra `daily_breakfast.guest_count` (resolvendo o
+      risco de inconsistência entre os dois campos, já apontado como
+      pendente na Parte 12) — cada um respeitando seu próprio
+      `stays_locked`.
+    - **Nova coluna `daily_breakfast_room_assignments.stays_locked`**
+      (migration `031_breakfast_assignment_lock.sql`): quando o admin
+      atribui/move uma suíte manualmente (`setTableRoomAssignment`), a
+      linha trava e a sincronização passa a ignorá-la, preservando a
+      escolha do admin pro resto do dia (regra de preferência do PRD seção
+      1). **Limitação conhecida, aceita conscientemente por ora**: o
+      botão de remover uma alocação (`removeTableRoomAssignment`) não deixa
+      nenhum rastro de que aquela suíte foi removida de propósito — como a
+      linha simplesmente deixa de existir, a próxima sincronização pode
+      recriá-la se a suíte continuar ocupada segundo a Stays. Contornável
+      na prática movendo a suíte pra outra mesa em vez de só removê-la
+      (isso sim trava). Resolver de verdade exigiria uma "lápide" (linha
+      marcando "suíte X removida de propósito no dia Y"), deixado de fora
+      por ora por não ter sido pedido e por adicionar complexidade nova ao
+      modelo de dados.
+    - **Testado com dados reais da API de produção da Stays**, mesmo
+      truque de rota de API temporária + bypass temporário do middleware já
+      usado na Parte 11 (e antes, na Parte 06 pra PDF) — confirmado
+      chegadas com nome/noites/hóspedes corretos e mesas distribuídas na
+      ordem esperada, ambos limpos do código depois do teste.
+    - **Não implementado nesta parte** (documentado como pendência menor em
+      `PRD_regrasdenegocio.md` seção 4): os quatro campos novos de
+      `daily_breakfast_settings` (quantidade de mesas de 1/2/3 hóspedes,
+      hóspedes na Mesa 07) — as colunas já existem (Parte 11) mas ainda não
+      têm sincronização nem tela de edição própria.
 
 ## Convenções e decisões importantes
 
@@ -1007,12 +1067,18 @@ o escopo mude no futuro.
   PIX da camareira (Parte 06): QR code estático (`public/pix-qrcode.png`)
   + valor total da conta.
 - `src/lib/actions/` — Server Actions (toda escrita no banco).
-- `src/lib/stays/` — integração com a API da Stays (Parte 11):
-  `client.ts` (busca de reservas), `troca-schedule.ts` (fórmula de troca
-  por noites) e `derive-planning.ts` (deriva o tipo de trabalho de um
-  quarto/dia a partir das reservas) — todos puros/testáveis isolados, sem
-  Server Action neles. `src/lib/actions/stays-sync.ts` é quem efetivamente
-  grava no banco (`syncStaysPlanning`, cliente admin/service-role).
+- `src/lib/stays/` — integração com a API da Stays (Parte 11 + Parte 13):
+  `client.ts` (busca de reservas + `getStaysClientName` pro nome do
+  hóspede), `troca-schedule.ts` (fórmula de troca por noites),
+  `derive-planning.ts` (deriva o tipo de trabalho de um quarto/dia a
+  partir das reservas, e exporta `daysBetween`) e `derive-breakfast.ts`
+  (algoritmo de distribuição suíte→mesa por proximidade da vista do mar,
+  Parte 13) — todos puros/testáveis isolados, sem Server Action neles.
+  `src/lib/actions/stays-sync.ts` é quem efetivamente grava no banco:
+  `syncStaysPlanning` (Planejamento Diário), `syncStaysArrivalsDepartures`
+  (Chegadas & Saídas) e `syncStaysBreakfastTables` (Mesas do Café), todas
+  via cliente admin/service-role — cada uma com seu próprio botão
+  "Sincronizar com a Stays" na tela correspondente.
 - `src/lib/task-type.ts` — rótulos centralizados dos tipos de trabalho
   (Arrumação/Preparação Chegada/Troca) — mudar aqui reflete em todo o app.
 - `src/components/shared/back-link.tsx` — link "← Voltar" reutilizável,

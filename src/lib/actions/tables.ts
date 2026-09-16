@@ -90,6 +90,7 @@ export async function setGuestCount(date: string, tableId: string, guestCount: n
       table_id: tableId,
       guest_count: guestCount,
       value_per_table_snapshot: settings?.value_per_table ?? 10,
+      stays_locked: true,
     },
     { onConflict: "date,table_id" }
   );
@@ -132,7 +133,13 @@ export async function setTableNotes(date: string, tableId: string, notes: string
 export async function setTableRoomAssignment(date: string, tableId: string, roomId: string, guestCount: number) {
   const supabase = await createClient();
   const { error } = await supabase.from("daily_breakfast_room_assignments").upsert(
-    { date, table_id: tableId, room_id: roomId, guest_count: Math.max(0, Math.floor(guestCount) || 0) },
+    {
+      date,
+      table_id: tableId,
+      room_id: roomId,
+      guest_count: Math.max(0, Math.floor(guestCount) || 0),
+      stays_locked: true,
+    },
     { onConflict: "date,room_id" }
   );
 

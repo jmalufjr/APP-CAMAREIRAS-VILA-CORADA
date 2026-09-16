@@ -3,14 +3,13 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { syncStaysPlanning } from "@/lib/actions/stays-sync";
+import { syncStaysBreakfastTables } from "@/lib/actions/stays-sync";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 
-// Gatilho manual da sincronização do Planejamento Diário com a Stays (hoje
-// + amanhã) — ver PRD_regrasdenegocio.md seção 2. Chegadas & Saídas e
-// Mesas do Café têm seus próprios botões nas respectivas telas (ver Parte
-// 13 do CLAUDE.md).
+// Gatilho manual da sincronização de Mesas do Café com a Stays (hoje +
+// amanhã) — distribui as suítes ocupadas entre as mesas por proximidade da
+// vista do mar (ver PRD_regrasdenegocio.md seção 4).
 export function SyncStaysButton() {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -22,7 +21,7 @@ export function SyncStaysButton() {
       disabled={isPending}
       onClick={() =>
         startTransition(async () => {
-          const result = await syncStaysPlanning();
+          const result = await syncStaysBreakfastTables();
           if (result?.error) {
             toast.error(result.error);
             return;

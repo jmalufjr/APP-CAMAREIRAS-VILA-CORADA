@@ -175,6 +175,7 @@ create table daily_breakfast_room_assignments (
   room_id uuid not null references rooms(id) on delete cascade,
   guest_count int not null default 0 check (guest_count >= 0),
   created_at timestamptz not null default now(),
+  stays_locked boolean not null default false,
   unique (date, room_id)
 );
 

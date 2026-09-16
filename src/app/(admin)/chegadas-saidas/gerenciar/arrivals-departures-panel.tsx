@@ -61,6 +61,10 @@ export function ArrivalsDeparturesPanel({
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {a.expected_time ? `Previsto para ${a.expected_time.slice(0, 5)}` : "Horário não informado"}
+                  {(a.nights || a.guest_count) && " · "}
+                  {a.nights ? `${a.nights} noite${a.nights === 1 ? "" : "s"}` : null}
+                  {a.nights && a.guest_count ? " · " : null}
+                  {a.guest_count ? `${a.guest_count} hóspede${a.guest_count === 1 ? "" : "s"}` : null}
                 </p>
                 {a.notes && <p className="text-xs text-muted-foreground mt-1">{a.notes}</p>}
               </div>
@@ -180,6 +184,16 @@ function ArrivalFormDialog({
           <div className="space-y-2">
             <Label htmlFor="guest_name">Nome do hóspede</Label>
             <Input id="guest_name" name="guest_name" defaultValue={arrival?.guest_name} required />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="nights">Noites</Label>
+              <Input id="nights" name="nights" type="number" min={0} defaultValue={arrival?.nights ?? ""} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="guest_count">Hóspedes</Label>
+              <Input id="guest_count" name="guest_count" type="number" min={0} defaultValue={arrival?.guest_count ?? ""} />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="expected_time">Horário previsto</Label>

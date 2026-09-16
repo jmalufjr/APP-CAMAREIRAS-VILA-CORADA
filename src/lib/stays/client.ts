@@ -9,6 +9,7 @@ export interface StaysReservationRaw {
   checkInDate: string; // "YYYY-MM-DD"
   checkOutDate: string; // "YYYY-MM-DD"
   _idlisting: string;
+  _idclient: string;
   type: string; // "booked" (reserva de hóspede) | "blocked" (bloqueio de calendário, sem hóspede)
   guests: number;
 }
@@ -53,4 +54,19 @@ export async function getStaysReservationsIncluding(
 
   const data = (await res.json()) as StaysReservationRaw[];
   return data.filter((r) => r.type === "booked");
+}
+
+// Busca o nome do hóspede (campo "name", já em "Nome Sobrenome") a partir do
+// _idclient de uma reserva — não vem embutido no payload de reserva (ver
+// PRD_regrasdenegocio.md seção 3). Retorna null em caso de erro/não
+// encontrado, nunca lança — quem chama decide o fallback.
+export async function getStaysClientName(clientId: string): Promise<string | null> {
+  const url = new URL(`/external/v1/booking/clients/${clientId}`, staysBaseUrl());
+  const res = await fetch(url, {
+    headers: { Authorization: staysAuthHeader() },
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as { name?: string };
+  return data.name ?? null;
 }

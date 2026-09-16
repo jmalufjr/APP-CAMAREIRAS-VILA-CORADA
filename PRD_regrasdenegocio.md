@@ -97,6 +97,11 @@ preferência) é a **suíte**.
 não se submete à regra de preferência nem compromete a sincronização dos
 demais campos.
 
+*(Implementado em 16/09/2026 — botão "Sincronizar com a Stays" na tela
+"Chegadas & saídas" do admin. O nome do hóspede não vem no payload da
+reserva; é buscado à parte via `GET /external/v1/booking/clients/{id}`,
+usando o `_idclient` da reserva — ver CLAUDE.md Parte 13.)*
+
 ## 4. Mesas do Café
 
 - Os campos **"Valor da comissão"** e **"Observações do dia"** são de
@@ -114,6 +119,13 @@ demais campos.
 
 O campo **"Observação"** de cada card de mesa é de edição exclusiva do
 admin, sem comprometer a sincronização dos demais campos.
+
+*(Nota de implementação, 16/09/2026: as colunas desses quatro campos já
+existem no banco (`daily_breakfast_settings`), mas a sincronização
+automática e a edição manual deles ainda não têm tela própria — só a
+alocação suíte↔mesa e o total de hóspedes por mesa sincronizam por
+enquanto, ver seção 5 e CLAUDE.md Parte 13. Pendente para uma próxima
+iteração, sem urgência identificada até aqui.)*
 
 ### Regra de preenchimento das mesas (distribuição por suíte)
 
@@ -165,11 +177,16 @@ na tela da camareira — ver CLAUDE.md Parte 12 para os detalhes técnicos.)*
   clara possível**, em contraste com as mesas vagas (tonalidade normal,
   mais escura) — facilita identificar de relance quais mesas já têm
   suíte(s) alocada(s).
-- **Como a alocação suíte↔mesa é registrada hoje**: manualmente pelo admin,
-  na tela "Mesas do café" (cada card de mesa tem um seletor pra escolher a
-  suíte e sua quantidade de hóspedes, com botão de remover). A regra de
-  preenchimento automático descrita na seção 4 acima (distribuição por
-  proximidade da vista do mar) **ainda não foi implementada** — é a
-  próxima peça pendente da integração com a Stays: quando pronta, deve
-  escrever nessa mesma associação suíte↔mesa, e o admin continua podendo
-  reatribuir manualmente por cima (mesma regra de preferência da seção 1).
+- **Como a alocação suíte↔mesa é registrada**: pelo botão "Sincronizar com
+  a Stays" na tela "Mesas do café" (admin), que aplica a regra de
+  preenchimento automático desta seção (implementado em 16/09/2026 — ver
+  CLAUDE.md Parte 13), **ou** manualmente pelo admin no mesmo lugar (cada
+  card de mesa tem um seletor pra escolher a suíte e sua quantidade de
+  hóspedes, com botão de remover). Reatribuir manualmente marca a suíte
+  como travada para aquele dia (mesma regra de preferência da seção 1): a
+  sincronização deixa de mexer nela até o dia seguinte. **Limitação
+  conhecida**: remover uma alocação (botão "×", sem escolher outra mesa)
+  não trava — se a suíte continuar ocupada segundo a Stays, a próxima
+  sincronização pode realocá-la. Para realmente tirar uma suíte da
+  sincronização automática de um dia, mova-a para outra mesa em vez de só
+  removê-la.

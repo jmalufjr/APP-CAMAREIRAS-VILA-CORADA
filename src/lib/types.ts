@@ -78,6 +78,7 @@ export interface DailyBreakfastRoomAssignment {
   room_id: string;
   guest_count: number;
   created_at: string;
+  stays_locked: boolean;
 }
 
 export interface DailyBreakfastSettings {

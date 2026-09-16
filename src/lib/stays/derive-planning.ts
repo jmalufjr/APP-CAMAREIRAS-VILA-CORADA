@@ -6,7 +6,7 @@ import { trocaNights } from "./troca-schedule";
 // Usa meia-noite UTC nas duas pontas de propósito — comparar strings de
 // data com fuso horário embutido já causou bug real neste projeto antes
 // (commit "Fix date logic using UTC calendar day instead of Brasília's").
-function daysBetween(fromDateKey: string, toDateKey: string): number {
+export function daysBetween(fromDateKey: string, toDateKey: string): number {
   const a = Date.UTC(...(fromDateKey.split("-").map(Number) as [number, number, number]));
   const b = Date.UTC(...(toDateKey.split("-").map(Number) as [number, number, number]));
   return Math.round((b - a) / 86_400_000);
