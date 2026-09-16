@@ -507,6 +507,69 @@ também é feita em Server Components.
       Os cards de mesa na tela do admin passaram a ser ordenados em ordem
       crescente pelo número extraído do rótulo (`"Mesa 3"` → `3`), não
       mais pela ordem de criação no banco.
+17. **Parte 10 — Serviços atrasados não somem mais, cancelamento e log de 7
+    dias no resumo executivo** (16/09/2026, feita direto em `main`, pós
+    parte 09; testada primeiro no ambiente local antes de aplicar em
+    produção):
+    - **Cards "Mesas · hoje/amanhã" saíram do Resumo Executivo e foram para
+      o final da tela "Mesas do café" (`/mesas/gerenciar`)** — o layout
+      visual (`TableLayoutCanvas`/`TableNotesList`) reaproveita os mesmos
+      dados que a tela já buscava pras abas "Mesas de hoje/amanhã", sem
+      fetch novo.
+    - **Nova tabela "Serviços dos últimos 7 dias"** no Resumo Executivo,
+      logo abaixo dos cards "Quartos de hoje"/"Quartos de amanhã": lista
+      `daily_room_tasks` com status `concluido` ou `cancelado` dos últimos
+      7 dias (data, quarto, tipo, camareira), ordenada por data
+      decrescente e, dentro do mesmo dia, por número do quarto crescente.
+      Linha de serviço cancelado mostra "Cancelado por {nome}" em vez do
+      nome de quem executou (não clicável — nunca houve nada preenchido).
+      Linha de serviço concluído é clicável e abre
+      `/dashboard/tarefas/[taskId]`, uma visão **somente leitura** nova
+      pro admin, reaproveitando o mesmíssimo componente
+      `src/components/shared/checklist-detail.tsx` da tela da camareira
+      (movido de dentro de `(camareira)/tarefas/[taskId]/` pra
+      `components/shared/` justamente por passar a ser usado nos dois
+      lugares) — o componente já trava tudo sozinho quando
+      `task.status === 'concluido'` (checkboxes, formulário de ocorrência,
+      frigobar), não precisou de nenhuma prop nova de "somente leitura".
+      **Decisão importante, não pedida explicitamente**: essa visão do
+      admin **não mostra consumo de frigobar** — a prop `minibar` do
+      `ChecklistDetail` virou opcional e a seção inteira só aparece quando
+      ela é passada. Motivo: frigobar é por **conta corrente do quarto**,
+      não por tarefa/dia (ver Parte 04) — mostrar "o frigobar de hoje"
+      rotulado como "o que a camareira preencheu naquele dia" seria
+      mostrar dado errado sempre que a conta do quarto já tiver girado
+      desde então. Se quiser esse dado ali mesmo assim, dá pra reconsiderar
+      (ex.: rotular claramente como "estado atual da conta", ou investir
+      num snapshot de frigobar por tarefa — mudança de modelo de dados
+      maior, fora do escopo desta parte).
+    - **Serviços de dias anteriores não reivindicados por ninguém não
+      somem mais da tela "Meus quartos" da camareira**: antes, a tela só
+      buscava `daily_room_tasks` do dia corrente (`.eq('date', hoje)`), e
+      um serviço `pendente` sem `assigned_to` de um dia passado ficava
+      invisível pra sempre assim que o dia virava (mesmo as RLS policies
+      de `daily_room_tasks` já sendo abertas por ownership, sem filtro de
+      data — o corte sempre foi só na query da página). "Disponíveis para
+      escolher" virou duas subseções: "Serviços de hoje" (como antes) e
+      "Serviços anteriores" (`date < hoje`, `status = 'pendente'`,
+      `assigned_to is null`, sem limite de quantos dias voltam). Uma
+      camareira pode **escolher** um serviço anterior (mesma
+      `claimTask`, sem mudança — ele passa a aparecer em "Meus quartos"
+      referenciando a **data original**, não hoje) ou **cancelar**
+      (`cancelTask`/`cancel_daily_room_task`, novo enum `task_status` =
+      `'cancelado'` + colunas `cancelled_by`/`cancelled_at` — migration
+      `028_cancelar_servico_pendente.sql`). Implementado como função
+      `security definer` (checando `is_camareira()`), não mais uma policy
+      de UPDATE na tabela — `daily_room_tasks` já tem duas policies de
+      UPDATE pra camareira (`drt_camareira_update_own`/`drt_camareira_claim`)
+      e o próprio `CLAUDE.md` já documentava o risco de combinar mais uma
+      ali (ver "Convenções e decisões importantes" abaixo). "Meus quartos"
+      também passou a buscar tarefas de dias anteriores ainda atribuídas à
+      própria camareira (`pendente`/`em_andamento`) — sem isso, escolher um
+      "serviço anterior" faria ele desaparecer de vez (não é mais "hoje",
+      então não aparecia nem em "disponíveis" nem em "meus quartos").
+      Cards de serviço de dia anterior mostram a data ao lado do tipo, pra
+      deixar claro que não é de hoje.
 
 ## Convenções e decisões importantes
 
@@ -778,6 +841,15 @@ o escopo mude no futuro.
   +/- (Parte 05, extraído como componente compartilhado na Parte 08):
   usado na comanda de bar e em todo lançamento de frigobar pela camareira
   (`checklist-detail.tsx` e `consumo-quartos-panel.tsx`).
+- `src/components/shared/checklist-detail.tsx` — o checklist de uma tarefa
+  (arrumação/troca/saída-chegada/somente saída/somente chegada), com
+  frigobar, ocorrências e observações; movido pra cá na Parte 10 (antes
+  vivia só dentro de `(camareira)/tarefas/[taskId]/`) porque passou a ser
+  usado também pela visão somente-leitura do admin em
+  `(admin)/dashboard/tarefas/[taskId]/` — o mesmo componente já é
+  automaticamente somente-leitura quando `task.status === 'concluido'`,
+  e a prop `minibar` é opcional (a visão do admin não passa essa prop, de
+  propósito — ver Parte 10).
 - `src/lib/receipt-pdf.tsx` — gera o PDF do recibo de uma conta paga sob
   demanda, sem persistir arquivo (Parte 06), usado tanto pelo e-mail
   automático quanto pela rota `/api/room-bills/[billId]/receipt` ("Ver

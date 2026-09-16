@@ -27,6 +27,16 @@ export async function claimTask(taskId: string) {
   return { success: true };
 }
 
+export async function cancelTask(taskId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("cancel_daily_room_task", { p_task_id: taskId });
+  if (error) return { error: error.message };
+  revalidatePath("/tarefas", "layout");
+  revalidatePath("/planejamento");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
 export async function toggleCheck(checkId: string, checked: boolean) {
   const supabase = await createClient();
   const { error } = await supabase.rpc("toggle_daily_room_task_check", {

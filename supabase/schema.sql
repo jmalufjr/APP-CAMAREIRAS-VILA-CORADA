@@ -9,7 +9,7 @@ create extension if not exists "uuid-ossp";
 -- ---------- ENUMS ----------
 create type user_role as enum ('admin', 'camareira', 'manutencao');
 create type checklist_type as enum ('arrumacao', 'preparacao', 'troca', 'somente_chegada', 'somente_saida');
-create type task_status as enum ('pendente', 'em_andamento', 'concluido');
+create type task_status as enum ('pendente', 'em_andamento', 'concluido', 'cancelado');
 create type table_shape as enum ('round', 'rect', 'square');
 create type occurrence_status as enum ('pendente', 'selecionada', 'resolvida');
 create type maintenance_execution_type as enum ('nao_tecnico', 'tecnico');
@@ -114,6 +114,8 @@ create table daily_room_tasks (
   notes text,
   created_at timestamptz not null default now(),
   created_by uuid references profiles(id),
+  cancelled_by uuid references profiles(id) on delete set null,
+  cancelled_at timestamptz,
   unique (date, room_id, task_type)
 );
 
@@ -527,6 +529,23 @@ begin
   update daily_room_tasks
   set started_at = now()
   where id = v_task_id and started_at is null;
+end;
+$$ language plpgsql security definer;
+
+-- Cancela um serviço pendente (dia anterior) ainda não reivindicado por
+-- ninguém. Usa função security definer (em vez de mais uma policy de UPDATE
+-- na mesma tabela, que já tem drt_camareira_update_own/drt_camareira_claim)
+-- para não repetir o problema já documentado de policies de UPDATE
+-- combinadas cobrindo mais de uma transição de estado na mesma tabela.
+create or replace function cancel_daily_room_task(p_task_id uuid) returns void as $$
+begin
+  if not is_camareira() then
+    raise exception 'not authorized';
+  end if;
+
+  update daily_room_tasks
+  set status = 'cancelado', cancelled_by = auth.uid(), cancelled_at = now()
+  where id = p_task_id and status = 'pendente' and assigned_to is null;
 end;
 $$ language plpgsql security definer;
 

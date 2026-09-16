@@ -38,7 +38,11 @@ export function ChecklistDetail({
   checks: CheckRow[];
   occurrences: OccurrenceRow[];
   categories: OccurrenceCategory[];
-  minibar: MinibarRoomConsumption;
+  // Omitido na visão somente-leitura do admin: o consumo de frigobar é por
+  // conta corrente do quarto, não por tarefa/dia (ver Parte 04), então não
+  // há um jeito de mostrar "como estava naquele dia" sem exibir dado atual
+  // do quarto sob o rótulo errado.
+  minibar?: MinibarRoomConsumption;
 }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -68,8 +72,8 @@ export function ChecklistDetail({
   // qualquer camareira/tarefa). O toggle "houve consumo?" é só uma
   // conveniência de UI (default "Sim" se já existir alguma quantidade > 0
   // salva), não precisa de uma coluna própria no banco.
-  const minibarItems = minibar.items;
-  const isMinibarClosed = minibar.billStatus === "fechada";
+  const minibarItems = minibar?.items ?? [];
+  const isMinibarClosed = minibar?.billStatus === "fechada";
   const initialQuantities = Object.fromEntries(minibarItems.map((item) => [item.id, item.quantity]));
   const [minibarQuantities, setMinibarQuantities] = useState<Record<string, number>>(initialQuantities);
   const [hasMinibarConsumption, setHasMinibarConsumption] = useState(
@@ -160,6 +164,7 @@ export function ChecklistDetail({
         ))}
       </div>
 
+      {minibar && (
       <Card>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
@@ -213,6 +218,7 @@ export function ChecklistDetail({
           )}
         </CardContent>
       </Card>
+      )}
 
       <Card>
         <CardContent className="space-y-4">

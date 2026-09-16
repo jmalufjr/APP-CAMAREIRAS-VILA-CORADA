@@ -1,6 +1,6 @@
 export type UserRole = "admin" | "camareira" | "manutencao";
 export type ChecklistType = "arrumacao" | "preparacao" | "troca" | "somente_chegada" | "somente_saida";
-export type TaskStatus = "pendente" | "em_andamento" | "concluido";
+export type TaskStatus = "pendente" | "em_andamento" | "concluido" | "cancelado";
 export type TableShape = "round" | "rect" | "square";
 export type OccurrenceStatus = "pendente" | "selecionada" | "resolvida";
 export type MaintenanceExecutionType = "nao_tecnico" | "tecnico";
@@ -96,6 +96,8 @@ export interface DailyRoomTask {
   notes: string | null;
   created_at: string;
   created_by: string | null;
+  cancelled_by: string | null;
+  cancelled_at: string | null;
 }
 
 export interface DailyRoomTaskCheck {

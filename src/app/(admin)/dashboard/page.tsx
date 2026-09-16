@@ -1,17 +1,16 @@
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/shared/page-header";
-import { todayKey, tomorrowKey, formatDatePt, nowInBrazil } from "@/lib/date";
+import { todayKey, tomorrowKey, daysAgoKey, formatDatePt, nowInBrazil } from "@/lib/date";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { TableLayoutCanvas } from "@/components/shared/table-layout-canvas";
-import { TableNotesList } from "@/components/shared/table-notes-list";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { MonthlyChart } from "./monthly-chart";
 import { MinibarPieChart } from "./minibar-pie-chart";
 import { MinibarSummaryTable } from "@/components/shared/minibar-summary-table";
+import { ServiceLogTable, type ServiceLogRow } from "./service-log-table";
 import { getMinibarMonthlySummary } from "@/lib/actions/minibar";
 import { getPoolbarMonthlySummary } from "@/lib/actions/poolbar";
-import type { BreakfastTable, ChecklistType } from "@/lib/types";
+import type { ChecklistType } from "@/lib/types";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import { BedDouble, Coffee, AlertTriangle, Wallet, History } from "lucide-react";
 import Link from "next/link";
@@ -29,22 +28,21 @@ export default async function DashboardPage() {
   const tomorrow = tomorrowKey();
   const { start, end } = monthRange();
 
+  const sevenDaysAgo = daysAgoKey(6);
+
   const [
     { data: todayTasks },
     { data: tomorrowTasks },
-    { data: tables },
     { data: todayGuests },
-    { data: tomorrowGuests },
     { data: monthBreakfast },
     { count: occurrencesToday },
+    { data: serviceLog },
     minibarSummary,
     poolbarSummary,
   ] = await Promise.all([
     supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", today),
     supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", tomorrow),
-    supabase.from("breakfast_tables").select("*").eq("active", true),
     supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", today),
-    supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", tomorrow),
     supabase
       .from("daily_breakfast")
       .select("date, guest_count, value_per_table_snapshot")
@@ -54,9 +52,41 @@ export default async function DashboardPage() {
       .from("daily_room_task_occurrences")
       .select("id, daily_room_tasks!inner(date)", { count: "exact", head: true })
       .eq("daily_room_tasks.date", today),
+    // Serviço realizado (ou cancelado) pelas camareiras nos últimos 7 dias,
+    // para a tabela "Serviços dos últimos 7 dias" abaixo dos cards de hoje/amanhã.
+    supabase
+      .from("daily_room_tasks")
+      .select(
+        "id, date, task_type, status, rooms(number), profiles!daily_room_tasks_assigned_to_fkey(name), cancelled_profile:profiles!daily_room_tasks_cancelled_by_fkey(name)"
+      )
+      .gte("date", sevenDaysAgo)
+      .lte("date", today)
+      .in("status", ["concluido", "cancelado"]),
     getMinibarMonthlySummary(),
     getPoolbarMonthlySummary(),
   ]);
+
+  const serviceLogRows: ServiceLogRow[] = (
+    (serviceLog ?? []) as unknown as {
+      id: string;
+      date: string;
+      task_type: ChecklistType;
+      status: "concluido" | "cancelado";
+      rooms: { number: string };
+      profiles: { name: string } | null;
+      cancelled_profile: { name: string } | null;
+    }[]
+  )
+    .map((r) => ({
+      id: r.id,
+      date: r.date,
+      room_number: r.rooms.number,
+      task_type: r.task_type,
+      status: r.status,
+      camareira_name: r.profiles?.name ?? null,
+      cancelled_by_name: r.cancelled_profile?.name ?? null,
+    }))
+    .sort((a, b) => (a.date !== b.date ? b.date.localeCompare(a.date) : Number(a.room_number) - Number(b.room_number)));
 
   const doneToday = (todayTasks ?? []).filter((t) => t.status === "concluido").length;
   const totalToday = (todayTasks ?? []).length;
@@ -82,12 +112,6 @@ export default async function DashboardPage() {
   const todayGuestMap: Record<string, number> = Object.fromEntries(
     (todayGuests ?? []).map((r) => [r.table_id, r.guest_count] as const)
   );
-  const tomorrowGuestMap: Record<string, number> = Object.fromEntries(
-    (tomorrowGuests ?? []).map((r) => [r.table_id, r.guest_count] as const)
-  );
-  const tableLabelById = new Map(((tables ?? []) as BreakfastTable[]).map((t) => [t.id, t.label]));
-  const todayTableNotes = (todayGuests ?? []).filter((r) => r.notes);
-  const tomorrowTableNotes = (tomorrowGuests ?? []).filter((r) => r.notes);
 
   return (
     <div className="space-y-8">
@@ -180,6 +204,15 @@ export default async function DashboardPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="font-heading text-lg">Serviços dos últimos 7 dias</CardTitle>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <ServiceLogTable rows={serviceLogRows} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="font-heading text-lg">Totais do mês · {totalTablesMonth} mesas · R$ {totalCommissionMonth.toFixed(2)} de comissão</CardTitle>
         </CardHeader>
         <CardContent>
@@ -260,27 +293,6 @@ export default async function DashboardPage() {
           </div>
         </CardContent>
       </Card>
-
-      <div className="grid lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-heading text-lg">Mesas · hoje</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <TableLayoutCanvas tables={(tables ?? []) as BreakfastTable[]} guestCounts={todayGuestMap} />
-            <TableNotesList rows={todayTableNotes} labelById={tableLabelById} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-heading text-lg">Mesas · amanhã</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <TableLayoutCanvas tables={(tables ?? []) as BreakfastTable[]} guestCounts={tomorrowGuestMap} />
-            <TableNotesList rows={tomorrowTableNotes} labelById={tableLabelById} />
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }

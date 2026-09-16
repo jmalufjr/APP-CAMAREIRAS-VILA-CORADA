@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { TableLayoutCanvas } from "@/components/shared/table-layout-canvas";
+import { TableNotesList } from "@/components/shared/table-notes-list";
 import {
   Select,
   SelectContent,
@@ -49,6 +51,13 @@ export function GuestsAdminPanel({
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const [commissionValue, setCommissionValue] = useState(String(commission?.value_per_table ?? 10));
+
+  const activeTables = tables.filter((t) => t.active);
+  const labelById = new Map(tables.map((t) => [t.id, t.label]));
+  const notesToRows = (notes: Record<string, string>) =>
+    Object.entries(notes)
+      .filter(([, v]) => v)
+      .map(([table_id, tableNotes]) => ({ table_id, notes: tableNotes }));
 
   return (
     <div className="space-y-8">
@@ -111,6 +120,27 @@ export function GuestsAdminPanel({
           />
         </TabsContent>
       </Tabs>
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-heading text-lg">Mesas · hoje</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <TableLayoutCanvas tables={activeTables} guestCounts={todayCounts} />
+            <TableNotesList rows={notesToRows(todayNotes)} labelById={labelById} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-heading text-lg">Mesas · amanhã</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <TableLayoutCanvas tables={activeTables} guestCounts={tomorrowCounts} />
+            <TableNotesList rows={notesToRows(tomorrowNotes)} labelById={labelById} />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
