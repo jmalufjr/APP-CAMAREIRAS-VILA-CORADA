@@ -4,8 +4,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { TableLayoutCanvas, type TableRoomAssignment } from "@/components/shared/table-layout-canvas";
 import { TableNotesList } from "@/components/shared/table-notes-list";
 import { computeTableSizeCounts } from "@/lib/stays/derive-breakfast";
-import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { todayKey, formatDatePt } from "@/lib/date";
 import { Card, CardContent } from "@/components/ui/card";
 
 function toTableRooms(
@@ -24,72 +23,37 @@ function toTableRooms(
 
 export default async function MesasViewPage() {
   const supabase = await createClient();
-  const [
-    { data: tables },
-    { data: rooms },
-    { data: todayRows },
-    { data: tomorrowRows },
-    { data: todaySettings },
-    { data: tomorrowSettings },
-    { data: todayAssignments },
-    { data: tomorrowAssignments },
-  ] = await Promise.all([
-    supabase.from("breakfast_tables").select("*").eq("active", true).order("created_at"),
-    supabase.from("rooms").select("*").eq("active", true).order("position"),
-    supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", todayKey()),
-    supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", tomorrowKey()),
-    supabase.from("daily_breakfast_settings").select("*").eq("date", todayKey()).maybeSingle(),
-    supabase.from("daily_breakfast_settings").select("*").eq("date", tomorrowKey()).maybeSingle(),
-    supabase.from("daily_breakfast_room_assignments").select("*").eq("date", todayKey()),
-    supabase.from("daily_breakfast_room_assignments").select("*").eq("date", tomorrowKey()),
-  ]);
+  const [{ data: tables }, { data: rooms }, { data: todayRows }, { data: todaySettings }, { data: todayAssignments }] =
+    await Promise.all([
+      supabase.from("breakfast_tables").select("*").eq("active", true).order("created_at"),
+      supabase.from("rooms").select("*").eq("active", true).order("position"),
+      supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", todayKey()),
+      supabase.from("daily_breakfast_settings").select("*").eq("date", todayKey()).maybeSingle(),
+      supabase.from("daily_breakfast_room_assignments").select("*").eq("date", todayKey()),
+    ]);
 
   const tableList = (tables ?? []) as BreakfastTable[];
   const roomList = (rooms ?? []) as Room[];
   const labelById = new Map(tableList.map((t) => [t.id, t.label]));
 
   const todayMap = Object.fromEntries((todayRows ?? []).map((r) => [r.table_id, r.guest_count]));
-  const tomorrowMap = Object.fromEntries((tomorrowRows ?? []).map((r) => [r.table_id, r.guest_count]));
   const todayNotes = (todayRows ?? []).filter((r) => r.notes);
-  const tomorrowNotes = (tomorrowRows ?? []).filter((r) => r.notes);
 
   return (
     <div className="space-y-6">
       <PageHeader title="Mesas do café da manhã" subtitle="Visualização do layout e hóspedes por mesa." />
-      <Tabs defaultValue="hoje">
-        <TabsList>
-          <TabsTrigger value="hoje">Hoje</TabsTrigger>
-          <TabsTrigger value="amanha">Amanhã</TabsTrigger>
-        </TabsList>
-        <TabsContent value="hoje" className="pt-4 space-y-4">
-          <p className="text-sm capitalize text-muted-foreground">{formatDatePt(todayKey())}</p>
-          <DaySettingsInfo
-            settings={todaySettings as DailyBreakfastSettings | null}
-            assignments={(todayAssignments ?? []) as DailyBreakfastRoomAssignment[]}
-            tables={tableList}
-          />
-          <TableLayoutCanvas
-            tables={tableList}
-            guestCounts={todayMap}
-            tableRooms={toTableRooms((todayAssignments ?? []) as DailyBreakfastRoomAssignment[], roomList)}
-          />
-          <TableNotesList rows={todayNotes} labelById={labelById} />
-        </TabsContent>
-        <TabsContent value="amanha" className="pt-4 space-y-4">
-          <p className="text-sm capitalize text-muted-foreground">{formatDatePt(tomorrowKey())}</p>
-          <DaySettingsInfo
-            settings={tomorrowSettings as DailyBreakfastSettings | null}
-            assignments={(tomorrowAssignments ?? []) as DailyBreakfastRoomAssignment[]}
-            tables={tableList}
-          />
-          <TableLayoutCanvas
-            tables={tableList}
-            guestCounts={tomorrowMap}
-            tableRooms={toTableRooms((tomorrowAssignments ?? []) as DailyBreakfastRoomAssignment[], roomList)}
-          />
-          <TableNotesList rows={tomorrowNotes} labelById={labelById} />
-        </TabsContent>
-      </Tabs>
+      <p className="text-sm capitalize text-muted-foreground">{formatDatePt(todayKey())}</p>
+      <DaySettingsInfo
+        settings={todaySettings as DailyBreakfastSettings | null}
+        assignments={(todayAssignments ?? []) as DailyBreakfastRoomAssignment[]}
+        tables={tableList}
+      />
+      <TableLayoutCanvas
+        tables={tableList}
+        guestCounts={todayMap}
+        tableRooms={toTableRooms((todayAssignments ?? []) as DailyBreakfastRoomAssignment[], roomList)}
+      />
+      <TableNotesList rows={todayNotes} labelById={labelById} />
     </div>
   );
 }

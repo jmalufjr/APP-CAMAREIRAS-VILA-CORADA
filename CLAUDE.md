@@ -976,6 +976,28 @@ também é feita em Server Components.
       funcionalidades de um jeito que o admin perceberia, vale revisar essa
       página também — ela pode ficar desatualizada silenciosamente, ao
       contrário do resto do app.
+26. **Parte 19 — Camareira só vê "hoje" em Mesas do café/Chegadas & saídas,
+    e ajuste de layout dos cards de "Minhas suítes"** (17/09/2026, feita
+    direto em `main`, pós parte 18):
+    - **`(camareira)/mesas/page.tsx` e `(camareira)/chegadas-saidas/page.tsx`
+      perderam as abas "Hoje"/"Amanhã"** — a camareira só precisa do dia
+      corrente pra essas duas telas (o admin continua vendo os dois dias
+      nas telas de gerenciamento, `mesas/gerenciar` e
+      `chegadas-saidas/gerenciar`, sem mudança nenhuma ali). As páginas
+      buscam só os dados de hoje agora, sem o segundo conjunto de queries
+      pra amanhã.
+    - **Correção de layout nos cards de "Disponíveis para escolher"**
+      (`(camareira)/tarefas/tasks-board.tsx`, `AvailableTaskCard`): antes,
+      o nome da suíte, o tipo de serviço e os botões "Cancelar"/"Escolher"
+      disputavam a mesma linha, e num card estreito (celular) isso
+      quebrava de forma feia — texto sobreposto, número da suíte pulando
+      de linha. Reestruturado em duas linhas fixas: a primeira só com
+      ícone + "Suíte N" (com `whitespace-nowrap`, nunca quebra) + os
+      botões; a segunda, abaixo e alinhada com o nome da suíte, com o tipo
+      de serviço (e a data, nos cards de "Serviços anteriores"). O botão
+      "Escolher" ficou mais estreito: o ícone da mãozinha agora fica
+      empilhado *acima* da palavra "Escolher" (`flex-col`), em vez de lado
+      a lado, sobrando mais espaço horizontal pro nome da suíte.
 
 ## Convenções e decisões importantes
 

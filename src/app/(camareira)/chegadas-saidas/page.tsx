@@ -1,52 +1,31 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Room, DailyArrival, DailyDeparture } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
-import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { todayKey, formatDatePt } from "@/lib/date";
 import { Card, CardContent } from "@/components/ui/card";
 import { LogIn, LogOut } from "lucide-react";
 
 export default async function ChegadasSaidasViewPage() {
   const supabase = await createClient();
   const today = todayKey();
-  const tomorrow = tomorrowKey();
 
-  const [{ data: rooms }, { data: arrivalsToday }, { data: departuresToday }, { data: arrivalsTomorrow }, { data: departuresTomorrow }] =
-    await Promise.all([
-      supabase.from("rooms").select("*").order("position"),
-      supabase.from("daily_arrivals").select("*").eq("date", today),
-      supabase.from("daily_departures").select("*").eq("date", today),
-      supabase.from("daily_arrivals").select("*").eq("date", tomorrow),
-      supabase.from("daily_departures").select("*").eq("date", tomorrow),
-    ]);
+  const [{ data: rooms }, { data: arrivals }, { data: departures }] = await Promise.all([
+    supabase.from("rooms").select("*").order("position"),
+    supabase.from("daily_arrivals").select("*").eq("date", today),
+    supabase.from("daily_departures").select("*").eq("date", today),
+  ]);
 
   const roomMap = new Map(((rooms ?? []) as Room[]).map((r) => [r.id, r.number]));
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Chegadas & saídas" subtitle="Hóspedes previstos para hoje e amanhã." />
-      <Tabs defaultValue="hoje">
-        <TabsList>
-          <TabsTrigger value="hoje">Hoje</TabsTrigger>
-          <TabsTrigger value="amanha">Amanhã</TabsTrigger>
-        </TabsList>
-        <TabsContent value="hoje" className="pt-4">
-          <DayLists
-            label={formatDatePt(today)}
-            arrivals={(arrivalsToday ?? []) as DailyArrival[]}
-            departures={(departuresToday ?? []) as DailyDeparture[]}
-            roomMap={roomMap}
-          />
-        </TabsContent>
-        <TabsContent value="amanha" className="pt-4">
-          <DayLists
-            label={formatDatePt(tomorrow)}
-            arrivals={(arrivalsTomorrow ?? []) as DailyArrival[]}
-            departures={(departuresTomorrow ?? []) as DailyDeparture[]}
-            roomMap={roomMap}
-          />
-        </TabsContent>
-      </Tabs>
+      <PageHeader title="Chegadas & saídas" subtitle="Hóspedes previstos para hoje." />
+      <DayLists
+        label={formatDatePt(today)}
+        arrivals={(arrivals ?? []) as DailyArrival[]}
+        departures={(departures ?? []) as DailyDeparture[]}
+        roomMap={roomMap}
+      />
     </div>
   );
 }

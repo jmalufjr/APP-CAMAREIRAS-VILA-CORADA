@@ -103,58 +103,57 @@ function AvailableTaskCard({ task, isPast }: { task: TaskWithRoom; isPast?: bool
 
   return (
     <Card>
-      <CardContent className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
+      <CardContent className="space-y-1.5">
+        <div className="flex items-center gap-3">
           <div className="size-10 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
             <BedDouble size={18} />
           </div>
-          <div className="min-w-0">
-            <p className="font-medium">Suíte {task.rooms.number}</p>
-            <p className="text-xs text-muted-foreground">
-              {TASK_TYPE_LABELS[task.task_type]}
-              {isPast && ` · ${formatDateShortPt(task.date)}`}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {isPast && (
+          <p className="font-medium flex-1 min-w-0 whitespace-nowrap">Suíte {task.rooms.number}</p>
+          <div className="flex items-center gap-1 shrink-0">
+            {isPast && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-auto rounded-xl px-2 py-1 text-[10px] leading-tight"
+                disabled={isPending}
+                onClick={() =>
+                  startTransition(async () => {
+                    const result = await cancelTask(task.id);
+                    if (result?.error) toast.error(result.error);
+                    else {
+                      toast.success("Serviço cancelado.");
+                      router.refresh();
+                    }
+                  })
+                }
+              >
+                Cancelar
+              </Button>
+            )}
             <Button
-              variant="outline"
               size="sm"
-              className="h-5 gap-1 rounded-4xl px-2 py-0.5 text-xs"
+              className="h-auto flex-col gap-0.5 rounded-xl px-2 py-1 text-[10px] leading-tight [&_svg:not([class*='size-'])]:size-3.5"
               disabled={isPending}
               onClick={() =>
                 startTransition(async () => {
-                  const result = await cancelTask(task.id);
+                  const result = await claimTask(task.id);
                   if (result?.error) toast.error(result.error);
                   else {
-                    toast.success("Serviço cancelado.");
-                    router.refresh();
+                    toast.success("Suíte escolhida!");
+                    router.push(`/tarefas/${task.id}`);
                   }
                 })
               }
             >
-              Cancelar
+              <Hand size={14} />
+              <span>Escolher</span>
             </Button>
-          )}
-          <Button
-            size="sm"
-            className="h-5 gap-1 rounded-4xl px-2 py-0.5 text-xs [&_svg:not([class*='size-'])]:size-3"
-            disabled={isPending}
-            onClick={() =>
-              startTransition(async () => {
-                const result = await claimTask(task.id);
-                if (result?.error) toast.error(result.error);
-                else {
-                  toast.success("Suíte escolhida!");
-                  router.push(`/tarefas/${task.id}`);
-                }
-              })
-            }
-          >
-            <Hand size={12} /> Escolher
-          </Button>
+          </div>
         </div>
+        <p className="text-xs text-muted-foreground pl-[52px]">
+          {TASK_TYPE_LABELS[task.task_type]}
+          {isPast && ` · ${formatDateShortPt(task.date)}`}
+        </p>
       </CardContent>
     </Card>
   );
