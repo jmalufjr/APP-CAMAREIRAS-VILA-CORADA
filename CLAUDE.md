@@ -60,9 +60,15 @@ sem que isso seja desfeito pela próxima sincronização automática (Parte
 15); e a troca dos 4 campos de contagem de mesas — e também do próprio "Total
 de mesas" — de "sincronizados"/"seletor manual" para "sempre calculados na
 hora" a partir da alocação suíte↔mesa, eliminando o risco de ficarem
-desatualizados (Partes 16 e 17); e, por fim, uma tela "Questões e
+desatualizados (Partes 16 e 17); uma tela "Questões e
 Respostas" no menu do admin, explicando em linguagem simples as 10
-funcionalidades mais importantes do app pra quem for operá-lo (Parte 18).
+funcionalidades mais importantes do app pra quem for operá-lo (Parte 18);
+telas da camareira simplificadas pra só "hoje" e ajustes de layout dos
+cards de tarefa (Parte 19); as cores de mesa ocupada/vaga invertidas, com
+receita própria por tema (Parte 20); e, por fim, a aba "Hoje" virando
+sempre o padrão (mesmo em Mesas do Café, que antes era exceção) nas três
+telas com seletor Hoje/Amanhã, além de ajustes de layout menores (Parte
+21).
 
 ## Onde está
 
@@ -1044,12 +1050,47 @@ também é feita em Server Components.
       como esperado, com a mesma "forma"/especificidade do `dark:` que já
       funcionava — evitou depender só de "o build não quebrou" pra validar
       uma técnica de CSS nova no projeto.
+28. **Parte 21 — Aba "Hoje" sempre como padrão, e ajustes de layout
+    (posição do seletor Hoje/Amanhã, botão "+ Nova chegada")** (17/09/2026,
+    feita direto em `main`, pós parte 20):
+    - **Planejamento Diário e Chegadas & Saídas passaram a default "Hoje"**
+      (`planejamento/page.tsx`, `chegadas-saidas/gerenciar/page.tsx`):
+      antes, na ausência do parâmetro `?date=` na URL, essas duas telas
+      caíam em `tomorrowKey()` — ou seja, o padrão de fato era "Amanhã",
+      contradizendo o que o próprio `PRD_regrasdenegocio.md` seção 1 já
+      dizia ("o padrão é sempre a aba Hoje"). Corrigido invertendo a
+      lógica: agora só mostra "Amanhã" quando `sp.date === "amanha"`
+      explicitamente; qualquer outra coisa (inclusive ausência do
+      parâmetro) cai em "Hoje". Como a URL não carrega esse parâmetro ao
+      navegar por um link do menu, sair da tela e voltar já mostra "Hoje"
+      de novo naturalmente.
+    - **Mesas do Café já defaultava "Hoje" corretamente** — usa um
+      `<Tabs defaultValue="hoje">` do lado do cliente, sem depender de
+      parâmetro de URL nenhum, então já reiniciava em "Hoje" a cada vez
+      que a tela era carregada. PRD seção 1 tinha uma exceção documentada
+      dizendo que essa tela devia default pra "Amanhã" — removida agora
+      (a pedido do proprietário, pra ficar igual às outras duas telas).
+    - **Seletor "Hoje/Amanhã" movido pra baixo do botão "Forçar
+      sincronização com a Stays"** nas duas telas acima — antes ficavam
+      lado a lado na mesma linha do cabeçalho, empilhados agora
+      (`flex-col items-end` no lugar de `flex items-center`).
+    - **Botão "+ Nova chegada"/"+ Nova saída" cortando na borda do card no
+      celular** (`arrivals-departures-panel.tsx`): o cabeçalho do card
+      (`CardHeader`) não deixava o título e o botão quebrarem linha
+      quando não cabiam lado a lado — adicionado `flex-wrap` (+ `gap-2`
+      no lugar do `gap-1` implícito) nos dois `CardHeader` (Chegadas e
+      Saídas), deixando o botão cair pra uma segunda linha em telas
+      estreitas em vez de ficar espremido/cortado.
 
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de
-  antecedência (admin usa a aba "Amanhã"); a aba "Hoje" existe para ajustes
-  de última hora e testes. Camareiras sempre veem/atuam em "Hoje".
+  antecedência (admin clica em "Amanhã" pra planejar); a aba "Hoje" existe
+  para ajustes de última hora e testes. Camareiras sempre veem/atuam em
+  "Hoje". **Desde a Parte 21**, a aba padrão ao abrir/retornar pra
+  qualquer uma das telas com Hoje/Amanhã (Planejamento Diário, Chegadas &
+  Saídas, Mesas do Café) é sempre "Hoje" — nunca fica "lembrando" a última
+  aba escolhida.
 - **Ambiente local de teste (desde a Parte 08, seção 15)**: `npm run dev`
   na máquina do proprietário roda contra um Supabase **local via Docker**
   (`npx supabase start`), não contra o banco de produção — testar não polui

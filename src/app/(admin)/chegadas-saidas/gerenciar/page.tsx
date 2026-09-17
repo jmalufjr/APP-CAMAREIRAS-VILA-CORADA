@@ -12,7 +12,9 @@ export default async function ChegadasSaidasGerenciarPage({
   searchParams: Promise<{ date?: string }>;
 }) {
   const sp = await searchParams;
-  const isToday = sp.date === "hoje";
+  // Padrão é sempre "Hoje" — só mostra "Amanhã" quando explicitamente
+  // selecionado via query string (nunca lembrado entre visitas).
+  const isToday = sp.date !== "amanha";
   const date = isToday ? todayKey() : tomorrowKey();
   const supabase = await createClient();
 
@@ -28,7 +30,7 @@ export default async function ChegadasSaidasGerenciarPage({
         title="Chegadas & saídas"
         subtitle={`Hóspedes previstos para ${formatDatePt(date)}.`}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col items-end gap-2">
             <SyncStaysButton />
             <DateSwitcher basePath="/chegadas-saidas/gerenciar" current={isToday ? "hoje" : "amanha"} />
           </div>

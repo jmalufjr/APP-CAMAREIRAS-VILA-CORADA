@@ -43,7 +43,7 @@ export function ArrivalsDeparturesPanel({
   return (
     <div className="grid lg:grid-cols-2 gap-6">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle className="font-heading text-lg flex items-center gap-2">
             <LogIn size={18} className="text-secondary" /> Chegadas
           </CardTitle>
@@ -81,7 +81,7 @@ export function ArrivalsDeparturesPanel({
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle className="font-heading text-lg flex items-center gap-2">
             <LogOut size={18} className="text-secondary" /> Saídas
           </CardTitle>

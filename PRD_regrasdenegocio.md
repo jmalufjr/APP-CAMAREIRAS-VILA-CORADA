@@ -21,8 +21,11 @@ a que ele se refere**, voltando a sincronizar no dia seguinte a esse dia.
   sincronizando normalmente.
 
 **Aba padrão (Hoje/Amanhã)**: nas telas do admin que têm os menus "Hoje" e
-"Amanhã", o padrão de visualização é sempre a aba **"Hoje"**, exceto na
-tela de **Mesas do Café**, cujo padrão é a aba **"Amanhã"**.
+"Amanhã" (Planejamento Diário, Chegadas & Saídas, Mesas do Café), o padrão
+de visualização é sempre a aba **"Hoje"**, sem exceção — mesmo depois de
+navegar pra "Amanhã" e sair da tela, ao voltar ela mostra "Hoje" de novo
+*(revisado em 17/09/2026 — antes a tela de Mesas do Café tinha "Amanhã"
+como padrão; decisão revertida a pedido do proprietário)*.
 
 **Sincronização automática e forçada** *(implementado em 16/09/2026 — ver
 CLAUDE.md Parte 14)*: além da sincronização automática por cron (que

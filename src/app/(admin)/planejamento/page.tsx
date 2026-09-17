@@ -12,7 +12,9 @@ export default async function PlanejamentoPage({
   searchParams: Promise<{ date?: string }>;
 }) {
   const sp = await searchParams;
-  const date = sp.date === "hoje" ? todayKey() : tomorrowKey();
+  // Padrão é sempre "Hoje" — só mostra "Amanhã" quando explicitamente
+  // selecionado via query string (nunca lembrado entre visitas).
+  const date = sp.date === "amanha" ? tomorrowKey() : todayKey();
   const supabase = await createClient();
   const [{ data: rooms }, { data: camareiras }, { data: tasks }] = await Promise.all([
     supabase.from("rooms").select("*").eq("active", true).order("position"),
@@ -26,9 +28,9 @@ export default async function PlanejamentoPage({
         title="Planejamento diário"
         subtitle={`Defina o tipo de trabalho de cada suíte para ${formatDatePt(date)}. As camareiras escolhem, no próprio app, qual suíte vão realizar.`}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col items-end gap-2">
             <SyncStaysButton />
-            <DateSwitcher basePath="/planejamento" current={sp.date === "hoje" ? "hoje" : "amanha"} />
+            <DateSwitcher basePath="/planejamento" current={sp.date === "amanha" ? "amanha" : "hoje"} />
           </div>
         }
       />
