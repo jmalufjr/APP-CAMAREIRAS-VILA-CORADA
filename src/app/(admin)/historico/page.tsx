@@ -21,6 +21,7 @@ interface TaskWithOccurrences {
   task_type: ChecklistType;
   status: string;
   claimed_at: string | null;
+  started_at: string | null;
   finished_at: string | null;
   profiles: { name: string } | null;
   daily_room_task_occurrences: {
@@ -51,7 +52,7 @@ export default async function HistoricoPage({
     supabase
       .from("daily_room_tasks")
       .select(
-        "date, task_type, status, assigned_to, claimed_at, finished_at, profiles!daily_room_tasks_assigned_to_fkey(name), daily_room_task_occurrences(id, status, occurrence_categories(name))"
+        "date, task_type, status, assigned_to, claimed_at, started_at, finished_at, profiles!daily_room_tasks_assigned_to_fkey(name), daily_room_task_occurrences(id, status, occurrence_categories(name))"
       )
       .gte("date", from)
       .lte("date", to)
@@ -85,6 +86,7 @@ export default async function HistoricoPage({
           task_type: t.task_type,
           camareira: t.profiles?.name ?? "—",
           claimed_at: t.claimed_at,
+          started_at: t.started_at,
           finished_at: t.finished_at,
           occurrences: t.daily_room_task_occurrences.length,
           occurrencesResolved: t.daily_room_task_occurrences.filter((o) => o.status === "resolvida").length,

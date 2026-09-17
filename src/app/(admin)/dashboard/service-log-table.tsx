@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
-import { formatDateShortPt, formatDateTimePt, formatDurationPt } from "@/lib/date";
+import { formatDateShortPt, formatTimePt, formatDurationPt, effectiveServiceStart } from "@/lib/date";
 import type { ChecklistType } from "@/lib/types";
 
 export interface ServiceLogRow {
@@ -12,6 +12,7 @@ export interface ServiceLogRow {
   room_number: string;
   task_type: ChecklistType;
   claimed_at: string | null;
+  started_at: string | null;
   finished_at: string | null;
   camareira_name: string | null;
 }
@@ -33,21 +34,24 @@ export function ServiceLogTable({ rows }: { rows: ServiceLogRow[] }) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {rows.map((r) => (
-          <TableRow
-            key={r.id}
-            className="cursor-pointer hover:bg-accent"
-            onClick={() => router.push(`/dashboard/tarefas/${r.id}`)}
-          >
-            <TableCell>{formatDateShortPt(r.date)}</TableCell>
-            <TableCell>{r.room_number}</TableCell>
-            <TableCell>{TASK_TYPE_LABELS[r.task_type]}</TableCell>
-            <TableCell>{r.camareira_name ?? "—"}</TableCell>
-            <TableCell>{r.claimed_at ? formatDateTimePt(r.claimed_at) : "—"}</TableCell>
-            <TableCell>{r.finished_at ? formatDateTimePt(r.finished_at) : "—"}</TableCell>
-            <TableCell>{formatDurationPt(r.claimed_at, r.finished_at)}</TableCell>
-          </TableRow>
-        ))}
+        {rows.map((r) => {
+          const inicio = effectiveServiceStart(r.claimed_at, r.started_at);
+          return (
+            <TableRow
+              key={r.id}
+              className="cursor-pointer hover:bg-accent"
+              onClick={() => router.push(`/dashboard/tarefas/${r.id}`)}
+            >
+              <TableCell>{formatDateShortPt(r.date)}</TableCell>
+              <TableCell>{r.room_number}</TableCell>
+              <TableCell>{TASK_TYPE_LABELS[r.task_type]}</TableCell>
+              <TableCell>{r.camareira_name ?? "—"}</TableCell>
+              <TableCell>{inicio ? formatTimePt(inicio) : "—"}</TableCell>
+              <TableCell>{r.finished_at ? formatTimePt(r.finished_at) : "—"}</TableCell>
+              <TableCell>{formatDurationPt(inicio, r.finished_at)}</TableCell>
+            </TableRow>
+          );
+        })}
         {rows.length === 0 && (
           <TableRow>
             <TableCell colSpan={7} className="text-center text-muted-foreground py-6">

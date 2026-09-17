@@ -110,6 +110,30 @@ export function formatDateTimePt(isoString: string): string {
   return `${get("day")}/${get("month")} ${get("hour")}:${get("minute")}`;
 }
 
+// Formata um timestamp ISO como "hh:mm" no horário de Brasília, sem a
+// data — usado quando a data do serviço já aparece em outra coluna da
+// mesma tabela (ex.: "Início"/"Término" no card de serviços recentes).
+export function formatTimePt(isoString: string): string {
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: BRAZIL_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(isoString));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("hour")}:${get("minute")}`;
+}
+
+// Início "efetivo" de um serviço para fins de exibição/duração: usa
+// claimed_at (o momento em que a camareira escolheu o quarto) quando
+// existir. Serviços concluídos antes dessa coluna existir no banco não
+// têm claimed_at — para esses (só para esses), cai para started_at
+// (início do checklist) como aproximação. Isso não redefine o
+// significado de "Início" para serviços novos, que sempre têm claimed_at.
+export function effectiveServiceStart(claimedAt: string | null, startedAt: string | null): string | null {
+  return claimedAt ?? startedAt;
+}
+
 // Duração em minutos entre dois timestamps ISO (ex.: claimed_at →
 // finished_at), ou null se qualquer um dos dois estiver ausente — usado
 // para agregações (ex.: média por camareira no Histórico) antes de

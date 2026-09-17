@@ -57,7 +57,7 @@ export default async function DashboardPage() {
     supabase
       .from("daily_room_tasks")
       .select(
-        "id, date, task_type, claimed_at, finished_at, rooms(number), profiles!daily_room_tasks_assigned_to_fkey(name)"
+        "id, date, task_type, claimed_at, started_at, finished_at, rooms(number), profiles!daily_room_tasks_assigned_to_fkey(name)"
       )
       .gte("date", sevenDaysAgo)
       .lte("date", today)
@@ -72,6 +72,7 @@ export default async function DashboardPage() {
       date: string;
       task_type: ChecklistType;
       claimed_at: string | null;
+      started_at: string | null;
       finished_at: string | null;
       rooms: { number: string };
       profiles: { name: string } | null;
@@ -83,6 +84,7 @@ export default async function DashboardPage() {
       room_number: r.rooms.number,
       task_type: r.task_type,
       claimed_at: r.claimed_at,
+      started_at: r.started_at,
       finished_at: r.finished_at,
       camareira_name: r.profiles?.name ?? null,
     }))

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TASK_TYPE_OPTIONS } from "@/lib/task-type";
-import { durationMinutes, formatMinutesPt } from "@/lib/date";
+import { durationMinutes, formatMinutesPt, effectiveServiceStart } from "@/lib/date";
 import type { ChecklistType } from "@/lib/types";
 import { Download } from "lucide-react";
 
@@ -27,6 +27,7 @@ interface TaskRow {
   task_type: ChecklistType;
   camareira: string;
   claimed_at: string | null;
+  started_at: string | null;
   finished_at: string | null;
   occurrences: number;
   occurrencesResolved: number;
@@ -99,7 +100,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
       entry.byType[t.task_type] += 1;
       entry.ocorrencias += t.occurrences;
       entry.ocorrenciasResolvidas += t.occurrencesResolved;
-      const mins = durationMinutes(t.claimed_at, t.finished_at);
+      const mins = durationMinutes(effectiveServiceStart(t.claimed_at, t.started_at), t.finished_at);
       if (mins !== null) {
         entry.durationSumMin += mins;
         entry.durationCount += 1;
