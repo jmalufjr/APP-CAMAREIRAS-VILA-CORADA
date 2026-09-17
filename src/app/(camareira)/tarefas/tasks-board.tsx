@@ -11,7 +11,7 @@ import { formatDateShortPt } from "@/lib/date";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { BedDouble, ChevronRight, Hand } from "lucide-react";
+import { BedDouble, ChevronRight, Hand, X } from "lucide-react";
 
 export type TaskWithRoom = DailyRoomTask & { rooms: { number: string; name: string | null } };
 
@@ -104,17 +104,14 @@ function AvailableTaskCard({ task, isPast }: { task: TaskWithRoom; isPast?: bool
   return (
     <Card>
       <CardContent className="space-y-1.5">
-        <div className="flex items-center gap-3">
-          <div className="size-10 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
-            <BedDouble size={18} />
-          </div>
-          <p className="font-medium flex-1 min-w-0 whitespace-nowrap">Suíte {task.rooms.number}</p>
+        <div className="flex items-center gap-2">
+          <p className="font-medium flex-1 min-w-0 truncate">Suíte {task.rooms.number}</p>
           <div className="flex items-center gap-1 shrink-0">
             {isPast && (
               <Button
                 variant="outline"
                 size="sm"
-                className="h-auto rounded-xl px-2 py-1 text-[10px] leading-tight"
+                className="h-auto flex-col gap-0.5 rounded-xl px-2 py-1 text-[10px] leading-tight [&_svg:not([class*='size-'])]:size-3.5"
                 disabled={isPending}
                 onClick={() =>
                   startTransition(async () => {
@@ -127,7 +124,8 @@ function AvailableTaskCard({ task, isPast }: { task: TaskWithRoom; isPast?: bool
                   })
                 }
               >
-                Cancelar
+                <X size={14} />
+                <span>Cancelar</span>
               </Button>
             )}
             <Button
@@ -150,9 +148,9 @@ function AvailableTaskCard({ task, isPast }: { task: TaskWithRoom; isPast?: bool
             </Button>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground pl-[52px]">
+        <p className="text-xs text-muted-foreground">
           {TASK_TYPE_LABELS[task.task_type]}
-          {isPast && ` · ${formatDateShortPt(task.date)}`}
+          {isPast && ` ${formatDateShortPt(task.date)}`}
         </p>
       </CardContent>
     </Card>

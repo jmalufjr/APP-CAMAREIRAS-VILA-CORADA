@@ -998,6 +998,16 @@ também é feita em Server Components.
       "Escolher" ficou mais estreito: o ícone da mãozinha agora fica
       empilhado *acima* da palavra "Escolher" (`flex-col`), em vez de lado
       a lado, sobrando mais espaço horizontal pro nome da suíte.
+      **Ajuste fino no mesmo card, ainda no mesmo dia**: essa primeira
+      correção não foi suficiente em telas bem estreitas (o nome da suíte
+      ainda sobrepunha o botão "Cancelar") — o ícone circular de cama
+      (`BedDouble`) foi removido do card, com o nome da suíte ("Suíte N",
+      agora com `truncate` de verdade — corta com reticências em vez de
+      vazar por cima do vizinho) ocupando esse espaço; o botão "Cancelar"
+      passou a ter exatamente o mesmo formato empilhado do "Escolher" (um
+      X no lugar da mãozinha); e o separador "·" entre o tipo de serviço e
+      a data (nos cards de "Serviços anteriores") foi removido — ficou só
+      um espaço entre os dois.
 
 ## Convenções e decisões importantes
 
