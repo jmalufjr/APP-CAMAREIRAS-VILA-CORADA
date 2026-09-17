@@ -207,10 +207,13 @@ na tela da camareira — ver CLAUDE.md Parte 12 para os detalhes técnicos.)*
   correspondente ("2 hóspedes", "1 hóspede" etc.). A Mesa 7 pode mostrar
   mais de um par suíte/quantidade, empilhados, já que pode receber mais de
   uma suíte (ver seção 4 acima).
-- Mesas com ocupação (pelo menos 1 hóspede) ficam na tonalidade **mais
-  clara possível**, em contraste com as mesas vagas (tonalidade normal,
-  mais escura) — facilita identificar de relance quais mesas já têm
-  suíte(s) alocada(s).
+- Mesas com ocupação (pelo menos 1 hóspede) ficam na cor de **destaque**
+  do tema em uso — facilita identificar de relance quais mesas já têm
+  suíte(s) alocada(s) — em contraste com as mesas vagas, discretas. A
+  combinação exata de cores muda por tema, ver CLAUDE.md Parte 20
+  *(decisão invertida em 17/09/2026 — originalmente a mesa ocupada é que
+  ficava na tonalidade mais clara/discreta, e a vaga na cor de destaque;
+  o proprietário pediu pra inverter, considerando mais fácil de ler)*.
 - **Como a alocação suíte↔mesa é registrada**: pelo botão "Forçar
   sincronização com a Stays" (ou pela sincronização automática por cron)
   na tela "Mesas do café" (admin), que aplica a regra de preenchimento

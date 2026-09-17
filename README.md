@@ -3,7 +3,7 @@
 Web app de gestão do serviço de camareiras da pousada Vila Corada — arrumação e
 preparação de quartos, layout do café da manhã e comissão da equipe.
 
-Stack: Next.js 15 (App Router) + TypeScript + Tailwind + shadcn/ui + Supabase
+Stack: Next.js 16 (App Router) + TypeScript + Tailwind + shadcn/ui + Supabase
 (Postgres + Auth + RLS) + Recharts. Deploy recomendado: Vercel.
 
 ## 1. Criar o projeto no Supabase
@@ -135,14 +135,23 @@ copie o conteúdo por cima de `.env.local` temporariamente e desfaça depois.
    importe o repositório `jmalufjr/APP-CAMAREIRAS-VILA-CORADA` do GitHub.
 2. A Vercel detecta automaticamente que é um projeto Next.js — não precisa
    mudar nada em build/output settings.
-3. Antes de clicar em Deploy, abra **Environment Variables** e adicione as
-   três, com os mesmos valores do seu `.env.local`:
+3. Antes de clicar em Deploy, abra **Environment Variables** e adicione
+   todas as de baixo, com os mesmos valores do seu `.env.local`/
+   `.env.local.cloud` (as três primeiras são obrigatórias pro app subir; as
+   demais habilitam recibo por e-mail, integração com a Stays e o cron —
+   sem elas essas partes específicas falham/ficam desligadas, mas o resto
+   do app funciona normalmente):
 
    | Nome | Valor | Environments |
    |---|---|---|
    | `NEXT_PUBLIC_SUPABASE_URL` | URL do projeto Supabase | Production, Preview, Development |
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | publishable key (`sb_publishable_...`) | Production, Preview, Development |
    | `SUPABASE_SERVICE_ROLE_KEY` | secret key (`sb_secret_...`) | Production, Preview, Development |
+   | `RESEND_API_KEY` | chave da conta Resend | Production, Preview, Development |
+   | `STAYS_BASE_URL` | ver seção 6.1 | Production, Preview, Development |
+   | `STAYS_CLIENT_ID` | ver seção 6.1 | Production, Preview, Development |
+   | `STAYS_CLIENT_SECRET` | ver seção 6.1 | Production, Preview, Development |
+   | `CRON_SECRET` | ver seção 7 | Production, Preview, Development |
 
 4. Clique em **Deploy**. Cada push na branch `main` gera um novo deploy
    automaticamente depois disso.
@@ -159,11 +168,15 @@ bundle do cliente; sem esse prefixo, uma variável de ambiente só existe no
 servidor. `SUPABASE_SERVICE_ROLE_KEY` **não tem** esse prefixo de propósito:
 ela ignora as políticas de RLS e só pode ser usada no servidor. No código
 deste projeto ela é lida apenas dentro de `src/lib/supabase/admin.ts`, que só
-é importado por Server Actions marcadas com `"use server"` (`auth.ts` e
-`camareiras.ts`, usadas para criar/editar login das camareiras) — o Next.js
-garante que esse código nunca é enviado ao navegador. Não crie nenhum
-componente `"use client"` que importe `admin.ts` ou leia
-`process.env.SUPABASE_SERVICE_ROLE_KEY` diretamente.
+é importado por Server Actions marcadas com `"use server"` (`auth.ts`,
+`users.ts` — criar/editar login de camareiras e manutenção — e
+`stays-sync.ts`, que precisa gravar no banco sem sessão de usuário nenhuma
+pro cron funcionar) — o Next.js garante que esse código nunca é enviado ao
+navegador. Não crie nenhum componente `"use client"` que importe `admin.ts`
+ou leia `process.env.SUPABASE_SERVICE_ROLE_KEY` diretamente. A mesma regra
+vale para `STAYS_CLIENT_SECRET` (lida só em `src/lib/stays/client.ts`, que
+tem esse mesmo aviso em comentário no topo do arquivo) e `CRON_SECRET`
+(lida só em `src/app/api/cron/stays-sync/route.ts`).
 
 ## 6. Integração com a Stays (reservas)
 
@@ -194,11 +207,10 @@ STAYS_CLIENT_ID=login-mostrado-na-tela-de-chaves-da-api
 STAYS_CLIENT_SECRET=senha-mostrada-na-tela-de-chaves-da-api
 ```
 
-Mesmas três variáveis em `.env.local` (dev local) e `.env.local.cloud`
-(backup de produção) — a conta Stays é a mesma independente de qual
-Supabase o app está usando. Quando a integração for pro ar, essas três
-também precisam ser adicionadas na Vercel (seção 5, mesmo processo das
-demais).
+Mesmas três variáveis em `.env.local` (dev local), `.env.local.cloud`
+(backup de produção) **e na Vercel** (seção 5) — a conta Stays é a mesma
+independente de qual Supabase o app está usando. Já configuradas e ativas
+em produção desde setembro/2026.
 
 ### 6.3 Mapeamento quarto ↔ listing da Stays
 
@@ -216,6 +228,30 @@ Se a pousada adicionar/remover uma suíte no futuro, é preciso repetir essa
 consulta e atualizar `stays_listing_id` do quarto correspondente
 manualmente (não há descoberta automática desse mapeamento).
 
+## 7. Sincronização automática com a Stays (cron)
+
+Além dos três botões manuais "Forçar sincronização com a Stays"
+(Planejamento Diário, Chegadas & Saídas, Mesas do Café), o app roda essa
+mesma sincronização sozinho, 1x por dia (`vercel.json`, `crons`), chamando
+`GET /api/cron/stays-sync`. Essa rota só executa se o pedido trouxer o
+cabeçalho `Authorization: Bearer <CRON_SECRET>` — é a própria Vercel que
+manda esse cabeçalho automaticamente quando o horário do cron chega, desde
+que a variável `CRON_SECRET` esteja configurada no projeto (seção 5); sem
+ela, a rota sempre responde 401 e a sincronização automática simplesmente
+não acontece (os três botões manuais continuam funcionando normalmente,
+sem depender dessa variável).
+
+Para gerar um valor novo (ex.: ao rodar este projeto do zero em outra
+conta), qualquer string aleatória longa serve — por exemplo:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Coloque o resultado em `CRON_SECRET` no `.env.local` e na Vercel (mesmo
+valor nos dois lugares). Ver `src/app/api/cron/stays-sync/route.ts` e
+`CLAUDE.md` Parte 14 para os detalhes de implementação.
+
 ## Fonte de títulos "The Seasons"
 
 O PRD pede a fonte paga **The Seasons** para títulos. Como o arquivo da fonte
@@ -227,10 +263,21 @@ para `localFont` (next/font/local) apontando para os arquivos.
 
 ## Estrutura
 
-- `supabase/schema.sql` / `supabase/seed.sql` — banco de dados.
-- `src/app/(admin)/` — páginas do proprietário/admin: dashboard, planejamento
-  diário, quartos, mesas, checklists/ocorrências, camareiras, histórico.
-- `src/app/(camareira)/` — páginas da camareira: meus quartos (checklist) e
-  visualização das mesas do café.
-- `src/lib/actions/` — Server Actions (mutações no banco).
-- `src/lib/supabase/` — clientes Supabase (browser, server, admin, middleware).
+- `supabase/schema.sql` / `supabase/seed.sql` — banco de dados (instalação
+  nova); `supabase/migrations/` — alterações incrementais (produção já
+  existente).
+- `src/app/(admin)/` — páginas do admin: resumo executivo, planejamento
+  diário, chegadas & saídas, mesas do café, consumo de bar e frigobar,
+  listas (checklists/ocorrências/manutenção preventiva/quartos), usuários,
+  histórico, questões e respostas.
+- `src/app/(camareira)/` — páginas da camareira: minhas suítes (checklist),
+  mesas do café, chegadas & saídas, comanda, consumo por suítes.
+- `src/app/manutencao/` — páginas do funcionário de manutenção.
+- `src/lib/actions/` — Server Actions (toda mutação no banco).
+- `src/lib/stays/` — integração com a API da Stays (funções puras, sem
+  Server Action).
+- `src/lib/supabase/` — clientes Supabase (browser, server, admin,
+  middleware).
+
+Mapa completo e detalhado de "o que existe e onde", com o histórico de
+decisões de cada parte do projeto: `CLAUDE.md`.

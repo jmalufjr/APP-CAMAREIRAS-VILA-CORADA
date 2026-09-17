@@ -1301,12 +1301,14 @@ o escopo mude no futuro.
   Manutenção (parte 2, implementada e testada, ver seção acima) +
   changelog de decisões/desvios (seção 4).
 - `PRD_regrasdenegocio.md` — regras de negócio da integração com a API da
-  Stays (**ainda não implementada** — fase em levantamento de requisitos
-  no momento em que este arquivo foi criado): regra de preferência
-  admin-vs-sincronização, regras de Arrumação/Troca por duração da
-  reserva, Saída com Chegada/Somente Saída/Somente Chegada, Chegadas &
-  Saídas e a regra de preenchimento das mesas do café por proximidade da
-  vista do mar. Ler antes de começar a implementar essa integração.
+  Stays (**implementada e em produção desde a Parte 11, com extensões até
+  a Parte 21**): regra de preferência admin-vs-sincronização (inclusive as
+  lápides de exclusão e a sincronização forçada), regras de Arrumação/
+  Troca por duração da reserva, Saída com Chegada/Somente Saída/Somente
+  Chegada, Chegadas & Saídas e a regra de preenchimento das mesas do café
+  por proximidade da vista do mar. Ler antes de mexer em qualquer parte
+  dessa integração — cada seção tem notas de implementação datadas
+  marcando o que já mudou desde a versão original do documento.
 - `README.md` — setup local (Docker/Supabase local desde a Parte 08, seção
   15), deploy na Vercel, variáveis de ambiente.
 - `supabase/schema.sql` / `supabase/seed.sql` — schema e dados iniciais.
@@ -1322,16 +1324,19 @@ o escopo mude no futuro.
   `poolbar/` e `mesas/` (só a aba "Layout & mesas") são as subtelas, cada
   uma com `<BackLink>`.
 - `src/app/(admin)/mesas/gerenciar/` — tela "Mesas do café" do menu
-  principal (hóspedes de hoje/amanhã + comissão + alocação de suítes por
-  mesa, `TableRoomAssignments` dentro de `guests-admin-panel.tsx`, Parte
-  12); **não** inclui mais o layout arrastável, que é
-  `src/app/(admin)/checklists/mesas/`.
+  principal: comissão, alocação de suítes por mesa (`TableRoomAssignments`
+  dentro de `guests-admin-panel.tsx`, Parte 12), hóspedes/observação por
+  mesa individual, e "Total de mesas" + os 4 campos de contagem por
+  tamanho de mesa — esses últimos somente leitura, sempre calculados na
+  hora a partir da alocação suíte↔mesa (Partes 16/17). **Não** inclui mais
+  o layout arrastável, que é `src/app/(admin)/checklists/mesas/`.
 - `src/components/shared/table-layout-canvas.tsx` — desenha o layout de
   mesas (formato, posição); único componente usado tanto pelo editor do
   admin quanto pela visão da camareira, e também pela visão só-leitura de
   `mesas/gerenciar`. Desde a Parte 12 também mostra as suítes alocadas em
-  cada mesa (prop `tableRooms`) e escurece mesas vagas em relação às
-  ocupadas.
+  cada mesa (prop `tableRooms`); desde a Parte 20, mesa **ocupada** é a
+  que recebe a cor de destaque do tema (mais escura que o fundo nos temas
+  escuros, sólida no claro) — o inverso do que era originalmente.
 - `src/app/(admin)/frigobar/` — tela "Consumo de Bar e Frigobar" do menu
   principal, **só leitura desde a Parte 05** (seção 12): duas abas, "Lista
   de comandas do bar" (`comandas-list-panel.tsx`) e "Consumo por quartos"
