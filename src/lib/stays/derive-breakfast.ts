@@ -28,6 +28,44 @@ export function tableNumber(label: string): number {
   return match ? parseInt(match[0], 10) : -1;
 }
 
+export interface TableSizeCounts {
+  tables1Guest: number;
+  tables2Guest: number;
+  tables3Guest: number;
+  guestsTable07: number;
+}
+
+// Deriva os 4 campos de contagem por tamanho de mesa (PRD_regrasdenegocio.md
+// seção 4: "Quantidade de mesas de 1/2/3 hóspede(s)" e "Quantidade de
+// hóspedes na Mesa 07") diretamente da alocação suíte↔mesa já existente —
+// não é um valor sincronizado/editável à parte, é sempre um cálculo em cima
+// do que já está na tela (ver CLAUDE.md Parte 16). Função pura, usada tanto
+// pela tela do admin quanto pela da camareira.
+export function computeTableSizeCounts(
+  assignments: { table_id: string; guest_count: number }[],
+  tables: { id: string; label: string }[]
+): TableSizeCounts {
+  const totalsByTable = new Map<string, number>();
+  assignments.forEach((a) => {
+    totalsByTable.set(a.table_id, (totalsByTable.get(a.table_id) ?? 0) + a.guest_count);
+  });
+
+  let tables1Guest = 0;
+  let tables2Guest = 0;
+  let tables3Guest = 0;
+  let guestsTable07 = 0;
+
+  tables.forEach((t) => {
+    const total = totalsByTable.get(t.id) ?? 0;
+    if (total === 1) tables1Guest++;
+    else if (total === 2) tables2Guest++;
+    else if (total === 3) tables3Guest++;
+    if (tableNumber(t.label) === 7) guestsTable07 = total;
+  });
+
+  return { tables1Guest, tables2Guest, tables3Guest, guestsTable07 };
+}
+
 // Recebe as suítes ocupadas num dia (com sua quantidade de hóspedes) e as
 // mesas ativas, devolve o mapeamento mesa -> suítes alocadas ali (a Mesa 7
 // pode receber mais de uma suíte). Suítes que não couberem em nenhuma mesa

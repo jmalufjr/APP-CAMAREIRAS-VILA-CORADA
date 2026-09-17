@@ -8,12 +8,11 @@ import {
   setGuestCount,
   setTableNotes,
   setBreakfastDaySettings,
-  setBreakfastTableCounts,
   setTableRoomAssignment,
   removeTableRoomAssignment,
   updateCommissionValue,
-  type BreakfastTableCounts,
 } from "@/lib/actions/tables";
+import { computeTableSizeCounts } from "@/lib/stays/derive-breakfast";
 import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -212,29 +211,16 @@ function GuestCountEditor({
   const [notes, setNotes] = useState(notesInit);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
-  const total = Object.values(values).reduce((a, b) => a + (b || 0), 0);
 
   const activeTables = tables.filter((t) => t.active).sort((a, b) => tableNumber(a.label) - tableNumber(b.label));
 
   const [totalTables, setTotalTables] = useState(String(daySettings?.total_tables ?? 0));
   const [dayNotes, setDayNotes] = useState(daySettings?.notes ?? "");
-  const [tableCounts, setTableCounts] = useState<BreakfastTableCounts>({
-    tables_1_guest: daySettings?.tables_1_guest ?? 0,
-    tables_2_guest: daySettings?.tables_2_guest ?? 0,
-    tables_3_guest: daySettings?.tables_3_guest ?? 0,
-    guests_table_07: daySettings?.guests_table_07 ?? 0,
-  });
+  const tableSizeCounts = computeTableSizeCounts(assignments, activeTables);
 
   function saveDaySettings(nextTotal: string, nextNotes: string) {
     startTransition(async () => {
       const result = await setBreakfastDaySettings(date, Number(nextTotal), nextNotes);
-      if (result?.error) toast.error(result.error);
-    });
-  }
-
-  function saveTableCounts(next: BreakfastTableCounts) {
-    startTransition(async () => {
-      const result = await setBreakfastTableCounts(date, next);
       if (result?.error) toast.error(result.error);
     });
   }
@@ -269,32 +255,11 @@ function GuestCountEditor({
         </Select>
       </div>
 
-      <div className="max-w-sm space-y-3">
-        {(
-          [
-            ["tables_1_guest", "Quantidade de mesas de 1 hóspede"],
-            ["tables_2_guest", "Quantidade de mesas de 2 hóspedes"],
-            ["tables_3_guest", "Quantidade de mesas de 3 hóspedes"],
-            ["guests_table_07", "Quantidade de hóspedes na Mesa 07"],
-          ] as const
-        ).map(([field, fieldLabel]) => (
-          <div key={field} className="space-y-1.5">
-            <Label htmlFor={`${field}-${date}`} className="text-sm">
-              {fieldLabel}
-            </Label>
-            <Input
-              id={`${field}-${date}`}
-              type="number"
-              min={0}
-              className="w-24"
-              value={tableCounts[field]}
-              onChange={(e) =>
-                setTableCounts((c) => ({ ...c, [field]: Math.max(0, Number(e.target.value) || 0) }))
-              }
-              onBlur={() => saveTableCounts(tableCounts)}
-            />
-          </div>
-        ))}
+      <div className="max-w-sm space-y-1.5 text-sm">
+        <p>Quantidade de mesas de 1 hóspede: {tableSizeCounts.tables1Guest}</p>
+        <p>Quantidade de mesas de 2 hóspedes: {tableSizeCounts.tables2Guest}</p>
+        <p>Quantidade de mesas de 3 hóspedes: {tableSizeCounts.tables3Guest}</p>
+        <p>Quantidade de hóspedes na Mesa 07: {tableSizeCounts.guestsTable07}</p>
       </div>
 
       <div className="max-w-sm space-y-1.5">
@@ -353,10 +318,6 @@ function GuestCountEditor({
           </div>
         ))}
       </div>
-      <p className="text-sm font-medium">
-        Total de mesas ocupadas: {Object.values(values).filter((v) => v > 0).length} · Total de hóspedes: {total}
-        {isPending && " · salvando..."}
-      </p>
     </div>
   );
 }

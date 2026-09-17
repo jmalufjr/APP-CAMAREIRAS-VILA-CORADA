@@ -86,11 +86,6 @@ export interface DailyBreakfastSettings {
   total_tables: number;
   notes: string | null;
   updated_at: string;
-  tables_1_guest: number;
-  tables_2_guest: number;
-  tables_3_guest: number;
-  guests_table_07: number;
-  stays_locked: boolean;
 }
 
 export interface ReceiptSettings {

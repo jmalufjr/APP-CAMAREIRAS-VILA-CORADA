@@ -57,7 +57,9 @@ tela dos 4 campos de contagem por tamanho de mesa (Parte 14); e, por fim,
 duas tabelas "lápide" que permitem ao admin apagar uma tarefa do
 Planejamento Diário ("Sem trabalho") ou uma alocação de suíte numa mesa,
 sem que isso seja desfeito pela próxima sincronização automática (Parte
-15).
+15); e a troca dos 4 campos de contagem de mesas de "sincronizados" para
+"sempre calculados na hora" a partir da alocação suíte↔mesa, eliminando o
+risco de ficarem desatualizados (Parte 16).
 
 ## Onde está
 
@@ -889,6 +891,41 @@ também é feita em Server Components.
       criou a tarefa/alocação de verdade e apagou a lápide correspondente.
       Mesmo truque de rota de API temporária das partes anteriores,
       removida depois do teste.
+23. **Parte 16 — Os 4 campos de contagem de mesas viraram calculados, não
+    sincronizados** (17/09/2026, feita direto em `main`, pós parte 15):
+    revisão de decisão pedida pelo proprietário depois de ver a Parte 14
+    em produção — os quatro campos (quantidade de mesas de 1/2/3 hóspedes,
+    hóspedes na Mesa 07) eram gravados em `daily_breakfast_settings` só
+    quando o admin clicava "Forçar sincronização" ou os editava manualmente,
+    o que os deixava desatualizados sempre que uma suíte era realocada
+    entre mesas sem passar por ali. Solução mais simples: eliminar a
+    persistência inteira e **calcular na hora**, sempre, a partir de
+    `daily_breakfast_room_assignments` — a fonte de verdade já existente.
+    - **`computeTableSizeCounts`** (nova função pura em
+      `src/lib/stays/derive-breakfast.ts`, ao lado de `assignRoomsToTables`
+      /`tableNumber`, que ela reaproveita): recebe as alocações do dia +
+      as mesas ativas, devolve os 4 números. Chamada tanto por
+      `guests-admin-panel.tsx` (admin, dentro de `GuestCountEditor`) quanto
+      por `(camareira)/mesas/page.tsx` (`DaySettingsInfo`) — os dois já
+      tinham `assignments`/`tables` disponíveis, não precisou de fetch novo.
+    - **Os 4 campos viraram somente leitura nas duas telas** (antes eram
+      editáveis pelo admin) — não faz sentido editar manualmente um valor
+      que é sempre recalculado a partir de outra fonte.
+    - **Removido**: a Server Action `setBreakfastTableCounts`
+      (`src/lib/actions/tables.ts`), o bloco de `syncStaysBreakfastTables`
+      que gravava esses 4 campos em `daily_breakfast_settings` (a soma por
+      mesa pra `daily_breakfast.guest_count` continua existindo, só o
+      detalhamento por tamanho é que não persiste mais), e as próprias
+      colunas do banco (`tables_1_guest`/`tables_2_guest`/`tables_3_guest`/
+      `guests_table_07`/`stays_locked` de `daily_breakfast_settings` —
+      migration `033_drop_unused_breakfast_settings_columns.sql`; nunca
+      chegaram a ser editadas de verdade por um admin, só por código de
+      sincronização já removido, então descartar foi seguro).
+    - **Também removida, a pedido**: a linha "Total de mesas ocupadas ·
+      Total de hóspedes" que aparecia no fim do `GuestCountEditor` (tela do
+      admin), logo antes dos cards "Mesas · hoje/amanhã" — considerada
+      redundante depois que os 4 campos de contagem já mostram esse
+      detalhamento de forma mais útil.
 
 ## Convenções e decisões importantes
 
@@ -1198,7 +1235,9 @@ o escopo mude no futuro.
   `derive-planning.ts` (deriva o tipo de trabalho de um quarto/dia a
   partir das reservas, e exporta `daysBetween`) e `derive-breakfast.ts`
   (algoritmo de distribuição suíte→mesa por proximidade da vista do mar,
-  Parte 13) — todos puros/testáveis isolados, sem Server Action neles.
+  Parte 13, e `computeTableSizeCounts`, os 4 campos de contagem calculados
+  na hora a partir da alocação suíte↔mesa, Parte 16) — todos
+  puros/testáveis isolados, sem Server Action neles.
   `src/lib/actions/stays-sync.ts` é quem efetivamente grava no banco:
   `syncStaysPlanning` (Planejamento Diário), `syncStaysArrivalsDepartures`
   (Chegadas & Saídas) e `syncStaysBreakfastTables` (Mesas do Café), todas

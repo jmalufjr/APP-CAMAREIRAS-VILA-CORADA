@@ -196,39 +196,6 @@ export async function setBreakfastDaySettings(date: string, totalTables: number,
   return { success: true };
 }
 
-export interface BreakfastTableCounts {
-  tables_1_guest: number;
-  tables_2_guest: number;
-  tables_3_guest: number;
-  guests_table_07: number;
-}
-
-// Os 4 campos de contagem por tamanho de mesa (PRD_regrasdenegocio.md
-// seção 4) são sincronizáveis: editar qualquer um deles trava a
-// sincronização (stays_locked) até o dia seguinte, igual aos demais campos
-// sincronizados — diferente de "Total de mesas" e "Observação do dia", que
-// nunca travam (não vêm da Stays).
-export async function setBreakfastTableCounts(date: string, counts: BreakfastTableCounts) {
-  const supabase = await createClient();
-  const { error } = await supabase.from("daily_breakfast_settings").upsert(
-    {
-      date,
-      tables_1_guest: Math.max(0, Math.floor(counts.tables_1_guest) || 0),
-      tables_2_guest: Math.max(0, Math.floor(counts.tables_2_guest) || 0),
-      tables_3_guest: Math.max(0, Math.floor(counts.tables_3_guest) || 0),
-      guests_table_07: Math.max(0, Math.floor(counts.guests_table_07) || 0),
-      stays_locked: true,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "date" }
-  );
-
-  if (error) return { error: error.message };
-  revalidatePath("/mesas/gerenciar");
-  revalidatePath("/mesas");
-  return { success: true };
-}
-
 export async function updateCommissionValue(value: number) {
   const supabase = await createClient();
   const { error } = await supabase

@@ -3,7 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaysReservationsIncluding, getStaysClientName, type StaysReservationRaw } from "@/lib/stays/client";
 import { deriveWorkType, daysBetween } from "@/lib/stays/derive-planning";
-import { assignRoomsToTables, tableNumber, type RoomGuestCount } from "@/lib/stays/derive-breakfast";
+import { assignRoomsToTables, type RoomGuestCount } from "@/lib/stays/derive-breakfast";
 import { todayKey, tomorrowKey } from "@/lib/date";
 import { revalidatePath } from "next/cache";
 
@@ -400,8 +400,11 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
     // Total de hóspedes por mesa (soma das suítes ali, incluindo as
     // travadas) -> daily_breakfast.guest_count, respeitando seu próprio
     // stays_locked (edição manual direta do campo, sem passar pela
-    // alocação por suíte) — e os 4 campos de contagem por tamanho de mesa
-    // (PRD seção 4) em daily_breakfast_settings, do mesmo jeito.
+    // alocação por suíte). Os 4 campos de contagem por tamanho de mesa
+    // (PRD seção 4) não são mais sincronizados/persistidos aqui — são
+    // calculados na hora, direto da alocação suíte↔mesa, tanto na tela do
+    // admin quanto na da camareira (`computeTableSizeCounts`, ver CLAUDE.md
+    // Parte 16).
     const totalsByTable = new Map<string, number>();
     assignment.forEach((roomsAtTable, tableId) => {
       totalsByTable.set(tableId, roomsAtTable.reduce((s, r) => s + r.guestCount, 0));
@@ -410,17 +413,8 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
       totalsByTable.set(a.table_id, (totalsByTable.get(a.table_id) ?? 0) + a.guest_count);
     });
 
-    let tables1Guest = 0;
-    let tables2Guest = 0;
-    let tables3Guest = 0;
-    let guestsTable07 = 0;
-
     for (const table of tables as { id: string; label: string }[]) {
       const total = totalsByTable.get(table.id) ?? 0;
-      if (total === 1) tables1Guest++;
-      else if (total === 2) tables2Guest++;
-      else if (total === 3) tables3Guest++;
-      if (tableNumber(table.label) === 7) guestsTable07 = total;
 
       const { data: existingBreakfast } = await supabase
         .from("daily_breakfast")
@@ -434,30 +428,6 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
       const { error } = await supabase.from("daily_breakfast").upsert(
         { date, table_id: table.id, guest_count: total, stays_locked: false },
         { onConflict: "date,table_id" }
-      );
-      if (!error) updated++;
-    }
-
-    const { data: existingSettings } = await supabase
-      .from("daily_breakfast_settings")
-      .select("stays_locked")
-      .eq("date", date)
-      .maybeSingle();
-
-    if (existingSettings?.stays_locked && !force) {
-      skipped++;
-    } else {
-      const { error } = await supabase.from("daily_breakfast_settings").upsert(
-        {
-          date,
-          tables_1_guest: tables1Guest,
-          tables_2_guest: tables2Guest,
-          tables_3_guest: tables3Guest,
-          guests_table_07: guestsTable07,
-          stays_locked: false,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "date" }
       );
       if (!error) updated++;
     }

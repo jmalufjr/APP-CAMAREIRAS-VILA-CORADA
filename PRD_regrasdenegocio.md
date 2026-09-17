@@ -142,13 +142,17 @@ usando o `_idclient` da reserva — ver CLAUDE.md Parte 13.)*
 O campo **"Observação"** de cada card de mesa é de edição exclusiva do
 admin, sem comprometer a sincronização dos demais campos.
 
-*(Implementado em 16/09/2026 — ver CLAUDE.md Parte 14. Os quatro campos
-aparecem, nessa ordem, logo abaixo de "Total de mesas" e logo acima de
-"Observação do dia", tanto na tela do admin (editáveis) quanto na da
-camareira (somente leitura). Editar qualquer um deles trava a
-sincronização desse dia (regra de preferência da seção 1); editar "Total
-de mesas" ou "Observação do dia" nunca trava, pois nenhum dos dois vem da
-Stays.)*
+*(Implementado em 16-17/09/2026 — ver CLAUDE.md Partes 14 e 16. Os quatro
+campos aparecem, nessa ordem, logo abaixo de "Total de mesas" e logo acima
+de "Observação do dia", tanto na tela do admin quanto na da camareira —
+**somente leitura nas duas**, ao contrário do que essa seção previa
+originalmente. Decisão revista em 17/09/2026: em vez de serem campos
+sincronizados/editáveis com trava própria, esses quatro números são
+sempre **calculados na hora**, direto da alocação suíte↔mesa que já existe
+(seção 5) — não têm valor próprio salvo, não podem ficar desatualizados em
+relação às suítes realmente alocadas, e não precisam de nenhuma regra de
+preferência: mudar a alocação de uma suíte já muda esses números
+automaticamente, sem precisar sincronizar nada.)*
 
 ### Regra de preenchimento das mesas (distribuição por suíte)
 

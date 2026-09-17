@@ -214,20 +214,15 @@ create table daily_breakfast_room_exclusions (
 -- ---------- DAILY BREAKFAST SETTINGS (total de mesas + observação geral do dia) ----------
 -- Configuração de dia inteiro (não por mesa), definida pelo admin e exibida
 -- para a camareira acima do layout de mesas; complementa daily_breakfast.
--- Campos "tables_*"/"guests_table_07" e stays_locked: ver integração com a
--- Stays em PRD_regrasdenegocio.md seção 4 — total_tables continua o valor
--- oficial, os quatro campos "tables_*"/"guests_table_07" são o detalhamento
--- calculado pela regra de distribuição de mesas.
+-- Os 4 campos de contagem por tamanho de mesa do PRD seção 4 (quantidade
+-- de mesas de 1/2/3 hóspedes, hóspedes na Mesa 07) não são colunas aqui —
+-- são sempre calculados na hora a partir de daily_breakfast_room_assignments
+-- (`computeTableSizeCounts`, ver CLAUDE.md Parte 16), nunca persistidos.
 create table daily_breakfast_settings (
   date date primary key,
   total_tables int not null default 0,
   notes text,
-  updated_at timestamptz not null default now(),
-  tables_1_guest int not null default 0,
-  tables_2_guest int not null default 0,
-  tables_3_guest int not null default 0,
-  guests_table_07 int not null default 0,
-  stays_locked boolean not null default false
+  updated_at timestamptz not null default now()
 );
 
 -- ---------- DAILY ARRIVALS (chegadas previstas do dia) ----------

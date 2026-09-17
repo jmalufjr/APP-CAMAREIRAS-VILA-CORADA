@@ -3,6 +3,7 @@ import type { BreakfastTable, DailyBreakfastSettings, DailyBreakfastRoomAssignme
 import { PageHeader } from "@/components/shared/page-header";
 import { TableLayoutCanvas, type TableRoomAssignment } from "@/components/shared/table-layout-canvas";
 import { TableNotesList } from "@/components/shared/table-notes-list";
+import { computeTableSizeCounts } from "@/lib/stays/derive-breakfast";
 import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
@@ -62,7 +63,11 @@ export default async function MesasViewPage() {
         </TabsList>
         <TabsContent value="hoje" className="pt-4 space-y-4">
           <p className="text-sm capitalize text-muted-foreground">{formatDatePt(todayKey())}</p>
-          <DaySettingsInfo settings={todaySettings as DailyBreakfastSettings | null} />
+          <DaySettingsInfo
+            settings={todaySettings as DailyBreakfastSettings | null}
+            assignments={(todayAssignments ?? []) as DailyBreakfastRoomAssignment[]}
+            tables={tableList}
+          />
           <TableLayoutCanvas
             tables={tableList}
             guestCounts={todayMap}
@@ -72,7 +77,11 @@ export default async function MesasViewPage() {
         </TabsContent>
         <TabsContent value="amanha" className="pt-4 space-y-4">
           <p className="text-sm capitalize text-muted-foreground">{formatDatePt(tomorrowKey())}</p>
-          <DaySettingsInfo settings={tomorrowSettings as DailyBreakfastSettings | null} />
+          <DaySettingsInfo
+            settings={tomorrowSettings as DailyBreakfastSettings | null}
+            assignments={(tomorrowAssignments ?? []) as DailyBreakfastRoomAssignment[]}
+            tables={tableList}
+          />
           <TableLayoutCanvas
             tables={tableList}
             guestCounts={tomorrowMap}
@@ -85,7 +94,16 @@ export default async function MesasViewPage() {
   );
 }
 
-function DaySettingsInfo({ settings }: { settings: DailyBreakfastSettings | null }) {
+function DaySettingsInfo({
+  settings,
+  assignments,
+  tables,
+}: {
+  settings: DailyBreakfastSettings | null;
+  assignments: DailyBreakfastRoomAssignment[];
+  tables: BreakfastTable[];
+}) {
+  const counts = computeTableSizeCounts(assignments, tables);
   return (
     <div className="space-y-3">
       <Card>
@@ -95,10 +113,10 @@ function DaySettingsInfo({ settings }: { settings: DailyBreakfastSettings | null
       </Card>
       <Card>
         <CardContent className="space-y-1">
-          <p className="text-sm">Quantidade de mesas de 1 hóspede: {settings?.tables_1_guest ?? 0}</p>
-          <p className="text-sm">Quantidade de mesas de 2 hóspedes: {settings?.tables_2_guest ?? 0}</p>
-          <p className="text-sm">Quantidade de mesas de 3 hóspedes: {settings?.tables_3_guest ?? 0}</p>
-          <p className="text-sm">Quantidade de hóspedes na Mesa 07: {settings?.guests_table_07 ?? 0}</p>
+          <p className="text-sm">Quantidade de mesas de 1 hóspede: {counts.tables1Guest}</p>
+          <p className="text-sm">Quantidade de mesas de 2 hóspedes: {counts.tables2Guest}</p>
+          <p className="text-sm">Quantidade de mesas de 3 hóspedes: {counts.tables3Guest}</p>
+          <p className="text-sm">Quantidade de hóspedes na Mesa 07: {counts.guestsTable07}</p>
         </CardContent>
       </Card>
       {settings?.notes && (
