@@ -53,6 +53,18 @@ export async function syncStaysPlanning(options?: SyncOptions) {
     byListing.set(r._idlisting, list);
   });
 
+  // Lápides de "Sem trabalho" explícito (ver `setRoomTask`/CLAUDE.md Parte
+  // 15) — ignoradas com `force`, igual a `stays_locked`.
+  let exclusions: { date: string; room_id: string }[] = [];
+  if (!force) {
+    const { data } = await supabase
+      .from("daily_room_task_exclusions")
+      .select("date, room_id")
+      .in("date", dates);
+    exclusions = data ?? [];
+  }
+  const excludedKeys = new Set(exclusions.map((e) => `${e.date}:${e.room_id}`));
+
   let updated = 0;
   let skipped = 0;
 
@@ -77,6 +89,14 @@ export async function syncStaysPlanning(options?: SyncOptions) {
         continue;
       }
 
+      // "Sem trabalho" explícito do admin (lápide, ignorada se `force`):
+      // não recria a tarefa, mesmo sem linha nenhuma de daily_room_tasks
+      // pra carregar o lock.
+      if (excludedKeys.has(`${date}:${room.id}`)) {
+        skipped++;
+        continue;
+      }
+
       if (!desiredType) {
         if (existing) {
           await supabase.from("daily_room_tasks").delete().eq("id", existing.id);
@@ -86,6 +106,11 @@ export async function syncStaysPlanning(options?: SyncOptions) {
       }
 
       if (existing && existing.task_type === desiredType) continue; // já está certo, não mexe
+
+      // Vai criar uma tarefa de verdade agora: qualquer lápide "sem
+      // trabalho" pra esta suíte/dia ficou obsoleta (só chega aqui com
+      // `force`, já que sem `force` o `continue` acima já teria pulado).
+      await supabase.from("daily_room_task_exclusions").delete().eq("date", date).eq("room_id", room.id);
 
       if (existing) {
         await supabase.from("daily_room_tasks").delete().eq("id", existing.id);
@@ -308,9 +333,24 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
       lockedAssignments = data ?? [];
     }
 
+    // Suítes removidas de propósito de qualquer mesa (lápide, ver
+    // `removeTableRoomAssignment`/CLAUDE.md Parte 15) — buscadas sempre
+    // (mesmo com `force`, pra poder limpar as obsoletas mais abaixo), mas
+    // só usadas pra filtrar o algoritmo quando não é `force`.
+    const { data: exclusionRows } = await supabase
+      .from("daily_breakfast_room_exclusions")
+      .select("room_id")
+      .eq("date", date);
+    const excludedRoomIds = new Set((exclusionRows ?? []).map((e) => e.room_id));
+
     const lockedRoomIds = new Set(lockedAssignments.map((a) => a.room_id));
-    const roomsToAssign = occupied.filter((o) => !lockedRoomIds.has(o.roomId));
-    skipped += lockedRoomIds.size;
+    const roomsToAssign = occupied.filter(
+      (o) => !lockedRoomIds.has(o.roomId) && !(!force && excludedRoomIds.has(o.roomId))
+    );
+    const excludedCount = force
+      ? 0
+      : occupied.filter((o) => excludedRoomIds.has(o.roomId) && !lockedRoomIds.has(o.roomId)).length;
+    skipped += lockedRoomIds.size + excludedCount;
 
     const assignment = assignRoomsToTables(
       roomsToAssign,
@@ -331,6 +371,15 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
     assignment.forEach((roomsAtTable, tableId) => {
       roomsAtTable.forEach((r) => desired.set(r.roomId, tableId));
     });
+
+    // Toda suíte que vai ganhar uma mesa de verdade agora não pode ter
+    // sobrado nenhuma lápide de exclusão (só acontece com `force`, já que
+    // sem `force` essas suítes nem entraram em `roomsToAssign`).
+    for (const roomId of desired.keys()) {
+      if (excludedRoomIds.has(roomId)) {
+        await supabase.from("daily_breakfast_room_exclusions").delete().eq("date", date).eq("room_id", roomId);
+      }
+    }
 
     for (const row of existingRows ?? []) {
       if (desired.get(row.room_id) !== row.table_id) {

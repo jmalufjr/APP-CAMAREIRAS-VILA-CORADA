@@ -49,11 +49,15 @@ reservas da Stays, sincronizando o Planejamento Diário (Parte 11,
 a alocação de suítes por mesa no layout do café, com tonalidade mais clara
 para mesas ocupadas (Parte 12); a extensão da sincronização com a Stays
 para Chegadas & Saídas (com busca do nome do hóspede) e Mesas do Café (com
-o algoritmo de distribuição por proximidade da vista do mar) — Parte 13; e,
-por fim, a automação por Vercel Cron (sincronização automática diária, sem
+o algoritmo de distribuição por proximidade da vista do mar) — Parte 13; a
+automação por Vercel Cron (sincronização automática diária, sem
 sobrescrever edições do admin), a transformação dos três botões manuais em
 sincronização **forçada** (ignora as edições do admin de propósito) e a
-tela dos 4 campos de contagem por tamanho de mesa — Parte 14.
+tela dos 4 campos de contagem por tamanho de mesa (Parte 14); e, por fim,
+duas tabelas "lápide" que permitem ao admin apagar uma tarefa do
+Planejamento Diário ("Sem trabalho") ou uma alocação de suíte numa mesa,
+sem que isso seja desfeito pela próxima sincronização automática (Parte
+15).
 
 ## Onde está
 
@@ -836,6 +840,55 @@ também é feita em Server Components.
       removida depois do teste. O endpoint de cron também foi testado
       diretamente (401 sem `Authorization`/com valor errado, 200 com o
       `CRON_SECRET` certo, sincronizando as três telas numa só chamada).
+22. **Parte 15 — "Lápides" de exclusão: apagar sem perder a regra de
+    preferência** (17/09/2026, feita direto em `main`, pós parte 14):
+    corrige de vez as duas limitações que a Parte 13 tinha documentado
+    como aceitas conscientemente — o admin pode apagar (Planejamento
+    Diário: "Sem trabalho"; Mesas do Café: remover suíte de uma mesa sem
+    realocar) e essa decisão passa a obedecer a regra de preferência do
+    PRD (seção 1) mesmo sem sobrar nenhuma linha viva pra carregar um
+    `stays_locked`.
+    - **O problema de fundo**: `stays_locked` é uma coluna *dentro* da
+      linha que o admin editou. Quando a edição do admin é "apagar a
+      linha" (não "mudar um valor"), não sobra onde gravar a preferência
+      — a próxima sincronização via cron ou o botão "Forçar sincronização"
+      recriava a linha do zero, como se o admin nunca tivesse decidido
+      nada.
+    - **Solução: duas tabelas "lápide"** (migration
+      `032_admin_exclusion_tombstones.sql`), cada uma só com
+      `(date, room_id)` como chave primária — não guardam mais nada além
+      de quem/quando excluiu, só precisam **existir** pra a sincronização
+      saber que aquela suíte/dia foi excluída de propósito:
+      `daily_room_task_exclusions` (Planejamento Diário) e
+      `daily_breakfast_room_exclusions` (Mesas do Café). RLS: qualquer
+      autenticado lê, só admin grava/apaga (mesmo padrão de sempre) — só
+      insert/delete, nunca update, porque não há campo pra mudar.
+    - **`setRoomTask(date, roomId, null)`** ("Sem trabalho" escolhido no
+      Planejamento Diário, `src/lib/actions/planning.ts`): além de apagar
+      a linha de `daily_room_tasks` como já fazia, agora também grava uma
+      lápide em `daily_room_task_exclusions`. Escolher um tipo de trabalho
+      de verdade depois **remove** a lápide (o admin não quer mais excluir
+      essa suíte).
+    - **`removeTableRoomAssignment(date, roomId)`** (botão "×" nas
+      Mesas do Café, `src/lib/actions/tables.ts`): mesma ideia — apaga a
+      linha de `daily_breakfast_room_assignments` e grava uma lápide em
+      `daily_breakfast_room_exclusions`. `setTableRoomAssignment`
+      (escolher/mover a suíte pra uma mesa) remove a lápide, se houver.
+    - **`syncStaysPlanning`/`syncStaysBreakfastTables`** (`stays-sync.ts`):
+      antes de criar uma tarefa/alocar uma suíte, checam se existe lápide
+      pra aquela suíte/dia — se existir e não for `force`, pulam (conta
+      como `skipped`, igual a um `stays_locked`). Com `force: true`, a
+      lápide é ignorada **e apagada** assim que uma tarefa/alocação de
+      verdade é criada no lugar — decisão confirmada explicitamente com o
+      proprietário: "forçar" significa "ignore toda a minha preferência,
+      confie 100% na Stays agora", incluindo as exclusões, não só o
+      `stays_locked` comum. Sem `force`, uma lápide nunca é tocada.
+    - **Testado localmente**: lápide gravada manualmente pra uma suíte com
+      reserva ativa amanhã — sincronização normal preservou a exclusão
+      (nenhuma tarefa/alocação criada); a mesma chamada com `force: true`
+      criou a tarefa/alocação de verdade e apagou a lápide correspondente.
+      Mesmo truque de rota de API temporária das partes anteriores,
+      removida depois do teste.
 
 ## Convenções e decisões importantes
 

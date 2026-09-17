@@ -14,10 +14,23 @@ export async function setRoomTask(date: string, roomId: string, taskType: Checkl
   await supabase.from("daily_room_tasks").delete().eq("date", date).eq("room_id", roomId);
 
   if (!taskType) {
+    // "Sem trabalho" de propósito: grava uma lápide pra sincronização
+    // futura (automática ou manual não forçada) respeitar essa escolha em
+    // vez de recriar a tarefa aqui, já que não sobra nenhuma linha viva de
+    // daily_room_tasks pra carregar um stays_locked (PRD_regrasdenegocio.md
+    // seção 1; ver CLAUDE.md Parte 15).
+    const { error } = await supabase
+      .from("daily_room_task_exclusions")
+      .upsert({ date, room_id: roomId, created_by: user?.id }, { onConflict: "date,room_id", ignoreDuplicates: true });
+    if (error) return { error: error.message };
     revalidatePath("/planejamento");
     revalidatePath("/tarefas");
     return { success: true };
   }
+
+  // Escolheu um trabalho de verdade: remove a lápide "sem trabalho", se
+  // houver — o admin não quer mais essa exclusão aqui.
+  await supabase.from("daily_room_task_exclusions").delete().eq("date", date).eq("room_id", roomId);
 
   // A camareira escolhe o quarto depois; a tarefa nasce sem responsável.
   // stays_locked = true: escolha manual do admin tem preferência sobre a

@@ -35,6 +35,17 @@ serviço do Planejamento Diário já reivindicado, em andamento, concluído ou
 cancelado por uma camareira — isso é trabalho em curso, não uma
 preferência de edição do admin, e nunca é descartado.
 
+**Exclusão explícita sem linha viva** *(implementado em 16/09/2026 — ver
+CLAUDE.md Parte 15)*: a regra de preferência também vale quando o admin
+apaga uma linha de propósito, mesmo sem sobrar nada pra marcar como
+travado — por exemplo, ao escolher "Sem trabalho" pra uma suíte no
+Planejamento Diário, ou ao remover uma suíte de uma mesa (seção 4) sem
+realocá-la em outra. Nesses dois casos, o sistema grava um registro à
+parte ("suíte X excluída de propósito no dia Y") que impede a
+sincronização automática ou manual não forçada de recriar essa tarefa/
+realocar essa suíte — a sincronização forçada continua sendo a única
+forma de reverter essa exclusão sem desfazê-la manualmente primeiro.
+
 ## 2. Planejamento Diário
 
 Regras para definir qual dos cinco tipos de trabalho se aplica a cada
@@ -189,16 +200,21 @@ na tela da camareira — ver CLAUDE.md Parte 12 para os detalhes técnicos.)*
   clara possível**, em contraste com as mesas vagas (tonalidade normal,
   mais escura) — facilita identificar de relance quais mesas já têm
   suíte(s) alocada(s).
-- **Como a alocação suíte↔mesa é registrada**: pelo botão "Sincronizar com
-  a Stays" na tela "Mesas do café" (admin), que aplica a regra de
-  preenchimento automático desta seção (implementado em 16/09/2026 — ver
-  CLAUDE.md Parte 13), **ou** manualmente pelo admin no mesmo lugar (cada
-  card de mesa tem um seletor pra escolher a suíte e sua quantidade de
-  hóspedes, com botão de remover). Reatribuir manualmente marca a suíte
-  como travada para aquele dia (mesma regra de preferência da seção 1): a
-  sincronização deixa de mexer nela até o dia seguinte. **Limitação
-  conhecida**: remover uma alocação (botão "×", sem escolher outra mesa)
-  não trava — se a suíte continuar ocupada segundo a Stays, a próxima
-  sincronização pode realocá-la. Para realmente tirar uma suíte da
-  sincronização automática de um dia, mova-a para outra mesa em vez de só
-  removê-la.
+- **Como a alocação suíte↔mesa é registrada**: pelo botão "Forçar
+  sincronização com a Stays" (ou pela sincronização automática por cron)
+  na tela "Mesas do café" (admin), que aplica a regra de preenchimento
+  automático desta seção — implementado em 16/09/2026, ver CLAUDE.md
+  Parte 13 (sincronização) e Parte 14 (cron + sincronização forçada) —,
+  **ou** manualmente pelo admin no mesmo lugar (cada card de mesa tem um
+  seletor pra escolher a suíte e sua quantidade de hóspedes, com botão de
+  remover). Reatribuir manualmente marca a suíte como travada para aquele
+  dia (mesma regra de preferência da seção 1): a sincronização automática
+  ou não forçada deixa de mexer nela até o dia seguinte.
+- **Remover uma suíte de uma mesa (botão "×", sem escolher outra mesa)
+  também obedece à regra de preferência** (implementado em 16/09/2026 —
+  ver CLAUDE.md Parte 15): mesmo sem sobrar nenhuma linha de alocação pra
+  carregar uma trava, o sistema grava um registro específico ("suíte X
+  excluída de propósito no dia Y") que impede a sincronização automática
+  ou manual não forçada de realocar essa suíte em qualquer mesa naquele
+  dia — só a sincronização **forçada** ignora essa exclusão de propósito
+  (mesmo comportamento do `stays_locked`).

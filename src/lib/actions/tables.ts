@@ -132,6 +132,12 @@ export async function setTableNotes(date: string, tableId: string, notes: string
 // diferente, move-a em vez de duplicar).
 export async function setTableRoomAssignment(date: string, tableId: string, roomId: string, guestCount: number) {
   const supabase = await createClient();
+
+  // Escolheu uma mesa de verdade: remove a lápide de exclusão, se houver
+  // (ver `removeTableRoomAssignment`) — o admin não quer mais excluir essa
+  // suíte da distribuição hoje.
+  await supabase.from("daily_breakfast_room_exclusions").delete().eq("date", date).eq("room_id", roomId);
+
   const { error } = await supabase.from("daily_breakfast_room_assignments").upsert(
     {
       date,
@@ -151,6 +157,10 @@ export async function setTableRoomAssignment(date: string, tableId: string, room
 
 export async function removeTableRoomAssignment(date: string, roomId: string) {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const { error } = await supabase
     .from("daily_breakfast_room_assignments")
     .delete()
@@ -158,6 +168,16 @@ export async function removeTableRoomAssignment(date: string, roomId: string) {
     .eq("room_id", roomId);
 
   if (error) return { error: error.message };
+
+  // Remoção de propósito, não só "ainda não alocada": grava uma lápide pra
+  // sincronização futura (automática ou manual não forçada) respeitar essa
+  // escolha em vez de realocar a suíte em alguma mesa na próxima execução
+  // (PRD_regrasdenegocio.md seção 1; ver CLAUDE.md Parte 15).
+  const { error: exclusionError } = await supabase
+    .from("daily_breakfast_room_exclusions")
+    .upsert({ date, room_id: roomId, created_by: user?.id }, { onConflict: "date,room_id", ignoreDuplicates: true });
+  if (exclusionError) return { error: exclusionError.message };
+
   revalidatePath("/mesas/gerenciar");
   revalidatePath("/mesas");
   return { success: true };

@@ -126,6 +126,22 @@ create table daily_room_tasks (
   unique (date, room_id, task_type)
 );
 
+-- ---------- DAILY ROOM TASK EXCLUSIONS (lápide: "sem trabalho" de propósito) ----------
+-- Ver PRD_regrasdenegocio.md seção 1 / CLAUDE.md Parte 15: quando o admin
+-- escolhe explicitamente "Sem trabalho" pra uma suíte/dia (apagando a
+-- linha de daily_room_tasks, que exige task_type not null), grava aqui em
+-- vez de só deletar — sem isso, a sincronização (automática ou manual não
+-- forçada) recriaria a tarefa na próxima execução, por não sobrar nenhuma
+-- linha viva pra carregar a preferência do admin. A sincronização forçada
+-- ignora esta tabela de propósito.
+create table daily_room_task_exclusions (
+  date date not null,
+  room_id uuid not null references rooms(id) on delete cascade,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  primary key (date, room_id)
+);
+
 -- ---------- DAILY ROOM TASK CHECKS (itens marcados) ----------
 create table daily_room_task_checks (
   id uuid primary key default uuid_generate_v4(),
@@ -177,6 +193,22 @@ create table daily_breakfast_room_assignments (
   created_at timestamptz not null default now(),
   stays_locked boolean not null default false,
   unique (date, room_id)
+);
+
+-- ---------- DAILY BREAKFAST ROOM EXCLUSIONS (lápide: suíte removida de propósito) ----------
+-- Ver PRD_regrasdenegocio.md seção 1 / CLAUDE.md Parte 15: quando o admin
+-- remove uma suíte de uma mesa sem realocá-la em outra, grava aqui em vez
+-- de só deletar a linha de daily_breakfast_room_assignments — sem isso, a
+-- sincronização (automática ou manual não forçada) recolocaria a suíte em
+-- alguma mesa na próxima execução, por não sobrar nenhuma linha viva pra
+-- carregar a preferência do admin. A sincronização forçada ignora esta
+-- tabela de propósito.
+create table daily_breakfast_room_exclusions (
+  date date not null,
+  room_id uuid not null references rooms(id) on delete cascade,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  primary key (date, room_id)
 );
 
 -- ---------- DAILY BREAKFAST SETTINGS (total de mesas + observação geral do dia) ----------
@@ -383,6 +415,8 @@ alter table daily_room_task_checks enable row level security;
 alter table daily_room_task_occurrences enable row level security;
 alter table daily_breakfast enable row level security;
 alter table daily_breakfast_room_assignments enable row level security;
+alter table daily_breakfast_room_exclusions enable row level security;
+alter table daily_room_task_exclusions enable row level security;
 alter table daily_breakfast_settings enable row level security;
 alter table daily_arrivals enable row level security;
 alter table daily_departures enable row level security;
@@ -634,6 +668,17 @@ create policy "dbra_select_authenticated" on daily_breakfast_room_assignments fo
 create policy "dbra_admin_write" on daily_breakfast_room_assignments for insert with check (is_admin());
 create policy "dbra_admin_update" on daily_breakfast_room_assignments for update using (is_admin());
 create policy "dbra_admin_delete" on daily_breakfast_room_assignments for delete using (is_admin());
+
+-- daily_breakfast_room_exclusions / daily_room_task_exclusions: everyone
+-- authenticated reads; only admin writes (só insert/delete — não há campo
+-- pra atualizar, ver CLAUDE.md Parte 15).
+create policy "dbre_select_authenticated" on daily_breakfast_room_exclusions for select using (auth.uid() is not null);
+create policy "dbre_admin_insert" on daily_breakfast_room_exclusions for insert with check (is_admin());
+create policy "dbre_admin_delete" on daily_breakfast_room_exclusions for delete using (is_admin());
+
+create policy "drte_select_authenticated" on daily_room_task_exclusions for select using (auth.uid() is not null);
+create policy "drte_admin_insert" on daily_room_task_exclusions for insert with check (is_admin());
+create policy "drte_admin_delete" on daily_room_task_exclusions for delete using (is_admin());
 
 -- daily_breakfast_settings: everyone authenticated reads; only admin writes
 create policy "dbs_select_authenticated" on daily_breakfast_settings for select using (auth.uid() is not null);
