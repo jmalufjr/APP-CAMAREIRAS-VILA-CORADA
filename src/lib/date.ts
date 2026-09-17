@@ -110,6 +110,33 @@ export function formatDateTimePt(isoString: string): string {
   return `${get("day")}/${get("month")} ${get("hour")}:${get("minute")}`;
 }
 
+// Duração em minutos entre dois timestamps ISO (ex.: claimed_at →
+// finished_at), ou null se qualquer um dos dois estiver ausente — usado
+// para agregações (ex.: média por camareira no Histórico) antes de
+// formatar uma única vez com formatMinutesPt.
+export function durationMinutes(startIso: string | null, endIso: string | null): number | null {
+  if (!startIso || !endIso) return null;
+  const ms = new Date(endIso).getTime() - new Date(startIso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  return ms / 60000;
+}
+
+// Formata um número de minutos (já calculado) como "1h 23min" ou "45min".
+export function formatMinutesPt(totalMinutes: number): string {
+  const rounded = Math.round(totalMinutes);
+  const h = Math.floor(rounded / 60);
+  const m = rounded % 60;
+  return h === 0 ? `${m}min` : `${h}h ${m}min`;
+}
+
+// Formata a duração entre dois timestamps ISO como "1h 23min"/"45min", ou
+// "—" quando qualquer um dos dois estiver ausente (ex.: tarefa concluída
+// antes de claimed_at existir).
+export function formatDurationPt(startIso: string | null, endIso: string | null): string {
+  const mins = durationMinutes(startIso, endIso);
+  return mins === null ? "—" : formatMinutesPt(mins);
+}
+
 export function formatDatePt(dateKey: string): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("pt-BR", {

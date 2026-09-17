@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
-import { formatDateShortPt } from "@/lib/date";
+import { formatDateShortPt, formatDateTimePt, formatDurationPt } from "@/lib/date";
 import type { ChecklistType } from "@/lib/types";
 
 export interface ServiceLogRow {
@@ -11,9 +11,9 @@ export interface ServiceLogRow {
   date: string;
   room_number: string;
   task_type: ChecklistType;
-  status: "concluido" | "cancelado";
+  claimed_at: string | null;
+  finished_at: string | null;
   camareira_name: string | null;
-  cancelled_by_name: string | null;
 }
 
 export function ServiceLogTable({ rows }: { rows: ServiceLogRow[] }) {
@@ -27,34 +27,31 @@ export function ServiceLogTable({ rows }: { rows: ServiceLogRow[] }) {
           <TableHead>Suíte</TableHead>
           <TableHead>Tipo</TableHead>
           <TableHead>Camareira</TableHead>
+          <TableHead>Início</TableHead>
+          <TableHead>Término</TableHead>
+          <TableHead>Duração</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {rows.map((r) => {
-          const isConcluido = r.status === "concluido";
-          return (
-            <TableRow
-              key={r.id}
-              className={isConcluido ? "cursor-pointer hover:bg-accent" : undefined}
-              onClick={isConcluido ? () => router.push(`/dashboard/tarefas/${r.id}`) : undefined}
-            >
-              <TableCell>{formatDateShortPt(r.date)}</TableCell>
-              <TableCell>{r.room_number}</TableCell>
-              <TableCell>{TASK_TYPE_LABELS[r.task_type]}</TableCell>
-              <TableCell>
-                {isConcluido ? (
-                  r.camareira_name ?? "—"
-                ) : (
-                  <span className="text-muted-foreground">Cancelado por {r.cancelled_by_name ?? "—"}</span>
-                )}
-              </TableCell>
-            </TableRow>
-          );
-        })}
+        {rows.map((r) => (
+          <TableRow
+            key={r.id}
+            className="cursor-pointer hover:bg-accent"
+            onClick={() => router.push(`/dashboard/tarefas/${r.id}`)}
+          >
+            <TableCell>{formatDateShortPt(r.date)}</TableCell>
+            <TableCell>{r.room_number}</TableCell>
+            <TableCell>{TASK_TYPE_LABELS[r.task_type]}</TableCell>
+            <TableCell>{r.camareira_name ?? "—"}</TableCell>
+            <TableCell>{r.claimed_at ? formatDateTimePt(r.claimed_at) : "—"}</TableCell>
+            <TableCell>{r.finished_at ? formatDateTimePt(r.finished_at) : "—"}</TableCell>
+            <TableCell>{formatDurationPt(r.claimed_at, r.finished_at)}</TableCell>
+          </TableRow>
+        ))}
         {rows.length === 0 && (
           <TableRow>
-            <TableCell colSpan={4} className="text-center text-muted-foreground py-6">
-              Nenhum serviço concluído ou cancelado nos últimos 7 dias.
+            <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
+              Nenhum serviço concluído nos últimos 7 dias.
             </TableCell>
           </TableRow>
         )}

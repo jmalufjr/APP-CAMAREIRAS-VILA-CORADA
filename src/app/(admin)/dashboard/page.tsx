@@ -52,16 +52,16 @@ export default async function DashboardPage() {
       .from("daily_room_task_occurrences")
       .select("id, daily_room_tasks!inner(date)", { count: "exact", head: true })
       .eq("daily_room_tasks.date", today),
-    // Serviço realizado (ou cancelado) pelas camareiras nos últimos 7 dias,
-    // para a tabela "Serviços dos últimos 7 dias" abaixo dos cards de hoje/amanhã.
+    // Serviço concluído pelas camareiras nos últimos 7 dias, para a tabela
+    // "Serviços dos últimos 7 dias" abaixo dos cards de hoje/amanhã.
     supabase
       .from("daily_room_tasks")
       .select(
-        "id, date, task_type, status, rooms(number), profiles!daily_room_tasks_assigned_to_fkey(name), cancelled_profile:profiles!daily_room_tasks_cancelled_by_fkey(name)"
+        "id, date, task_type, claimed_at, finished_at, rooms(number), profiles!daily_room_tasks_assigned_to_fkey(name)"
       )
       .gte("date", sevenDaysAgo)
       .lte("date", today)
-      .in("status", ["concluido", "cancelado"]),
+      .eq("status", "concluido"),
     getMinibarMonthlySummary(),
     getPoolbarMonthlySummary(),
   ]);
@@ -71,10 +71,10 @@ export default async function DashboardPage() {
       id: string;
       date: string;
       task_type: ChecklistType;
-      status: "concluido" | "cancelado";
+      claimed_at: string | null;
+      finished_at: string | null;
       rooms: { number: string };
       profiles: { name: string } | null;
-      cancelled_profile: { name: string } | null;
     }[]
   )
     .map((r) => ({
@@ -82,9 +82,9 @@ export default async function DashboardPage() {
       date: r.date,
       room_number: r.rooms.number,
       task_type: r.task_type,
-      status: r.status,
+      claimed_at: r.claimed_at,
+      finished_at: r.finished_at,
       camareira_name: r.profiles?.name ?? null,
-      cancelled_by_name: r.cancelled_profile?.name ?? null,
     }))
     .sort((a, b) => (a.date !== b.date ? b.date.localeCompare(a.date) : Number(a.room_number) - Number(b.room_number)));
 

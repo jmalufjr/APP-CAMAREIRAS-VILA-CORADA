@@ -111,6 +111,9 @@ create table daily_room_tasks (
   task_type checklist_type not null,
   assigned_to uuid references profiles(id) on delete set null,
   status task_status not null default 'pendente',
+  -- momento em que a camareira reivindicou (clicou "Escolher") a tarefa;
+  -- diferente de started_at, que marca o primeiro toque no checklist.
+  claimed_at timestamptz,
   started_at timestamptz,
   finished_at timestamptz,
   released_at timestamptz,

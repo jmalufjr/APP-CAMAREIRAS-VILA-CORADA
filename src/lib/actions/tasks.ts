@@ -13,7 +13,7 @@ export async function claimTask(taskId: string) {
   // Só reivindica se ainda não houver responsável (evita duas camareiras pegarem o mesmo quarto).
   const { data, error } = await supabase
     .from("daily_room_tasks")
-    .update({ assigned_to: user.id })
+    .update({ assigned_to: user.id, claimed_at: new Date().toISOString() })
     .eq("id", taskId)
     .is("assigned_to", null)
     .select("id")

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TASK_TYPE_OPTIONS } from "@/lib/task-type";
+import { durationMinutes, formatMinutesPt } from "@/lib/date";
 import type { ChecklistType } from "@/lib/types";
 import { Download } from "lucide-react";
 
@@ -25,6 +26,8 @@ interface TaskRow {
   date: string;
   task_type: ChecklistType;
   camareira: string;
+  claimed_at: string | null;
+  finished_at: string | null;
   occurrences: number;
   occurrencesResolved: number;
 }
@@ -85,12 +88,22 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
   }, [breakfast, tasks]);
 
   const byCamareira = useMemo(() => {
-    const map = new Map<string, { byType: ByType; ocorrencias: number; ocorrenciasResolvidas: number }>();
+    const map = new Map<
+      string,
+      { byType: ByType; ocorrencias: number; ocorrenciasResolvidas: number; durationSumMin: number; durationCount: number }
+    >();
     tasks.forEach((t) => {
-      const entry = map.get(t.camareira) ?? { byType: emptyByType(), ocorrencias: 0, ocorrenciasResolvidas: 0 };
+      const entry =
+        map.get(t.camareira) ??
+        { byType: emptyByType(), ocorrencias: 0, ocorrenciasResolvidas: 0, durationSumMin: 0, durationCount: 0 };
       entry.byType[t.task_type] += 1;
       entry.ocorrencias += t.occurrences;
       entry.ocorrenciasResolvidas += t.occurrencesResolved;
+      const mins = durationMinutes(t.claimed_at, t.finished_at);
+      if (mins !== null) {
+        entry.durationSumMin += mins;
+        entry.durationCount += 1;
+      }
       map.set(t.camareira, entry);
     });
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
@@ -112,7 +125,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
   }, [byDay]);
 
   const diarioColSpan = 3 + TASK_TYPE_OPTIONS.length + 3;
-  const camareiraColSpan = 1 + TASK_TYPE_OPTIONS.length + 2;
+  const camareiraColSpan = 1 + TASK_TYPE_OPTIONS.length + 3;
 
   return (
     <div className="space-y-6">
@@ -217,6 +230,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
                   ...TASK_TYPE_OPTIONS.map((o) => o.label),
                   "Ocorrências Manutenção",
                   "Ocorrências Manutenção resolvidas",
+                  "Duração média",
                   "Total",
                 ],
                 ...byCamareira.map(([name, v]) => [
@@ -224,6 +238,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
                   ...TASK_TYPE_OPTIONS.map((o) => v.byType[o.value]),
                   v.ocorrencias,
                   v.ocorrenciasResolvidas,
+                  v.durationCount > 0 ? formatMinutesPt(v.durationSumMin / v.durationCount) : "—",
                   TASK_TYPE_OPTIONS.reduce((sum, o) => sum + v.byType[o.value], 0),
                 ]),
               ])
@@ -242,6 +257,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
                 ))}
                 <TableHead>Ocorrências Manutenção</TableHead>
                 <TableHead>Ocorrências resolvidas</TableHead>
+                <TableHead>Duração média</TableHead>
                 <TableHead>Total</TableHead>
               </TableRow>
             </TableHeader>
@@ -254,6 +270,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
                   ))}
                   <TableCell>{v.ocorrencias}</TableCell>
                   <TableCell>{v.ocorrenciasResolvidas}</TableCell>
+                  <TableCell>{v.durationCount > 0 ? formatMinutesPt(v.durationSumMin / v.durationCount) : "—"}</TableCell>
                   <TableCell>{TASK_TYPE_OPTIONS.reduce((sum, o) => sum + v.byType[o.value], 0)}</TableCell>
                 </TableRow>
               ))}
