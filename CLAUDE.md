@@ -1008,6 +1008,42 @@ também é feita em Server Components.
       X no lugar da mãozinha); e o separador "·" entre o tipo de serviço e
       a data (nos cards de "Serviços anteriores") foi removido — ficou só
       um espaço entre os dois.
+27. **Parte 20 — Cores de mesa ocupada/vaga invertidas, com receita própria
+    por tema** (17/09/2026, feita direto em `main`, pós parte 19): pedido
+    do proprietário pra inverter qual estado (ocupada/vaga) recebe a cor de
+    destaque, com uma combinação diferente pra cada um dos 3 temas —
+    diferente de tudo que existia até aqui no app, que só distinguia "claro"
+    de "escuro" (os dois temas escuros sempre usavam exatamente as mesmas
+    cores entre si).
+    - **Duas variantes novas do Tailwind, em `src/app/globals.css`**:
+      `theme-bordo` (`&:is(.dark *)`) e `theme-blue` (`&:is(.dark-blue *)`)
+      — ao lado da já existente `dark` (que continua cobrindo os dois temas
+      escuros juntos, `&:is(.dark *, .dark-blue *)`, usada em todo o
+      resto do app). Como o tema é uma classe única aplicada no `<html>`
+      pelo `next-themes` (`light`/`dark`/`dark-blue`, nunca duas ao mesmo
+      tempo), essas duas variantes nunca conflitam entre si — só precisam
+      ser usadas juntas quando um componente, como o layout de mesas, quer
+      cores diferentes entre os dois escuros.
+    - **`table-layout-canvas.tsx`**: mesa ocupada agora é a que recebe a
+      cor de destaque (antes era o contrário — "tonalidade mais clara
+      possível", pedido original da Parte 12):
+      - Claro: ocupada = azul sólido (`bg-secondary`) + fonte clara; vaga =
+        azul bem clarinho (`bg-secondary/30`) + fonte escura.
+      - Escuro azul: ocupada = um azul mais escuro que o fundo da tela
+        (`#262D45` vs. `--background: #3B4564`) + fonte clara; vaga = um
+        azul só um pouco mais claro que o fundo (`#4C577A`) + fonte clara
+        (nunca chega a clarear o bastante pra precisar de fonte escura —
+        pedido explícito do proprietário pra não usar fundo claro aqui).
+      - Escuro bordô: ocupada = um bordô bem mais escuro que o fundo
+        (`#2A0D10` vs. `--background: #5A2025`) + fonte clara; vaga = um
+        bordô bem mais claro que o fundo, quase rosado (`#E6C6C8`) + fonte
+        escura (`#5A2025`, a própria cor bordô do tema, reaproveitada como
+        texto por já ter bom contraste ali).
+    - **Verificado direto no CSS gerado** (não só que o build passou): o
+      seletor `.theme-bordo\:bg-\[\#2A0D10\]:is(.dark *)` saiu exatamente
+      como esperado, com a mesma "forma"/especificidade do `dark:` que já
+      funcionava — evitou depender só de "o build não quebrou" pra validar
+      uma técnica de CSS nova no projeto.
 
 ## Convenções e decisões importantes
 

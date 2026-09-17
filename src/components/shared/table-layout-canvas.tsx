@@ -72,18 +72,21 @@ export function TableLayoutCanvas({ tables, guestCounts, tableRooms, editable, o
               onPointerDown={() => handlePointerDown(t.id)}
               className={cn(
                 "absolute flex flex-col items-center justify-center gap-0.5 shadow-sm select-none overflow-hidden",
-                // Mesas ocupadas ficam na tonalidade mais clara possível,
-                // em contraste com as vagas (mais escuras) — pedido do
-                // proprietário para identificar ocupação de relance. Texto
-                // sempre em `text-secondary` (não `-foreground`): essa cor
-                // é escura nos três temas do app (claro, bordô escuro, azul
-                // escuro), garantindo contraste contra o fundo claro da
-                // mesa ocupada — usar a cor clara de "-foreground" aqui
-                // deixava o texto quase ilegível no tema claro (texto claro
-                // sobre fundo claro).
+                // Mesas ocupadas recebem a cor de destaque do tema (pra
+                // saltar aos olhos), vagas ficam numa tonalidade discreta —
+                // a combinação exata muda por tema, ver CLAUDE.md Parte 20:
+                // - Claro: ocupada = azul sólido + fonte clara; vaga = azul
+                //   bem clarinho + fonte escura.
+                // - Escuro azul: ocupada = azul mais escuro que o fundo da
+                //   tela + fonte clara; vaga = azul um pouco mais claro que
+                //   o fundo + fonte clara (nunca fica clara o bastante pra
+                //   precisar de fonte escura).
+                // - Escuro bordô: ocupada = bordô bem mais escuro que o
+                //   fundo + fonte clara; vaga = bordô bem mais claro que o
+                //   fundo (quase rosado) + fonte escura.
                 occupied
-                  ? "bg-secondary/30 text-secondary dark:bg-[#F9F9F7]"
-                  : "bg-secondary text-secondary-foreground dark:bg-secondary dark:text-secondary-foreground",
+                  ? "bg-secondary text-secondary-foreground theme-bordo:bg-[#2A0D10] theme-bordo:text-[#F9F9F7] theme-blue:bg-[#262D45] theme-blue:text-[#F9F9F7]"
+                  : "bg-secondary/30 text-secondary theme-bordo:bg-[#E6C6C8] theme-bordo:text-[#5A2025] theme-blue:bg-[#4C577A] theme-blue:text-[#F9F9F7]",
                 t.shape === "round" ? "rounded-full" : t.shape === "square" ? "rounded-md" : "rounded-2xl",
                 editable && "cursor-move active:cursor-grabbing"
               )}

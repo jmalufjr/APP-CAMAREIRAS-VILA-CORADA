@@ -3,6 +3,12 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *, .dark-blue *));
+/* Variantes por tema individual (o "dark" acima cobre os dois temas
+   escuros juntos) — necessárias quando um componente precisa de cores
+   diferentes entre o escuro bordô e o escuro azul, ex.: mesas do café
+   ocupadas/vagas (ver table-layout-canvas.tsx). */
+@custom-variant theme-bordo (&:is(.dark *));
+@custom-variant theme-blue (&:is(.dark-blue *));
 
 @theme inline {
   --color-background: var(--background);
