@@ -74,9 +74,15 @@ export function TableLayoutCanvas({ tables, guestCounts, tableRooms, editable, o
                 "absolute flex flex-col items-center justify-center gap-0.5 shadow-sm select-none overflow-hidden",
                 // Mesas ocupadas ficam na tonalidade mais clara possível,
                 // em contraste com as vagas (mais escuras) — pedido do
-                // proprietário para identificar ocupação de relance.
+                // proprietário para identificar ocupação de relance. Texto
+                // sempre em `text-secondary` (não `-foreground`): essa cor
+                // é escura nos três temas do app (claro, bordô escuro, azul
+                // escuro), garantindo contraste contra o fundo claro da
+                // mesa ocupada — usar a cor clara de "-foreground" aqui
+                // deixava o texto quase ilegível no tema claro (texto claro
+                // sobre fundo claro).
                 occupied
-                  ? "bg-secondary/30 text-secondary-foreground dark:bg-[#F9F9F7] dark:text-primary-foreground"
+                  ? "bg-secondary/30 text-secondary dark:bg-[#F9F9F7]"
                   : "bg-secondary text-secondary-foreground dark:bg-secondary dark:text-secondary-foreground",
                 t.shape === "round" ? "rounded-full" : t.shape === "square" ? "rounded-md" : "rounded-2xl",
                 editable && "cursor-move active:cursor-grabbing"
@@ -87,14 +93,14 @@ export function TableLayoutCanvas({ tables, guestCounts, tableRooms, editable, o
               {rooms.length > 0
                 ? rooms.map((r) => (
                     <div key={r.roomNumber} className="flex flex-col items-center leading-tight">
-                      <span className="text-[11px] font-medium opacity-90">Suíte {r.roomNumber}</span>
-                      <span className="text-[10px] opacity-80">
+                      <span className="text-[11px] font-semibold">Suíte {r.roomNumber}</span>
+                      <span className="text-[10px] font-medium">
                         {r.guestCount} hóspede{r.guestCount === 1 ? "" : "s"}
                       </span>
                     </div>
                   ))
                 : guestCounts && (
-                    <span className="text-[11px] opacity-90">
+                    <span className="text-[11px] font-semibold">
                       {count} hóspede{count === 1 ? "" : "s"}
                     </span>
                   )}
