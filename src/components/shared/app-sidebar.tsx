@@ -23,6 +23,7 @@ import {
   CalendarCheck2,
   Wine,
   Martini,
+  HelpCircle,
 } from "lucide-react";
 
 interface NavItem {
@@ -44,6 +45,7 @@ const adminNav: NavItem[] = [
   { href: "/manutencao-preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
   { href: "/usuarios", label: "Usuários", icon: Users },
   { href: "/historico", label: "Histórico", icon: History },
+  { href: "/questoes-respostas", label: "Questões e Respostas", icon: HelpCircle },
 ];
 
 const camareiraNav: NavItem[] = [

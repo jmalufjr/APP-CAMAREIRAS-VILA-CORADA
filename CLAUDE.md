@@ -60,7 +60,9 @@ sem que isso seja desfeito pela próxima sincronização automática (Parte
 15); e a troca dos 4 campos de contagem de mesas — e também do próprio "Total
 de mesas" — de "sincronizados"/"seletor manual" para "sempre calculados na
 hora" a partir da alocação suíte↔mesa, eliminando o risco de ficarem
-desatualizados (Partes 16 e 17).
+desatualizados (Partes 16 e 17); e, por fim, uma tela "Questões e
+Respostas" no menu do admin, explicando em linguagem simples as 10
+funcionalidades mais importantes do app pra quem for operá-lo (Parte 18).
 
 ## Onde está
 
@@ -949,6 +951,31 @@ também é feita em Server Components.
       que sobrou nela). `setBreakfastDaySettings` foi renomeada pra
       `setBreakfastDayNotes(date, notes)`, já que não recebe mais
       `totalTables` como parâmetro.
+25. **Parte 18 — Tela "Questões e Respostas" para o admin** (17/09/2026,
+    feita direto em `main`, pós parte 17): pedida porque quem vai operar o
+    app no dia a dia não é necessariamente quem participou de construí-lo
+    — é um guia de referência, em linguagem simples (sem jargão técnico),
+    explicando as 10 funcionalidades mais importantes pra quem supervisiona
+    o sistema, em formato de perguntas e respostas.
+    - **Rota nova**: `src/app/(admin)/questoes-respostas/page.tsx`, um
+      componente só de conteúdo estático (sem busca no banco) — um
+      `Accordion` com 10 itens. Adicionada ao menu principal do admin
+      (`src/components/shared/app-sidebar.tsx`) logo depois de "Histórico",
+      e ao `adminOnlyPrefixes` do proxy (`src/lib/supabase/middleware.ts`)
+      pra ficar restrita ao papel admin.
+    - **Conteúdo**: começa pela integração com a Stays (como funciona a
+      sincronização automática diária, o botão "Forçar sincronização" e o
+      que acontece ao editar manualmente um campo sincronizado, com
+      exemplos, terminando na lista completa dos campos sincronizados e
+      editáveis) e segue com mais 9 tópicos (Planejamento Diário, Chegadas
+      & Saídas, Mesas do Café, Bar e Frigobar/Comandas, Ocorrências de
+      Manutenção, Manutenção Preventiva, Usuários, Resumo Executivo e
+      Histórico) — sempre em linguagem não técnica, com exemplos práticos.
+    - **Manutenção futura**: como é conteúdo escrito à mão (não gerado a
+      partir do código), sempre que uma parte futura mudar uma dessas 10
+      funcionalidades de um jeito que o admin perceberia, vale revisar essa
+      página também — ela pode ficar desatualizada silenciosamente, ao
+      contrário do resto do app.
 
 ## Convenções e decisões importantes
 
