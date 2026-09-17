@@ -230,10 +230,10 @@ function GuestCountEditor({
 
       <div className="max-w-sm space-y-1.5 text-sm">
         <p className="font-medium">Total de mesas: {tableSizeCounts.totalOccupiedTables}</p>
-        <p>Quantidade de mesas de 1 hóspede: {tableSizeCounts.tables1Guest}</p>
-        <p>Quantidade de mesas de 2 hóspedes: {tableSizeCounts.tables2Guest}</p>
-        <p>Quantidade de mesas de 3 hóspedes: {tableSizeCounts.tables3Guest}</p>
-        <p>Quantidade de hóspedes na Mesa 07: {tableSizeCounts.guestsTable07}</p>
+        <p>Mesas de 1 hóspede: {tableSizeCounts.tables1Guest}</p>
+        <p>Mesas de 2 hóspedes: {tableSizeCounts.tables2Guest}</p>
+        <p>Mesas de 3 hóspedes: {tableSizeCounts.tables3Guest}</p>
+        <p>Hóspedes na Mesa 07: {tableSizeCounts.guestsTable07}</p>
       </div>
 
       <div className="max-w-sm space-y-1.5">

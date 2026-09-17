@@ -77,10 +77,10 @@ function DaySettingsInfo({
       </Card>
       <Card>
         <CardContent className="space-y-1">
-          <p className="text-sm">Quantidade de mesas de 1 hóspede: {counts.tables1Guest}</p>
-          <p className="text-sm">Quantidade de mesas de 2 hóspedes: {counts.tables2Guest}</p>
-          <p className="text-sm">Quantidade de mesas de 3 hóspedes: {counts.tables3Guest}</p>
-          <p className="text-sm">Quantidade de hóspedes na Mesa 07: {counts.guestsTable07}</p>
+          <p className="text-sm">Mesas de 1 hóspede: {counts.tables1Guest}</p>
+          <p className="text-sm">Mesas de 2 hóspedes: {counts.tables2Guest}</p>
+          <p className="text-sm">Mesas de 3 hóspedes: {counts.tables3Guest}</p>
+          <p className="text-sm">Hóspedes na Mesa 07: {counts.guestsTable07}</p>
         </CardContent>
       </Card>
       {settings?.notes && (

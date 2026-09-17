@@ -135,10 +135,10 @@ usando o `_idclient` da reserva — ver CLAUDE.md Parte 13.)*
 ### "Total de mesas" e os campos novos depois dele
 
 - **Total de mesas** (quantas mesas devem ser postas para o café da manhã)
-- Quantidade de mesas de 1 hóspede
-- Quantidade de mesas de 2 hóspedes
-- Quantidade de mesas de 3 hóspedes
-- Quantidade de hóspedes na Mesa 07
+- Mesas de 1 hóspede
+- Mesas de 2 hóspedes
+- Mesas de 3 hóspedes
+- Hóspedes na Mesa 07
 
 O campo **"Observação"** de cada card de mesa é de edição exclusiva do
 admin, sem comprometer a sincronização dos demais campos.

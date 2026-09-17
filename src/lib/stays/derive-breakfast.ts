@@ -38,8 +38,8 @@ export interface TableSizeCounts {
 
 // Deriva "Total de mesas" (quantidade de mesas ocupadas, que devem ser
 // postas para o café) e os 4 campos de contagem por tamanho de mesa
-// (PRD_regrasdenegocio.md seção 4: "Quantidade de mesas de 1/2/3
-// hóspede(s)" e "Quantidade de hóspedes na Mesa 07") diretamente da
+// (PRD_regrasdenegocio.md seção 4: "Mesas de 1/2/3 hóspede(s)" e
+// "Hóspedes na Mesa 07") diretamente da
 // alocação suíte↔mesa já existente — nenhum desses é um valor
 // sincronizado/editável à parte, são sempre um cálculo em cima do que já
 // está na tela (ver CLAUDE.md Parte 16/17). Função pura, usada tanto pela
