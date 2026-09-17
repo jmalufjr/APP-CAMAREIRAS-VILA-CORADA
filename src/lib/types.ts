@@ -83,7 +83,6 @@ export interface DailyBreakfastRoomAssignment {
 
 export interface DailyBreakfastSettings {
   date: string;
-  total_tables: number;
   notes: string | null;
   updated_at: string;
 }

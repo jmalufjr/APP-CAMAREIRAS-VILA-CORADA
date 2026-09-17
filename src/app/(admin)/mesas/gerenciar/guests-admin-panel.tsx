@@ -7,7 +7,7 @@ import type { BreakfastTable, CommissionSettings, DailyBreakfastSettings, DailyB
 import {
   setGuestCount,
   setTableNotes,
-  setBreakfastDaySettings,
+  setBreakfastDayNotes,
   setTableRoomAssignment,
   removeTableRoomAssignment,
   updateCommissionValue,
@@ -209,18 +209,17 @@ function GuestCountEditor({
 }) {
   const [values, setValues] = useState(counts);
   const [notes, setNotes] = useState(notesInit);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const router = useRouter();
 
   const activeTables = tables.filter((t) => t.active).sort((a, b) => tableNumber(a.label) - tableNumber(b.label));
 
-  const [totalTables, setTotalTables] = useState(String(daySettings?.total_tables ?? 0));
   const [dayNotes, setDayNotes] = useState(daySettings?.notes ?? "");
   const tableSizeCounts = computeTableSizeCounts(assignments, activeTables);
 
-  function saveDaySettings(nextTotal: string, nextNotes: string) {
+  function saveDayNotes(nextNotes: string) {
     startTransition(async () => {
-      const result = await setBreakfastDaySettings(date, Number(nextTotal), nextNotes);
+      const result = await setBreakfastDayNotes(date, nextNotes);
       if (result?.error) toast.error(result.error);
     });
   }
@@ -229,33 +228,8 @@ function GuestCountEditor({
     <div className="space-y-4">
       <p className="text-sm capitalize text-muted-foreground">{label}</p>
 
-      <div className="max-w-sm space-y-1.5">
-        <Label htmlFor={`total-mesas-${date}`} className="text-sm">
-          Total de mesas
-        </Label>
-        <Select
-          value={totalTables}
-          onValueChange={(v) => {
-            const next = v ?? "0";
-            setTotalTables(next);
-            saveDaySettings(next, dayNotes);
-          }}
-          disabled={isPending}
-        >
-          <SelectTrigger id={`total-mesas-${date}`} className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Array.from({ length: activeTables.length + 1 }, (_, n) => (
-              <SelectItem key={n} value={String(n)}>
-                {n}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
       <div className="max-w-sm space-y-1.5 text-sm">
+        <p className="font-medium">Total de mesas: {tableSizeCounts.totalOccupiedTables}</p>
         <p>Quantidade de mesas de 1 hóspede: {tableSizeCounts.tables1Guest}</p>
         <p>Quantidade de mesas de 2 hóspedes: {tableSizeCounts.tables2Guest}</p>
         <p>Quantidade de mesas de 3 hóspedes: {tableSizeCounts.tables3Guest}</p>
@@ -272,7 +246,7 @@ function GuestCountEditor({
           className="min-h-16 text-sm"
           value={dayNotes}
           onChange={(e) => setDayNotes(e.target.value)}
-          onBlur={() => saveDaySettings(totalTables, dayNotes)}
+          onBlur={() => saveDayNotes(dayNotes)}
         />
       </div>
 

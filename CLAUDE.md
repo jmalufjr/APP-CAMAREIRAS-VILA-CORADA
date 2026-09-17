@@ -57,9 +57,10 @@ tela dos 4 campos de contagem por tamanho de mesa (Parte 14); e, por fim,
 duas tabelas "lápide" que permitem ao admin apagar uma tarefa do
 Planejamento Diário ("Sem trabalho") ou uma alocação de suíte numa mesa,
 sem que isso seja desfeito pela próxima sincronização automática (Parte
-15); e a troca dos 4 campos de contagem de mesas de "sincronizados" para
-"sempre calculados na hora" a partir da alocação suíte↔mesa, eliminando o
-risco de ficarem desatualizados (Parte 16).
+15); e a troca dos 4 campos de contagem de mesas — e também do próprio "Total
+de mesas" — de "sincronizados"/"seletor manual" para "sempre calculados na
+hora" a partir da alocação suíte↔mesa, eliminando o risco de ficarem
+desatualizados (Partes 16 e 17).
 
 ## Onde está
 
@@ -926,6 +927,28 @@ também é feita em Server Components.
       admin), logo antes dos cards "Mesas · hoje/amanhã" — considerada
       redundante depois que os 4 campos de contagem já mostram esse
       detalhamento de forma mais útil.
+24. **Parte 17 — "Total de mesas" também virou calculado** (17/09/2026,
+    feita direto em `main`, pós parte 16): extensão direta da Parte 16,
+    pedida pelo proprietário ao notar que "Total de mesas" — até então um
+    seletor manual (0 até o total de mesas ativas) — deveria significar a
+    mesma coisa que "Total de mesas ocupadas" já significava (quantas
+    mesas precisam ser postas pro café, dado quem está hospedado): por
+    exemplo, 1 suíte de 1 hóspede + 5 suítes de 2 hóspedes = 6 mesas.
+    - **`computeTableSizeCounts`** (`src/lib/stays/derive-breakfast.ts`)
+      ganhou um quinto campo, `totalOccupiedTables`: conta quantas mesas
+      têm pelo menos 1 hóspede somado entre as suítes alocadas nelas —
+      não é só a soma dos outros quatro contadores (que só cobrem mesas de
+      exatamente 1/2/3 hóspedes), cobre também mesas com mais de 3 (ex.:
+      Mesa 7 com duas suítes de 3 hóspedes cada, 6 no total).
+    - **O seletor manual de "Total de mesas" saiu da tela do admin**
+      (`guests-admin-panel.tsx`) — agora é só mais uma linha somente
+      leitura, junto dos outros 4 campos, todas na mesma ordem do PRD.
+    - **`daily_breakfast_settings` perdeu a coluna `total_tables`**
+      (migration `034_drop_total_tables_column.sql`) — a tabela agora só
+      guarda `date`/`notes`/`updated_at` (observação do dia, o único campo
+      que sobrou nela). `setBreakfastDaySettings` foi renomeada pra
+      `setBreakfastDayNotes(date, notes)`, já que não recebe mais
+      `totalTables` como parâmetro.
 
 ## Convenções e decisões importantes
 

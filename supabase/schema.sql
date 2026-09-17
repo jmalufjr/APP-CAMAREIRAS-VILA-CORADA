@@ -211,16 +211,16 @@ create table daily_breakfast_room_exclusions (
   primary key (date, room_id)
 );
 
--- ---------- DAILY BREAKFAST SETTINGS (total de mesas + observação geral do dia) ----------
--- Configuração de dia inteiro (não por mesa), definida pelo admin e exibida
--- para a camareira acima do layout de mesas; complementa daily_breakfast.
--- Os 4 campos de contagem por tamanho de mesa do PRD seção 4 (quantidade
--- de mesas de 1/2/3 hóspedes, hóspedes na Mesa 07) não são colunas aqui —
--- são sempre calculados na hora a partir de daily_breakfast_room_assignments
--- (`computeTableSizeCounts`, ver CLAUDE.md Parte 16), nunca persistidos.
+-- ---------- DAILY BREAKFAST SETTINGS (observação geral do dia) ----------
+-- Só a observação do dia (edição exclusiva do admin), exibida pra
+-- camareira acima do layout de mesas. "Total de mesas" e os 4 campos de
+-- contagem por tamanho de mesa do PRD seção 4 (quantidade de mesas de
+-- 1/2/3 hóspedes, hóspedes na Mesa 07) não são colunas aqui — são sempre
+-- calculados na hora a partir de daily_breakfast_room_assignments
+-- (`computeTableSizeCounts`, ver CLAUDE.md Partes 16 e 17), nunca
+-- persistidos.
 create table daily_breakfast_settings (
   date date primary key,
-  total_tables int not null default 0,
   notes text,
   updated_at timestamptz not null default now()
 );

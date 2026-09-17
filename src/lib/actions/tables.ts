@@ -183,10 +183,13 @@ export async function removeTableRoomAssignment(date: string, roomId: string) {
   return { success: true };
 }
 
-export async function setBreakfastDaySettings(date: string, totalTables: number, notes: string) {
+// "Total de mesas" deixou de existir como campo próprio (ver
+// computeTableSizeCounts/CLAUDE.md Parte 17) — esta tabela hoje só guarda a
+// observação do dia, de edição exclusiva do admin.
+export async function setBreakfastDayNotes(date: string, notes: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("daily_breakfast_settings").upsert(
-    { date, total_tables: totalTables, notes: notes.trim() || null, updated_at: new Date().toISOString() },
+    { date, notes: notes.trim() || null, updated_at: new Date().toISOString() },
     { onConflict: "date" }
   );
 

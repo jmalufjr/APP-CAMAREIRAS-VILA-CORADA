@@ -108,7 +108,7 @@ function DaySettingsInfo({
     <div className="space-y-3">
       <Card>
         <CardContent>
-          <p className="text-sm font-medium">Total de mesas do café: {settings?.total_tables ?? 0}</p>
+          <p className="text-sm font-medium">Total de mesas: {counts.totalOccupiedTables}</p>
         </CardContent>
       </Card>
       <Card>

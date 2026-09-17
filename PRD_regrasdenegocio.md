@@ -132,8 +132,9 @@ usando o `_idclient` da reserva — ver CLAUDE.md Parte 13.)*
 - Os demais campos são sincronizados e continuam editáveis pelo admin,
   se submetendo à regra de preferência do item 1.
 
-### Campos novos após "Total de mesas"
+### "Total de mesas" e os campos novos depois dele
 
+- **Total de mesas** (quantas mesas devem ser postas para o café da manhã)
 - Quantidade de mesas de 1 hóspede
 - Quantidade de mesas de 2 hóspedes
 - Quantidade de mesas de 3 hóspedes
@@ -142,17 +143,20 @@ usando o `_idclient` da reserva — ver CLAUDE.md Parte 13.)*
 O campo **"Observação"** de cada card de mesa é de edição exclusiva do
 admin, sem comprometer a sincronização dos demais campos.
 
-*(Implementado em 16-17/09/2026 — ver CLAUDE.md Partes 14 e 16. Os quatro
-campos aparecem, nessa ordem, logo abaixo de "Total de mesas" e logo acima
-de "Observação do dia", tanto na tela do admin quanto na da camareira —
-**somente leitura nas duas**, ao contrário do que essa seção previa
-originalmente. Decisão revista em 17/09/2026: em vez de serem campos
-sincronizados/editáveis com trava própria, esses quatro números são
-sempre **calculados na hora**, direto da alocação suíte↔mesa que já existe
-(seção 5) — não têm valor próprio salvo, não podem ficar desatualizados em
-relação às suítes realmente alocadas, e não precisam de nenhuma regra de
-preferência: mudar a alocação de uma suíte já muda esses números
-automaticamente, sem precisar sincronizar nada.)*
+*(Implementado em 16-17/09/2026 — ver CLAUDE.md Partes 14, 16 e 17. Esses
+cinco campos aparecem, nessa ordem, logo acima de "Observação do dia",
+tanto na tela do admin quanto na da camareira — **somente leitura nas
+duas**, ao contrário do que essa seção previa originalmente para os
+quatro últimos, e ao contrário do que "Total de mesas" sempre foi (um
+seletor manual, até 17/09/2026). Decisão revista: nenhum desses cinco
+campos é sincronizado/editável com trava própria — todos são sempre
+**calculados na hora**, direto da alocação suíte↔mesa que já existe
+(seção 5): "Total de mesas" é a quantidade de mesas com pelo menos 1
+hóspede alocado (mesas ocupadas), e os outros quatro detalham essa mesma
+alocação por tamanho de mesa. Nenhum tem valor próprio salvo, nenhum pode
+ficar desatualizado em relação às suítes realmente alocadas, e nenhum
+precisa de regra de preferência: mudar a alocação de uma suíte já muda
+esses números automaticamente, sem precisar sincronizar nada.)*
 
 ### Regra de preenchimento das mesas (distribuição por suíte)
 
