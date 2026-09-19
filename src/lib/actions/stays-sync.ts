@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaysReservationsIncluding, getStaysClientName, type StaysReservationRaw } from "@/lib/stays/client";
 import { deriveWorkType, daysBetween } from "@/lib/stays/derive-planning";
 import { assignRoomsToTables, type RoomGuestCount } from "@/lib/stays/derive-breakfast";
-import { todayKey, tomorrowKey } from "@/lib/date";
+import { todayKey, tomorrowKey, yesterdayKey } from "@/lib/date";
 import { revalidatePath } from "next/cache";
 
 export interface SyncOptions {
@@ -39,9 +39,18 @@ export async function syncStaysPlanning(options?: SyncOptions) {
     return { error: "Nenhuma suíte com stays_listing_id configurado (ver README.md seção 6.3)." };
   }
 
+  // Busca a partir de ontem, não de hoje: a Stays só considera uma reserva
+  // "incluída" no intervalo se pelo menos uma noite dela começa dentro
+  // dele. Uma reserva cujo check-out é hoje não tem nenhuma noite
+  // começando hoje (a última começou ontem) — sem esse dia extra pra trás,
+  // a Stays nunca devolve essa reserva e a saída de hoje passa
+  // despercebida. Verificado direto contra a API real antes desta mudança.
+  // Não é preciso alargar `to` pro lado de amanhã: um check-in em amanhã
+  // já tem a primeira noite dele começando em amanhã, então já cai dentro
+  // do intervalo sem ajuste nenhum.
   let reservations: StaysReservationRaw[];
   try {
-    reservations = await getStaysReservationsIncluding(dates[0], dates[dates.length - 1]);
+    reservations = await getStaysReservationsIncluding(yesterdayKey(), dates[dates.length - 1]);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Erro ao consultar a API da Stays." };
   }
@@ -167,9 +176,18 @@ export async function syncStaysArrivalsDepartures(options?: SyncOptions) {
     return { error: "Nenhuma suíte com stays_listing_id configurado (ver README.md seção 6.3)." };
   }
 
+  // Busca a partir de ontem, não de hoje: a Stays só considera uma reserva
+  // "incluída" no intervalo se pelo menos uma noite dela começa dentro
+  // dele. Uma reserva cujo check-out é hoje não tem nenhuma noite
+  // começando hoje (a última começou ontem) — sem esse dia extra pra trás,
+  // a Stays nunca devolve essa reserva e a saída de hoje passa
+  // despercebida. Verificado direto contra a API real antes desta mudança.
+  // Não é preciso alargar `to` pro lado de amanhã: um check-in em amanhã
+  // já tem a primeira noite dele começando em amanhã, então já cai dentro
+  // do intervalo sem ajuste nenhum.
   let reservations: StaysReservationRaw[];
   try {
-    reservations = await getStaysReservationsIncluding(dates[0], dates[dates.length - 1]);
+    reservations = await getStaysReservationsIncluding(yesterdayKey(), dates[dates.length - 1]);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Erro ao consultar a API da Stays." };
   }
@@ -295,9 +313,18 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
     return { error: "Nenhuma mesa ativa cadastrada." };
   }
 
+  // Busca a partir de ontem, não de hoje: a Stays só considera uma reserva
+  // "incluída" no intervalo se pelo menos uma noite dela começa dentro
+  // dele. Uma reserva cujo check-out é hoje não tem nenhuma noite
+  // começando hoje (a última começou ontem) — sem esse dia extra pra trás,
+  // a Stays nunca devolve essa reserva e a saída de hoje passa
+  // despercebida. Verificado direto contra a API real antes desta mudança.
+  // Não é preciso alargar `to` pro lado de amanhã: um check-in em amanhã
+  // já tem a primeira noite dele começando em amanhã, então já cai dentro
+  // do intervalo sem ajuste nenhum.
   let reservations: StaysReservationRaw[];
   try {
-    reservations = await getStaysReservationsIncluding(dates[0], dates[dates.length - 1]);
+    reservations = await getStaysReservationsIncluding(yesterdayKey(), dates[dates.length - 1]);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Erro ao consultar a API da Stays." };
   }
