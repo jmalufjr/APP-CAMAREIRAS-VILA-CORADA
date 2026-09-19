@@ -298,7 +298,7 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
   ] = await Promise.all([
     supabase
       .from("rooms")
-      .select("id, stays_listing_id")
+      .select("id, number, stays_listing_id")
       .eq("active", true)
       .not("stays_listing_id", "is", null),
     supabase.from("breakfast_tables").select("id, label, seats").eq("active", true),
@@ -341,10 +341,10 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
 
   for (const date of dates) {
     const occupied: RoomGuestCount[] = [];
-    for (const room of rooms as { id: string; stays_listing_id: string }[]) {
+    for (const room of rooms as { id: string; number: string; stays_listing_id: string }[]) {
       const roomReservations = byListing.get(room.stays_listing_id) ?? [];
       const staying = roomReservations.find((r) => r.checkInDate < date && date <= r.checkOutDate);
-      if (staying) occupied.push({ roomId: room.id, guestCount: staying.guests });
+      if (staying) occupied.push({ roomId: room.id, roomNumber: room.number, guestCount: staying.guests });
     }
 
     // Suítes já travadas manualmente (admin reatribuiu) nesse dia: preserva

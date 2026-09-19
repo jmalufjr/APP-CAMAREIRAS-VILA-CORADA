@@ -6,12 +6,13 @@ import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import { formatDatePt } from "@/lib/date";
 import type { ChecklistType } from "@/lib/types";
 import { ChecklistDetail } from "@/components/shared/checklist-detail";
+import { getRoomBillSnapshotForDate } from "@/lib/actions/room-bills";
 
 // Visão somente-leitura do admin de um serviço já concluído (ou cancelado)
 // pela camareira — mesmo componente ChecklistDetail da tela dela, que já
 // trava tudo (checkboxes, formulários) quando o status é "concluido". Não
-// recebe `minibar`: consumo de frigobar é por conta corrente do quarto, não
-// por tarefa/dia, então não há como mostrar "como estava naquele dia".
+// recebe `minibar` (edição): em vez disso recebe `minibarSnapshot`, um
+// retrato somente-leitura da conta vigente na data da tarefa.
 export default async function AdminTaskDetailPage({
   params,
 }: {
@@ -28,7 +29,7 @@ export default async function AdminTaskDetailPage({
 
   if (!task) notFound();
 
-  const [{ data: checks }, { data: occurrences }, { data: categories }] = await Promise.all([
+  const [{ data: checks }, { data: occurrences }, { data: categories }, minibarSnapshot] = await Promise.all([
     supabase
       .from("daily_room_task_checks")
       .select("*, checklist_items(label, description, position)")
@@ -39,6 +40,7 @@ export default async function AdminTaskDetailPage({
       .select("*, occurrence_categories(name)")
       .eq("daily_room_task_id", taskId),
     supabase.from("occurrence_categories").select("*").eq("active", true).order("position"),
+    getRoomBillSnapshotForDate(task.room_id, task.date),
   ]);
 
   const room = (task as unknown as { rooms: { number: string; name: string | null } }).rooms;
@@ -57,6 +59,7 @@ export default async function AdminTaskDetailPage({
         checks={checks ?? []}
         occurrences={occurrences ?? []}
         categories={categories ?? []}
+        minibarSnapshot={minibarSnapshot}
       />
     </div>
   );

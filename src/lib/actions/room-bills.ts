@@ -281,6 +281,77 @@ export async function getRoomBillReceiptData(billId: string): Promise<ReceiptDat
   };
 }
 
+// ---------- Retrato do consumo de uma suíte numa data específica ----------
+
+export interface RoomBillSnapshot {
+  found: boolean;
+  status: RoomBillStatus | null;
+  minibarItems: RoomBillLineItem[];
+  minibarTotal: number;
+  poolbarItems: RoomBillLineItem[];
+  poolbarSubtotal: number;
+  serviceCharge: number;
+  poolbarTotalWithCharge: number;
+  grandTotal: number;
+}
+
+// Busca a conta do quarto vigente numa data específica (a tarefa/dia sendo
+// visualizada pelo admin em /dashboard/tarefas/[taskId]) — a conta cujo
+// ciclo (opened_at até paid_at, ou ainda em aberto) contém essa data.
+// Importante: como o consumo não é registrado por dia (é acumulado por
+// conta corrente do quarto, ver Parte 04 do CLAUDE.md), o valor devolvido é
+// o total acumulado da conta inteira até aquele ponto, não só o que foi
+// lançado especificamente nesse dia — a UI precisa rotular isso com
+// clareza, não como "consumo daquele dia".
+export async function getRoomBillSnapshotForDate(roomId: string, dateKey: string): Promise<RoomBillSnapshot> {
+  const supabase = await createClient();
+  const { data: bill } = await supabase
+    .from("room_bills")
+    .select("id, status, opened_at, paid_at")
+    .eq("room_id", roomId)
+    .lte("opened_at", `${dateKey}T23:59:59`)
+    .or(`paid_at.is.null,paid_at.gte.${dateKey}T00:00:00`)
+    .order("opened_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const empty: RoomBillSnapshot = {
+    found: false,
+    status: null,
+    minibarItems: [],
+    minibarTotal: 0,
+    poolbarItems: [],
+    poolbarSubtotal: 0,
+    serviceCharge: 0,
+    poolbarTotalWithCharge: 0,
+    grandTotal: 0,
+  };
+  if (!bill) return empty;
+
+  const [{ data: minibarRows }, { data: poolbarRows }] = await Promise.all([
+    supabase
+      .from("room_bill_minibar_items")
+      .select("bill_id, minibar_item_id, quantity, price_snapshot, minibar_items(name)")
+      .eq("bill_id", bill.id)
+      .gt("quantity", 0),
+    supabase
+      .from("bar_comanda_items")
+      .select("quantity, price_snapshot, poolbar_item_id, poolbar_items(name), bar_comandas!inner(bill_id, status)")
+      .eq("bar_comandas.bill_id", bill.id)
+      .neq("bar_comandas.status", "cancelada")
+      .gt("quantity", 0),
+  ]);
+
+  const mbRows = (minibarRows ?? []) as unknown as MinibarRow[];
+  const pbRows = (poolbarRows ?? []) as unknown as PoolbarRow[];
+
+  return {
+    found: true,
+    status: bill.status,
+    ...computeBillTotals(bill.id, mbRows, pbRows),
+  };
+}
+
 // ---------- Configuração: e-mail da contabilidade (destino do recibo) ----------
 // Configurável pelo admin na tela "Consumo por quartos" (em vez de fixo por
 // variável de ambiente) — mesmo padrão de singleton já usado em

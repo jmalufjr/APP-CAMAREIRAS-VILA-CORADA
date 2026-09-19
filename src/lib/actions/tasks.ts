@@ -37,6 +37,20 @@ export async function cancelTask(taskId: string) {
   return { success: true };
 }
 
+// Cancela a própria escolha de uma suíte já reivindicada (antes de
+// finalizar): a suíte volta pra lista de disponíveis, com tudo que foi
+// preenchido nessa reivindicação apagado (ver cancel_own_claimed_task).
+// Não confundir com cancelTask acima, que cancela um serviço pendente
+// ainda não reivindicado por ninguém.
+export async function unclaimTask(taskId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("cancel_own_claimed_task", { p_task_id: taskId });
+  if (error) return { error: error.message };
+  revalidatePath("/tarefas", "layout");
+  revalidatePath("/planejamento");
+  return { success: true };
+}
+
 export async function toggleCheck(checkId: string, checked: boolean) {
   const supabase = await createClient();
   const { error } = await supabase.rpc("toggle_daily_room_task_check", {

@@ -622,6 +622,38 @@ begin
 end;
 $$ language plpgsql security definer;
 
+-- Camareira cancela a própria escolha de uma suíte já reivindicada (antes
+-- de finalizar): devolve o serviço pra lista de disponíveis, apagando tudo
+-- que foi preenchido nessa reivindicação. Diferente de cancel_daily_room_task
+-- acima, que só cancela um serviço PENDENTE ainda não reivindicado por
+-- ninguém. Precisa ser security definer porque drt_camareira_update_own
+-- exige with check (assigned_to = auth.uid()), que rejeitaria a transição
+-- assigned_to -> null.
+create or replace function cancel_own_claimed_task(p_task_id uuid) returns void as $$
+begin
+  if not is_camareira() then
+    raise exception 'not authorized';
+  end if;
+
+  if not exists (
+    select 1 from daily_room_tasks
+    where id = p_task_id and assigned_to = auth.uid() and status in ('pendente', 'em_andamento')
+  ) then
+    raise exception 'not authorized';
+  end if;
+
+  delete from daily_room_task_occurrences where daily_room_task_id = p_task_id;
+
+  update daily_room_task_checks
+  set checked = false, checked_at = null
+  where daily_room_task_id = p_task_id;
+
+  update daily_room_tasks
+  set assigned_to = null, claimed_at = null, started_at = null, status = 'pendente', notes = null
+  where id = p_task_id;
+end;
+$$ language plpgsql security definer;
+
 -- Permite ao admin reordenar itens de checklist (arrumação/troca/preparação
 -- chegada) e itens de manutenção preventiva, incluindo inserir um item novo
 -- em qualquer posição (primeiro, último ou intermediária). Recebe a lista

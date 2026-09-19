@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import Link from "next/link";
 import type { DailyRoomTask, Profile } from "@/lib/types";
-import { claimTask, cancelTask } from "@/lib/actions/tasks";
+import { claimTask, cancelTask, unclaimTask } from "@/lib/actions/tasks";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import { formatDateShortPt } from "@/lib/date";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { BedDouble, ChevronRight, Hand, X } from "lucide-react";
+import { BedDouble, ChevronRight, Hand, Undo2, X } from "lucide-react";
 
 export type TaskWithRoom = DailyRoomTask & { rooms: { number: string; name: string | null } };
 
@@ -88,7 +88,7 @@ export function TasksBoard({
         ) : (
           <div className="grid sm:grid-cols-2 gap-4">
             {mine.map((task) => (
-              <TaskCard key={task.id} task={task} today={today} href={`/tarefas/${task.id}`} />
+              <MyTaskCard key={task.id} task={task} today={today} />
             ))}
           </div>
         )}
@@ -152,6 +152,69 @@ function AvailableTaskCard({ task, isPast }: { task: TaskWithRoom; isPast?: bool
           {TASK_TYPE_LABELS[task.task_type]}
           {isPast && ` ${formatDateShortPt(task.date)}`}
         </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Card de "Minhas suítes" com o botão "Cancelar escolha" — só a parte de
+// ícone+texto é um Link (não o card inteiro), pra o botão poder ficar fora
+// dele sem aninhar um <button> dentro de um <a> (inválido em HTML e causa
+// conflito de clique).
+function MyTaskCard({ task, today }: { task: TaskWithRoom; today: string }) {
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  const isPast = task.date !== today;
+  const canCancel = task.status !== "concluido";
+
+  return (
+    <Card className="hover:border-primary transition-colors">
+      <CardContent className="flex items-center justify-between gap-3">
+        <Link href={`/tarefas/${task.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="size-10 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
+            <BedDouble size={18} />
+          </div>
+          <div className="min-w-0">
+            <p className="font-medium">Suíte {task.rooms.number}</p>
+            <p className="text-xs text-muted-foreground">
+              {TASK_TYPE_LABELS[task.task_type]}
+              {isPast && ` · ${formatDateShortPt(task.date)}`}
+            </p>
+          </div>
+        </Link>
+        <div className="flex items-center gap-2 shrink-0">
+          <Badge variant={task.status === "concluido" ? "default" : "secondary"}>
+            {task.status === "concluido"
+              ? "Concluído"
+              : task.status === "em_andamento"
+              ? "Em andamento"
+              : "Pendente"}
+          </Badge>
+          {canCancel && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-auto flex-col gap-0.5 rounded-xl px-2 py-1 text-[10px] leading-tight [&_svg:not([class*='size-'])]:size-3.5"
+              disabled={isPending}
+              onClick={() =>
+                startTransition(async () => {
+                  const result = await unclaimTask(task.id);
+                  if (result?.error) toast.error(result.error);
+                  else {
+                    toast.success("Escolha cancelada.");
+                    router.refresh();
+                  }
+                })
+              }
+            >
+              <Undo2 size={14} />
+              <span>Cancelar</span>
+            </Button>
+          )}
+          <Link href={`/tarefas/${task.id}`}>
+            <ChevronRight size={16} className="text-muted-foreground" />
+          </Link>
+        </div>
       </CardContent>
     </Card>
   );

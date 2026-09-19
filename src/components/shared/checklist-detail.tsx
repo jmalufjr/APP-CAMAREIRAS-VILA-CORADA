@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import type { DailyRoomTask, DailyRoomTaskCheck, DailyRoomTaskOccurrence, OccurrenceCategory } from "@/lib/types";
 import { toggleCheck, addOccurrence, removeOccurrence, releaseTask } from "@/lib/actions/tasks";
 import { setMinibarConsumption, type MinibarRoomConsumption } from "@/lib/actions/minibar";
+import type { RoomBillSnapshot } from "@/lib/actions/room-bills";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,16 +34,21 @@ export function ChecklistDetail({
   occurrences,
   categories,
   minibar,
+  minibarSnapshot,
 }: {
   task: DailyRoomTask;
   checks: CheckRow[];
   occurrences: OccurrenceRow[];
   categories: OccurrenceCategory[];
-  // Omitido na visão somente-leitura do admin: o consumo de frigobar é por
-  // conta corrente do quarto, não por tarefa/dia (ver Parte 04), então não
-  // há um jeito de mostrar "como estava naquele dia" sem exibir dado atual
-  // do quarto sob o rótulo errado.
+  // Só passado pela tela da camareira: consumo editável da conta corrente
+  // do quarto (steppers, grava a cada clique).
   minibar?: MinibarRoomConsumption;
+  // Só passado pela visão somente-leitura do admin: retrato (não editável)
+  // da conta vigente na data da tarefa, no mesmo formato usado em
+  // "Consumo de Bar e Frigobar" > Consumo por quartos. Ver
+  // getRoomBillSnapshotForDate — é o acumulado da conta até aquele ponto,
+  // não só o que foi lançado exatamente naquele dia.
+  minibarSnapshot?: RoomBillSnapshot;
 }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -220,6 +226,80 @@ export function ChecklistDetail({
       </Card>
       )}
 
+      {minibarSnapshot && (
+        <Card>
+          <CardContent className="space-y-4">
+            <div>
+              <h3 className="font-heading text-lg">Consumo de frigobar e bar</h3>
+              <p className="text-xs text-muted-foreground">
+                Estado acumulado da conta da suíte vigente nessa data — não é só o que foi lançado
+                exatamente nesse dia, e sim tudo que já constava na conta até esse ponto.
+              </p>
+            </div>
+            {!minibarSnapshot.found ? (
+              <p className="text-sm text-muted-foreground">
+                Não foi encontrada nenhuma conta dessa suíte pra essa data.
+              </p>
+            ) : (
+              <>
+                <div className="grid sm:grid-cols-2 gap-x-8 gap-y-4">
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">Frigobar</p>
+                    <div className="space-y-1.5">
+                      {minibarSnapshot.minibarItems.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between text-sm">
+                          <span>
+                            {item.name} <span className="text-muted-foreground">× {item.quantity}</span>
+                          </span>
+                          <span>R$ {item.subtotal.toFixed(2)}</span>
+                        </div>
+                      ))}
+                      {minibarSnapshot.minibarItems.length === 0 && (
+                        <p className="text-sm text-muted-foreground py-2">Sem consumo.</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">Bar da piscina</p>
+                    <div className="space-y-1.5">
+                      {minibarSnapshot.poolbarItems.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between text-sm">
+                          <span>
+                            {item.name} <span className="text-muted-foreground">× {item.quantity}</span>
+                          </span>
+                          <span>R$ {item.subtotal.toFixed(2)}</span>
+                        </div>
+                      ))}
+                      {minibarSnapshot.poolbarItems.length === 0 && (
+                        <p className="text-sm text-muted-foreground py-2">Sem consumo.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="border-t border-border pt-2 space-y-1 text-sm max-w-md">
+                  <div className="flex items-center justify-between">
+                    <span>Total frigobar</span>
+                    <span>R$ {minibarSnapshot.minibarTotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Total bar da piscina</span>
+                    <span>R$ {minibarSnapshot.poolbarSubtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-muted-foreground text-xs">
+                    <span>Taxa de serviço (10% sobre o bar)</span>
+                    <span>R$ {minibarSnapshot.serviceCharge.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between font-medium pt-1">
+                    <span>Total bar e frigobar</span>
+                    <span>R$ {minibarSnapshot.grandTotal.toFixed(2)}</span>
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="space-y-4">
           <h3 className="font-heading text-lg">Ocorrências Manutenção</h3>
@@ -246,6 +326,9 @@ export function ChecklistDetail({
                 )}
               </div>
             ))}
+            {occurrences.length === 0 && (
+              <p className="text-sm text-muted-foreground">Nenhuma ocorrência de manutenção registrada.</p>
+            )}
           </div>
           {!isReleased && (
             <div className="flex flex-col sm:flex-row gap-2">
@@ -317,11 +400,11 @@ export function ChecklistDetail({
         </Card>
       )}
 
-      {isReleased && task.notes && (
+      {isReleased && (
         <Card>
           <CardContent>
             <h3 className="font-heading text-lg mb-2">Observações</h3>
-            <p className="text-sm text-muted-foreground">{task.notes}</p>
+            <p className="text-sm text-muted-foreground">{task.notes || "Nenhuma observação registrada."}</p>
           </CardContent>
         </Card>
       )}
