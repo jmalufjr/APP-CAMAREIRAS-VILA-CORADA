@@ -43,28 +43,37 @@ export default async function HistoricoPage({
 
   const supabase = await createClient();
 
-  const [{ data: breakfastAssignments }, { data: commissionSettings }, { data: tasks }, minibarSummary, poolbarSummary] =
-    await Promise.all([
-      // Comissão = quantidade de suítes servidas no café por dia (uma linha
-      // por suíte/dia aqui) × valor por café servido — não depende mais de
-      // mesa/hóspedes por mesa.
-      supabase
-        .from("daily_breakfast_room_assignments")
-        .select("date, guest_count, commission_value_snapshot")
-        .gte("date", from)
-        .lte("date", to),
-      supabase.from("commission_settings").select("value_per_table").single(),
-      supabase
-        .from("daily_room_tasks")
-        .select(
-          "date, task_type, status, assigned_to, claimed_at, started_at, finished_at, profiles!daily_room_tasks_assigned_to_fkey(name), daily_room_task_occurrences(id, status, occurrence_categories(name))"
-        )
-        .gte("date", from)
-        .lte("date", to)
-        .eq("status", "concluido"),
-      getMinibarConsumptionForPeriod(from, to),
-      getPoolbarConsumptionForPeriod(from, to),
-    ]);
+  const [
+    { data: eligibility },
+    { data: roomAssignments },
+    { data: commissionSettings },
+    { data: tasks },
+    minibarSummary,
+    poolbarSummary,
+  ] = await Promise.all([
+    // Comissão = quantidade de suítes elegíveis pro café da manhã por dia
+    // (independente de terem sido de fato alocadas a uma mesa) × valor por
+    // café servido, gravada a cada sincronização com a Stays.
+    supabase
+      .from("daily_breakfast_settings")
+      .select("date, eligible_suites_count, commission_value_snapshot")
+      .gte("date", from)
+      .lte("date", to),
+    // "Hóspedes café": soma dos hóspedes reais por suíte alocada (estatística
+    // separada da comissão, não usada pra calculá-la).
+    supabase.from("daily_breakfast_room_assignments").select("date, guest_count").gte("date", from).lte("date", to),
+    supabase.from("commission_settings").select("value_per_table").single(),
+    supabase
+      .from("daily_room_tasks")
+      .select(
+        "date, task_type, status, assigned_to, claimed_at, started_at, finished_at, profiles!daily_room_tasks_assigned_to_fkey(name), daily_room_task_occurrences(id, status, occurrence_categories(name))"
+      )
+      .gte("date", from)
+      .lte("date", to)
+      .eq("status", "concluido"),
+    getMinibarConsumptionForPeriod(from, to),
+    getPoolbarConsumptionForPeriod(from, to),
+  ]);
 
   const commissionRate = Number(commissionSettings?.value_per_table ?? 0);
 
@@ -87,7 +96,8 @@ export default async function HistoricoPage({
       <PageHeader title="Histórico" subtitle="Dados diários, mensais e anuais consolidados." />
       <HistoryFilters from={from} to={to} />
       <HistoryTables
-        breakfast={breakfastAssignments ?? []}
+        eligibility={eligibility ?? []}
+        roomAssignments={roomAssignments ?? []}
         commissionRate={commissionRate}
         tasks={taskRows.map((t) => ({
           date: t.date,

@@ -353,6 +353,24 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
       if (staying) occupied.push({ roomId: room.id, roomNumber: room.number, guestCount: staying.guests });
     }
 
+    // Comissão do dia = quantidade de suítes elegíveis pro café da manhã
+    // (a regra de ocupação acima), independente de terem sido de fato
+    // alocadas a alguma mesa — grava sempre, mesmo com lápide de exclusão
+    // ou superlotação real, e mesmo sem `force` (não é um campo editável
+    // pelo admin, só reflete a regra objetiva de ocupação). Um erro aqui
+    // não interrompe o resto da sincronização (alocação de mesas segue
+    // normalmente abaixo) — só não conta como "atualizado".
+    const { error: settingsError } = await supabase.from("daily_breakfast_settings").upsert(
+      {
+        date,
+        eligible_suites_count: occupied.length,
+        commission_value_snapshot: commissionValueSnapshot,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "date" }
+    );
+    if (!settingsError) updated++;
+
     // Suítes já travadas manualmente (admin reatribuiu) nesse dia: preserva
     // a alocação delas e não as considera disponíveis pro algoritmo — a
     // menos que `force`, que trata como se nada estivesse travado.

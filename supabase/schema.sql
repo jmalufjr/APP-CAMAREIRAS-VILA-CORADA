@@ -195,11 +195,6 @@ create table daily_breakfast_room_assignments (
   guest_count int not null default 0 check (guest_count >= 0),
   created_at timestamptz not null default now(),
   stays_locked boolean not null default false,
-  -- valor da comissão por café servido no momento em que esta suíte foi
-  -- alocada — usado pro Histórico manter meses já fechados congelados,
-  -- mesmo que o valor do campo mude depois (o mês corrente sempre usa o
-  -- valor atual, não este).
-  commission_value_snapshot numeric(10,2) not null default 0,
   unique (date, room_id)
 );
 
@@ -219,17 +214,29 @@ create table daily_breakfast_room_exclusions (
   primary key (date, room_id)
 );
 
--- ---------- DAILY BREAKFAST SETTINGS (observação geral do dia) ----------
--- Só a observação do dia (edição exclusiva do admin), exibida pra
+-- ---------- DAILY BREAKFAST SETTINGS (observação geral do dia + comissão do dia) ----------
+-- A observação do dia é de edição exclusiva do admin, exibida pra
 -- camareira acima do layout de mesas. "Total de mesas" e os 4 campos de
 -- contagem por tamanho de mesa do PRD seção 4 (quantidade de mesas de
 -- 1/2/3 hóspedes, hóspedes na Mesa 07) não são colunas aqui — são sempre
 -- calculados na hora a partir de daily_breakfast_room_assignments
 -- (`computeTableSizeCounts`, ver CLAUDE.md Partes 16 e 17), nunca
 -- persistidos.
+--
+-- eligible_suites_count e commission_value_snapshot são gravados sempre
+-- que a sincronização com a Stays roda (automática ou forçada, nunca pelo
+-- admin diretamente): quantas suítes atendem a regra de ocupação pro café
+-- da manhã naquele dia (checkInDate < data <= checkOutDate), independente
+-- de terem sido efetivamente alocadas a alguma mesa, e o valor da
+-- comissão vigente naquele momento. É a base do cálculo de comissão do
+-- dia (quantidade × valor) — meses já fechados no Histórico usam o valor
+-- congelado aqui; o mês corrente sempre usa o valor atual do campo de
+-- comissão, não este.
 create table daily_breakfast_settings (
   date date primary key,
   notes text,
+  eligible_suites_count int not null default 0,
+  commission_value_snapshot numeric(10,2) not null default 0,
   updated_at timestamptz not null default now()
 );
 

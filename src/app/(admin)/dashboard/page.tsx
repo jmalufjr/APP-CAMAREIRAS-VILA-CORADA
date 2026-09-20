@@ -33,7 +33,7 @@ export default async function DashboardPage() {
   const [
     { data: todayTasks },
     { data: tomorrowTasks },
-    { data: monthAssignments },
+    { data: monthEligibility },
     { data: commissionSettings },
     { count: occurrencesToday },
     { data: serviceLog },
@@ -42,11 +42,15 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", today),
     supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", tomorrow),
-    // Comissão do dia = quantidade de suítes servidas no café (uma linha
-    // por suíte/dia aqui, independente de mesa/hóspedes) × valor por café
-    // servido — ver CLAUDE.md sobre a mudança do modelo "por mesa" pro
-    // modelo "por suíte servida".
-    supabase.from("daily_breakfast_room_assignments").select("date, room_id").gte("date", start).lte("date", end),
+    // Comissão do dia = quantidade de suítes elegíveis pro café da manhã
+    // naquele dia (independente de terem sido de fato alocadas a uma
+    // mesa) × valor por café servido — gravada a cada sincronização com a
+    // Stays em daily_breakfast_settings.
+    supabase
+      .from("daily_breakfast_settings")
+      .select("date, eligible_suites_count")
+      .gte("date", start)
+      .lte("date", end),
     supabase.from("commission_settings").select("value_per_table").single(),
     supabase
       .from("daily_room_task_occurrences")
@@ -95,13 +99,11 @@ export default async function DashboardPage() {
 
   const commissionRate = Number(commissionSettings?.value_per_table ?? 0);
 
-  // Uma linha em daily_breakfast_room_assignments = uma suíte servida
-  // naquele dia (a tabela já garante no máximo 1 linha por suíte/dia), daí
-  // contar linhas por data já dá a quantidade de suítes servidas por dia.
-  const suitesByDate = new Map<string, number>();
-  (monthAssignments ?? []).forEach((r) => {
-    suitesByDate.set(r.date, (suitesByDate.get(r.date) ?? 0) + 1);
-  });
+  // Uma linha em daily_breakfast_settings por data, já com a contagem de
+  // suítes elegíveis daquele dia pronta (gravada pela sincronização).
+  const suitesByDate = new Map<string, number>(
+    (monthEligibility ?? []).map((r) => [r.date, r.eligible_suites_count])
+  );
 
   const totalSuitesMonth = Array.from(suitesByDate.values()).reduce((sum, n) => sum + n, 0);
   const totalCommissionMonth = totalSuitesMonth * commissionRate;

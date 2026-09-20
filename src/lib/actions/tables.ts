@@ -161,11 +161,9 @@ export async function setTableRoomAssignment(date: string, tableId: string, room
   // suíte da distribuição hoje.
   await supabase.from("daily_breakfast_room_exclusions").delete().eq("date", date).eq("room_id", roomId);
 
-  // Congela o valor de comissão vigente agora nesta linha — é o que o
-  // Histórico vai mostrar pra esse dia depois que o mês fechar (ver
-  // migration 037).
-  const { data: settings } = await supabase.from("commission_settings").select("value_per_table").single();
-
+  // A comissão não depende mais desta alocação (ver
+  // daily_breakfast_settings.eligible_suites_count) — essa linha só
+  // controla em qual mesa a suíte fica sentada.
   const { error } = await supabase.from("daily_breakfast_room_assignments").upsert(
     {
       date,
@@ -173,7 +171,6 @@ export async function setTableRoomAssignment(date: string, tableId: string, room
       room_id: roomId,
       guest_count: guestCount,
       stays_locked: true,
-      commission_value_snapshot: settings?.value_per_table ?? 10,
     },
     { onConflict: "date,room_id" }
   );

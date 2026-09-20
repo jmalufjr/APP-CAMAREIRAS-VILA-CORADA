@@ -17,15 +17,24 @@ import { durationMinutes, formatMinutesPt, effectiveServiceStart, todayKey } fro
 import type { ChecklistType } from "@/lib/types";
 import { Download } from "lucide-react";
 
-// Uma linha por suíte servida no café num dia (vem de
-// daily_breakfast_room_assignments — no máximo 1 por suíte/dia).
-// commission_value_snapshot é o valor da comissão congelado no momento em
-// que a linha foi gravada — usado pra meses já fechados (o mês corrente
-// sempre usa o valor atual do campo, não esse).
-interface BreakfastRow {
+// Uma linha por dia (vem de daily_breakfast_settings, gravada a cada
+// sincronização com a Stays): quantas suítes eram elegíveis pro café da
+// manhã naquele dia, independente de terem sido de fato alocadas a
+// alguma mesa. commission_value_snapshot é o valor da comissão congelado
+// no momento em que a linha foi gravada — usado pra meses já fechados (o
+// mês corrente sempre usa o valor atual do campo, não esse).
+interface EligibilityRow {
+  date: string;
+  eligible_suites_count: number;
+  commission_value_snapshot: number;
+}
+
+// Uma linha por suíte alocada a uma mesa num dia — só usada aqui pra
+// somar o total de hóspedes reais ("Hóspedes café"), estatística separada
+// da comissão (que não depende mais da alocação).
+interface RoomAssignmentRow {
   date: string;
   guest_count: number;
-  commission_value_snapshot: number;
 }
 interface TaskRow {
   date: string;
@@ -73,11 +82,13 @@ function downloadCsv(filename: string, rows: (string | number)[][]) {
 }
 
 export function HistoryTables({
-  breakfast,
+  eligibility,
+  roomAssignments,
   commissionRate,
   tasks,
 }: {
-  breakfast: BreakfastRow[];
+  eligibility: EligibilityRow[];
+  roomAssignments: RoomAssignmentRow[];
   commissionRate: number;
   tasks: TaskRow[];
 }) {
@@ -89,12 +100,16 @@ export function HistoryTables({
 
   const byDay = useMemo(() => {
     const map = new Map<string, DayStats>();
-    breakfast.forEach((b) => {
-      const entry = map.get(b.date) ?? emptyDayStats();
-      entry.suites += 1;
-      entry.hospedes += b.guest_count;
-      entry.comissao += b.date.slice(0, 7) === currentMonthPrefix ? commissionRate : b.commission_value_snapshot;
-      map.set(b.date, entry);
+    eligibility.forEach((e) => {
+      const entry = map.get(e.date) ?? emptyDayStats();
+      entry.suites = e.eligible_suites_count;
+      entry.comissao = e.date.slice(0, 7) === currentMonthPrefix ? commissionRate * e.eligible_suites_count : e.commission_value_snapshot * e.eligible_suites_count;
+      map.set(e.date, entry);
+    });
+    roomAssignments.forEach((r) => {
+      const entry = map.get(r.date) ?? emptyDayStats();
+      entry.hospedes += r.guest_count;
+      map.set(r.date, entry);
     });
     tasks.forEach((t) => {
       const entry = map.get(t.date) ?? emptyDayStats();
@@ -104,7 +119,7 @@ export function HistoryTables({
       map.set(t.date, entry);
     });
     return Array.from(map.entries()).sort(([a], [b]) => b.localeCompare(a));
-  }, [breakfast, commissionRate, currentMonthPrefix, tasks]);
+  }, [eligibility, roomAssignments, commissionRate, currentMonthPrefix, tasks]);
 
   const byCamareira = useMemo(() => {
     const map = new Map<
