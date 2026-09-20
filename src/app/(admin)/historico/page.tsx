@@ -50,7 +50,7 @@ export default async function HistoricoPage({
       // mesa/hóspedes por mesa.
       supabase
         .from("daily_breakfast_room_assignments")
-        .select("date, guest_count")
+        .select("date, guest_count, commission_value_snapshot")
         .gte("date", from)
         .lte("date", to),
       supabase.from("commission_settings").select("value_per_table").single(),

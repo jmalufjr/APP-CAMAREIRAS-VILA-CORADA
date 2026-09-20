@@ -195,6 +195,11 @@ create table daily_breakfast_room_assignments (
   guest_count int not null default 0 check (guest_count >= 0),
   created_at timestamptz not null default now(),
   stays_locked boolean not null default false,
+  -- valor da comissão por café servido no momento em que esta suíte foi
+  -- alocada — usado pro Histórico manter meses já fechados congelados,
+  -- mesmo que o valor do campo mude depois (o mês corrente sempre usa o
+  -- valor atual, não este).
+  commission_value_snapshot numeric(10,2) not null default 0,
   unique (date, room_id)
 );
 

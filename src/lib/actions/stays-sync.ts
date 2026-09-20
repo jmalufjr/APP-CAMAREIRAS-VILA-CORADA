@@ -313,6 +313,12 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
     return { error: "Nenhuma mesa ativa cadastrada." };
   }
 
+  // Valor de comissão vigente agora, gravado (congelado) em cada linha de
+  // alocação criada/atualizada nesta sincronização — é o que o Histórico
+  // vai mostrar pra esse dia depois que o mês fechar (ver migration 037).
+  const { data: commissionSettings } = await supabase.from("commission_settings").select("value_per_table").single();
+  const commissionValueSnapshot = commissionSettings?.value_per_table ?? 10;
+
   // Busca a partir de ontem, não de hoje: a Stays só considera uma reserva
   // "incluída" no intervalo se pelo menos uma noite dela começa dentro
   // dele. Uma reserva cujo check-out é hoje não tem nenhuma noite
@@ -417,7 +423,14 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
     for (const [tableId, roomsAtTable] of assignment) {
       for (const r of roomsAtTable) {
         const { error } = await supabase.from("daily_breakfast_room_assignments").upsert(
-          { date, table_id: tableId, room_id: r.roomId, guest_count: r.guestCount, stays_locked: false },
+          {
+            date,
+            table_id: tableId,
+            room_id: r.roomId,
+            guest_count: r.guestCount,
+            stays_locked: false,
+            commission_value_snapshot: commissionValueSnapshot,
+          },
           { onConflict: "date,room_id" }
         );
         if (!error) updated++;

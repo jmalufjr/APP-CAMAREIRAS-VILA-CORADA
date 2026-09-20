@@ -13,15 +13,19 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TASK_TYPE_OPTIONS } from "@/lib/task-type";
-import { durationMinutes, formatMinutesPt, effectiveServiceStart } from "@/lib/date";
+import { durationMinutes, formatMinutesPt, effectiveServiceStart, todayKey } from "@/lib/date";
 import type { ChecklistType } from "@/lib/types";
 import { Download } from "lucide-react";
 
 // Uma linha por suíte servida no café num dia (vem de
 // daily_breakfast_room_assignments — no máximo 1 por suíte/dia).
+// commission_value_snapshot é o valor da comissão congelado no momento em
+// que a linha foi gravada — usado pra meses já fechados (o mês corrente
+// sempre usa o valor atual do campo, não esse).
 interface BreakfastRow {
   date: string;
   guest_count: number;
+  commission_value_snapshot: number;
 }
 interface TaskRow {
   date: string;
@@ -77,13 +81,19 @@ export function HistoryTables({
   commissionRate: number;
   tasks: TaskRow[];
 }) {
+  // Mês corrente sempre usa o valor atual do campo de comissão (muda na
+  // hora se o admin alterar o valor); meses já fechados usam o valor que
+  // estava congelado em cada linha no momento em que foi gravada, então
+  // ficam parados mesmo que o valor do campo mude depois.
+  const currentMonthPrefix = todayKey().slice(0, 7);
+
   const byDay = useMemo(() => {
     const map = new Map<string, DayStats>();
     breakfast.forEach((b) => {
       const entry = map.get(b.date) ?? emptyDayStats();
       entry.suites += 1;
       entry.hospedes += b.guest_count;
-      entry.comissao += commissionRate;
+      entry.comissao += b.date.slice(0, 7) === currentMonthPrefix ? commissionRate : b.commission_value_snapshot;
       map.set(b.date, entry);
     });
     tasks.forEach((t) => {
@@ -94,7 +104,7 @@ export function HistoryTables({
       map.set(t.date, entry);
     });
     return Array.from(map.entries()).sort(([a], [b]) => b.localeCompare(a));
-  }, [breakfast, commissionRate, tasks]);
+  }, [breakfast, commissionRate, currentMonthPrefix, tasks]);
 
   const byCamareira = useMemo(() => {
     const map = new Map<
