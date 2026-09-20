@@ -4,9 +4,9 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { BreakfastTable, DailyBreakfastRoomAssignment, Room } from "@/lib/types";
-import { setTableRoomAssignment, removeTableRoomAssignment } from "@/lib/actions/tables";
+import { setTableRoomAssignment, removeTableRoomAssignment, setTableNotes } from "@/lib/actions/tables";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -26,47 +26,58 @@ import { X } from "lucide-react";
 
 // Edição de quais suítes estão alocadas numa mesa, aberta ao clicar na mesa
 // no layout de "Mesas do café" (hoje/amanhã) do admin — substitui os cards
-// por mesa que existiam antes. Só o essencial: quais suítes, com qual
-// quantidade de hóspedes cada. Uma suíte só pode estar numa mesa por vez —
-// escolher uma suíte já alocada em outra mesa aqui a move automaticamente
-// (mesmo upsert por date+room_id de sempre, ver setTableRoomAssignment). O
-// sistema não permite lançar mais hóspedes do que a mesa comporta.
+// por mesa que existiam antes (que também guardavam a quantidade de
+// hóspedes e as observações; a quantidade de hóspedes deixou de existir
+// como campo — vem sempre da suíte/reserva sincronizada com a Stays — e as
+// observações se mudaram pra cá).
+//
+// Uma suíte só pode estar numa mesa por vez — escolher uma suíte já
+// alocada em outra mesa aqui a move automaticamente (mesmo upsert por
+// date+room_id de sempre, ver setTableRoomAssignment). O sistema não
+// permite lançar mais hóspedes do que a mesa comporta (a quantidade de
+// hóspedes da suíte é resolvida no servidor, não aparece nem é digitada
+// aqui).
 export function TableAssignmentDialog({
   date,
   table,
   rooms,
   assignments,
+  notes,
   onOpenChange,
 }: {
   date: string;
   table: BreakfastTable | null;
   rooms: Room[];
   assignments: DailyBreakfastRoomAssignment[];
+  notes: string;
   onOpenChange: (open: boolean) => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const [newRoomId, setNewRoomId] = useState("");
-  const [newGuestCount, setNewGuestCount] = useState("2");
+  const [notesValue, setNotesValue] = useState(notes);
 
   const roomById = new Map(rooms.map((r) => [r.id, r]));
   const forThisTable = table ? assignments.filter((a) => a.table_id === table.id) : [];
   const assignedElsewhere = new Set(assignments.map((a) => a.room_id));
   const availableRooms = rooms.filter((r) => !assignedElsewhere.has(r.id));
 
+  // Sincroniza o valor local sempre que o diálogo abre numa mesa diferente
+  // (prop `notes` muda de identidade) — sem useEffect, mesmo padrão de
+  // "ajustar estado durante a renderização" já usado no resto do app.
+  const [syncedNotes, setSyncedNotes] = useState(notes);
+  if (notes !== syncedNotes) {
+    setSyncedNotes(notes);
+    setNotesValue(notes);
+  }
+
   function handleAdd() {
     if (!table || !newRoomId) return;
-    const guestCount = Number(newGuestCount) || 0;
-    if (guestCount > table.seats) {
-      toast.error(`Essa mesa comporta no máximo ${table.seats} hóspede${table.seats === 1 ? "" : "s"}.`);
-      return;
-    }
     startTransition(async () => {
-      const result = await setTableRoomAssignment(date, table.id, newRoomId, guestCount);
+      const result = await setTableRoomAssignment(date, table.id, newRoomId);
       if (result?.error) toast.error(result.error);
       else {
         setNewRoomId("");
-        setNewGuestCount("2");
         router.refresh();
       }
     });
@@ -75,6 +86,15 @@ export function TableAssignmentDialog({
   function handleRemove(roomId: string) {
     startTransition(async () => {
       const result = await removeTableRoomAssignment(date, roomId);
+      if (result?.error) toast.error(result.error);
+      else router.refresh();
+    });
+  }
+
+  function handleSaveNotes() {
+    if (!table) return;
+    startTransition(async () => {
+      const result = await setTableNotes(date, table.id, notesValue);
       if (result?.error) toast.error(result.error);
       else router.refresh();
     });
@@ -132,21 +152,25 @@ export function TableAssignmentDialog({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="w-20 space-y-1">
-                  <Label className="text-xs text-muted-foreground">Hóspedes</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={table.seats}
-                    value={newGuestCount}
-                    onChange={(e) => setNewGuestCount(e.target.value)}
-                  />
-                </div>
                 <Button type="button" disabled={isPending || !newRoomId} onClick={handleAdd}>
                   Adicionar
                 </Button>
               </div>
             )}
+
+            <div className="space-y-1.5">
+              <Label htmlFor={`table-notes-${table.id}`} className="text-xs text-muted-foreground">
+                Observações desta mesa (visível para as camareiras)
+              </Label>
+              <Textarea
+                id={`table-notes-${table.id}`}
+                placeholder="Ex.: mesa perto da janela, pedido especial do hóspede etc."
+                className="min-h-16 text-sm"
+                value={notesValue}
+                onChange={(e) => setNotesValue(e.target.value)}
+                onBlur={handleSaveNotes}
+              />
+            </div>
           </div>
         )}
         <DialogFooter>

@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { getStaysReservationsIncluding } from "@/lib/stays/client";
+import { addDaysKey } from "@/lib/date";
 
 export async function createBreakfastTable(formData: FormData) {
   const label = String(formData.get("label") ?? "").trim();
@@ -77,31 +79,6 @@ export async function saveTableLayout(positions: TablePosition[]) {
   return { success: true };
 }
 
-export async function setGuestCount(date: string, tableId: string, guestCount: number) {
-  const supabase = await createClient();
-  const { data: settings } = await supabase
-    .from("commission_settings")
-    .select("value_per_table")
-    .single();
-
-  const { error } = await supabase.from("daily_breakfast").upsert(
-    {
-      date,
-      table_id: tableId,
-      guest_count: guestCount,
-      value_per_table_snapshot: settings?.value_per_table ?? 10,
-      stays_locked: true,
-    },
-    { onConflict: "date,table_id" }
-  );
-
-  if (error) return { error: error.message };
-  revalidatePath("/mesas/gerenciar");
-  revalidatePath("/mesas");
-  revalidatePath("/dashboard");
-  return { success: true };
-}
-
 export async function setTableNotes(date: string, tableId: string, notes: string) {
   const supabase = await createClient();
   const { data: settings } = await supabase
@@ -125,17 +102,57 @@ export async function setTableNotes(date: string, tableId: string, notes: string
   return { success: true };
 }
 
-// Associa uma suíte a uma mesa do café num dia (com sua quantidade de
-// hóspedes) — a Mesa 7 pode receber mais de uma suíte (ver
-// PRD_regrasdenegocio.md seção 4). Uma suíte só pode estar em uma mesa por
-// dia (upsert por date+room_id: escolher a suíte de novo, numa mesa
-// diferente, move-a em vez de duplicar).
-export async function setTableRoomAssignment(date: string, tableId: string, roomId: string, guestCount: number) {
+// Associa uma suíte a uma mesa do café num dia — a Mesa 7 pode receber mais
+// de uma suíte (ver PRD_regrasdenegocio.md seção 4). Uma suíte só pode
+// estar em uma mesa por dia (upsert por date+room_id: escolher a suíte de
+// novo, numa mesa diferente, move-a em vez de duplicar).
+//
+// A quantidade de hóspedes nunca é digitada pelo admin aqui (evita
+// divergir do dado que a sincronização com a Stays já traz): se a suíte já
+// estava alocada em alguma mesa nesse dia, reaproveita o valor que já
+// tinha (só está sendo movida); senão, busca na Stays a reserva vigente da
+// suíte nessa data. Se por algum motivo a Stays não tiver esse dado (sem
+// credenciais, fora do ar, suíte fora da sincronização), cai num valor
+// padrão em vez de travar o admin.
+async function resolveGuestCountForAssignment(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  date: string,
+  roomId: string
+): Promise<number> {
+  const { data: existing } = await supabase
+    .from("daily_breakfast_room_assignments")
+    .select("guest_count")
+    .eq("date", date)
+    .eq("room_id", roomId)
+    .maybeSingle();
+  if (existing) return existing.guest_count;
+
+  const { data: room } = await supabase.from("rooms").select("stays_listing_id").eq("id", roomId).single();
+  if (room?.stays_listing_id) {
+    try {
+      // Busca a partir do dia anterior, mesmo motivo já documentado em
+      // stays-sync.ts: uma reserva cujo check-out é `date` não tem nenhuma
+      // noite começando em `date`, então a Stays só a devolve se
+      // alargarmos o início da busca em 1 dia.
+      const reservations = await getStaysReservationsIncluding(addDaysKey(date, -1), date);
+      const staying = reservations.find(
+        (r) => r._idlisting === room.stays_listing_id && r.checkInDate < date && date <= r.checkOutDate
+      );
+      if (staying) return staying.guests;
+    } catch {
+      // segue para o padrão abaixo
+    }
+  }
+
+  return 2;
+}
+
+export async function setTableRoomAssignment(date: string, tableId: string, roomId: string) {
   const supabase = await createClient();
 
   const { data: table } = await supabase.from("breakfast_tables").select("seats").eq("id", tableId).single();
-  const safeGuestCount = Math.max(0, Math.floor(guestCount) || 0);
-  if (table && safeGuestCount > table.seats) {
+  const guestCount = await resolveGuestCountForAssignment(supabase, date, roomId);
+  if (table && guestCount > table.seats) {
     return { error: `Essa mesa comporta no máximo ${table.seats} hóspede${table.seats === 1 ? "" : "s"}.` };
   }
 
@@ -149,7 +166,7 @@ export async function setTableRoomAssignment(date: string, tableId: string, room
       date,
       table_id: tableId,
       room_id: roomId,
-      guest_count: safeGuestCount,
+      guest_count: guestCount,
       stays_locked: true,
     },
     { onConflict: "date,room_id" }
@@ -158,6 +175,8 @@ export async function setTableRoomAssignment(date: string, tableId: string, room
   if (error) return { error: error.message };
   revalidatePath("/mesas/gerenciar");
   revalidatePath("/mesas");
+  revalidatePath("/dashboard");
+  revalidatePath("/historico");
   return { success: true };
 }
 
@@ -186,6 +205,8 @@ export async function removeTableRoomAssignment(date: string, roomId: string) {
 
   revalidatePath("/mesas/gerenciar");
   revalidatePath("/mesas");
+  revalidatePath("/dashboard");
+  revalidatePath("/historico");
   return { success: true };
 }
 
@@ -214,5 +235,6 @@ export async function updateCommissionValue(value: number) {
   if (error) return { error: error.message };
   revalidatePath("/mesas/gerenciar");
   revalidatePath("/dashboard");
+  revalidatePath("/historico");
   return { success: true };
 }

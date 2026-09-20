@@ -13,7 +13,7 @@ import {
 export function MonthlyChart({
   data,
 }: {
-  data: { date: string; mesas: number; comissao: number }[];
+  data: { date: string; suites: number; comissao: number }[];
 }) {
   if (data.length === 0) {
     return (
@@ -38,7 +38,7 @@ export function MonthlyChart({
               fontSize: 12,
             }}
           />
-          <Bar dataKey="mesas" name="Mesas" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="suites" name="Suítes" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

@@ -33,8 +33,8 @@ export default async function DashboardPage() {
   const [
     { data: todayTasks },
     { data: tomorrowTasks },
-    { data: todayGuests },
-    { data: monthBreakfast },
+    { data: monthAssignments },
+    { data: commissionSettings },
     { count: occurrencesToday },
     { data: serviceLog },
     minibarSummary,
@@ -42,12 +42,12 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", today),
     supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", tomorrow),
-    supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", today),
-    supabase
-      .from("daily_breakfast")
-      .select("date, guest_count, value_per_table_snapshot")
-      .gte("date", start)
-      .lte("date", end),
+    // Comissão do dia = quantidade de suítes servidas no café (uma linha
+    // por suíte/dia aqui, independente de mesa/hóspedes) × valor por café
+    // servido — ver CLAUDE.md sobre a mudança do modelo "por mesa" pro
+    // modelo "por suíte servida".
+    supabase.from("daily_breakfast_room_assignments").select("date, room_id").gte("date", start).lte("date", end),
+    supabase.from("commission_settings").select("value_per_table").single(),
     supabase
       .from("daily_room_task_occurrences")
       .select("id, daily_room_tasks!inner(date)", { count: "exact", head: true })
@@ -93,27 +93,23 @@ export default async function DashboardPage() {
   const doneToday = (todayTasks ?? []).filter((t) => t.status === "concluido").length;
   const totalToday = (todayTasks ?? []).length;
 
-  const occupiedThisMonth = (monthBreakfast ?? []).filter((r) => r.guest_count > 0);
-  const totalTablesMonth = occupiedThisMonth.length;
-  const totalCommissionMonth = occupiedThisMonth.reduce(
-    (sum, r) => sum + Number(r.value_per_table_snapshot),
-    0
-  );
+  const commissionRate = Number(commissionSettings?.value_per_table ?? 0);
 
-  const dailyMap = new Map<string, { tables: number; commission: number }>();
-  occupiedThisMonth.forEach((r) => {
-    const entry = dailyMap.get(r.date) ?? { tables: 0, commission: 0 };
-    entry.tables += 1;
-    entry.commission += Number(r.value_per_table_snapshot);
-    dailyMap.set(r.date, entry);
+  // Uma linha em daily_breakfast_room_assignments = uma suíte servida
+  // naquele dia (a tabela já garante no máximo 1 linha por suíte/dia), daí
+  // contar linhas por data já dá a quantidade de suítes servidas por dia.
+  const suitesByDate = new Map<string, number>();
+  (monthAssignments ?? []).forEach((r) => {
+    suitesByDate.set(r.date, (suitesByDate.get(r.date) ?? 0) + 1);
   });
-  const chartData = Array.from(dailyMap.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, v]) => ({ date: date.slice(8, 10), mesas: v.tables, comissao: v.commission }));
 
-  const todayGuestMap: Record<string, number> = Object.fromEntries(
-    (todayGuests ?? []).map((r) => [r.table_id, r.guest_count] as const)
-  );
+  const totalSuitesMonth = Array.from(suitesByDate.values()).reduce((sum, n) => sum + n, 0);
+  const totalCommissionMonth = totalSuitesMonth * commissionRate;
+  const suitesToday = suitesByDate.get(today) ?? 0;
+
+  const chartData = Array.from(suitesByDate.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, n]) => ({ date: date.slice(8, 10), suites: n, comissao: n * commissionRate }));
 
   return (
     <div className="space-y-8">
@@ -131,8 +127,8 @@ export default async function DashboardPage() {
         />
         <StatCard
           icon={Coffee}
-          label="Mesas de café hoje"
-          value={String(Object.values(todayGuestMap).filter((v) => v > 0).length)}
+          label="Suítes no café hoje"
+          value={String(suitesToday)}
         />
         <StatCard
           icon={Wallet}
@@ -215,7 +211,7 @@ export default async function DashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-heading text-lg">Totais do mês · {totalTablesMonth} mesas · R$ {totalCommissionMonth.toFixed(2)} de comissão</CardTitle>
+          <CardTitle className="font-heading text-lg">Totais do mês · {totalSuitesMonth} suítes · R$ {totalCommissionMonth.toFixed(2)} de comissão</CardTitle>
         </CardHeader>
         <CardContent>
           <MonthlyChart data={chartData} />

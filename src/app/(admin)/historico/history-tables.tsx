@@ -17,10 +17,11 @@ import { durationMinutes, formatMinutesPt, effectiveServiceStart } from "@/lib/d
 import type { ChecklistType } from "@/lib/types";
 import { Download } from "lucide-react";
 
+// Uma linha por suíte servida no café num dia (vem de
+// daily_breakfast_room_assignments — no máximo 1 por suíte/dia).
 interface BreakfastRow {
   date: string;
   guest_count: number;
-  value_per_table_snapshot: number;
 }
 interface TaskRow {
   date: string;
@@ -36,7 +37,7 @@ interface TaskRow {
 type ByType = Record<ChecklistType, number>;
 
 interface DayStats {
-  mesas: number;
+  suites: number;
   hospedes: number;
   comissao: number;
   byType: ByType;
@@ -48,7 +49,7 @@ const emptyByType = (): ByType =>
   Object.fromEntries(TASK_TYPE_OPTIONS.map((o) => [o.value, 0])) as ByType;
 
 const emptyDayStats = (): DayStats => ({
-  mesas: 0,
+  suites: 0,
   hospedes: 0,
   comissao: 0,
   byType: emptyByType(),
@@ -67,15 +68,22 @@ function downloadCsv(filename: string, rows: (string | number)[][]) {
   URL.revokeObjectURL(url);
 }
 
-export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[]; tasks: TaskRow[] }) {
+export function HistoryTables({
+  breakfast,
+  commissionRate,
+  tasks,
+}: {
+  breakfast: BreakfastRow[];
+  commissionRate: number;
+  tasks: TaskRow[];
+}) {
   const byDay = useMemo(() => {
     const map = new Map<string, DayStats>();
     breakfast.forEach((b) => {
-      if (b.guest_count <= 0) return;
       const entry = map.get(b.date) ?? emptyDayStats();
-      entry.mesas += 1;
+      entry.suites += 1;
       entry.hospedes += b.guest_count;
-      entry.comissao += Number(b.value_per_table_snapshot);
+      entry.comissao += commissionRate;
       map.set(b.date, entry);
     });
     tasks.forEach((t) => {
@@ -86,7 +94,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
       map.set(t.date, entry);
     });
     return Array.from(map.entries()).sort(([a], [b]) => b.localeCompare(a));
-  }, [breakfast, tasks]);
+  }, [breakfast, commissionRate, tasks]);
 
   const byCamareira = useMemo(() => {
     const map = new Map<
@@ -113,7 +121,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
   const totals = useMemo(() => {
     const t = emptyDayStats();
     byDay.forEach(([, v]) => {
-      t.mesas += v.mesas;
+      t.suites += v.suites;
       t.hospedes += v.hospedes;
       t.comissao += v.comissao;
       t.ocorrencias += v.ocorrencias;
@@ -140,7 +148,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
               downloadCsv("historico-diario.csv", [
                 [
                   "Data",
-                  "Mesas café",
+                  "Suítes no café",
                   "Hóspedes café",
                   ...TASK_TYPE_OPTIONS.map((o) => `Qtd. ${o.label}`),
                   "Ocorrências Manutenção",
@@ -149,7 +157,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
                 ],
                 ...byDay.map(([date, v]) => [
                   date,
-                  v.mesas,
+                  v.suites,
                   v.hospedes,
                   ...TASK_TYPE_OPTIONS.map((o) => v.byType[o.value]),
                   v.ocorrencias,
@@ -167,7 +175,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
             <TableHeader>
               <TableRow>
                 <TableHead>Data</TableHead>
-                <TableHead>Mesas café</TableHead>
+                <TableHead>Suítes no café</TableHead>
                 <TableHead>Hóspedes café</TableHead>
                 {TASK_TYPE_OPTIONS.map((o) => (
                   <TableHead key={o.value}>Qtd. {o.label}</TableHead>
@@ -181,7 +189,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
               {byDay.map(([date, v]) => (
                 <TableRow key={date}>
                   <TableCell>{date.split("-").reverse().join("/")}</TableCell>
-                  <TableCell>{v.mesas}</TableCell>
+                  <TableCell>{v.suites}</TableCell>
                   <TableCell>{v.hospedes}</TableCell>
                   {TASK_TYPE_OPTIONS.map((o) => (
                     <TableCell key={o.value}>{v.byType[o.value]}</TableCell>
@@ -203,7 +211,7 @@ export function HistoryTables({ breakfast, tasks }: { breakfast: BreakfastRow[];
               <TableFooter>
                 <TableRow>
                   <TableCell>Total</TableCell>
-                  <TableCell>{totals.mesas}</TableCell>
+                  <TableCell>{totals.suites}</TableCell>
                   <TableCell>{totals.hospedes}</TableCell>
                   {TASK_TYPE_OPTIONS.map((o) => (
                     <TableCell key={o.value}>{totals.byType[o.value]}</TableCell>

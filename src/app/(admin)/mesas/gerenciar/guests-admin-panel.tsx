@@ -4,12 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { BreakfastTable, CommissionSettings, DailyBreakfastSettings, DailyBreakfastRoomAssignment, Room } from "@/lib/types";
-import {
-  setGuestCount,
-  setTableNotes,
-  setBreakfastDayNotes,
-  updateCommissionValue,
-} from "@/lib/actions/tables";
+import { setBreakfastDayNotes, updateCommissionValue } from "@/lib/actions/tables";
 import { computeTableSizeCounts } from "@/lib/stays/derive-breakfast";
 import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
 import { Button } from "@/components/ui/button";
@@ -96,33 +91,39 @@ export function GuestsAdminPanel({
     <div className="space-y-8">
       <Card>
         <CardHeader>
-          <CardTitle className="font-heading text-lg">Valor da comissão por mesa</CardTitle>
+          <CardTitle className="font-heading text-lg">Valor da comissão por café servido</CardTitle>
         </CardHeader>
-        <CardContent className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">R$</span>
-          <Input
-            className="w-32"
-            type="number"
-            step="0.01"
-            min="0"
-            value={commissionValue}
-            onChange={(e) => setCommissionValue(e.target.value)}
-          />
-          <Button
-            disabled={isPending}
-            onClick={() =>
-              startTransition(async () => {
-                const result = await updateCommissionValue(Number(commissionValue));
-                if (result?.error) toast.error(result.error);
-                else {
-                  toast.success("Valor atualizado.");
-                  router.refresh();
-                }
-              })
-            }
-          >
-            Salvar
-          </Button>
+        <CardContent className="space-y-2">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">R$</span>
+            <Input
+              className="w-32"
+              type="number"
+              step="0.01"
+              min="0"
+              value={commissionValue}
+              onChange={(e) => setCommissionValue(e.target.value)}
+            />
+            <Button
+              disabled={isPending}
+              onClick={() =>
+                startTransition(async () => {
+                  const result = await updateCommissionValue(Number(commissionValue));
+                  if (result?.error) toast.error(result.error);
+                  else {
+                    toast.success("Valor atualizado.");
+                    router.refresh();
+                  }
+                })
+              }
+            >
+              Salvar
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Esse valor será multiplicado pelo número de suítes para as quais será servido o café da manhã
+            para se obter o valor total da comissão do dia.
+          </p>
         </CardContent>
       </Card>
 
@@ -137,8 +138,6 @@ export function GuestsAdminPanel({
             date={todayKey()}
             label={formatDatePt(todayKey())}
             tables={tables}
-            counts={todayCounts}
-            notesInit={todayNotes}
             daySettings={todaySettings}
             assignments={todayAssignments}
           />
@@ -148,8 +147,6 @@ export function GuestsAdminPanel({
             date={tomorrowKey()}
             label={formatDatePt(tomorrowKey())}
             tables={tables}
-            counts={tomorrowCounts}
-            notesInit={tomorrowNotes}
             daySettings={tomorrowSettings}
             assignments={tomorrowAssignments}
           />
@@ -200,6 +197,7 @@ export function GuestsAdminPanel({
         table={editingTable?.table ?? null}
         rooms={rooms}
         assignments={editingAssignments}
+        notes={editingTable ? (editingTable.date === todayKey() ? todayNotes : tomorrowNotes)[editingTable.table.id] ?? "" : ""}
         onOpenChange={(open) => {
           if (!open) setEditingTable(null);
         }}
@@ -208,29 +206,20 @@ export function GuestsAdminPanel({
   );
 }
 
-const MAX_GUESTS_PER_TABLE = 10;
-
 function GuestCountEditor({
   date,
   label,
   tables,
-  counts,
-  notesInit,
   daySettings,
   assignments,
 }: {
   date: string;
   label: string;
   tables: BreakfastTable[];
-  counts: Record<string, number>;
-  notesInit: Record<string, string>;
   daySettings: DailyBreakfastSettings | null;
   assignments: DailyBreakfastRoomAssignment[];
 }) {
-  const [values, setValues] = useState(counts);
-  const [notes, setNotes] = useState(notesInit);
   const [, startTransition] = useTransition();
-  const router = useRouter();
 
   const activeTables = tables.filter((t) => t.active).sort((a, b) => tableNumber(a.label) - tableNumber(b.label));
 
@@ -268,48 +257,6 @@ function GuestCountEditor({
           onChange={(e) => setDayNotes(e.target.value)}
           onBlur={() => saveDayNotes(dayNotes)}
         />
-      </div>
-
-      <div className="grid sm:grid-cols-2 gap-3">
-        {activeTables.map((t) => (
-          <div key={t.id} className="rounded-lg border border-border p-3 bg-card space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <Label htmlFor={`g-${t.id}`} className="text-sm">{t.label}</Label>
-              <Input
-                id={`g-${t.id}`}
-                type="number"
-                min={0}
-                max={MAX_GUESTS_PER_TABLE}
-                className="w-20"
-                value={values[t.id] ?? 0}
-                onChange={(e) =>
-                  setValues((v) => ({
-                    ...v,
-                    [t.id]: Math.min(MAX_GUESTS_PER_TABLE, Number(e.target.value)),
-                  }))
-                }
-                onBlur={() =>
-                  startTransition(async () => {
-                    await setGuestCount(date, t.id, values[t.id] ?? 0);
-                    router.refresh();
-                  })
-                }
-              />
-            </div>
-            <Textarea
-              placeholder="Observações desta mesa (visível para as camareiras)"
-              className="min-h-14 text-sm"
-              value={notes[t.id] ?? ""}
-              onChange={(e) => setNotes((n) => ({ ...n, [t.id]: e.target.value }))}
-              onBlur={() =>
-                startTransition(async () => {
-                  await setTableNotes(date, t.id, notes[t.id] ?? "");
-                  router.refresh();
-                })
-              }
-            />
-          </div>
-        ))}
       </div>
     </div>
   );
