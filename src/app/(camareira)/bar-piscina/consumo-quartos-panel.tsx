@@ -10,6 +10,8 @@ import type { MinibarItem } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { QuantityStepper } from "@/components/shared/quantity-stepper";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
 import { formatDateShortPt } from "@/lib/date";
 
@@ -41,6 +43,12 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
     minibarItems.map((item) => [item.id, room.minibarItems.find((i) => i.id === item.id)?.quantity ?? 0])
   );
   const [minibarQty, setMinibarQty] = useState<Record<string, number>>(initialMinibarQty);
+  // Antes de fechar a conta (status "aberta"), a camareira decide
+  // explicitamente se houve consumo no último dia — só então os steppers de
+  // quantidade aparecem, com o mesmo mecanismo já usado quando a conta está
+  // reaberta. Começa marcado quando já existe algum consumo lançado nessa
+  // conta (ex.: ela volta à tela no meio da edição).
+  const [hasConsumption, setHasConsumption] = useState(room.minibarItems.length > 0);
 
   function runAction(action: () => Promise<{ error?: string } | undefined>, successMessage?: string) {
     startTransition(async () => {
@@ -67,8 +75,26 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
         <div className="space-y-3 pt-3">
           <div className="grid sm:grid-cols-2 gap-x-8 gap-y-4">
             <div className="space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground">Frigobar</p>
-              {room.status === "reaberta" ? (
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium text-muted-foreground">Frigobar</p>
+                {room.status === "aberta" && (
+                  <div className="flex items-center gap-2">
+                    <Label
+                      htmlFor={`has-consumption-${room.room_id}`}
+                      className="text-xs font-normal text-muted-foreground"
+                    >
+                      Houve consumo no último dia?
+                    </Label>
+                    <Switch
+                      id={`has-consumption-${room.room_id}`}
+                      checked={hasConsumption}
+                      disabled={isPending}
+                      onCheckedChange={(checked) => setHasConsumption(!!checked)}
+                    />
+                  </div>
+                )}
+              </div>
+              {room.status === "reaberta" || (room.status === "aberta" && hasConsumption) ? (
                 <div className="space-y-1.5">
                   {minibarItems.map((item) => (
                     <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-sm">
