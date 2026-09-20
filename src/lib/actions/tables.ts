@@ -133,6 +133,12 @@ export async function setTableNotes(date: string, tableId: string, notes: string
 export async function setTableRoomAssignment(date: string, tableId: string, roomId: string, guestCount: number) {
   const supabase = await createClient();
 
+  const { data: table } = await supabase.from("breakfast_tables").select("seats").eq("id", tableId).single();
+  const safeGuestCount = Math.max(0, Math.floor(guestCount) || 0);
+  if (table && safeGuestCount > table.seats) {
+    return { error: `Essa mesa comporta no máximo ${table.seats} hóspede${table.seats === 1 ? "" : "s"}.` };
+  }
+
   // Escolheu uma mesa de verdade: remove a lápide de exclusão, se houver
   // (ver `removeTableRoomAssignment`) — o admin não quer mais excluir essa
   // suíte da distribuição hoje.
@@ -143,7 +149,7 @@ export async function setTableRoomAssignment(date: string, tableId: string, room
       date,
       table_id: tableId,
       room_id: roomId,
-      guest_count: Math.max(0, Math.floor(guestCount) || 0),
+      guest_count: safeGuestCount,
       stays_locked: true,
     },
     { onConflict: "date,room_id" }

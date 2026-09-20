@@ -8,8 +8,6 @@ import {
   setGuestCount,
   setTableNotes,
   setBreakfastDayNotes,
-  setTableRoomAssignment,
-  removeTableRoomAssignment,
   updateCommissionValue,
 } from "@/lib/actions/tables";
 import { computeTableSizeCounts } from "@/lib/stays/derive-breakfast";
@@ -22,14 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TableLayoutCanvas, type TableRoomAssignment } from "@/components/shared/table-layout-canvas";
 import { TableNotesList } from "@/components/shared/table-notes-list";
-import { X, Plus } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { TableAssignmentDialog } from "./table-assignment-dialog";
 
 // Extrai o número da mesa a partir do rótulo (ex.: "Mesa 3" -> 3) para
 // ordenar os cards em ordem crescente, independente da ordem de criação.
@@ -50,6 +41,12 @@ function toTableRooms(
     map[a.table_id] = list;
   });
   return map;
+}
+
+// Mesas com alguma suíte alocada manualmente pelo admin (stays_locked) —
+// recebem o destaque amarelo no layout, ver table-layout-canvas.tsx.
+function editedTableIds(assignments: DailyBreakfastRoomAssignment[]): Set<string> {
+  return new Set(assignments.filter((a) => a.stays_locked).map((a) => a.table_id));
 }
 
 export function GuestsAdminPanel({
@@ -80,6 +77,10 @@ export function GuestsAdminPanel({
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const [commissionValue, setCommissionValue] = useState(String(commission?.value_per_table ?? 10));
+  // Mesa clicada no layout "Mesas · hoje/amanhã", pra abrir o diálogo de
+  // quais suítes estão alocadas ali — substitui os cards de suítes por mesa
+  // que existiam antes.
+  const [editingTable, setEditingTable] = useState<{ date: string; table: BreakfastTable } | null>(null);
 
   const activeTables = tables.filter((t) => t.active);
   const labelById = new Map(tables.map((t) => [t.id, t.label]));
@@ -87,6 +88,9 @@ export function GuestsAdminPanel({
     Object.entries(notes)
       .filter(([, v]) => v)
       .map(([table_id, tableNotes]) => ({ table_id, notes: tableNotes }));
+
+  const editingAssignments =
+    editingTable?.date === todayKey() ? todayAssignments : editingTable?.date === tomorrowKey() ? tomorrowAssignments : [];
 
   return (
     <div className="space-y-8">
@@ -133,7 +137,6 @@ export function GuestsAdminPanel({
             date={todayKey()}
             label={formatDatePt(todayKey())}
             tables={tables}
-            rooms={rooms}
             counts={todayCounts}
             notesInit={todayNotes}
             daySettings={todaySettings}
@@ -145,7 +148,6 @@ export function GuestsAdminPanel({
             date={tomorrowKey()}
             label={formatDatePt(tomorrowKey())}
             tables={tables}
-            rooms={rooms}
             counts={tomorrowCounts}
             notesInit={tomorrowNotes}
             daySettings={tomorrowSettings}
@@ -160,10 +162,15 @@ export function GuestsAdminPanel({
             <CardTitle className="font-heading text-lg">Mesas · hoje</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Clique numa mesa para escolher quais suítes ficam nela.
+            </p>
             <TableLayoutCanvas
               tables={activeTables}
               guestCounts={todayCounts}
               tableRooms={toTableRooms(todayAssignments, rooms)}
+              editedTableIds={editedTableIds(todayAssignments)}
+              onTableClick={(t) => setEditingTable({ date: todayKey(), table: t })}
             />
             <TableNotesList rows={notesToRows(todayNotes)} labelById={labelById} />
           </CardContent>
@@ -173,15 +180,30 @@ export function GuestsAdminPanel({
             <CardTitle className="font-heading text-lg">Mesas · amanhã</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Clique numa mesa para escolher quais suítes ficam nela.
+            </p>
             <TableLayoutCanvas
               tables={activeTables}
               guestCounts={tomorrowCounts}
               tableRooms={toTableRooms(tomorrowAssignments, rooms)}
+              editedTableIds={editedTableIds(tomorrowAssignments)}
+              onTableClick={(t) => setEditingTable({ date: tomorrowKey(), table: t })}
             />
             <TableNotesList rows={notesToRows(tomorrowNotes)} labelById={labelById} />
           </CardContent>
         </Card>
       </div>
+
+      <TableAssignmentDialog
+        date={editingTable?.date ?? todayKey()}
+        table={editingTable?.table ?? null}
+        rooms={rooms}
+        assignments={editingAssignments}
+        onOpenChange={(open) => {
+          if (!open) setEditingTable(null);
+        }}
+      />
     </div>
   );
 }
@@ -192,7 +214,6 @@ function GuestCountEditor({
   date,
   label,
   tables,
-  rooms,
   counts,
   notesInit,
   daySettings,
@@ -201,7 +222,6 @@ function GuestCountEditor({
   date: string;
   label: string;
   tables: BreakfastTable[];
-  rooms: Room[];
   counts: Record<string, number>;
   notesInit: Record<string, string>;
   daySettings: DailyBreakfastSettings | null;
@@ -276,7 +296,6 @@ function GuestCountEditor({
                 }
               />
             </div>
-            <TableRoomAssignments date={date} tableId={t.id} rooms={rooms} assignments={assignments} />
             <Textarea
               placeholder="Observações desta mesa (visível para as camareiras)"
               className="min-h-14 text-sm"
@@ -296,112 +315,3 @@ function GuestCountEditor({
   );
 }
 
-// Escolhe quais suítes estão sentadas numa mesa, cada uma com sua
-// quantidade de hóspedes — a Mesa 7 (maior capacidade) pode receber mais de
-// uma suíte (ver PRD_regrasdenegocio.md seção 4). Uma suíte só pode estar
-// numa mesa por vez: já alocada em outra mesa neste dia não aparece na
-// lista de opções.
-function TableRoomAssignments({
-  date,
-  tableId,
-  rooms,
-  assignments,
-}: {
-  date: string;
-  tableId: string;
-  rooms: Room[];
-  assignments: DailyBreakfastRoomAssignment[];
-}) {
-  const [isPending, startTransition] = useTransition();
-  const router = useRouter();
-  const [newRoomId, setNewRoomId] = useState("");
-  const [newGuestCount, setNewGuestCount] = useState("1");
-
-  const roomById = new Map(rooms.map((r) => [r.id, r]));
-  const forThisTable = assignments.filter((a) => a.table_id === tableId);
-  const assignedElsewhere = new Set(assignments.map((a) => a.room_id));
-  const availableRooms = rooms.filter((r) => !assignedElsewhere.has(r.id));
-
-  function handleAdd() {
-    if (!newRoomId) return;
-    startTransition(async () => {
-      const result = await setTableRoomAssignment(date, tableId, newRoomId, Number(newGuestCount) || 0);
-      if (result?.error) toast.error(result.error);
-      else {
-        setNewRoomId("");
-        setNewGuestCount("1");
-        router.refresh();
-      }
-    });
-  }
-
-  function handleRemove(roomId: string) {
-    startTransition(async () => {
-      const result = await removeTableRoomAssignment(date, roomId);
-      if (result?.error) toast.error(result.error);
-      else router.refresh();
-    });
-  }
-
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs text-muted-foreground">Suítes nesta mesa</Label>
-      {forThisTable.length > 0 && (
-        <div className="space-y-1">
-          {forThisTable.map((a) => (
-            <div
-              key={a.room_id}
-              className="flex items-center justify-between gap-2 rounded bg-muted px-2 py-1 text-xs"
-            >
-              <span>
-                Suíte {roomById.get(a.room_id)?.number ?? "—"} · {a.guest_count} hóspede
-                {a.guest_count === 1 ? "" : "s"}
-              </span>
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={() => handleRemove(a.room_id)}
-                className="text-muted-foreground hover:text-destructive"
-                aria-label="Remover suíte desta mesa"
-              >
-                <X size={12} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      {availableRooms.length > 0 && (
-        <div className="flex items-center gap-1.5">
-          <Select value={newRoomId} onValueChange={(v) => setNewRoomId(v ?? "")} disabled={isPending}>
-            <SelectTrigger className="h-7 flex-1 text-xs">
-              <SelectValue placeholder="Suíte" />
-            </SelectTrigger>
-            <SelectContent>
-              {availableRooms.map((r) => (
-                <SelectItem key={r.id} value={r.id}>
-                  Suíte {r.number}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Input
-            type="number"
-            min={0}
-            className="h-7 w-14 text-xs"
-            value={newGuestCount}
-            onChange={(e) => setNewGuestCount(e.target.value)}
-          />
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="outline"
-            disabled={isPending || !newRoomId}
-            onClick={handleAdd}
-          >
-            <Plus size={12} />
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}

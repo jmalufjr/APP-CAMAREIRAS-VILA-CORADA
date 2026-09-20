@@ -19,9 +19,25 @@ interface Props {
   tableRooms?: Record<string, TableRoomAssignment[]>;
   editable?: boolean;
   onPositionsChange?: (positions: { id: string; pos_x: number; pos_y: number }[]) => void;
+  // Clique numa mesa (tela "Mesas do café" do admin) abre a edição de quais
+  // suítes estão alocadas nela ali mesmo, direto no layout — mutuamente
+  // exclusivo com `editable` (arrastar mesas, usado só em "Layout & mesas").
+  onTableClick?: (table: BreakfastTable) => void;
+  // Mesas com alguma suíte alocada manualmente pelo admin (stays_locked):
+  // sempre em amarelo claro com letra escura, sobrepondo a cor normal de
+  // ocupada/vaga do tema.
+  editedTableIds?: Set<string>;
 }
 
-export function TableLayoutCanvas({ tables, guestCounts, tableRooms, editable, onPositionsChange }: Props) {
+export function TableLayoutCanvas({
+  tables,
+  guestCounts,
+  tableRooms,
+  editable,
+  onPositionsChange,
+  onTableClick,
+  editedTableIds,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>(() =>
     Object.fromEntries(tables.map((t) => [t.id, { x: t.pos_x, y: t.pos_y }]))
@@ -66,10 +82,12 @@ export function TableLayoutCanvas({ tables, guestCounts, tableRooms, editable, o
           const count = guestCounts?.[t.id] ?? 0;
           const rooms = tableRooms?.[t.id] ?? [];
           const occupied = count > 0;
+          const isEdited = editedTableIds?.has(t.id) ?? false;
           return (
             <div
               key={t.id}
               onPointerDown={() => handlePointerDown(t.id)}
+              onClick={() => onTableClick?.(t)}
               className={cn(
                 "absolute flex flex-col items-center justify-center gap-0.5 shadow-sm select-none overflow-hidden",
                 // Mesas ocupadas recebem a cor de destaque do tema (pra
@@ -84,11 +102,17 @@ export function TableLayoutCanvas({ tables, guestCounts, tableRooms, editable, o
                 // - Escuro bordô: ocupada = bordô bem mais escuro que o
                 //   fundo + fonte clara; vaga = bordô bem mais claro que o
                 //   fundo (quase rosado) + fonte escura.
-                occupied
+                // Mesa editada manualmente pelo admin: sempre amarelo claro
+                // com letra escura, igual nos três temas — sobrepõe a regra
+                // acima de propósito.
+                isEdited
+                  ? "bg-amber-200 text-amber-950"
+                  : occupied
                   ? "bg-secondary text-secondary-foreground theme-bordo:bg-[#2A0D10] theme-bordo:text-[#F9F9F7] theme-blue:bg-[#262D45] theme-blue:text-[#F9F9F7]"
                   : "bg-secondary/30 text-secondary theme-bordo:bg-[#E6C6C8] theme-bordo:text-[#5A2025] theme-blue:bg-[#4C577A] theme-blue:text-[#F9F9F7]",
                 t.shape === "round" ? "rounded-full" : t.shape === "square" ? "rounded-md" : "rounded-2xl",
-                editable && "cursor-move active:cursor-grabbing"
+                editable && "cursor-move active:cursor-grabbing",
+                onTableClick && "cursor-pointer hover:opacity-80"
               )}
               style={{ left: pos.x, top: pos.y, width: t.width, height: t.height }}
             >
