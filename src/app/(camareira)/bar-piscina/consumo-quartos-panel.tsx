@@ -42,13 +42,39 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
   const initialMinibarQty = Object.fromEntries(
     minibarItems.map((item) => [item.id, room.minibarItems.find((i) => i.id === item.id)?.quantity ?? 0])
   );
-  const [minibarQty, setMinibarQty] = useState<Record<string, number>>(initialMinibarQty);
-  // Antes de fechar a conta (status "aberta"), a camareira decide
-  // explicitamente se houve consumo no último dia — só então os steppers de
-  // quantidade aparecem, com o mesmo mecanismo já usado quando a conta está
-  // reaberta. Começa marcado quando já existe algum consumo lançado nessa
-  // conta (ex.: ela volta à tela no meio da edição).
-  const [hasConsumption, setHasConsumption] = useState(room.minibarItems.length > 0);
+  const zeroQty = Object.fromEntries(minibarItems.map((item) => [item.id, 0]));
+
+  // "aberta": a camareira opta por lançar consumo adicional antes de fechar
+  // a conta pela primeira vez. Começa sempre desligado — é uma ação que ela
+  // escolhe fazer, não uma pergunta sobre o que já existe na conta.
+  const [isLaunchingAdditional, setIsLaunchingAdditional] = useState(false);
+
+  // "reaberta": edição sempre disponível; por padrão soma ao que já existe
+  // (aditivo). A camareira pode optar por zerar e relançar tudo do zero
+  // ("integral") — essa escolha nunca é persistida: volta a ser aditiva
+  // sempre que a conta passa por um novo ciclo fechar -> reabrir.
+  const [isIntegralMode, setIsIntegralMode] = useState(false);
+
+  // Base sobre a qual os steppers somam (modo aditivo): o total que já
+  // existia no momento em que a edição começou. O que o stepper mostra é
+  // só a quantidade sendo adicionada agora (autônomo, sempre começa em
+  // zero) — o valor salvo é sempre base + o que está no stepper.
+  const [baseQty, setBaseQty] = useState<Record<string, number>>(initialMinibarQty);
+  const [additionalQty, setAdditionalQty] = useState<Record<string, number>>(zeroQty);
+
+  // Detecta uma reabertura de verdade (não um refresh qualquer com a conta
+  // já reaberta) pra resetar o modo "integral" e recapturar a base — sem
+  // useEffect, mesmo padrão de "ajustar estado durante a renderização" já
+  // usado no resto do app (ex.: checklist-detail.tsx).
+  const [trackedStatus, setTrackedStatus] = useState(room.status);
+  if (room.status !== trackedStatus) {
+    setTrackedStatus(room.status);
+    if (room.status === "reaberta") {
+      setIsIntegralMode(false);
+      setBaseQty(initialMinibarQty);
+      setAdditionalQty(zeroQty);
+    }
+  }
 
   function runAction(action: () => Promise<{ error?: string } | undefined>, successMessage?: string) {
     startTransition(async () => {
@@ -60,6 +86,57 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
       }
     });
   }
+
+  // Salva sempre base + o que está no stepper — por isso o consumo lançado
+  // aqui soma ao que a camareira já tinha lançado durante o serviço na
+  // suíte, em vez de sobrescrevê-lo.
+  function handleAdditionalChange(itemId: string, v: number) {
+    setAdditionalQty((prev) => ({ ...prev, [itemId]: v }));
+    runAction(() => setMinibarConsumption(room.room_id, itemId, (baseQty[itemId] ?? 0) + v));
+  }
+
+  function handleStartLaunchingAdditional(checked: boolean) {
+    setIsLaunchingAdditional(checked);
+    if (checked) {
+      setBaseQty(initialMinibarQty);
+      setAdditionalQty(zeroQty);
+    }
+  }
+
+  function handleToggleIntegralMode(checked: boolean) {
+    if (checked) {
+      if (
+        !confirm(
+          "Isso vai zerar todo o consumo de frigobar já lançado nessa conta, para lançar tudo novamente do zero. Confirma?"
+        )
+      ) {
+        return;
+      }
+      startTransition(async () => {
+        const results = await Promise.all(
+          minibarItems.map((item) => setMinibarConsumption(room.room_id, item.id, 0))
+        );
+        const failed = results.find((r) => r?.error);
+        if (failed?.error) {
+          toast.error(failed.error);
+          return;
+        }
+        setIsIntegralMode(true);
+        setBaseQty(zeroQty);
+        setAdditionalQty(zeroQty);
+        router.refresh();
+      });
+    } else {
+      // Volta a ser aditivo, preservando o que já está lançado agora (não
+      // volta pro valor de antes de entrar no modo integral).
+      setIsIntegralMode(false);
+      setBaseQty(initialMinibarQty);
+      setAdditionalQty(zeroQty);
+    }
+  }
+
+  const showEditableMinibar =
+    room.status === "reaberta" || (room.status === "aberta" && isLaunchingAdditional);
 
   return (
     <AccordionItem value={room.room_id}>
@@ -80,32 +157,49 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
                 {room.status === "aberta" && (
                   <div className="flex items-center gap-2">
                     <Label
-                      htmlFor={`has-consumption-${room.room_id}`}
+                      htmlFor={`launch-additional-${room.room_id}`}
                       className="text-xs font-normal text-muted-foreground"
                     >
-                      Houve consumo no último dia?
+                      Lançar consumo adicional
                     </Label>
                     <Switch
-                      id={`has-consumption-${room.room_id}`}
-                      checked={hasConsumption}
+                      id={`launch-additional-${room.room_id}`}
+                      checked={isLaunchingAdditional}
                       disabled={isPending}
-                      onCheckedChange={(checked) => setHasConsumption(!!checked)}
+                      onCheckedChange={(checked) => handleStartLaunchingAdditional(!!checked)}
                     />
                   </div>
                 )}
               </div>
-              {room.status === "reaberta" || (room.status === "aberta" && hasConsumption) ? (
+              {room.status === "reaberta" && (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Lançamento adicional de consumo</p>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id={`zero-relaunch-${room.room_id}`}
+                      checked={isIntegralMode}
+                      disabled={isPending}
+                      onCheckedChange={(checked) => handleToggleIntegralMode(!!checked)}
+                    />
+                    <Label
+                      htmlFor={`zero-relaunch-${room.room_id}`}
+                      className="text-xs font-normal text-muted-foreground"
+                    >
+                      Selecione aqui apenas se quiser zerar o consumo de frigobar e lançar todo o consumo
+                      novamente
+                    </Label>
+                  </div>
+                </div>
+              )}
+              {showEditableMinibar ? (
                 <div className="space-y-1.5">
                   {minibarItems.map((item) => (
                     <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-sm">
                       <span className="min-w-0">{item.name}</span>
                       <QuantityStepper
-                        value={minibarQty[item.id] ?? 0}
+                        value={additionalQty[item.id] ?? 0}
                         disabled={isPending}
-                        onChange={(v) => {
-                          setMinibarQty((prev) => ({ ...prev, [item.id]: v }));
-                          runAction(() => setMinibarConsumption(room.room_id, item.id, v));
-                        }}
+                        onChange={(v) => handleAdditionalChange(item.id, v)}
                       />
                     </div>
                   ))}
