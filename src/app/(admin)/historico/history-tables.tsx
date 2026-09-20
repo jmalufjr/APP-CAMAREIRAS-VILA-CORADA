@@ -23,9 +23,12 @@ import { Download } from "lucide-react";
 // alguma mesa. commission_value_snapshot é o valor da comissão congelado
 // no momento em que a linha foi gravada — usado pra meses já fechados (o
 // mês corrente sempre usa o valor atual do campo, não esse).
+// eligible_suites_count é nulo pra datas anteriores a essa regra existir
+// — nesse caso cai pro fallback (regra antiga, ver byDay abaixo) em vez
+// de mostrar comissão zerada pra um dia que já tinha valor calculado.
 interface EligibilityRow {
   date: string;
-  eligible_suites_count: number;
+  eligible_suites_count: number | null;
   commission_value_snapshot: number;
 }
 
@@ -100,17 +103,40 @@ export function HistoryTables({
 
   const byDay = useMemo(() => {
     const map = new Map<string, DayStats>();
-    eligibility.forEach((e) => {
-      const entry = map.get(e.date) ?? emptyDayStats();
-      entry.suites = e.eligible_suites_count;
-      entry.comissao = e.date.slice(0, 7) === currentMonthPrefix ? commissionRate * e.eligible_suites_count : e.commission_value_snapshot * e.eligible_suites_count;
-      map.set(e.date, entry);
-    });
+
+    // Regra antiga (suítes com alguma mesa naquele dia) — fonte de
+    // "Hóspedes café" (sempre) e fallback de "Suítes no café"/comissão
+    // pra data sem eligible_suites_count.
+    const fallbackSuitesByDate = new Map<string, number>();
     roomAssignments.forEach((r) => {
+      fallbackSuitesByDate.set(r.date, (fallbackSuitesByDate.get(r.date) ?? 0) + 1);
       const entry = map.get(r.date) ?? emptyDayStats();
       entry.hospedes += r.guest_count;
       map.set(r.date, entry);
     });
+
+    const eligibilityByDate = new Map<string, EligibilityRow>(eligibility.map((e) => [e.date, e]));
+    const allBreakfastDates = new Set<string>([...eligibilityByDate.keys(), ...fallbackSuitesByDate.keys()]);
+    allBreakfastDates.forEach((date) => {
+      const entry = map.get(date) ?? emptyDayStats();
+      const e = eligibilityByDate.get(date);
+      if (e && e.eligible_suites_count !== null) {
+        entry.suites = e.eligible_suites_count;
+        entry.comissao =
+          date.slice(0, 7) === currentMonthPrefix
+            ? commissionRate * e.eligible_suites_count
+            : e.commission_value_snapshot * e.eligible_suites_count;
+      } else {
+        // Sem eligible_suites_count pra essa data (nunca sincronizada sob
+        // a regra nova): cai pra regra antiga, sempre com o valor atual
+        // do campo de comissão (não há retrato congelado pra essas linhas).
+        const fallbackSuites = fallbackSuitesByDate.get(date) ?? 0;
+        entry.suites = fallbackSuites;
+        entry.comissao = fallbackSuites * commissionRate;
+      }
+      map.set(date, entry);
+    });
+
     tasks.forEach((t) => {
       const entry = map.get(t.date) ?? emptyDayStats();
       entry.byType[t.task_type] += 1;

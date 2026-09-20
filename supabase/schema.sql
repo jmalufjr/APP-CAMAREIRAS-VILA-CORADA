@@ -232,10 +232,17 @@ create table daily_breakfast_room_exclusions (
 -- dia (quantidade × valor) — meses já fechados no Histórico usam o valor
 -- congelado aqui; o mês corrente sempre usa o valor atual do campo de
 -- comissão, não este.
+--
+-- eligible_suites_count é anulável de propósito: null significa "essa
+-- data nunca foi sincronizada sob esta regra" (dias anteriores a quando
+-- essa coluna passou a existir), e a aplicação cai de volta pra regra
+-- antiga (contagem de daily_breakfast_room_assignments) nesse caso — uma
+-- mudança de regra nunca deve zerar retroativamente um valor que já
+-- tinha sido calculado sob a regra anterior.
 create table daily_breakfast_settings (
   date date primary key,
   notes text,
-  eligible_suites_count int not null default 0,
+  eligible_suites_count int,
   commission_value_snapshot numeric(10,2) not null default 0,
   updated_at timestamptz not null default now()
 );

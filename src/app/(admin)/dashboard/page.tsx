@@ -34,6 +34,7 @@ export default async function DashboardPage() {
     { data: todayTasks },
     { data: tomorrowTasks },
     { data: monthEligibility },
+    { data: monthAssignmentsFallback },
     { data: commissionSettings },
     { count: occurrencesToday },
     { data: serviceLog },
@@ -45,12 +46,17 @@ export default async function DashboardPage() {
     // Comissão do dia = quantidade de suítes elegíveis pro café da manhã
     // naquele dia (independente de terem sido de fato alocadas a uma
     // mesa) × valor por café servido — gravada a cada sincronização com a
-    // Stays em daily_breakfast_settings.
+    // Stays em daily_breakfast_settings. eligible_suites_count é nulo pra
+    // datas anteriores a essa coluna existir; ver fallback abaixo.
     supabase
       .from("daily_breakfast_settings")
       .select("date, eligible_suites_count")
       .gte("date", start)
       .lte("date", end),
+    // Fallback pra datas sem eligible_suites_count (regra antiga: conta
+    // suítes alocadas a alguma mesa) — uma mudança de regra não pode
+    // zerar retroativamente um valor que já tinha sido calculado.
+    supabase.from("daily_breakfast_room_assignments").select("date, room_id").gte("date", start).lte("date", end),
     supabase.from("commission_settings").select("value_per_table").single(),
     supabase
       .from("daily_room_task_occurrences")
@@ -99,11 +105,25 @@ export default async function DashboardPage() {
 
   const commissionRate = Number(commissionSettings?.value_per_table ?? 0);
 
-  // Uma linha em daily_breakfast_settings por data, já com a contagem de
-  // suítes elegíveis daquele dia pronta (gravada pela sincronização).
-  const suitesByDate = new Map<string, number>(
+  // Regra antiga (suítes com alguma mesa naquele dia) só usada como
+  // fallback pra data sem eligible_suites_count.
+  const fallbackSuitesByDate = new Map<string, number>();
+  (monthAssignmentsFallback ?? []).forEach((r) => {
+    fallbackSuitesByDate.set(r.date, (fallbackSuitesByDate.get(r.date) ?? 0) + 1);
+  });
+
+  // eligible_suites_count nulo (ou a data nem aparecer aqui) = nunca
+  // sincronizada sob essa regra — cai pro fallback em vez de zerar um
+  // valor que já existia (nunca uma mudança de regra pode zerar
+  // retroativamente algo que já tinha sido calculado).
+  const eligibilityByDate = new Map<string, number | null>(
     (monthEligibility ?? []).map((r) => [r.date, r.eligible_suites_count])
   );
+  const allDates = new Set<string>([...eligibilityByDate.keys(), ...fallbackSuitesByDate.keys()]);
+  const suitesByDate = new Map<string, number>();
+  allDates.forEach((date) => {
+    suitesByDate.set(date, eligibilityByDate.get(date) ?? fallbackSuitesByDate.get(date) ?? 0);
+  });
 
   const totalSuitesMonth = Array.from(suitesByDate.values()).reduce((sum, n) => sum + n, 0);
   const totalCommissionMonth = totalSuitesMonth * commissionRate;
