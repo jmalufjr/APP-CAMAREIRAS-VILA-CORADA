@@ -31,17 +31,21 @@ import { X } from "lucide-react";
 // como campo — vem sempre da suíte/reserva sincronizada com a Stays — e as
 // observações se mudaram pra cá).
 //
-// Uma suíte só pode estar numa mesa por vez — escolher uma suíte já
-// alocada em outra mesa aqui a move automaticamente (mesmo upsert por
-// date+room_id de sempre, ver setTableRoomAssignment). O sistema não
-// permite lançar mais hóspedes do que a mesa comporta (a quantidade de
-// hóspedes da suíte é resolvida no servidor, não aparece nem é digitada
-// aqui).
+// Qualquer suíte da pousada pode ser escolhida aqui, mesmo já alocada em
+// outra mesa — escolher uma suíte que já está em outra mesa a move pra
+// esta (mesmo upsert por date+room_id de sempre, ver
+// setTableRoomAssignment: o conflito é por suíte, não por mesa, então a
+// linha antiga simplesmente passa a apontar pra mesa nova, sem deixar
+// rastro na mesa de origem — ela fica livre pro sistema realocar depois,
+// sem nenhuma marca de "editada"). O sistema não permite lançar mais
+// hóspedes do que a mesa comporta (a quantidade de hóspedes da suíte é
+// resolvida no servidor, não aparece nem é digitada aqui).
 export function TableAssignmentDialog({
   date,
   table,
   rooms,
   assignments,
+  tableLabelById,
   notes,
   onOpenChange,
 }: {
@@ -49,6 +53,7 @@ export function TableAssignmentDialog({
   table: BreakfastTable | null;
   rooms: Room[];
   assignments: DailyBreakfastRoomAssignment[];
+  tableLabelById: Map<string, string>;
   notes: string;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -59,8 +64,14 @@ export function TableAssignmentDialog({
 
   const roomById = new Map(rooms.map((r) => [r.id, r]));
   const forThisTable = table ? assignments.filter((a) => a.table_id === table.id) : [];
-  const assignedElsewhere = new Set(assignments.map((a) => a.room_id));
-  const availableRooms = rooms.filter((r) => !assignedElsewhere.has(r.id));
+  // Suítes já alocadas nesta mesma mesa não aparecem no seletor de novo
+  // (já estão listadas acima); todas as demais entram, mesmo as alocadas
+  // em outra mesa — escolher uma delas move, não duplica.
+  const roomsAlreadyHere = new Set(forThisTable.map((a) => a.room_id));
+  const elsewhereTableIdByRoomId = new Map(
+    table ? assignments.filter((a) => a.table_id !== table.id).map((a) => [a.room_id, a.table_id]) : []
+  );
+  const selectableRooms = rooms.filter((r) => !roomsAlreadyHere.has(r.id));
 
   // Sincroniza o valor local sempre que o diálogo abre numa mesa diferente
   // (prop `notes` muda de identidade) — sem useEffect, mesmo padrão de
@@ -135,7 +146,7 @@ export function TableAssignmentDialog({
               )}
             </div>
 
-            {availableRooms.length > 0 && (
+            {selectableRooms.length > 0 && (
               <div className="flex items-end gap-2">
                 <div className="flex-1 space-y-1">
                   <Label className="text-xs text-muted-foreground">Suíte</Label>
@@ -144,11 +155,16 @@ export function TableAssignmentDialog({
                       <SelectValue placeholder="Escolha a suíte" />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableRooms.map((r) => (
-                        <SelectItem key={r.id} value={r.id}>
-                          Suíte {r.number}
-                        </SelectItem>
-                      ))}
+                      {selectableRooms.map((r) => {
+                        const elsewhereTableId = elsewhereTableIdByRoomId.get(r.id);
+                        const elsewhereLabel = elsewhereTableId ? tableLabelById.get(elsewhereTableId) : undefined;
+                        return (
+                          <SelectItem key={r.id} value={r.id}>
+                            Suíte {r.number}
+                            {elsewhereLabel ? ` (atualmente na ${elsewhereLabel})` : ""}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>

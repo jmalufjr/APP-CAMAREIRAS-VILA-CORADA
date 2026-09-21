@@ -197,6 +197,7 @@ export function GuestsAdminPanel({
         table={editingTable?.table ?? null}
         rooms={rooms}
         assignments={editingAssignments}
+        tableLabelById={labelById}
         notes={editingTable ? (editingTable.date === todayKey() ? todayNotes : tomorrowNotes)[editingTable.table.id] ?? "" : ""}
         onOpenChange={(open) => {
           if (!open) setEditingTable(null);
