@@ -161,17 +161,25 @@ function StatCard({
   return (
     <Card>
       <CardContent className="space-y-1.5">
-        <div className="flex items-center gap-2">
+        {/* items-start (não items-center): o ícone fica sempre alinhado ao
+            topo do título, na mesma posição em todos os cards — com
+            items-center, um título mais longo que quebra em 2-3 linhas
+            (ex.: "Ocorrências Manutenção hoje") empurrava o ícone mais pra
+            baixo que o dos outros cards, desalinhando os círculos entre si. */}
+        <div className="flex items-start gap-2">
           <div className="size-8 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
             <Icon size={16} strokeWidth={1.75} />
           </div>
-          <p className="text-sm font-semibold leading-tight">{label}</p>
+          {/* min-w-0 é o que permite o título quebrar linha dentro do card
+              em vez de estourar a borda (sem isso, um item flex não encolhe
+              abaixo do tamanho do próprio conteúdo). */}
+          <p className="min-w-0 flex-1 text-sm font-semibold leading-tight">{label}</p>
         </div>
         {/* Valor menor que o título, mas destacado por cor — bordô (cor da
             marca) no tema claro, dourado nos dois temas escuros (onde a cor
             "primary" do tema já é quase branca, igual ao resto do texto, e
-            não serviria de destaque sozinha). */}
-        <p className="text-base font-bold text-primary dark:text-[#E8B85C]">{value}</p>
+            não serviria de destaque sozinha) — e centralizado no card. */}
+        <p className="text-center text-base font-bold text-primary dark:text-[#E8B85C]">{value}</p>
         {footer}
       </CardContent>
     </Card>
