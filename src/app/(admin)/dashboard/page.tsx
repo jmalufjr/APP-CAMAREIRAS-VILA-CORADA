@@ -15,6 +15,7 @@ import {
   Percent,
   History,
   ChevronRight,
+  Key,
 } from "lucide-react";
 
 function monthRange() {
@@ -26,6 +27,11 @@ function monthRange() {
 
 const menuItems = [
   { href: "/dashboard/servicos-suites", label: "Serviços nas suítes", icon: BedDouble },
+  {
+    href: "/dashboard/suites-disponiveis",
+    label: "Suítes vagas e limpas, disponíveis para alugar",
+    icon: Key,
+  },
   { href: "/dashboard/consumo-frigobar", label: "Consumo de frigobar", icon: Wine },
   { href: "/dashboard/consumo-bar", label: "Consumo de bar", icon: Martini },
   { href: "/dashboard/comissao-bar", label: "Comissão de 10% do bar por camareira", icon: Percent },
