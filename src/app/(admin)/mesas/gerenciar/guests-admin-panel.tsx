@@ -48,8 +48,6 @@ export function GuestsAdminPanel({
   tables,
   rooms,
   commission,
-  todayCounts,
-  tomorrowCounts,
   todayNotes,
   tomorrowNotes,
   todaySettings,
@@ -60,8 +58,6 @@ export function GuestsAdminPanel({
   tables: BreakfastTable[];
   rooms: Room[];
   commission: CommissionSettings;
-  todayCounts: Record<string, number>;
-  tomorrowCounts: Record<string, number>;
   todayNotes: Record<string, string>;
   tomorrowNotes: Record<string, string>;
   todaySettings: DailyBreakfastSettings | null;
@@ -164,7 +160,6 @@ export function GuestsAdminPanel({
             </p>
             <TableLayoutCanvas
               tables={activeTables}
-              guestCounts={todayCounts}
               tableRooms={toTableRooms(todayAssignments, rooms)}
               editedTableIds={editedTableIds(todayAssignments)}
               onTableClick={(t) => setEditingTable({ date: todayKey(), table: t })}
@@ -182,7 +177,6 @@ export function GuestsAdminPanel({
             </p>
             <TableLayoutCanvas
               tables={activeTables}
-              guestCounts={tomorrowCounts}
               tableRooms={toTableRooms(tomorrowAssignments, rooms)}
               editedTableIds={editedTableIds(tomorrowAssignments)}
               onTableClick={(t) => setEditingTable({ date: tomorrowKey(), table: t })}

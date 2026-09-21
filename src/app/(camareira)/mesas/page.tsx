@@ -27,7 +27,7 @@ export default async function MesasViewPage() {
     await Promise.all([
       supabase.from("breakfast_tables").select("*").eq("active", true).order("created_at"),
       supabase.from("rooms").select("*").eq("active", true).order("position"),
-      supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", todayKey()),
+      supabase.from("daily_breakfast").select("table_id, notes").eq("date", todayKey()),
       supabase.from("daily_breakfast_settings").select("*").eq("date", todayKey()).maybeSingle(),
       supabase.from("daily_breakfast_room_assignments").select("*").eq("date", todayKey()),
     ]);
@@ -36,7 +36,6 @@ export default async function MesasViewPage() {
   const roomList = (rooms ?? []) as Room[];
   const labelById = new Map(tableList.map((t) => [t.id, t.label]));
 
-  const todayMap = Object.fromEntries((todayRows ?? []).map((r) => [r.table_id, r.guest_count]));
   const todayNotes = (todayRows ?? []).filter((r) => r.notes);
 
   return (
@@ -50,7 +49,6 @@ export default async function MesasViewPage() {
       />
       <TableLayoutCanvas
         tables={tableList}
-        guestCounts={todayMap}
         tableRooms={toTableRooms((todayAssignments ?? []) as DailyBreakfastRoomAssignment[], roomList)}
       />
       <TableNotesList rows={todayNotes} labelById={labelById} />

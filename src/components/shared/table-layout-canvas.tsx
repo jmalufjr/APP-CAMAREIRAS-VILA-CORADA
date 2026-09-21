@@ -11,11 +11,10 @@ export interface TableRoomAssignment {
 
 interface Props {
   tables: BreakfastTable[];
-  guestCounts?: Record<string, number>;
   // Suíte(s) alocada(s) em cada mesa (Mesa 7 pode ter mais de uma — ver
-  // PRD_regrasdenegocio.md seção 4). Quando ausente para uma mesa, cai de
-  // volta pro total simples de `guestCounts` (compatibilidade com dias/
-  // mesas que ainda não têm suíte associada).
+  // PRD_regrasdenegocio.md seção 4) — única fonte de hóspedes/ocupação
+  // exibida; uma mesa sem nenhuma linha aqui é tratada como vaga, mesmo
+  // que já tenha tido hóspedes num ciclo de sincronização anterior.
   tableRooms?: Record<string, TableRoomAssignment[]>;
   editable?: boolean;
   onPositionsChange?: (positions: { id: string; pos_x: number; pos_y: number }[]) => void;
@@ -31,7 +30,6 @@ interface Props {
 
 export function TableLayoutCanvas({
   tables,
-  guestCounts,
   tableRooms,
   editable,
   onPositionsChange,
@@ -79,9 +77,8 @@ export function TableLayoutCanvas({
       <div className="relative" style={{ height: maxHeight, minWidth: 420 }}>
         {tables.map((t) => {
           const pos = positions[t.id] ?? { x: t.pos_x, y: t.pos_y };
-          const count = guestCounts?.[t.id] ?? 0;
           const rooms = tableRooms?.[t.id] ?? [];
-          const occupied = count > 0;
+          const occupied = rooms.length > 0;
           const isEdited = editedTableIds?.has(t.id) ?? false;
           return (
             <div
@@ -117,20 +114,14 @@ export function TableLayoutCanvas({
               style={{ left: pos.x, top: pos.y, width: t.width, height: t.height }}
             >
               <span className="text-xs font-medium">{t.label}</span>
-              {rooms.length > 0
-                ? rooms.map((r) => (
-                    <div key={r.roomNumber} className="flex flex-col items-center leading-tight">
-                      <span className="text-[11px] font-semibold">Suíte {r.roomNumber}</span>
-                      <span className="text-[10px] font-medium">
-                        {r.guestCount} hóspede{r.guestCount === 1 ? "" : "s"}
-                      </span>
-                    </div>
-                  ))
-                : guestCounts && (
-                    <span className="text-[11px] font-semibold">
-                      {count} hóspede{count === 1 ? "" : "s"}
-                    </span>
-                  )}
+              {rooms.map((r) => (
+                <div key={r.roomNumber} className="flex flex-col items-center leading-tight">
+                  <span className="text-[11px] font-semibold">Suíte {r.roomNumber}</span>
+                  <span className="text-[10px] font-medium">
+                    {r.guestCount} hóspede{r.guestCount === 1 ? "" : "s"}
+                  </span>
+                </div>
+              ))}
             </div>
           );
         })}

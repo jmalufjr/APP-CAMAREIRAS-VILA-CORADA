@@ -21,8 +21,8 @@ export default async function GerenciarMesasPage() {
     supabase.from("breakfast_tables").select("*").order("created_at", { ascending: true }),
     supabase.from("rooms").select("*").eq("active", true).order("position"),
     supabase.from("commission_settings").select("*").single(),
-    supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", todayKey()),
-    supabase.from("daily_breakfast").select("table_id, guest_count, notes").eq("date", tomorrowKey()),
+    supabase.from("daily_breakfast").select("table_id, notes").eq("date", todayKey()),
+    supabase.from("daily_breakfast").select("table_id, notes").eq("date", tomorrowKey()),
     supabase.from("daily_breakfast_settings").select("*").eq("date", todayKey()).maybeSingle(),
     supabase.from("daily_breakfast_settings").select("*").eq("date", tomorrowKey()).maybeSingle(),
     supabase.from("daily_breakfast_room_assignments").select("*").eq("date", todayKey()),
@@ -40,8 +40,6 @@ export default async function GerenciarMesasPage() {
         tables={(tables ?? []) as BreakfastTable[]}
         rooms={(rooms ?? []) as Room[]}
         commission={settings as CommissionSettings}
-        todayCounts={Object.fromEntries((todayRows ?? []).map((r) => [r.table_id, r.guest_count]))}
-        tomorrowCounts={Object.fromEntries((tomorrowRows ?? []).map((r) => [r.table_id, r.guest_count]))}
         todayNotes={Object.fromEntries((todayRows ?? []).map((r) => [r.table_id, r.notes ?? ""]))}
         tomorrowNotes={Object.fromEntries((tomorrowRows ?? []).map((r) => [r.table_id, r.notes ?? ""]))}
         todaySettings={todaySettings as DailyBreakfastSettings | null}
