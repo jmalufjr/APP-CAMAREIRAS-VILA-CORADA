@@ -1,6 +1,11 @@
 import type { createClient } from "@/lib/supabase/server";
 import type { RoomBill } from "@/lib/types";
 
+// Taxa de serviço sobre o consumo do bar da piscina — usada tanto no
+// total da conta do quarto (room-bills.ts) quanto no cálculo da comissão
+// de 10% por camareira, aplicada por comanda (comandas.ts).
+export const SERVICE_CHARGE_RATE = 0.1;
+
 // Não é uma Server Action (recebe o client Supabase como parâmetro, o que
 // não é serializável através do boundary "use server") — é um helper
 // interno, importado pelos módulos de actions que precisam da conta

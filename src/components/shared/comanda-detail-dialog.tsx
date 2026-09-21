@@ -17,7 +17,7 @@ export function ComandaDetailDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {comanda ? `Comanda #${comanda.sequence_number} · Suíte ${comanda.room_number}` : "Comanda"}
+            {comanda ? `Comanda #${comanda.monthly_number ?? comanda.sequence_number} · Suíte ${comanda.room_number}` : "Comanda"}
           </DialogTitle>
         </DialogHeader>
         {comanda && (

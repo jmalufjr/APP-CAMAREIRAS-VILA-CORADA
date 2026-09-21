@@ -251,6 +251,7 @@ export interface BarComanda {
   room_id: string;
   bill_id: string;
   sequence_number: number;
+  monthly_number: number | null;
   status: ComandaStatus;
   created_by: string | null;
   created_at: string;

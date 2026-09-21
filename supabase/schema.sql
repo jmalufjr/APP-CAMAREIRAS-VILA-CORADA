@@ -399,6 +399,12 @@ create table bar_comandas (
   room_id uuid not null references rooms(id) on delete cascade,
   bill_id uuid not null references room_bills(id) on delete cascade,
   sequence_number int not null,
+  -- Número exibido nas telas ("Comanda #N"): sequencial por mês (pela
+  -- ordem de lançamento, 1 em diante), reiniciando a cada mês — diferente
+  -- de sequence_number, que é por conta corrente do quarto e usado só
+  -- internamente. Atribuído uma única vez em submit_comanda, nunca
+  -- recalculado numa edição.
+  monthly_number int,
   status comanda_status not null default 'original',
   created_by uuid references profiles(id) on delete set null,
   created_at timestamptz not null default now(),
@@ -1023,6 +1029,7 @@ declare
   v_bill_status room_bill_status;
   v_comanda_id uuid;
   v_next_seq int;
+  v_next_monthly int;
   v_item jsonb;
 begin
   if not is_camareira() then
@@ -1045,8 +1052,12 @@ begin
   select coalesce(max(sequence_number), 0) + 1 into v_next_seq
   from bar_comandas where bill_id = v_bill_id;
 
-  insert into bar_comandas (room_id, bill_id, sequence_number, status, created_by, last_action_by)
-  values (p_room_id, v_bill_id, v_next_seq, 'original', auth.uid(), auth.uid())
+  select coalesce(max(monthly_number), 0) + 1 into v_next_monthly
+  from bar_comandas
+  where created_at >= date_trunc('month', now() at time zone 'America/Sao_Paulo') at time zone 'America/Sao_Paulo';
+
+  insert into bar_comandas (room_id, bill_id, sequence_number, monthly_number, status, created_by, last_action_by)
+  values (p_room_id, v_bill_id, v_next_seq, v_next_monthly, 'original', auth.uid(), auth.uid())
   returning id into v_comanda_id;
 
   for v_item in select * from jsonb_array_elements(p_items)

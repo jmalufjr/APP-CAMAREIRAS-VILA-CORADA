@@ -10,6 +10,8 @@ import { MinibarSummaryTable } from "@/components/shared/minibar-summary-table";
 import { ServiceLogTable, type ServiceLogRow } from "./service-log-table";
 import { getMinibarMonthlySummary } from "@/lib/actions/minibar";
 import { getPoolbarMonthlySummary } from "@/lib/actions/poolbar";
+import { getBarCommissionByCamareira } from "@/lib/actions/comandas";
+import { CamareiraBarCommissionTable } from "./camareira-bar-commission-table";
 import type { ChecklistType } from "@/lib/types";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import { BedDouble, Coffee, AlertTriangle, Wallet, History } from "lucide-react";
@@ -40,6 +42,7 @@ export default async function DashboardPage() {
     { data: serviceLog },
     minibarSummary,
     poolbarSummary,
+    barCommission,
   ] = await Promise.all([
     supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", today),
     supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", tomorrow),
@@ -74,6 +77,7 @@ export default async function DashboardPage() {
       .eq("status", "concluido"),
     getMinibarMonthlySummary(),
     getPoolbarMonthlySummary(),
+    getBarCommissionByCamareira(),
   ]);
 
   const serviceLogRows: ServiceLogRow[] = (
@@ -129,6 +133,8 @@ export default async function DashboardPage() {
   const totalCommissionMonth = totalSuitesMonth * commissionRate;
   const suitesToday = suitesByDate.get(today) ?? 0;
 
+  const barCommissionCurrentMonthTotal = barCommission.currentMonth.reduce((sum, r) => sum + r.commission, 0);
+
   const chartData = Array.from(suitesByDate.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, n]) => ({ date: date.slice(8, 10), suites: n, comissao: n * commissionRate }));
@@ -156,6 +162,8 @@ export default async function DashboardPage() {
           icon={Wallet}
           label="Comissão do mês"
           value={`R$ ${totalCommissionMonth.toFixed(2)}`}
+          subLabel="10% bar"
+          subValue={`R$ ${barCommissionCurrentMonthTotal.toFixed(2)}`}
         />
         <Card>
           <CardContent className="flex items-start gap-4">
@@ -313,6 +321,22 @@ export default async function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-lg">Comissão de 10% do bar por camareira</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-3">
+            10% do valor de cada comanda, atribuído a quem a lançou originalmente — mesmo quando outra
+            camareira editou a comanda depois. Somado pelo mês em que a comanda foi lançada.
+          </p>
+          <CamareiraBarCommissionTable
+            currentMonth={barCommission.currentMonth}
+            previousMonth={barCommission.previousMonth}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -321,10 +345,17 @@ function StatCard({
   icon: Icon,
   label,
   value,
+  subLabel,
+  subValue,
 }: {
   icon: React.ElementType;
   label: string;
   value: string;
+  // Segunda linha opcional, menor, pra uma informação relacionada dentro
+  // do mesmo card (ex.: "10% bar" dentro de "Comissão do mês") — evita
+  // criar um StatCard novo só pra um número que complementa o de cima.
+  subLabel?: string;
+  subValue?: string;
 }) {
   return (
     <Card>
@@ -335,6 +366,11 @@ function StatCard({
         <div className="min-w-0 flex-1">
           <p className="text-xs text-muted-foreground">{label}</p>
           <p className="text-xl font-heading truncate">{value}</p>
+          {subLabel && (
+            <p className="text-xs text-muted-foreground mt-1 truncate">
+              {subLabel}: <span className="font-medium">{subValue}</span>
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>

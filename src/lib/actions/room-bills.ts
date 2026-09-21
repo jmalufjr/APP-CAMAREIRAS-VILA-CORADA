@@ -2,12 +2,10 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { getOrCreateCurrentBill } from "@/lib/room-bills";
+import { getOrCreateCurrentBill, SERVICE_CHARGE_RATE } from "@/lib/room-bills";
 import { renderReceiptPdf, type ReceiptData } from "@/lib/receipt-pdf";
 import type { RoomBillStatus, ReceiptSettings } from "@/lib/types";
 import { Resend } from "resend";
-
-const SERVICE_CHARGE_RATE = 0.1;
 
 // Fechar/reabrir/marcar como paga a conta do quarto: ação da camareira (a
 // tela "Consumo por quartos" do admin passou a ser só leitura). As funções

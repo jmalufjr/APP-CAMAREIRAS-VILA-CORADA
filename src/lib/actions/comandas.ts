@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { ComandaStatus } from "@/lib/types";
+import { SERVICE_CHARGE_RATE } from "@/lib/room-bills";
+import { nowInBrazil, toDateKey } from "@/lib/date";
 
 export interface ComandaItemInput {
   item_id: string;
@@ -64,6 +66,12 @@ export interface ComandaListItem {
   room_id: string;
   room_number: string;
   sequence_number: number;
+  // Número exibido nas telas ("Comanda #N") — sequencial por mês, pela
+  // ordem de lançamento (ver migration 040). Nulo só pra comandas de
+  // meses anteriores a essa migration, que nunca aparecem em tela (a
+  // lista de inativas nunca olha mais que 7 dias pra trás); qualquer
+  // exibição cai pro sequence_number nesse caso raro.
+  monthly_number: number | null;
   status: ComandaStatus;
   created_at: string;
   created_by_name: string;
@@ -90,6 +98,7 @@ type ComandaRow = {
   id: string;
   room_id: string;
   sequence_number: number;
+  monthly_number: number | null;
   status: ComandaStatus;
   created_at: string;
   last_action_at: string;
@@ -108,7 +117,7 @@ type ComandaItemRow = {
 };
 
 const COMANDA_ROW_SELECT =
-  "id, room_id, sequence_number, status, created_at, last_action_at, rooms(number), created_by_profile:profiles!bar_comandas_created_by_fkey(name), last_action_by_profile:profiles!bar_comandas_last_action_by_fkey(name), room_bills!inner(status, paid_at)";
+  "id, room_id, sequence_number, monthly_number, status, created_at, last_action_at, rooms(number), created_by_profile:profiles!bar_comandas_created_by_fkey(name), last_action_by_profile:profiles!bar_comandas_last_action_by_fkey(name), room_bills!inner(status, paid_at)";
 
 // Busca os itens de um conjunto de comandas já embutidos no resultado da
 // lista (em vez de buscar item a item quando o usuário abre o modal de
@@ -147,6 +156,7 @@ async function attachItemsAndMap(
       room_id: r.room_id,
       room_number: r.rooms?.number ?? "—",
       sequence_number: r.sequence_number,
+      monthly_number: r.monthly_number,
       status: r.status,
       created_at: r.created_at,
       created_by_name: r.created_by_profile?.name ?? "—",
@@ -285,4 +295,80 @@ export async function getRoomsForComandaSelector(): Promise<RoomOption[]> {
     room_number: room.number,
     billStatus: statusByRoom.get(room.id) ?? "aberta",
   }));
+}
+
+// ---------- Leitura: comissão de 10% do bar por camareira (Resumo Executivo) ----------
+
+export interface CamareiraBarCommissionRow {
+  camareira_id: string | null;
+  camareira_name: string;
+  commission: number;
+}
+
+export interface BarCommissionByCamareiraSummary {
+  currentMonth: CamareiraBarCommissionRow[];
+  previousMonth: CamareiraBarCommissionRow[];
+}
+
+type BarCommissionItemRow = {
+  quantity: number;
+  price_snapshot: number;
+  bar_comandas: {
+    status: ComandaStatus;
+    created_at: string;
+    created_by: string | null;
+    created_by_profile: { name: string } | null;
+  };
+};
+
+// Comissão de 10% do bar da piscina atribuída à camareira que lançou a
+// comanda ORIGINALMENTE (created_by) — mesmo que outra tenha feito alguma
+// edição depois, é sempre quem lançou que recebe os 10% daquela comanda.
+// Somada pelo mês em que a comanda foi lançada (created_at), não pela
+// data de pagamento da conta (diferente do relatório geral de consumo em
+// poolbar.ts, que soma por paid_at): o objetivo aqui é creditar a
+// camareira no mês em que ela de fato atendeu o pedido, não em qualquer
+// mês futuro em que o hóspede resolver pagar a conta. Comandas canceladas
+// não entram (nenhum consumo de verdade aconteceu).
+export async function getBarCommissionByCamareira(): Promise<BarCommissionByCamareiraSummary> {
+  const supabase = await createClient();
+  const now = nowInBrazil();
+  const currentStart = toDateKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)));
+  const currentEnd = toDateKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)));
+  const prevStart = toDateKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)));
+  const prevEnd = toDateKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)));
+
+  const { data } = await supabase
+    .from("bar_comanda_items")
+    .select(
+      "quantity, price_snapshot, bar_comandas!inner(status, created_at, created_by, created_by_profile:profiles!bar_comandas_created_by_fkey(name))"
+    )
+    .neq("bar_comandas.status", "cancelada")
+    .gte("bar_comandas.created_at", `${prevStart}T00:00:00`)
+    .lte("bar_comandas.created_at", `${currentEnd}T23:59:59`)
+    .gt("quantity", 0);
+
+  const rows = (data ?? []) as unknown as BarCommissionItemRow[];
+
+  function summarize(filterFn: (dateKey: string) => boolean): CamareiraBarCommissionRow[] {
+    const byCamareira = new Map<string, CamareiraBarCommissionRow>();
+    rows.forEach((r) => {
+      const dateKey = r.bar_comandas.created_at.slice(0, 10);
+      if (!filterFn(dateKey)) return;
+      const key = r.bar_comandas.created_by ?? "—";
+      const entry = byCamareira.get(key) ?? {
+        camareira_id: r.bar_comandas.created_by,
+        camareira_name: r.bar_comandas.created_by_profile?.name ?? "—",
+        commission: 0,
+      };
+      entry.commission += r.quantity * Number(r.price_snapshot) * SERVICE_CHARGE_RATE;
+      byCamareira.set(key, entry);
+    });
+    return Array.from(byCamareira.values()).sort((a, b) => b.commission - a.commission);
+  }
+
+  return {
+    currentMonth: summarize((d) => d >= currentStart && d <= currentEnd),
+    previousMonth: summarize((d) => d >= prevStart && d <= prevEnd),
+  };
 }

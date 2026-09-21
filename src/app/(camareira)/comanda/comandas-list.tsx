@@ -28,9 +28,9 @@ export function ComandasList({ comandas }: { comandas: ComandaListItem[] }) {
           >
             <div className="min-w-0">
               <p className="text-sm font-medium">
-                Comanda #{c.sequence_number} · Suíte {c.room_number}
+                Comanda #{c.monthly_number ?? c.sequence_number} · Suíte {c.room_number}
               </p>
-              <p className="text-xs text-muted-foreground truncate">Última ação: {c.last_action_by_name}</p>
+              <p className="text-xs text-muted-foreground truncate">Responsável: {c.created_by_name}</p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-sm font-medium">R$ {c.total.toFixed(2)}</span>
