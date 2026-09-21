@@ -95,7 +95,7 @@ async function getPaidPoolbarRows(supabase: Awaited<ReturnType<typeof createClie
   const { data } = await supabase
     .from("bar_comanda_items")
     .select(
-      "quantity, price_snapshot, poolbar_items(name), bar_comandas!inner(status, room_bills!inner(status, paid_at))"
+      "quantity, price_snapshot, poolbar_items(name, category), bar_comandas!inner(status, room_bills!inner(status, paid_at))"
     )
     .neq("bar_comandas.status", "cancelada")
     .eq("bar_comandas.room_bills.status", "paga")
@@ -104,7 +104,7 @@ async function getPaidPoolbarRows(supabase: Awaited<ReturnType<typeof createClie
   type Row = {
     quantity: number;
     price_snapshot: number;
-    poolbar_items: { name: string } | null;
+    poolbar_items: { name: string; category: string | null } | null;
     bar_comandas: { status: string; room_bills: { status: string; paid_at: string | null } };
   };
   return ((data ?? []) as unknown as Row[])
@@ -113,6 +113,7 @@ async function getPaidPoolbarRows(supabase: Awaited<ReturnType<typeof createClie
       quantity: r.quantity,
       price_snapshot: r.price_snapshot,
       name: r.poolbar_items?.name ?? "—",
+      category: r.poolbar_items?.category ?? "Bebidas",
       date: (r.bar_comandas.room_bills.paid_at as string).slice(0, 10),
     }));
 }
@@ -126,10 +127,40 @@ export async function getPoolbarConsumptionForPeriod(
   return summarizePoolbarRows(rows, (d) => d >= from && d <= to);
 }
 
+export interface PoolbarCategorySummary {
+  items: PoolbarItemTotal[];
+  total: number;
+}
+
+// Petiscos e bebidas contabilizados separadamente (Resumo Executivo) — as
+// únicas duas categorias que poolbar_items usa na prática (ver seed);
+// qualquer item sem categoria cai em "Bebidas" por segurança, pra nunca
+// desaparecer de um total.
+export interface PoolbarSplitSummary {
+  petiscos: PoolbarCategorySummary;
+  bebidas: PoolbarCategorySummary;
+}
+
+function splitByCategory(
+  rows: { quantity: number; price_snapshot: number; name: string; category: string; date: string }[],
+  filterFn: (date: string) => boolean
+): PoolbarSplitSummary {
+  return {
+    petiscos: summarizePoolbarRows(
+      rows.filter((r) => r.category === "Petiscos"),
+      filterFn
+    ),
+    bebidas: summarizePoolbarRows(
+      rows.filter((r) => r.category !== "Petiscos"),
+      filterFn
+    ),
+  };
+}
+
 export interface PoolbarMonthlySummary {
-  currentMonth: { items: PoolbarItemTotal[]; total: number };
-  previousMonth: { items: PoolbarItemTotal[]; total: number };
-  allTime: { items: PoolbarItemTotal[]; total: number };
+  currentMonth: PoolbarSplitSummary;
+  previousMonth: PoolbarSplitSummary;
+  allTime: PoolbarSplitSummary;
 }
 
 export async function getPoolbarMonthlySummary(): Promise<PoolbarMonthlySummary> {
@@ -143,8 +174,8 @@ export async function getPoolbarMonthlySummary(): Promise<PoolbarMonthlySummary>
   const rows = await getPaidPoolbarRows(supabase);
 
   return {
-    currentMonth: summarizePoolbarRows(rows, (d) => d >= currentStart && d <= currentEnd),
-    previousMonth: summarizePoolbarRows(rows, (d) => d >= prevStart && d <= prevEnd),
-    allTime: summarizePoolbarRows(rows, () => true),
+    currentMonth: splitByCategory(rows, (d) => d >= currentStart && d <= currentEnd),
+    previousMonth: splitByCategory(rows, (d) => d >= prevStart && d <= prevEnd),
+    allTime: splitByCategory(rows, () => true),
   };
 }

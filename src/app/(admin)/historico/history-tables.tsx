@@ -208,7 +208,7 @@ export function HistoryTables({
   }, [byDay]);
 
   const diarioColSpan = 3 + TASK_TYPE_OPTIONS.length + 3;
-  const camareiraColSpan = 1 + TASK_TYPE_OPTIONS.length + 4;
+  const camareiraServicosColSpan = 1 + TASK_TYPE_OPTIONS.length + 2;
 
   return (
     <div className="space-y-6">
@@ -302,7 +302,7 @@ export function HistoryTables({
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="font-heading text-lg">Por camareira</CardTitle>
+          <CardTitle className="font-heading text-lg">Por camareira — serviços</CardTitle>
           <Button
             variant="outline"
             size="sm"
@@ -311,20 +311,20 @@ export function HistoryTables({
                 [
                   "Camareira",
                   ...TASK_TYPE_OPTIONS.map((o) => o.label),
+                  "Total",
+                  "Duração média",
                   "Ocorrências Manutenção",
                   "Ocorrências Manutenção resolvidas",
-                  "Duração média",
                   "Total 10% bar no período (R$)",
-                  "Total",
                 ],
                 ...byCamareira.map(([name, v]) => [
                   name,
                   ...TASK_TYPE_OPTIONS.map((o) => v.byType[o.value]),
+                  TASK_TYPE_OPTIONS.reduce((sum, o) => sum + v.byType[o.value], 0),
+                  v.durationCount > 0 ? formatMinutesPt(v.durationSumMin / v.durationCount) : "—",
                   v.ocorrencias,
                   v.ocorrenciasResolvidas,
-                  v.durationCount > 0 ? formatMinutesPt(v.durationSumMin / v.durationCount) : "—",
                   v.barCommission.toFixed(2),
-                  TASK_TYPE_OPTIONS.reduce((sum, o) => sum + v.byType[o.value], 0),
                 ]),
               ])
             }
@@ -340,11 +340,8 @@ export function HistoryTables({
                 {TASK_TYPE_OPTIONS.map((o) => (
                   <TableHead key={o.value}>{o.label}</TableHead>
                 ))}
-                <TableHead>Ocorrências Manutenção</TableHead>
-                <TableHead>Ocorrências resolvidas</TableHead>
-                <TableHead>Duração média</TableHead>
-                <TableHead>Total 10% bar no período</TableHead>
                 <TableHead>Total</TableHead>
+                <TableHead>Duração média</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -354,16 +351,48 @@ export function HistoryTables({
                   {TASK_TYPE_OPTIONS.map((o) => (
                     <TableCell key={o.value}>{v.byType[o.value]}</TableCell>
                   ))}
-                  <TableCell>{v.ocorrencias}</TableCell>
-                  <TableCell>{v.ocorrenciasResolvidas}</TableCell>
-                  <TableCell>{v.durationCount > 0 ? formatMinutesPt(v.durationSumMin / v.durationCount) : "—"}</TableCell>
-                  <TableCell>R$ {v.barCommission.toFixed(2)}</TableCell>
                   <TableCell>{TASK_TYPE_OPTIONS.reduce((sum, o) => sum + v.byType[o.value], 0)}</TableCell>
+                  <TableCell>{v.durationCount > 0 ? formatMinutesPt(v.durationSumMin / v.durationCount) : "—"}</TableCell>
                 </TableRow>
               ))}
               {byCamareira.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={camareiraColSpan} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={camareiraServicosColSpan} className="text-center text-muted-foreground py-8">
+                    Sem dados no período.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-lg">Por camareira — ocorrências e comissão de bar</CardTitle>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Camareira</TableHead>
+                <TableHead>Ocorrências Manutenção</TableHead>
+                <TableHead>Ocorrências resolvidas</TableHead>
+                <TableHead>Total 10% bar no período</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {byCamareira.map(([name, v]) => (
+                <TableRow key={name}>
+                  <TableCell>{name}</TableCell>
+                  <TableCell>{v.ocorrencias}</TableCell>
+                  <TableCell>{v.ocorrenciasResolvidas}</TableCell>
+                  <TableCell>R$ {v.barCommission.toFixed(2)}</TableCell>
+                </TableRow>
+              ))}
+              {byCamareira.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
                     Sem dados no período.
                   </TableCell>
                 </TableRow>
