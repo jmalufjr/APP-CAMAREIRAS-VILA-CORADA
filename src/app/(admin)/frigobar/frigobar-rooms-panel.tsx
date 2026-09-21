@@ -171,7 +171,7 @@ function PaidBillAccordionItem({ bill }: { bill: RecentlyPaidBill }) {
               <span>R$ {bill.poolbarSubtotal.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between text-muted-foreground text-xs">
-              <span>Taxa de serviço (10% sobre o bar)</span>
+              <span>Taxa de serviço (10% sobre o bar){bill.serviceChargeWaived && " · isenta"}</span>
               <span>R$ {bill.serviceCharge.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between text-muted-foreground text-xs">
@@ -275,7 +275,7 @@ function RoomAccordionItem({ room }: { room: RoomBillOverview }) {
               <span>R$ {room.poolbarSubtotal.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between text-muted-foreground text-xs">
-              <span>Taxa de serviço (10% sobre o bar)</span>
+              <span>Taxa de serviço (10% sobre o bar){room.serviceChargeWaived && " · isenta"}</span>
               <span>R$ {room.serviceCharge.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between text-muted-foreground text-xs">

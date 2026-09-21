@@ -318,8 +318,46 @@ type BarCommissionItemRow = {
     created_at: string;
     created_by: string | null;
     created_by_profile: { name: string } | null;
+    // Se a conta a que esta comanda pertence teve a taxa de serviço de
+    // 10% isentada (o hóspede recusou o pagamento) — nesse caso a comanda
+    // não entra na comissão de quem a lançou, mesmo não estando cancelada.
+    room_bills: { service_charge_waived: boolean } | null;
   };
 };
+
+async function fetchBarCommissionRows(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  from: string,
+  to: string
+): Promise<BarCommissionItemRow[]> {
+  const { data } = await supabase
+    .from("bar_comanda_items")
+    .select(
+      "quantity, price_snapshot, bar_comandas!inner(status, created_at, created_by, created_by_profile:profiles!bar_comandas_created_by_fkey(name), room_bills(service_charge_waived))"
+    )
+    .neq("bar_comandas.status", "cancelada")
+    .gte("bar_comandas.created_at", `${from}T00:00:00`)
+    .lte("bar_comandas.created_at", `${to}T23:59:59`)
+    .gt("quantity", 0);
+
+  return (data ?? []) as unknown as BarCommissionItemRow[];
+}
+
+function summarizeBarCommissionRows(rows: BarCommissionItemRow[]): CamareiraBarCommissionRow[] {
+  const byCamareira = new Map<string, CamareiraBarCommissionRow>();
+  rows.forEach((r) => {
+    if (r.bar_comandas.room_bills?.service_charge_waived) return;
+    const key = r.bar_comandas.created_by ?? "—";
+    const entry = byCamareira.get(key) ?? {
+      camareira_id: r.bar_comandas.created_by,
+      camareira_name: r.bar_comandas.created_by_profile?.name ?? "—",
+      commission: 0,
+    };
+    entry.commission += r.quantity * Number(r.price_snapshot) * SERVICE_CHARGE_RATE;
+    byCamareira.set(key, entry);
+  });
+  return Array.from(byCamareira.values()).sort((a, b) => b.commission - a.commission);
+}
 
 // Comissão de 10% do bar da piscina atribuída à camareira que lançou a
 // comanda ORIGINALMENTE (created_by) — mesmo que outra tenha feito alguma
@@ -328,8 +366,10 @@ type BarCommissionItemRow = {
 // data de pagamento da conta (diferente do relatório geral de consumo em
 // poolbar.ts, que soma por paid_at): o objetivo aqui é creditar a
 // camareira no mês em que ela de fato atendeu o pedido, não em qualquer
-// mês futuro em que o hóspede resolver pagar a conta. Comandas canceladas
-// não entram (nenhum consumo de verdade aconteceu).
+// mês futuro em que o hóspede resolver pagar a conta. Não entram: comandas
+// canceladas (nenhum consumo de verdade aconteceu) e comandas cuja conta
+// teve a taxa de serviço isentada (o hóspede recusou o pagamento dela —
+// ver setServiceChargeWaived em room-bills.ts).
 export async function getBarCommissionByCamareira(): Promise<BarCommissionByCamareiraSummary> {
   const supabase = await createClient();
   const now = nowInBrazil();
@@ -338,37 +378,31 @@ export async function getBarCommissionByCamareira(): Promise<BarCommissionByCama
   const prevStart = toDateKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)));
   const prevEnd = toDateKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)));
 
-  const { data } = await supabase
-    .from("bar_comanda_items")
-    .select(
-      "quantity, price_snapshot, bar_comandas!inner(status, created_at, created_by, created_by_profile:profiles!bar_comandas_created_by_fkey(name))"
-    )
-    .neq("bar_comandas.status", "cancelada")
-    .gte("bar_comandas.created_at", `${prevStart}T00:00:00`)
-    .lte("bar_comandas.created_at", `${currentEnd}T23:59:59`)
-    .gt("quantity", 0);
+  const rows = await fetchBarCommissionRows(supabase, prevStart, currentEnd);
 
-  const rows = (data ?? []) as unknown as BarCommissionItemRow[];
-
-  function summarize(filterFn: (dateKey: string) => boolean): CamareiraBarCommissionRow[] {
-    const byCamareira = new Map<string, CamareiraBarCommissionRow>();
-    rows.forEach((r) => {
-      const dateKey = r.bar_comandas.created_at.slice(0, 10);
-      if (!filterFn(dateKey)) return;
-      const key = r.bar_comandas.created_by ?? "—";
-      const entry = byCamareira.get(key) ?? {
-        camareira_id: r.bar_comandas.created_by,
-        camareira_name: r.bar_comandas.created_by_profile?.name ?? "—",
-        commission: 0,
-      };
-      entry.commission += r.quantity * Number(r.price_snapshot) * SERVICE_CHARGE_RATE;
-      byCamareira.set(key, entry);
-    });
-    return Array.from(byCamareira.values()).sort((a, b) => b.commission - a.commission);
-  }
+  const currentMonthRows = rows.filter((r) => {
+    const d = r.bar_comandas.created_at.slice(0, 10);
+    return d >= currentStart && d <= currentEnd;
+  });
+  const previousMonthRows = rows.filter((r) => {
+    const d = r.bar_comandas.created_at.slice(0, 10);
+    return d >= prevStart && d <= prevEnd;
+  });
 
   return {
-    currentMonth: summarize((d) => d >= currentStart && d <= currentEnd),
-    previousMonth: summarize((d) => d >= prevStart && d <= prevEnd),
+    currentMonth: summarizeBarCommissionRows(currentMonthRows),
+    previousMonth: summarizeBarCommissionRows(previousMonthRows),
   };
+}
+
+// Mesma comissão de 10% por camareira, pra um período arbitrário (usado
+// pelo Histórico, que já tem seu próprio seletor de datas) — mesmas
+// regras de exclusão (canceladas e contas isentas não entram).
+export async function getBarCommissionByCamareiraForPeriod(
+  from: string,
+  to: string
+): Promise<CamareiraBarCommissionRow[]> {
+  const supabase = await createClient();
+  const rows = await fetchBarCommissionRows(supabase, from, to);
+  return summarizeBarCommissionRows(rows);
 }

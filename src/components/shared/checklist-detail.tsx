@@ -286,7 +286,7 @@ export function ChecklistDetail({
                     <span>R$ {minibarSnapshot.poolbarSubtotal.toFixed(2)}</span>
                   </div>
                   <div className="flex items-center justify-between text-muted-foreground text-xs">
-                    <span>Taxa de serviço (10% sobre o bar)</span>
+                    <span>Taxa de serviço (10% sobre o bar){minibarSnapshot.serviceChargeWaived && " · isenta"}</span>
                     <span>R$ {minibarSnapshot.serviceCharge.toFixed(2)}</span>
                   </div>
                   <div className="flex items-center justify-between font-medium pt-1">

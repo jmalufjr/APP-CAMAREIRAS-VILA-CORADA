@@ -235,6 +235,7 @@ export interface RoomBill {
   paid_at: string | null;
   paid_by: string | null;
   receipt_email_sent: boolean;
+  service_charge_waived: boolean;
 }
 
 export interface RoomBillMinibarItem {

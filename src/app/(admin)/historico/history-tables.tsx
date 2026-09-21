@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TASK_TYPE_OPTIONS } from "@/lib/task-type";
 import { durationMinutes, formatMinutesPt, effectiveServiceStart, todayKey } from "@/lib/date";
 import type { ChecklistType } from "@/lib/types";
+import type { CamareiraBarCommissionRow } from "@/lib/actions/comandas";
 import { Download } from "lucide-react";
 
 // Uma linha por dia (vem de daily_breakfast_settings, gravada a cada
@@ -88,11 +89,13 @@ export function HistoryTables({
   eligibility,
   roomAssignments,
   commissionRate,
+  barCommission,
   tasks,
 }: {
   eligibility: EligibilityRow[];
   roomAssignments: RoomAssignmentRow[];
   commissionRate: number;
+  barCommission: CamareiraBarCommissionRow[];
   tasks: TaskRow[];
 }) {
   // Mês corrente sempre usa o valor atual do campo de comissão (muda na
@@ -150,12 +153,25 @@ export function HistoryTables({
   const byCamareira = useMemo(() => {
     const map = new Map<
       string,
-      { byType: ByType; ocorrencias: number; ocorrenciasResolvidas: number; durationSumMin: number; durationCount: number }
+      {
+        byType: ByType;
+        ocorrencias: number;
+        ocorrenciasResolvidas: number;
+        durationSumMin: number;
+        durationCount: number;
+        barCommission: number;
+      }
     >();
+    const empty = () => ({
+      byType: emptyByType(),
+      ocorrencias: 0,
+      ocorrenciasResolvidas: 0,
+      durationSumMin: 0,
+      durationCount: 0,
+      barCommission: 0,
+    });
     tasks.forEach((t) => {
-      const entry =
-        map.get(t.camareira) ??
-        { byType: emptyByType(), ocorrencias: 0, ocorrenciasResolvidas: 0, durationSumMin: 0, durationCount: 0 };
+      const entry = map.get(t.camareira) ?? empty();
       entry.byType[t.task_type] += 1;
       entry.ocorrencias += t.occurrences;
       entry.ocorrenciasResolvidas += t.occurrencesResolved;
@@ -166,8 +182,15 @@ export function HistoryTables({
       }
       map.set(t.camareira, entry);
     });
+    // Camareiras que só lançaram comandas de bar no período (sem nenhum
+    // serviço de suíte) também entram — colunas de serviço ficam zeradas.
+    barCommission.forEach((c) => {
+      const entry = map.get(c.camareira_name) ?? empty();
+      entry.barCommission += c.commission;
+      map.set(c.camareira_name, entry);
+    });
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [tasks]);
+  }, [tasks, barCommission]);
 
   const totals = useMemo(() => {
     const t = emptyDayStats();
@@ -185,7 +208,7 @@ export function HistoryTables({
   }, [byDay]);
 
   const diarioColSpan = 3 + TASK_TYPE_OPTIONS.length + 3;
-  const camareiraColSpan = 1 + TASK_TYPE_OPTIONS.length + 3;
+  const camareiraColSpan = 1 + TASK_TYPE_OPTIONS.length + 4;
 
   return (
     <div className="space-y-6">
@@ -291,6 +314,7 @@ export function HistoryTables({
                   "Ocorrências Manutenção",
                   "Ocorrências Manutenção resolvidas",
                   "Duração média",
+                  "Total 10% bar no período (R$)",
                   "Total",
                 ],
                 ...byCamareira.map(([name, v]) => [
@@ -299,6 +323,7 @@ export function HistoryTables({
                   v.ocorrencias,
                   v.ocorrenciasResolvidas,
                   v.durationCount > 0 ? formatMinutesPt(v.durationSumMin / v.durationCount) : "—",
+                  v.barCommission.toFixed(2),
                   TASK_TYPE_OPTIONS.reduce((sum, o) => sum + v.byType[o.value], 0),
                 ]),
               ])
@@ -318,6 +343,7 @@ export function HistoryTables({
                 <TableHead>Ocorrências Manutenção</TableHead>
                 <TableHead>Ocorrências resolvidas</TableHead>
                 <TableHead>Duração média</TableHead>
+                <TableHead>Total 10% bar no período</TableHead>
                 <TableHead>Total</TableHead>
               </TableRow>
             </TableHeader>
@@ -331,6 +357,7 @@ export function HistoryTables({
                   <TableCell>{v.ocorrencias}</TableCell>
                   <TableCell>{v.ocorrenciasResolvidas}</TableCell>
                   <TableCell>{v.durationCount > 0 ? formatMinutesPt(v.durationSumMin / v.durationCount) : "—"}</TableCell>
+                  <TableCell>R$ {v.barCommission.toFixed(2)}</TableCell>
                   <TableCell>{TASK_TYPE_OPTIONS.reduce((sum, o) => sum + v.byType[o.value], 0)}</TableCell>
                 </TableRow>
               ))}

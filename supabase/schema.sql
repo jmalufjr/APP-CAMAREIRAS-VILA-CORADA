@@ -369,7 +369,12 @@ create table room_bills (
   paid_by uuid references profiles(id) on delete set null,
   -- Se o recibo em PDF daquela conta paga foi mandado com sucesso por
   -- e-mail (ver pay_room_bill/mark_receipt_email_sent mais abaixo).
-  receipt_email_sent boolean not null default false
+  receipt_email_sent boolean not null default false,
+  -- A taxa de serviço de 10% sobre o bar não é obrigatória por lei — o
+  -- hóspede pode recusar o pagamento dela ao fechar a conta. Quando isso
+  -- acontece, nenhuma comanda desta conta gera comissão de 10% pra quem a
+  -- lançou (ver set_room_bill_service_charge_waived mais abaixo).
+  service_charge_waived boolean not null default false
 );
 create unique index room_bills_one_active_per_room on room_bills(room_id) where status <> 'paga';
 
@@ -1259,5 +1264,25 @@ begin
   end if;
 
   update room_bills set receipt_email_sent = p_sent where id = p_bill_id;
+end;
+$$ language plpgsql security definer;
+
+-- Isenta (ou volta a cobrar) a taxa de serviço de 10% da conta corrente do
+-- quarto — ação da camareira, permitida em qualquer status não pago.
+create or replace function set_room_bill_service_charge_waived(p_room_id uuid, p_waived boolean)
+returns void as $$
+declare
+  v_bill_id uuid;
+begin
+  if not is_camareira() then
+    raise exception 'not authorized';
+  end if;
+
+  select id into v_bill_id from room_bills where room_id = p_room_id and status <> 'paga' for update;
+  if v_bill_id is null then
+    insert into room_bills (room_id, status) values (p_room_id, 'aberta') returning id into v_bill_id;
+  end if;
+
+  update room_bills set service_charge_waived = p_waived where id = v_bill_id;
 end;
 $$ language plpgsql security definer;

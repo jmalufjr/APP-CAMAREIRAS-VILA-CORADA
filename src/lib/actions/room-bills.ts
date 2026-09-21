@@ -66,6 +66,26 @@ export async function resendRoomBillReceipt(billId: string) {
   return { success: true };
 }
 
+// Isenta (ou volta a cobrar) a taxa de serviço de 10% sobre o bar da
+// conta corrente do quarto — a taxa não é uma cobrança obrigatória por
+// lei, e o hóspede pode recusar o pagamento dela. Isentar tira dessa
+// conta específica o valor dos 10%, e nenhuma comanda que a compõe conta
+// mais na comissão de quem a lançou (ver getBarCommissionByCamareira* em
+// comandas.ts) — nenhuma outra conta ou comanda é afetada.
+export async function setServiceChargeWaived(roomId: string, waived: boolean) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_room_bill_service_charge_waived", {
+    p_room_id: roomId,
+    p_waived: waived,
+  });
+  if (error) return { error: error.message };
+  revalidatePath("/frigobar");
+  revalidatePath("/bar-piscina");
+  revalidatePath("/dashboard");
+  revalidatePath("/historico");
+  return { success: true };
+}
+
 // ---------- Leitura combinada para a tela do admin "Consumo de Bar e Frigobar" ----------
 
 export interface RoomBillLineItem {
@@ -87,6 +107,11 @@ export interface RoomBillOverview {
   serviceCharge: number;
   poolbarTotalWithCharge: number;
   grandTotal: number;
+  // Se o hóspede recusou o pagamento da taxa de serviço de 10% nesta
+  // conta específica (a taxa não é obrigatória por lei) — quando true,
+  // serviceCharge/poolbarTotalWithCharge/grandTotal já vêm calculados
+  // sem ela.
+  serviceChargeWaived: boolean;
   // Nome da camareira que fechou a conta corrente (null se ela nunca foi
   // fechada ainda — só existe uma vez que closed_by é gravado).
   closedByName: string | null;
@@ -119,7 +144,7 @@ type PoolbarRow = {
   bar_comandas: { bill_id: string; status: string };
 };
 
-function computeBillTotals(billId: string, mbRows: MinibarRow[], pbRows: PoolbarRow[]) {
+function computeBillTotals(billId: string, mbRows: MinibarRow[], pbRows: PoolbarRow[], waived: boolean) {
   const minibarItems = sumLines(
     mbRows
       .filter((r) => r.bill_id === billId)
@@ -132,10 +157,19 @@ function computeBillTotals(billId: string, mbRows: MinibarRow[], pbRows: Poolbar
   );
   const minibarTotal = minibarItems.reduce((sum, i) => sum + i.subtotal, 0);
   const poolbarSubtotal = poolbarItems.reduce((sum, i) => sum + i.subtotal, 0);
-  const serviceCharge = poolbarSubtotal * SERVICE_CHARGE_RATE;
+  const serviceCharge = waived ? 0 : poolbarSubtotal * SERVICE_CHARGE_RATE;
   const poolbarTotalWithCharge = poolbarSubtotal + serviceCharge;
   const grandTotal = minibarTotal + poolbarTotalWithCharge;
-  return { minibarItems, minibarTotal, poolbarItems, poolbarSubtotal, serviceCharge, poolbarTotalWithCharge, grandTotal };
+  return {
+    minibarItems,
+    minibarTotal,
+    poolbarItems,
+    poolbarSubtotal,
+    serviceCharge,
+    poolbarTotalWithCharge,
+    grandTotal,
+    serviceChargeWaived: waived,
+  };
 }
 
 export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
@@ -150,36 +184,50 @@ export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
     id: string;
     status: RoomBillStatus;
     paid_at: string | null;
+    service_charge_waived: boolean;
     closed_by_profile: { name: string } | null;
   };
 
   const roomList = rooms ?? [];
   const allBills = (bills ?? []) as unknown as BillRow[];
 
-  const currentBillByRoom = new Map<string, { id: string; status: RoomBillStatus; closedByName: string | null }>();
+  const currentBillByRoom = new Map<
+    string,
+    { id: string; status: RoomBillStatus; serviceChargeWaived: boolean; closedByName: string | null }
+  >();
   for (const room of roomList) {
     const current = allBills.find((b) => b.room_id === room.id && b.status !== "paga");
     if (current) {
       currentBillByRoom.set(room.id, {
         id: current.id,
         status: current.status,
+        serviceChargeWaived: current.service_charge_waived,
         closedByName: current.closed_by_profile?.name ?? null,
       });
     } else {
       const created = await getOrCreateCurrentBill(supabase, room.id);
-      currentBillByRoom.set(room.id, { id: created.id, status: created.status, closedByName: null });
+      currentBillByRoom.set(room.id, {
+        id: created.id,
+        status: created.status,
+        serviceChargeWaived: created.service_charge_waived,
+        closedByName: null,
+      });
     }
   }
 
   const currentBillIds = Array.from(currentBillByRoom.values()).map((b) => b.id);
 
-  const lastPaidByRoom = new Map<string, { id: string; paid_at: string }>();
+  const lastPaidByRoom = new Map<string, { id: string; paid_at: string; serviceChargeWaived: boolean }>();
   allBills
     .filter((b) => b.status === "paga" && b.paid_at)
     .forEach((b) => {
       const existing = lastPaidByRoom.get(b.room_id);
       if (!existing || (b.paid_at as string) > existing.paid_at) {
-        lastPaidByRoom.set(b.room_id, { id: b.id, paid_at: b.paid_at as string });
+        lastPaidByRoom.set(b.room_id, {
+          id: b.id,
+          paid_at: b.paid_at as string,
+          serviceChargeWaived: b.service_charge_waived,
+        });
       }
     });
   const lastPaidBillIds = Array.from(lastPaidByRoom.values()).map((b) => b.id);
@@ -213,7 +261,7 @@ export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
 
   return roomList.map((room) => {
     const currentBill = currentBillByRoom.get(room.id)!;
-    const totals = computeBillTotals(currentBill.id, mbRows, pbRows);
+    const totals = computeBillTotals(currentBill.id, mbRows, pbRows, currentBill.serviceChargeWaived);
 
     const lastPaid = lastPaidByRoom.get(room.id);
     let lastPaidBill: RoomBillOverview["lastPaidBill"] = null;
@@ -224,7 +272,8 @@ export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
       const paidPoolbarSubtotal = pbRows
         .filter((r) => r.bar_comandas.bill_id === lastPaid.id)
         .reduce((sum, r) => sum + r.quantity * Number(r.price_snapshot), 0);
-      const paidTotal = paidMinibarTotal + paidPoolbarSubtotal * (1 + SERVICE_CHARGE_RATE);
+      const paidTotal =
+        paidMinibarTotal + paidPoolbarSubtotal * (lastPaid.serviceChargeWaived ? 1 : 1 + SERVICE_CHARGE_RATE);
       lastPaidBill = { total: paidTotal, paid_at: lastPaid.paid_at };
     }
 
@@ -249,7 +298,7 @@ export async function getRoomBillReceiptData(billId: string): Promise<ReceiptDat
   const supabase = await createClient();
   const { data: bill } = await supabase
     .from("room_bills")
-    .select("paid_at, rooms(number)")
+    .select("paid_at, service_charge_waived, rooms(number)")
     .eq("id", billId)
     .single();
   if (!bill || !bill.paid_at) return null;
@@ -275,7 +324,7 @@ export async function getRoomBillReceiptData(billId: string): Promise<ReceiptDat
   return {
     room_number: room.rooms?.number ?? "—",
     paid_at: bill.paid_at,
-    ...computeBillTotals(billId, mbRows, pbRows),
+    ...computeBillTotals(billId, mbRows, pbRows, bill.service_charge_waived),
   };
 }
 
@@ -291,6 +340,7 @@ export interface RoomBillSnapshot {
   serviceCharge: number;
   poolbarTotalWithCharge: number;
   grandTotal: number;
+  serviceChargeWaived: boolean;
 }
 
 // Busca a conta do quarto vigente numa data específica (a tarefa/dia sendo
@@ -305,7 +355,7 @@ export async function getRoomBillSnapshotForDate(roomId: string, dateKey: string
   const supabase = await createClient();
   const { data: bill } = await supabase
     .from("room_bills")
-    .select("id, status, opened_at, paid_at")
+    .select("id, status, opened_at, paid_at, service_charge_waived")
     .eq("room_id", roomId)
     .lte("opened_at", `${dateKey}T23:59:59`)
     .or(`paid_at.is.null,paid_at.gte.${dateKey}T00:00:00`)
@@ -323,6 +373,7 @@ export async function getRoomBillSnapshotForDate(roomId: string, dateKey: string
     serviceCharge: 0,
     poolbarTotalWithCharge: 0,
     grandTotal: 0,
+    serviceChargeWaived: false,
   };
   if (!bill) return empty;
 
@@ -346,7 +397,7 @@ export async function getRoomBillSnapshotForDate(roomId: string, dateKey: string
   return {
     found: true,
     status: bill.status,
-    ...computeBillTotals(bill.id, mbRows, pbRows),
+    ...computeBillTotals(bill.id, mbRows, pbRows, bill.service_charge_waived),
   };
 }
 
@@ -419,6 +470,7 @@ export interface RecentlyPaidBill {
   serviceCharge: number;
   poolbarTotalWithCharge: number;
   grandTotal: number;
+  serviceChargeWaived: boolean;
 }
 
 // Contas pagas nos últimos `days` dias (uma linha por conta paga, não só a
@@ -431,7 +483,7 @@ export async function getRecentlyPaidRoomBills(days = 7): Promise<RecentlyPaidBi
   const { data: bills } = await supabase
     .from("room_bills")
     .select(
-      "id, room_id, paid_at, receipt_email_sent, rooms(number), paid_by_profile:profiles!room_bills_paid_by_fkey(name)"
+      "id, room_id, paid_at, receipt_email_sent, service_charge_waived, rooms(number), paid_by_profile:profiles!room_bills_paid_by_fkey(name)"
     )
     .eq("status", "paga")
     .gte("paid_at", cutoff)
@@ -442,6 +494,7 @@ export async function getRecentlyPaidRoomBills(days = 7): Promise<RecentlyPaidBi
     room_id: string;
     paid_at: string;
     receipt_email_sent: boolean;
+    service_charge_waived: boolean;
     rooms: { number: string } | null;
     paid_by_profile: { name: string } | null;
   };
@@ -474,6 +527,6 @@ export async function getRecentlyPaidRoomBills(days = 7): Promise<RecentlyPaidBi
     paid_at: bill.paid_at,
     paidByName: bill.paid_by_profile?.name ?? null,
     receiptEmailSent: bill.receipt_email_sent,
-    ...computeBillTotals(bill.id, mbRows, pbRows),
+    ...computeBillTotals(bill.id, mbRows, pbRows, bill.service_charge_waived),
   }));
 }

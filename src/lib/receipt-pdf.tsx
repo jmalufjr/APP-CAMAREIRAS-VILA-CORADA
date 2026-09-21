@@ -18,6 +18,7 @@ export interface ReceiptData {
   serviceCharge: number;
   poolbarTotalWithCharge: number;
   grandTotal: number;
+  serviceChargeWaived: boolean;
 }
 
 const styles = StyleSheet.create({
@@ -81,7 +82,7 @@ function ReceiptDocument({ data }: { data: ReceiptData }) {
             <Text>R$ {data.poolbarSubtotal.toFixed(2)}</Text>
           </View>
           <View style={styles.rowMuted}>
-            <Text>Taxa de serviço (10% sobre o bar)</Text>
+            <Text>Taxa de serviço (10% sobre o bar){data.serviceChargeWaived ? " — isenta" : ""}</Text>
             <Text>R$ {data.serviceCharge.toFixed(2)}</Text>
           </View>
           <View style={styles.rowMuted}>

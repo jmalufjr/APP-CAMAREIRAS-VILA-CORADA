@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { RoomBillOverview } from "@/lib/actions/room-bills";
-import { closeRoomBill, reopenRoomBill, markRoomBillPaid } from "@/lib/actions/room-bills";
+import { closeRoomBill, reopenRoomBill, markRoomBillPaid, setServiceChargeWaived } from "@/lib/actions/room-bills";
 import { setMinibarConsumption } from "@/lib/actions/minibar";
 import type { MinibarItem } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -85,6 +85,26 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
         router.refresh();
       }
     });
+  }
+
+  // A taxa de serviço de 10% sobre o bar não é obrigatória por lei — o
+  // hóspede pode recusar o pagamento dela ao fechar a conta. Isentar tira
+  // o valor dos 10% desta conta específica e também da comissão de quem
+  // lançou as comandas que a compõem (ver comandas.ts), sem afetar
+  // nenhuma outra conta/comanda.
+  function handleToggleServiceCharge(waived: boolean) {
+    if (
+      waived &&
+      !confirm(
+        "A taxa de serviço de 10% sobre o bar não é uma cobrança obrigatória por lei — use isso quando o hóspede não quiser pagá-la. As camareiras não recebem comissão sobre as comandas desta conta. Confirma a isenção?"
+      )
+    ) {
+      return;
+    }
+    runAction(
+      () => setServiceChargeWaived(room.room_id, waived),
+      waived ? "Taxa de serviço isentada nesta conta." : "Taxa de serviço voltou a ser cobrada nesta conta."
+    );
   }
 
   // Salva sempre base + o que está no stepper — por isso o consumo lançado
@@ -249,9 +269,20 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
               <span>Total bar da piscina</span>
               <span>R$ {room.poolbarSubtotal.toFixed(2)}</span>
             </div>
-            <div className="flex items-center justify-between text-muted-foreground text-xs">
-              <span>Taxa de serviço (10% sobre o bar)</span>
+            <div className="flex items-center justify-between gap-2 text-muted-foreground text-xs">
+              <span>Taxa de serviço (10% sobre o bar){room.serviceChargeWaived && " · isenta"}</span>
               <span>R$ {room.serviceCharge.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-xs text-muted-foreground"
+                disabled={isPending}
+                onClick={() => handleToggleServiceCharge(!room.serviceChargeWaived)}
+              >
+                {room.serviceChargeWaived ? "Cobrar taxa de serviço (10%)" : "Isentar taxa de serviço (10%)"}
+              </Button>
             </div>
             <div className="flex items-center justify-between text-muted-foreground text-xs">
               <span>Bar da piscina com taxa</span>
