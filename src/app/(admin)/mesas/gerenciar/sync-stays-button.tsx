@@ -31,7 +31,13 @@ export function SyncStaysButton() {
         toast.error(result.error);
         return;
       }
-      toast.success(`Sincronizado: ${result.updated} atualizado(s), ${result.skipped} preservado(s).`);
+      if ((result.errors ?? 0) > 0) {
+        toast.error(
+          `Sincronizado com ${result.errors} erro(s): ${result.updated} atualizado(s), ${result.skipped} preservado(s). Veja o console/logs para detalhes.`
+        );
+      } else {
+        toast.success(`Sincronizado: ${result.updated} atualizado(s), ${result.skipped} preservado(s).`);
+      }
       router.refresh();
     });
   }

@@ -3,7 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaysReservationsIncluding, getStaysClientName, type StaysReservationRaw } from "@/lib/stays/client";
 import { deriveWorkType, daysBetween } from "@/lib/stays/derive-planning";
-import { assignRoomsToTables, type RoomGuestCount } from "@/lib/stays/derive-breakfast";
+import { assignRoomsToTables, tableNumber, type RoomGuestCount } from "@/lib/stays/derive-breakfast";
 import { todayKey, tomorrowKey, yesterdayKey } from "@/lib/date";
 import { revalidatePath } from "next/cache";
 
@@ -278,6 +278,35 @@ export async function syncStaysArrivalsDepartures(options?: SyncOptions) {
   return { success: true, updated, skipped };
 }
 
+// Mesas já ocupadas por suítes travadas (stays_locked) ficam de fora do
+// algoritmo de distribuição, ou com a capacidade reduzida — sem isso,
+// assignRoomsToTables (que não sabe nada sobre travas) poderia tentar
+// colocar uma suíte nova numa mesa que já tem uma suíte travada,
+// resultando em duas suítes na mesma mesa fora da Mesa 7 (que é a única
+// que pode dividir, ver CLAUDE.md Parte 22/derive-breakfast.ts).
+function tablesAvailableForAlgorithm(
+  tables: { id: string; label: string; seats: number }[],
+  lockedAssignments: { table_id: string; guest_count: number }[]
+): { id: string; label: string; seats: number }[] {
+  const lockedGuestsByTable = new Map<string, number>();
+  lockedAssignments.forEach((a) => {
+    lockedGuestsByTable.set(a.table_id, (lockedGuestsByTable.get(a.table_id) ?? 0) + a.guest_count);
+  });
+
+  return tables
+    .filter((t) => {
+      const lockedGuests = lockedGuestsByTable.get(t.id) ?? 0;
+      if (lockedGuests === 0) return true;
+      // Mesa 7 é a única que pode dividir com outra suíte — as demais,
+      // com qualquer suíte travada, já não têm mais vaga pra nenhuma outra.
+      return tableNumber(t.label) === 7;
+    })
+    .map((t) => {
+      const lockedGuests = lockedGuestsByTable.get(t.id) ?? 0;
+      return lockedGuests > 0 ? { ...t, seats: Math.max(0, t.seats - lockedGuests) } : t;
+    });
+}
+
 // Sincroniza a alocação suíte<->mesa, o total de hóspedes por mesa e os 4
 // campos de contagem por tamanho de mesa (hoje + amanhã) com as reservas da
 // Stays — ver PRD_regrasdenegocio.md seção 4 (regra de preenchimento por
@@ -344,6 +373,7 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
 
   let updated = 0;
   let skipped = 0;
+  let errors = 0;
 
   for (const date of dates) {
     const occupied: RoomGuestCount[] = [];
@@ -369,7 +399,8 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
       },
       { onConflict: "date" }
     );
-    if (!settingsError) updated++;
+    if (settingsError) errors++;
+    else updated++;
 
     // Suítes já travadas manualmente (admin reatribuiu) nesse dia: preserva
     // a alocação delas e não as considera disponíveis pro algoritmo — a
@@ -405,7 +436,7 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
 
     const assignment = assignRoomsToTables(
       roomsToAssign,
-      tables as { id: string; label: string; seats: number }[]
+      tablesAvailableForAlgorithm(tables as { id: string; label: string; seats: number }[], lockedAssignments)
     );
 
     // Remove alocações antigas que não fazem mais sentido hoje (suíte não
@@ -440,6 +471,10 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
 
     for (const [tableId, roomsAtTable] of assignment) {
       for (const r of roomsAtTable) {
+        // Comissão não depende mais desta linha (ver
+        // daily_breakfast_settings.eligible_suites_count acima) — não
+        // gravar commission_value_snapshot aqui, a coluna nem existe mais
+        // nesta tabela (migration 038).
         const { error } = await supabase.from("daily_breakfast_room_assignments").upsert(
           {
             date,
@@ -447,11 +482,11 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
             room_id: r.roomId,
             guest_count: r.guestCount,
             stays_locked: false,
-            commission_value_snapshot: commissionValueSnapshot,
           },
           { onConflict: "date,room_id" }
         );
-        if (!error) updated++;
+        if (error) errors++;
+        else updated++;
       }
     }
 
@@ -487,12 +522,14 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
         { date, table_id: table.id, guest_count: total, stays_locked: false },
         { onConflict: "date,table_id" }
       );
-      if (!error) updated++;
+      if (error) errors++;
+      else updated++;
     }
   }
 
   revalidatePath("/mesas/gerenciar");
   revalidatePath("/mesas");
   revalidatePath("/dashboard");
-  return { success: true, updated, skipped };
+  revalidatePath("/historico");
+  return { success: true, updated, skipped, errors };
 }
