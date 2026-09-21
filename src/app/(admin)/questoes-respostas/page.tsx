@@ -284,10 +284,22 @@ export default function QuestoesRespostasPage() {
               </P>
               <P>
                 Já o bar da piscina funciona por <strong>comandas</strong> — cada pedido feito pela
-                piscina vira um número de comanda, que pode ser editado ou cancelado enquanto a conta
-                da suíte ainda estiver aberta. Fechar a conta, reabrir e marcar como paga são ações
+                piscina vira uma comanda numerada sequencialmente pelo mês (reinicia em #1 a cada
+                início de mês, contando pra pousada inteira, não mais separado por suíte), que pode ser
+                editada ou cancelada enquanto a conta da suíte ainda estiver aberta. A “responsável” por
+                uma comanda é sempre a camareira que a lançou originalmente, mesmo que outra precise
+                editar alguma coisa nela depois. Fechar a conta, reabrir e marcar como paga são ações
                 feitas pela própria camareira; você, como admin, acompanha tudo pronto pra conferência
                 na tela “Consumo de Bar e Frigobar”, incluindo as comandas de cada suíte.
+              </P>
+              <P>
+                Sobre o consumo do bar da piscina incide uma taxa de serviço de 10%, que funciona como
+                comissão pra equipe: cada camareira recebe os 10% referentes às comandas que ela
+                lançou (ver pergunta 9). Como essa taxa não é uma cobrança obrigatória por lei, se o
+                hóspede não quiser pagá-la a camareira pode isentá-la ao fechar a conta — nesse caso o
+                total da conta fica sem os 10%, e a comissão daquela conta específica também deixa de
+                contar pra quem lançou as comandas dela (o que ela lançou em qualquer outra conta
+                continua valendo normalmente).
               </P>
               <P>
                 Ao ser paga, a conta gera automaticamente um recibo em PDF e tenta enviá-lo por e-mail
@@ -384,15 +396,49 @@ export default function QuestoesRespostasPage() {
           <AccordionPanel>
             <div className="space-y-3">
               <P>
-                É a primeira tela que você vê ao entrar — um retrato rápido do dia: quantas suítes têm
-                trabalho hoje e amanhã, quantas mesas do café estão ocupadas, e os totais de frigobar,
-                bar e comissão do período. Logo abaixo aparece uma lista dos serviços concluídos nos
-                últimos 7 dias, mostrando o horário em que a camareira escolheu a suíte, o horário em
-                que terminou e quanto tempo o serviço levou — útil pra acompanhar o ritmo da equipe.
-                Clicando num serviço, você abre o checklist inteiro que a camareira preencheu naquela
-                suíte (só pra consulta, sem poder editar nada ali), incluindo o consumo de frigobar e
-                bar e qualquer ocorrência de manutenção registrada durante aquele atendimento.
+                É a primeira tela que você vê ao entrar. No topo ficam 5 cards de “Consulta rápida do
+                mês corrente”: suítes concluídas hoje, suítes no café hoje, comissão do mês (café da
+                manhã), 10% bar total (a comissão do bar somada de todas as camareiras) e ocorrências de
+                manutenção hoje.
               </P>
+              <P>
+                Logo abaixo tem um menu levando a 5 telas com mais detalhes, cada uma com um botão pra
+                voltar:
+              </P>
+              <List
+                items={[
+                  <>
+                    <strong>Serviços nas suítes</strong>: as suítes de hoje e de amanhã, e a lista dos
+                    serviços concluídos nos últimos 7 dias — horário em que a camareira escolheu a
+                    suíte, horário em que terminou e quanto tempo levou, útil pra acompanhar o ritmo da
+                    equipe. Clicando num serviço, você abre o checklist inteiro que a camareira
+                    preencheu (só pra consulta), incluindo o consumo de frigobar e bar e qualquer
+                    ocorrência de manutenção daquele atendimento.
+                  </>,
+                  <>
+                    <strong>Suítes vagas e limpas, disponíveis para alugar</strong>: duas listas —
+                    suítes limpas e suítes sujas — só das suítes sem hóspede previsto para hoje à
+                    noite (uma suíte com Troca, Arrumação, Saída com Chegada ou Somente Chegada hoje
+                    nunca aparece aqui, porque está ocupada). Uma suíte entra em “limpas” quando o
+                    serviço de saída dela já foi concluído; caso contrário — ou se ela já estava vaga e
+                    o último serviço registrado nela não foi uma saída concluída — aparece em “sujas”.
+                    Atualiza na hora: se uma suíte “disponível” receber uma reserva nova a qualquer
+                    momento do dia, ela sai das duas listas imediatamente.
+                  </>,
+                  <>
+                    <strong>Consumo de frigobar</strong>: os totais do mês atual e do mês anterior, item
+                    por item, com gráficos de participação de cada um.
+                  </>,
+                  <>
+                    <strong>Consumo de bar</strong>: o mesmo, mas com petiscos e bebidas contabilizados
+                    separadamente, tanto nas tabelas quanto nos gráficos.
+                  </>,
+                  <>
+                    <strong>Comissão de 10% do bar por camareira</strong>: quanto cada camareira tem a
+                    receber no mês atual e no mês anterior (ver pergunta 5).
+                  </>,
+                ]}
+              />
             </div>
           </AccordionPanel>
         </AccordionItem>
@@ -410,8 +456,12 @@ export default function QuestoesRespostasPage() {
                 por tipo e por camareira (incluindo o tempo médio que cada uma leva do início ao fim de
                 um serviço), ocorrências de manutenção mais comuns, consumo de frigobar e bar, mesas do
                 café e comissão total (usando, pra cada mês fechado, o valor congelado daquele mês —
-                ver pergunta 4). Também dá pra exportar essas informações em uma planilha (CSV), caso
-                queira analisar os números em outro programa ou guardar um relatório.
+                ver pergunta 4). A tabela “Por camareira” vem dividida em duas: uma com os serviços
+                realizados (por tipo, total e duração média), outra com as ocorrências de manutenção e o
+                total de comissão de 10% do bar de cada camareira no período escolhido (contas cuja taxa
+                foi isentada pelo hóspede não entram nesse total — ver pergunta 5). Também dá pra
+                exportar essas informações em uma planilha (CSV), caso queira analisar os números em
+                outro programa ou guardar um relatório.
               </P>
             </div>
           </AccordionPanel>

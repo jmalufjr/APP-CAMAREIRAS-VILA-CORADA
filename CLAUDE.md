@@ -85,7 +85,19 @@ da quantidade de suítes elegíveis pro café (não mais da alocação efetiva
 numa mesa), com o valor de cada mês fechado congelado no Histórico — essa
 reformulação expôs, já em produção, um bug real de sincronização de
 mesas, corrigido na mesma leva junto com a atualização completa da tela
-"Questões e Respostas" pra refletir tudo isso.
+"Questões e Respostas" pra refletir tudo isso. Em seguida (Partes 30 a
+33, 21/09/2026): uma comissão de 10% do bar da piscina por camareira,
+atribuída a quem lançou cada comanda originalmente, com a numeração da
+comanda passando a ser sequencial pelo mês inteiro em vez de por conta do
+quarto; a possibilidade de a camareira isentar a taxa de serviço de 10%
+numa conta específica (ela não é obrigatória por lei), o que também tira
+a comissão só das comandas daquela conta; o Resumo Executivo
+reestruturado como um hub — 5 cards de consulta rápida do mês no topo e
+um menu abaixo levando a telas de detalhe, cada uma com botão de voltar;
+e uma nova tela nesse menu, "Suítes vagas e limpas, disponíveis para
+alugar", com a regra de negócio (o que conta como "disponível" e como
+"limpa") desenvolvida junto com o proprietário em várias rodadas de
+crítica antes de implementar.
 
 ## Onde está
 
@@ -1372,6 +1384,187 @@ também é feita em Server Components.
     mas na prática passou despercebido por 11 partes seguidas — vale
     checar essa tela a cada parte futura que mexer numa das áreas que ela
     cobre, em vez de confiar em lembrar depois.
+37. **Parte 30 — Comissão de 10% do bar por camareira, comanda
+    "responsável" e numeração mensal** (21/09/2026, feita direto em
+    `main`, pós parte 29):
+    - **Comissão de 10% do bar por camareira** (nova, do zero):
+      `getBarCommissionByCamareira`
+      (`src/lib/actions/comandas.ts`) soma, por camareira, 10% do valor
+      de cada comanda que ela lançou **originalmente** (`created_by` —
+      coluna que já existia desde a Parte 05, nunca sobrescrita por
+      edições posteriores; só `last_action_by` muda quando outra
+      camareira edita) — mesmo que outra tenha editado a comanda depois,
+      quem lançou é sempre quem recebe. Somada pelo **mês em que a
+      comanda foi lançada** (`created_at`), não pela data em que a conta
+      é paga (diferente do relatório geral de consumo em `poolbar.ts`,
+      que soma por `paid_at`) — o objetivo é creditar a camareira no mês
+      em que ela de fato atendeu, não em qualquer mês futuro que o
+      hóspede resolver pagar. Comandas canceladas não entram.
+    - Tela "Comanda" da camareira (`comandas-list.tsx`): "Última ação: X"
+      virou "Responsável: X", mostrando `created_by_name` — a tela do
+      admin (`comandas-list-panel.tsx`) já mostrava "Original" e "Última
+      ação" lado a lado, sem mudança necessária ali.
+    - Resumo Executivo ganhou uma tabela (`CamareiraBarCommissionTable`)
+      com essa comissão por camareira, mês atual/anterior lado a lado, e
+      o card "Comissão do mês" ganhou uma segunda linha "10% bar" com o
+      total de todas as camareiras no mês corrente — a colocação exata
+      dessas duas coisas na tela foi reorganizada logo depois, na Parte
+      32.
+    - **Numeração da comanda** ("Comanda #N"): deixou de ser por conta
+      corrente do quarto (reiniciava toda vez que uma conta nova nascia,
+      podendo repetir "#1" em várias suítes ao mesmo tempo) e passou a
+      ser sequencial por **mês inteiro** (nova coluna `monthly_number`,
+      migration `040_comanda_monthly_number.sql`), pela ordem de
+      lançamento — atribuída uma única vez em `submit_comanda`, nunca
+      recalculada numa edição (reflete a ordem de lançamento original,
+      não o estado atual). A coluna antiga `sequence_number` (por conta)
+      continua existindo, só não é mais exibida — ainda usada
+      internamente por `edit_comanda` pra não colidir dentro de uma
+      mesma conta. Migration faz o backfill das comandas já lançadas no
+      mês corrente, na ordem de `created_at`; meses anteriores não são
+      renumerados (nenhuma tela os exibe além da janela de 7 dias de
+      "Comandas inativas", que nunca alcança um mês fechado).
+    - **Testado**: simulação direta no banco local (comanda lançada por
+      uma camareira e editada por outra — comissão continua indo pra
+      quem lançou; comanda cancelada — corretamente excluída) e a query
+      aninhada nova (`bar_comanda_items` → `bar_comandas` → `profiles`)
+      verificada contra o `next dev` local antes de integrar.
+38. **Parte 31 — Isenção da taxa de serviço de 10% por conta** (21/09/2026,
+    feita direto em `main`, pós parte 30): a taxa de serviço de 10% sobre
+    o bar da piscina não é uma cobrança obrigatória por lei — a camareira
+    agora pode isentá-la numa conta específica.
+    - Botão "Isentar taxa de serviço (10%)" ao lado do valor calculado,
+      na tela "Consumo por quartos" da camareira (`consumo-quartos-panel.tsx`),
+      com `confirm()` antes (afeta dinheiro e comissão da equipe). Nova
+      coluna `room_bills.service_charge_waived` (migration
+      `041_service_charge_waiver.sql`) + função `security definer`
+      `set_room_bill_service_charge_waived`, seguindo o mesmo padrão de
+      `close_room_bill`/`reopen_room_bill`/`pay_room_bill`. Permitida em
+      qualquer status não pago; uma vez paga, a conta é histórico
+      imutável como qualquer outro valor já congelado no projeto.
+    - A isenção some com os 10% do total **daquela conta específica**
+      (inclusive no recibo em PDF, que passou a mostrar "· isenta") e da
+      comissão de quem lançou as comandas que a compõem — mas só das
+      comandas dessa conta: nenhuma outra conta da mesma suíte (passada
+      ou futura) nem nenhuma outra comanda da mesma camareira em
+      qualquer outro quarto é afetada.
+      `getBarCommissionByCamareira`/nova `getBarCommissionByCamareiraForPeriod`
+      (pro Histórico) passaram a excluir comandas de contas isentas. As
+      telas do admin (Consumo por Quartos, detalhe de tarefa em
+      `checklist-detail.tsx`) mostram "· isenta" quando aplicável, sempre
+      só leitura.
+    - **Testado**: a query aninhada nova (comanda → conta → isenta)
+      verificada contra o `next dev` local; simulação direta no banco
+      confirmando que isentar uma conta zera a comissão só das comandas
+      dela (uma segunda comanda da mesma camareira, em outra conta,
+      permaneceu intacta).
+39. **Parte 32 — Resumo Executivo reestruturado em 5 cards de consulta
+    rápida + menu de seções** (21/09/2026, feita direto em `main`, pós
+    parte 31; inclui o ajuste de alinhamento feito no mesmo dia como
+    correção da própria leva):
+    - **O Resumo Executivo virou um hub**: no topo, só os 5 cards de
+      "Consulta rápida do mês corrente" (Suítes concluídas hoje, Suítes
+      no café hoje, Comissão do mês, 10% bar total — separado num card
+      próprio, antes cortava o valor por dividir espaço com "Comissão do
+      mês" — e Ocorrências Manutenção hoje); abaixo, um menu (mesmo
+      padrão de `/checklists`) que leva a telas novas, cada uma com
+      `<BackLink>`: "Serviços nas suítes" (`/dashboard/servicos-suites`
+      — cards de hoje/amanhã + serviços dos últimos 7 dias), "Consumo de
+      frigobar" (`/dashboard/consumo-frigobar`), "Consumo de bar"
+      (`/dashboard/consumo-bar`) e "Comissão de 10% do bar por
+      camareira" (`/dashboard/comissao-bar`) — mais uma quinta tela,
+      "Suítes vagas e limpas, disponíveis para alugar", adicionada logo
+      em seguida na Parte 33.
+    - **StatCard redesenhado** (`src/app/(admin)/dashboard/page.tsx`):
+      ícone + título em negrito ("realçado") na mesma linha, valor
+      abaixo numa fonte menor que o título mas em cor de destaque — bordô
+      da marca no tema claro (`text-primary`), dourado nos dois temas
+      escuros (`dark:text-[#E8B85C]`, já que a cor "primary" desses dois
+      temas é quase branca, igual ao resto do texto, e não serviria de
+      destaque sozinha). Correção de alinhamento no mesmo dia: o título
+      mais comprido dos cinco ("Ocorrências Manutenção hoje") estourava a
+      borda do card por faltar `min-w-0` no item flex (sem isso um item
+      flex não encolhe abaixo do tamanho do próprio conteúdo), e usava
+      `items-center` na linha ícone+título, que alinha o ícone ao centro
+      do bloco de texto inteiro — como esse título quebra em mais linhas
+      que os outros, o ícone descia mais que o dos demais cards,
+      desalinhando os círculos entre si. Corrigido com `min-w-0 flex-1`
+      no título e `items-start` no lugar de `items-center` (ícone sempre
+      no topo, alinhado com os das outras cards independente de quantas
+      linhas o título ocupar); valor também centralizado horizontalmente.
+    - Removido o gráfico de barras "Totais do mês · N suítes · R$ X de
+      comissão" (redundante com os cards) — `monthly-chart.tsx` excluído,
+      sem mais nenhum uso.
+    - `getPoolbarMonthlySummary` (`src/lib/actions/poolbar.ts`) passou a
+      devolver petiscos e bebidas separados (`PoolbarSplitSummary`), só
+      pro Resumo Executivo — `getPoolbarConsumptionForPeriod`, usada pelo
+      Histórico, não foi pedida pra mudar e continua com o total único de
+      sempre.
+    - Histórico > "Por camareira" dividido em dois cards: "— serviços"
+      (Arrumação/Saída com Chegada/Somente Saída/Somente Chegada/Troca/
+      Total/Duração média) e "— ocorrências e comissão de bar"
+      (Ocorrências Manutenção/Ocorrências resolvidas/Total 10% bar no
+      período) — mesmo CSV de sempre, com todas as colunas juntas.
+    - **Lição de teste nova**: verificado com uma sessão autenticada de
+      verdade, não só o bypass de middleware usado até então (que só
+      funciona pra rotas de API — uma página real dentro do route group
+      `(admin)` tem sua própria checagem de sessão em `layout.tsx`, via
+      `getCurrentProfile()`, independente do middleware, então bypassar
+      só o middleware não é suficiente pra testar uma página de verdade
+      sem login). A técnica: login via password grant direto contra o
+      GoTrue local (`POST /auth/v1/token?grant_type=password`) pra pegar
+      um `access_token`/`refresh_token` reais, monta-se o cookie que o
+      `@supabase/ssr` espera (`sb-127-auth-token` no Supabase local,
+      nome derivado do hostname da URL; valor = `"base64-" +
+      base64url(JSON.stringify(sessão))`) e usa-se esse cookie no `curl`.
+      Vale como técnica de teste padrão pra páginas admin daqui pra
+      frente, mais forte que testar só via rota de API.
+40. **Parte 33 — Nova tela "Suítes vagas e limpas, disponíveis para
+    alugar"** (21/09/2026, feita direto em `main`, pós parte 32):
+    `src/app/(admin)/dashboard/suites-disponiveis/page.tsx`, quinto item
+    do menu do Resumo Executivo, logo após "Serviços nas suítes" — duas
+    listas, Suítes limpas e Suítes sujas, das suítes sem hóspede previsto
+    pra hoje à noite.
+    - **Regra de negócio, discutida e ajustada com o proprietário antes
+      de implementar** (a partir de uma proposta inicial dele, corrigida
+      em duas rodadas de crítica — ver histórico da conversa pro
+      raciocínio completo):
+      - Suíte com serviço de hoje igual a Troca, Arrumação, Saída com
+        Chegada ou Somente Chegada pressupõe hóspede essa noite →
+        ocupada, fora das duas listas.
+      - Suíte com serviço de hoje igual a Somente Saída → disponível;
+        limpa se o serviço já estiver concluído, suja caso contrário.
+        Sempre calculado **ao vivo**, sem nenhuma trava de horário — a
+        proposta original do proprietário cogitava congelar a
+        classificação às 15h (fim do turno típico das camareiras), mas
+        isso foi descartado por criar risco real de overbooking: uma
+        suíte que recebesse reserva nova depois desse horário
+        continuaria marcada como "disponível" até o fim do dia.
+      - Suíte sem nenhum serviço previsto hoje (já vaga) → disponível;
+        pra saber se está limpa, olha só a **última tarefa registrada**
+        pra ela, de **qualquer tipo**, entre os dias anteriores — limpa
+        apenas se essa última tarefa for especificamente uma Somente
+        Saída concluída, suja em qualquer outro caso (última tarefa de
+        outro tipo, Somente Saída não concluída, ou nenhuma tarefa no
+        histórico). Não basta achar uma Somente Saída concluída em algum
+        dia do passado: se depois dela existe uma tarefa mais recente de
+        qualquer outro tipo — inclusive uma Saída com Chegada, que a
+        primeira versão desta regra incluía por engano no grupo de
+        "sinais válidos de limpeza" — esse serviço mais antigo não
+        garante mais nada sobre o estado atual da suíte, porque ela
+        certamente foi ocupada de novo depois (uma Saída com Chegada
+        implica hóspede naquela noite, então nunca pode legitimamente
+        ser a última tarefa de uma suíte que hoje está vaga; se aparece
+        como a mais recente no banco, é sinal de uma lacuna de dados, não
+        de limpeza garantida).
+    - **Testado**: 11 cenários controlados no banco local (um por suíte,
+      cobrindo cada combinação da regra, incluindo os dois casos mais
+      delicados — suíte cuja última tarefa registrada foi uma Saída com
+      Chegada concluída, e suíte cuja tarefa mais recente é uma Arrumação
+      pendente por cima de uma Somente Saída concluída mais antiga) —
+      validado primeiro em SQL puro, depois confirmado batendo igual na
+      tela real via sessão autenticada de verdade (mesma técnica da
+      Parte 32).
 
 ## Convenções e decisões importantes
 
@@ -1389,6 +1582,23 @@ também é feita em Server Components.
   seção 4. Login admin local: `admin@camareiras.vilacorada.app` /
   `admin123`. As credenciais da nuvem ficam em `.env.local.cloud` (não
   versionado) só para o caso raro de precisar rodar local contra produção.
+- **Testar uma página admin de verdade precisa de sessão real, não só
+  bypass de middleware (desde a Parte 32)**: o truque já usado neste
+  projeto de adicionar temporariamente uma rota a `isPublic` em
+  `src/lib/supabase/middleware.ts` só funciona pra rotas de API — uma
+  página dentro do route group `(admin)` (ou `(camareira)`) tem sua
+  própria checagem de sessão em `layout.tsx`, via `getCurrentProfile()`
+  (`src/lib/actions/session.ts`), que roda independente do middleware e
+  redireciona pra `/login` mesmo com o bypass. Pra testar uma página real
+  contra o `next dev` local sem precisar de navegador: login via password
+  grant direto contra o GoTrue local (`curl -X POST
+  http://127.0.0.1:54321/auth/v1/token?grant_type=password` com
+  `apikey`/e-mail/senha do admin local), montar o cookie que o
+  `@supabase/ssr` espera (nome `sb-127-auth-token` — derivado do
+  hostname `127.0.0.1` da URL local; valor = `"base64-" +
+  base64url(JSON.stringify(sessão))`, a sessão sendo o JSON cru devolvido
+  pelo GoTrue) e passar esse cookie no `curl`. Mais forte que o bypass de
+  middleware porque exercita a autenticação de verdade, ponta a ponta.
 - **Migrações do banco**: todo schema novo é adicionado em
   `supabase/schema.sql` (para instalações novas) **e** em um arquivo
   numerado sequencialmente em `supabase/migrations/00N_*.sql` (para rodar no
@@ -1665,11 +1875,18 @@ o escopo mude no futuro.
 - `src/app/(admin)/frigobar/` — tela "Consumo de Bar e Frigobar" do menu
   principal, **só leitura desde a Parte 05** (seção 12): duas abas, "Lista
   de comandas do bar" (`comandas-list-panel.tsx`) e "Consumo por quartos"
-  (`frigobar-rooms-panel.tsx`, acordeão por quarto, sem ações).
+  (`frigobar-rooms-panel.tsx`, acordeão por quarto, sem ações) — desde a
+  Parte 31, mostra "· isenta" junto da taxa de serviço quando a camareira
+  isentou os 10% daquela conta.
 - `src/app/(camareira)/comanda/` — tela "Comanda" da camareira (ver Parte
   05): lista de comandas ativas (`page.tsx` + `comandas-list.tsx`) e o
   formulário de pedido, compartilhado entre criar e editar
   (`comanda-form.tsx`, usado por `novo/page.tsx` e `[id]/editar/page.tsx`).
+  Desde a Parte 30, a lista mostra "Responsável: X" (quem lançou a
+  comanda originalmente, `created_by` — nunca muda numa edição) em vez de
+  "Última ação: X", e a numeração "Comanda #N" é o `monthly_number`
+  (sequencial pra pousada inteira, reinicia todo mês), não mais o antigo
+  `sequence_number` por conta.
 - `src/app/(camareira)/bar-piscina/` — tela "Consumo por quartos" da
   camareira (renomeada na Parte 05; era "Consumo de Bar da Piscina" na
   Parte 04): acordeão por quarto com os totais de frigobar e bar da
@@ -1679,7 +1896,11 @@ o escopo mude no futuro.
   sempre aditivo desde a Parte 25: conta aberta soma se a camareira ligar
   "Lançar consumo adicional"; conta reaberta soma por padrão, com "zerar e
   lançar tudo novamente" como opção explícita — nenhuma das duas escolhas
-  persiste entre ciclos fechar/reabrir.
+  persiste entre ciclos fechar/reabrir. Desde a Parte 31, o mesmo
+  componente tem o botão "Isentar taxa de serviço (10%)" ao lado do valor
+  calculado — a taxa não é obrigatória por lei; isentar tira os 10% do
+  total daquela conta e da comissão de quem lançou as comandas dela (só
+  dessa conta, nenhuma outra é afetada).
 - `src/app/(camareira)/` — telas da camareira.
 - `src/app/manutencao/` — telas do funcionário de manutenção (pasta real,
   não route-group — ver "Parte 02 do projeto").
@@ -1687,12 +1908,23 @@ o escopo mude no futuro.
   Actions do frigobar, dos relatórios de bar da piscina e do ciclo de conta
   por quarto (fechar/reabrir/pagar, agora via RPC `security definer`
   checando `is_camareira()` — ver Parte 05 — + a consulta combinada usada
-  em `/frigobar` e `/bar-piscina`).
+  em `/frigobar` e `/bar-piscina`). Desde a Parte 31, `room-bills.ts`
+  também tem `setServiceChargeWaived` (isenção da taxa de 10%, RPC
+  `set_room_bill_service_charge_waived`) e `computeBillTotals` recebe um
+  `waived` pra zerar a taxa nos totais quando aplicável.
+  `poolbar.ts` > `getPoolbarMonthlySummary` (Resumo Executivo) passou, na
+  Parte 32, a devolver petiscos e bebidas separados
+  (`PoolbarSplitSummary`) — `getPoolbarConsumptionForPeriod` (Histórico)
+  não mudou, continua com o total único.
 - `src/lib/actions/comandas.ts` — Server Actions das comandas de bar da
   piscina (Parte 05): `submitComanda`/`editComanda`/`cancelComanda` (via
   RPC `security definer`) e as consultas de leitura `getActiveComandas`
   (lista, com itens já embutidos), `getComandaForEdit`,
-  `getRoomsForComandaSelector`.
+  `getRoomsForComandaSelector`. Desde a Parte 30, também
+  `getBarCommissionByCamareira` (mês atual/anterior, Resumo Executivo) e
+  `getBarCommissionByCamareiraForPeriod` (Histórico) — comissão de 10%
+  por camareira responsável (`created_by`), excluindo comandas canceladas
+  e, desde a Parte 31, comandas de contas isentas da taxa de serviço.
 - `src/lib/room-bills.ts` — helper `getOrCreateCurrentBill` (não é Server
   Action; recebe o client Supabase como parâmetro), usado pelos arquivos de
   actions acima.
@@ -1719,12 +1951,34 @@ o escopo mude no futuro.
   escolha de uma suíte (Parte 24, `cancelClaim`/`cancel_own_claimed_task`)
   fica no mesmo componente que já mostrava "Meus quartos"/"Disponíveis
   para escolher" desde a Parte 10.
+- `src/app/(admin)/dashboard/` — Resumo Executivo. Desde a Parte 32,
+  `page.tsx` só busca dados dos 5 cards de "Consulta rápida do mês
+  corrente" e renderiza o menu (mesmo padrão de `/checklists`) — o resto
+  virou telas próprias, cada uma com `<BackLink href="/dashboard">`:
+  `servicos-suites/` (suítes de hoje/amanhã + serviços dos últimos 7
+  dias, usa `service-log-table.tsx`), `suites-disponiveis/` (Parte 33,
+  ver abaixo), `consumo-frigobar/`, `consumo-bar/` (petiscos/bebidas
+  separados) e `comissao-bar/` (usa `camareira-bar-commission-table.tsx`,
+  criado na Parte 30). `monthly-chart.tsx` (o gráfico "Totais do mês") foi
+  excluído na Parte 32, sem uso desde então.
+- `src/app/(admin)/dashboard/suites-disponiveis/page.tsx` — "Suítes vagas
+  e limpas, disponíveis para alugar" (Parte 33): duas listas (limpas/
+  sujas) calculadas ao vivo a partir de `daily_room_tasks` — suíte com
+  serviço de hoje em Troca/Arrumação/Saída com Chegada/Somente Chegada
+  fica de fora (ocupada); com Somente Saída, entra como limpa/suja
+  conforme o status; sem nenhum serviço hoje (já vaga), olha a última
+  tarefa registrada de qualquer tipo e só considera limpa se for
+  especificamente uma Somente Saída concluída — ver Parte 33 pro
+  raciocínio completo da regra.
 - `src/app/(admin)/dashboard/service-log-table.tsx` e
   `src/app/(admin)/historico/history-tables.tsx` — Início/Término/Duração
   do card "Serviços dos últimos 7 dias" e "Duração média" por camareira no
   Histórico (Parte 22, a partir de `daily_room_tasks.claimed_at`/
   `finished_at`); `history-tables.tsx` também tem o cálculo de comissão
-  por suíte elegível com fallback/congelamento histórico (Parte 27).
+  por suíte elegível com fallback/congelamento histórico (Parte 27), e
+  desde a Parte 32 a tabela "Por camareira" está dividida em dois cards
+  (serviços; e ocorrências + "Total 10% bar no período", este último
+  vindo de `getBarCommissionByCamareiraForPeriod`).
 - `src/lib/receipt-pdf.tsx` — gera o PDF do recibo de uma conta paga sob
   demanda, sem persistir arquivo (Parte 06), usado tanto pelo e-mail
   automático quanto pela rota `/api/room-bills/[billId]/receipt` ("Ver
@@ -1764,8 +2018,9 @@ o escopo mude no futuro.
 - `src/components/shared/back-link.tsx` — link "← Voltar" reutilizável,
   usado nas subtelas de "Listas" e no detalhe de tarefa da camareira.
 - `src/app/(admin)/questoes-respostas/page.tsx` — guia de referência em
-  linguagem simples pra quem opera o app no dia a dia (Parte 18; conteúdo
-  revisado por completo na Parte 29 pra bater com tudo que mudou desde a
-  Parte 18) — conteúdo escrito à mão, não gerado a partir do código, então
-  precisa ser revisado manualmente sempre que uma parte futura mudar algo
-  que uma das 10 perguntas descreve.
+  linguagem simples pra quem opera o app no dia a dia (Parte 18; revisado
+  por completo na Parte 29, e de novo nas Partes 30-33 — comanda
+  "responsável" e comissão de 10%, isenção da taxa, e a reestruturação
+  inteira do Resumo Executivo) — conteúdo escrito à mão, não gerado a
+  partir do código, então precisa ser revisado manualmente sempre que uma
+  parte futura mudar algo que uma das perguntas descreve.
