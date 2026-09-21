@@ -65,10 +65,27 @@ Respostas" no menu do admin, explicando em linguagem simples as 10
 funcionalidades mais importantes do app pra quem for operá-lo (Parte 18);
 telas da camareira simplificadas pra só "hoje" e ajustes de layout dos
 cards de tarefa (Parte 19); as cores de mesa ocupada/vaga invertidas, com
-receita própria por tema (Parte 20); e, por fim, a aba "Hoje" virando
+receita própria por tema (Parte 20); e a aba "Hoje" virando
 sempre o padrão (mesmo em Mesas do Café, que antes era exceção) nas três
 telas com seletor Hoje/Amanhã, além de ajustes de layout menores (Parte
-21).
+21). Numa leva mais recente (Partes 22 a 29, 17–20/09/2026): o registro de
+Início/Término/Duração de cada serviço da camareira (Resumo Executivo e
+Histórico); a correção de um problema de fronteira na API da Stays que
+fazia a sincronização perder saídas cujo check-out caía exatamente no dia
+consultado; ajustes finos na distribuição de suítes pelas mesas do café
+(só a Mesa 07 pode reunir mais de uma suíte) e a exibição do consumo de
+frigobar/bar no detalhe de um serviço concluído visto pelo admin; a
+possibilidade de a camareira cancelar a própria escolha de uma suíte; o
+lançamento de frigobar passando a ser sempre aditivo; a alocação de
+suítes por mesa migrando dos antigos cards por mesa para um diálogo
+aberto ao clicar na própria mesa do layout, com destaque visual pras
+mesas editadas manualmente e um segundo botão de sincronização que
+preserva edições; e uma reformulação da comissão, que passou a depender
+da quantidade de suítes elegíveis pro café (não mais da alocação efetiva
+numa mesa), com o valor de cada mês fechado congelado no Histórico — essa
+reformulação expôs, já em produção, um bug real de sincronização de
+mesas, corrigido na mesma leva junto com a atualização completa da tela
+"Questões e Respostas" pra refletir tudo isso.
 
 ## Onde está
 
@@ -1081,6 +1098,280 @@ também é feita em Server Components.
       no lugar do `gap-1` implícito) nos dois `CardHeader` (Chegadas e
       Saídas), deixando o botão cair pra uma segunda linha em telas
       estreitas em vez de ficar espremido/cortado.
+29. **Parte 22 — Duração de serviço: Início/Término no Resumo Executivo e
+    Duração média no Histórico** (17/09/2026, feita direto em `main`, pós
+    parte 21):
+    - Nova coluna `daily_room_tasks.claimed_at` (migration
+      `035_daily_room_tasks_claimed_at.sql`): grava o momento em que a
+      camareira reivindica um serviço (clique em "Escolher") — diferente
+      de `started_at` (já existente, grava o primeiro toque num item do
+      checklist). `claimTask` (`src/lib/actions/tasks.ts`) passou a
+      gravar esse timestamp junto com `assigned_to`.
+    - Card "Serviços dos últimos 7 dias" (Resumo Executivo) ganhou colunas
+      Início/Término/Duração (Duração = Término − Início, só hora:minuto,
+      já que a data aparece em outra coluna) — `src/app/(admin)/dashboard/
+      service-log-table.tsx`. Linhas de serviço **cancelado** saíram da
+      lista, que agora mostra só concluídos.
+    - Histórico > Por camareira ganhou "Duração média" (mesma fórmula,
+      agregada por camareira).
+    - Serviços concluídos antes de `claimed_at` existir (sem valor nessa
+      coluna) usam `started_at` como aproximação de início, tanto na
+      exibição quanto no cálculo de duração/média — pra não ficarem com
+      "—" indefinidamente; serviços novos sempre têm `claimed_at` real.
+    - Helpers `formatDurationPt`/`durationMinutes`/`formatMinutesPt` em
+      `src/lib/date.ts`.
+30. **Parte 23 — Correção da sincronização perdendo saídas cujo check-out é
+    exatamente hoje** (19/09/2026, feita direto em `main`, pós parte 22):
+    - **Bug real descoberto em produção**: a Stays só considera uma
+      reserva "incluída" (`dateType=included`) num intervalo consultado se
+      pelo menos uma noite dela começa dentro desse intervalo — uma
+      reserva com check-out hoje não tem nenhuma noite começando hoje,
+      então a API nunca a devolvia quando a sincronização buscava a partir
+      de `from=hoje`. Isso fazia a suíte sumir do Planejamento Diário
+      (virava "Sem trabalho" incorretamente), da lista de Saídas em
+      Chegadas & Saídas, e da alocação de mesas do café (hóspede que sai
+      hoje ainda toma café antes de partir).
+    - Corrigido nas três sincronizações (`syncStaysPlanning`,
+      `syncStaysArrivalsDepartures`, `syncStaysBreakfastTables`, em
+      `src/lib/actions/stays-sync.ts`) buscando reservas a partir de
+      **ontem**, não de hoje — não foi preciso alargar o lado de "amanhã",
+      já que um check-in em amanhã sempre tem a primeira noite dele
+      começando em amanhã. `resolveGuestCountForAssignment`
+      (`src/lib/actions/tables.ts`, Parte 26/27) já buscava a partir de
+      ontem por esse mesmo motivo, documentado ali antes até de o bug ser
+      corrigido nas sincronizações.
+    - Verificado direto contra a API real da Stays antes da correção, e
+      testado localmente depois.
+31. **Parte 24 — Regras finas de alocação de mesas, consumo/ocorrências no
+    detalhe do admin, e cancelar escolha de suíte** (19/09/2026, feita
+    direto em `main`, pós parte 23 — três mudanças não relacionadas entre
+    si, pedidas pelo proprietário na mesma leva):
+    - **Mesas do café**: refinamento do algoritmo de distribuição
+      (`assignRoomsToTables`, `src/lib/stays/derive-breakfast.ts`) —
+      suítes 10 e 11, quando ocupadas, têm preferência pelas Mesas 5 e 9
+      (mais perto da vista do mar); na ausência delas, a preferência passa
+      a ser de uma suíte de 1 hóspede. Mesa 7 passa a ser a **única** mesa
+      que pode reunir mais de uma suíte — todas as outras ficam
+      reservadas inteiras pra uma única suíte (mesmo que sobre
+      capacidade), evitando juntar duas suítes de 1 hóspede numa mesma
+      mesa normal; só em superlotação real (mais suítes do que mesas
+      comportam) esse limite é quebrado, e só na Mesa 7. Verificado com
+      casos sintéticos e testado contra dados reais antes de integrar.
+    - **Resumo Executivo > detalhe de um serviço concluído**
+      (`/dashboard/tarefas/[taskId]`): passou a mostrar o consumo de
+      frigobar/bar da suíte (retrato da conta vigente naquele dia, mesmo
+      formato da tela "Consumo por quartos") — **reverte a decisão
+      explícita da Parte 10**, que tinha deixado essa seção de fora de
+      propósito porque o frigobar é por conta corrente, não por
+      tarefa/dia, e mostrar "o frigobar de hoje" rotulado como "o que a
+      camareira preencheu naquele dia" seria dado errado sempre que a
+      conta já tivesse girado. Essa ressalva continua valendo tecnicamente
+      (o consumo mostrado é sempre o da conta **atual**, não um retrato
+      congelado do dia do serviço) — o proprietário pediu a mudança
+      ciente disso. A tela também passou a deixar explícito quando não há
+      nenhuma ocorrência de manutenção ou observação registrada (antes a
+      seção simplesmente não aparecia).
+    - **Cancelar escolha de suíte**: a camareira pode cancelar a própria
+      escolha de uma suíte já reivindicada, antes de finalizar
+      (`cancelClaim`/`cancel_own_claimed_task`, migration
+      `036_cancel_own_claimed_task.sql`, função `security definer`
+      seguindo o padrão já estabelecido): o serviço volta pra lista de
+      disponíveis, e tudo que tinha sido preenchido nessa tentativa
+      (itens do checklist marcados, ocorrências, observação) é apagado —
+      como se a suíte nunca tivesse sido escolhida. Diferente de
+      `cancel_daily_room_task` (Parte 10, migration 028), que só cancela
+      um serviço **pendente** de dia anterior, ainda não reivindicado por
+      ninguém.
+32. **Parte 25 — Lançamento de frigobar sempre aditivo** (20/09/2026, feita
+    direto em `main`, pós parte 24 — duas iterações no mesmo dia, a
+    segunda substituindo o modelo da primeira a pedido do proprietário):
+    - **Primeira tentativa**: contas ainda abertas ganharam um seletor
+      "Houve consumo no último dia?" — ao marcar "sim", apareciam os
+      mesmos steppers já usados na conta reaberta.
+    - **Redesenhada no mesmo dia**, a pedido explícito do proprietário
+      ("vamos abandonar essa ideia de consumo do último dia... renomeando
+      a seleção para 'Lançar consumo adicional'"). Modelo final, em
+      `src/app/(camareira)/bar-piscina/consumo-quartos-panel.tsx`: com a
+      conta **aberta**, a camareira pode ligar "Lançar consumo adicional"
+      — nasce sempre desligado, não reflete consumo pré-existente — pra
+      somar mais alguma coisa antes de fechar a conta pela primeira vez.
+      Com a conta **reaberta** (pra corrigir algo), a edição já fica
+      sempre disponível e **soma por padrão** ao que já existe; só
+      virando explicitamente "zerar e lançar tudo novamente" (com
+      `confirm()`, já que apaga o consumo lançado) é que a base zera pra
+      recomeçar do zero. Essa escolha nunca é persistida — cada novo
+      ciclo fechar → reabrir volta sempre ao padrão aditivo.
+    - Implementado com um par `baseQty`/`additionalQty`: o stepper mostra
+      só o delta sendo adicionado agora (autônomo, sempre começa em
+      zero); o valor salvo em cada clique é sempre `base + delta`. Reset
+      do modo "integral" ao detectar uma reabertura de verdade via o
+      padrão já usado no projeto de "ajustar estado durante a
+      renderização" (sem `useEffect`).
+33. **Parte 26 — Alocação de suítes por mesa direto no layout, e
+    sincronização não-forçada sob demanda** (20/09/2026, feita direto em
+    `main`, pós parte 25):
+    - **Mesas do café (admin)**: clicar numa mesa no layout "Mesas ·
+      hoje/amanhã" abre `TableAssignmentDialog`
+      (`src/app/(admin)/mesas/gerenciar/table-assignment-dialog.tsx`) com
+      as suítes alocadas ali (adicionar/remover) — substitui os antigos
+      seletores dentro de cada card de mesa, que foram removidos (o
+      componente `TableRoomAssignments` da Parte 12 não existe mais). O
+      sistema rejeita lançar mais hóspedes do que a mesa comporta.
+    - Mesas com alguma suíte alocada manualmente pelo admin
+      (`stays_locked`) ficam sempre em amarelo claro com letra escura no
+      layout (`editedTableIds`, `table-layout-canvas.tsx`), sobrepondo a
+      cor normal de ocupada/vaga do tema — só na visão do admin; a
+      camareira nunca vê esse destaque (não recebe a prop
+      `editedTableIds`), então não distingue mesa editada de mesa alocada
+      pelo sistema.
+    - Planejamento Diário, Chegadas & Saídas e Mesas do Café ganharam um
+      segundo botão de sincronização, **"Sincronizar agora (preserva
+      edições)"**: roda a sincronização com a Stays imediatamente (sem
+      esperar o cron do dia), mas nunca sobrescreve nada que o admin já
+      editou hoje/amanhã — só preenche o que ainda está do jeito que a
+      Stays sugere. Complementa (não substitui) o botão "Forçar
+      sincronização", que continua ignorando as edições de propósito.
+      Ambos chamam a mesma Server Action, só mudando `{ force: true/false
+      }`.
+34. **Parte 27 — Comissão por suíte elegível ao café, não por mesa, com
+    congelamento histórico** (20/09/2026, feita direto em `main`, pós
+    parte 26 — quatro iterações na mesma leva, cada uma corrigindo um
+    defeito de design da anterior):
+    - **Decisão de fundo, pedida explicitamente pelo proprietário**: a
+      comissão do dia deixou de depender de quantos hóspedes o admin
+      digitava por mesa (sinal indireto de "mesa ocupada") e passou a ser
+      puramente "quantidade de suítes elegíveis pro café da manhã" (mesma
+      regra já usada pra decidir quais suítes ocupar nas mesas:
+      `checkInDate < data <= checkOutDate`) × "Valor da comissão por café
+      servido" (campo renomeado de "por mesa"). O diálogo de suítes por
+      mesa (Parte 26) perdeu o campo de digitar quantidade de hóspedes —
+      a quantidade agora é sempre resolvida no servidor
+      (`resolveGuestCountForAssignment`, `src/lib/actions/tables.ts`):
+      reaproveita o valor já conhecido se a suíte só está sendo movida,
+      ou busca a reserva vigente na Stays se for alocação nova.
+    - **Primeira versão**: comissão calculada a partir de
+      `daily_breakfast_room_assignments` (quantas suítes foram de fato
+      alocadas a alguma mesa). **Corrigida logo em seguida**: essa
+      contagem podia ficar errada em caso de superlotação real ou de uma
+      suíte excluída por lápide — nenhuma das duas situações deveria
+      afetar a comissão, já que a suíte continua elegível mesmo sem estar
+      sentada em mesa nenhuma. A contagem definitiva
+      (`eligible_suites_count`) passou a ser gravada em
+      `daily_breakfast_settings` a cada sincronização (automática ou
+      forçada), independente de alocação de mesa — junto com o valor de
+      comissão vigente naquele momento (`commission_value_snapshot`,
+      também em `daily_breakfast_settings`; a coluna equivalente que
+      tinha sido criada em `daily_breakfast_room_assignments` na versão
+      anterior foi removida). "Hóspedes café" (estatística separada, não
+      usada no cálculo) continua somando os hóspedes reais por suíte
+      alocada.
+    - **Congelamento histórico**: o Histórico usa o
+      `commission_value_snapshot` gravado no dia da sincronização pra
+      qualquer mês que não seja o corrente — mudar o valor da comissão
+      hoje nunca altera meses já fechados. O mês corrente (e o Resumo
+      Executivo, que só mostra o mês corrente) sempre usa o valor atual
+      do campo.
+    - **Fallback pra não zerar o passado**: `eligible_suites_count` virou
+      anulável — `null` significa "essa data nunca foi sincronizada sob a
+      regra nova" (distinto de `0`, que só passou a significar
+      "sincronizada e confirmada zero suítes elegíveis" depois da
+      migration `039_eligible_suites_nullable_fallback.sql`). Resumo
+      Executivo e Histórico caem pra regra antiga (contagem de
+      `daily_breakfast_room_assignments` × valor atual da comissão)
+      sempre que `eligible_suites_count` for nulo pra uma data. **Essa
+      foi a origem da prática já registrada em "Convenções e decisões
+      importantes" abaixo — ver essa seção pro texto completo da regra,
+      pedida explicitamente pelo proprietário**: uma mudança de regra de
+      cálculo nunca deve zerar retroativamente um valor que já tinha sido
+      calculado antes dela existir.
+    - Migrations: `037_commission_snapshot_per_suite.sql` (criada e
+      depois parcialmente revertida por
+      `038_commission_by_eligible_suites.sql`, que moveu o retrato pra
+      `daily_breakfast_settings`) e `039_eligible_suites_nullable_fallback.sql`.
+35. **Parte 28 — Bugs reais pós-lançamento da Parte 26/27, e alocação de
+    qualquer suíte em qualquer mesa** (20/09/2026, feita direto em `main`,
+    pós parte 27 — todos corrigidos no mesmo dia em que o proprietário
+    reportou os sintomas em produção):
+    - **Bug real, causa raiz**: o upsert de `daily_breakfast_room_assignments`
+      (dentro de `syncStaysBreakfastTables`) continuava gravando
+      `commission_value_snapshot`, coluna que a migration `038` tinha
+      removido dessa tabela (mudou pra `daily_breakfast_settings`, Parte
+      27) — todo upsert de alocação suíte↔mesa vinha falhando
+      silenciosamente desde então (o erro não era checado), fazendo uma
+      suíte recém-computada pelo algoritmo sumir sem deixar rastro (linha
+      antiga apagada, nova nunca gravada), enquanto o total de hóspedes
+      por mesa (calculado à parte) saía certo — sintoma visível em
+      produção: uma mesa mostrando "N hóspedes" sem nome de suíte
+      nenhuma. Corrigido removendo o campo indevido e passando a checar o
+      `error` desse upsert (e dos outros dois da mesma função) — falhas
+      agora contam num contador `errors` devolvido pra tela, que avisa se
+      algo falhar (`sync-stays-button.tsx`). **Reforça a lição já
+      registrada em "Convenções e decisões importantes"**: mesmo uma
+      função que já segue a prática de checar `.error` pode ter um call
+      site específico esquecido — vale auditar todos os pontos de escrita
+      de uma função sempre que uma coluna que ela grava for
+      removida/renomeada por uma migration, não só assumir que a prática
+      geral já cobre o caso.
+    - **Segundo bug relacionado, mesma correção**: o algoritmo de
+      distribuição (`assignRoomsToTables`) não sabia quais mesas já
+      estavam ocupadas por suítes travadas (`stays_locked`), podendo
+      tentar colocar uma suíte nova numa mesa normal (fora a Mesa 7) já
+      travada com outra suíte. Corrigido com `tablesAvailableForAlgorithm`
+      (`src/lib/actions/stays-sync.ts`): exclui do algoritmo qualquer
+      mesa normal com alguma suíte travada, e reduz a capacidade efetiva
+      da Mesa 7 (a única compartilhada) pelos hóspedes já travados nela.
+    - **Terceiro bug, reportado separadamente pelo proprietário com
+      print**: o seletor do diálogo de alocação (Parte 26) escondia
+      qualquer suíte já alocada em **alguma** mesa naquele dia, não só na
+      mesa aberta no momento — impedindo mover uma suíte de uma mesa pra
+      outra pelo próprio diálogo (ela simplesmente não aparecia como
+      opção). Corrigido: só as suítes já alocadas na mesa que está sendo
+      editada ficam de fora; as demais aparecem, inclusive as que já
+      estão em outra mesa (com a dica "(atualmente na Mesa X)"). Escolher
+      uma suíte que está noutra mesa a move automaticamente (mesmo
+      upsert por data+suíte de sempre) — a mesa de origem fica livre, sem
+      nenhuma lápide/marca de "editada" criada ali; só a mesa de destino
+      recebe o destaque de mesa editada.
+    - **Quarto bug, mesmo dia**: depois de mover uma suíte, a mesa de
+      origem continuava mostrando "N hóspedes" — resquício de um
+      fallback antigo do layout de mesas (`guestCounts`, lido de
+      `daily_breakfast.guest_count`, campo legado só atualizado pela
+      sincronização, nunca pelas ações manuais do diálogo). Removido de
+      vez: `TableLayoutCanvas` passou a derivar ocupação/hóspedes só de
+      `tableRooms` (a alocação suíte↔mesa, sempre atualizada tanto por
+      sincronização quanto por edição manual) — uma mesa sem nenhuma
+      suíte alocada agora sempre aparece vazia. `daily_breakfast.guest_count`
+      continua existindo no banco (ainda gravado pela sincronização), mas
+      não é mais lido em lugar nenhum do código.
+    - **Testado extensivamente**: sincronização não forçada, forçada, e
+      não forçada de novo sobre o resultado limpo (zero erros nas três,
+      suítes elegíveis corretamente alocadas, Mesa 7 dividindo suítes sem
+      sobra de capacidade, nenhuma mesa normal com mais de uma suíte) —
+      reproduzindo o cenário exato de produção no banco local. Mecanismo
+      de mover suíte entre mesas verificado com um teste SQL direto. A
+      sincronização por cron chama a mesma função sem `force`, então está
+      sujeita às mesmas correções.
+36. **Parte 29 — Atualização da tela "Questões e Respostas"** (20/09/2026,
+    feita direto em `main`, pós parte 28): a tela
+    `src/app/(admin)/questoes-respostas/page.tsx` (escrita na Parte 18,
+    antes de boa parte do que mudou desde então) tinha ficado desatualizada
+    em vários pontos — descrevia a comissão como "por mesa" (já era "por
+    suíte elegível" desde a Parte 27), dizia que Mesas do Café abria por
+    padrão em "Amanhã" (corrigido pra "Hoje" já na Parte 21, mas o texto
+    nunca foi atualizado), descrevia mesa ocupada como "cor mais clara"
+    (invertido desde a Parte 20) e "arrastar/reatribuir" suíte por mesa
+    (virou um diálogo ao clicar na mesa, Parte 26), não mencionava o
+    segundo botão "Sincronizar agora (preserva edições)" (Parte 26), a
+    possibilidade de a camareira cancelar a própria escolha (Parte 24), o
+    lançamento aditivo de frigobar (Parte 25), nem as colunas de
+    Início/Término/Duração (Parte 22). Revisada por completo nesta leva
+    pra bater com o estado atual do app. **Lição reforçada**: como o
+    conteúdo dessa tela é escrito à mão (não gerado a partir do código),
+    ela fica desatualizada silenciosamente sempre que uma parte muda algo
+    que ela descreve; já havia um aviso nesse sentido desde a Parte 18,
+    mas na prática passou despercebido por 11 partes seguidas — vale
+    checar essa tela a cada parte futura que mexer numa das áreas que ela
+    cobre, em vez de confiar em lembrar depois.
 
 ## Convenções e decisões importantes
 
@@ -1144,7 +1435,28 @@ também é feita em Server Components.
   aconteceu de verdade (reordenação de itens em Parte 03, seção 10) e só
   apareceu em teste manual, não em `npm run build`/`lint`. Sempre capturar
   o `error` do retorno de `.rpc()` e devolver `{ error: error.message }`
-  quando existir, igual já é feito para `.insert()`/`.update()`.
+  quando existir, igual já é feito para `.insert()`/`.update()`. **A mesma
+  regra vale pra `.upsert()`/`.insert()`/`.update()` direto, não só
+  `.rpc()`**: o bug de sincronização de mesas da Parte 28 foi exatamente
+  isso — um `.upsert()` continuou gravando uma coluna que uma migration
+  tinha removido, o erro nunca era checado, e a alocação de suítes falhava
+  silenciosamente em produção. Vale auditar **todos** os pontos de escrita
+  de uma função sempre que uma coluna que ela grava for removida/renomeada
+  por uma migration nova, não só assumir que a prática geral de checar
+  `.error` já cobre o caso.
+- **Mudança de regra de cálculo nunca deve zerar retroativamente um valor
+  já calculado** (pedido explícito do proprietário, Parte 27): quando uma
+  regra muda e passa a depender de um dado que datas passadas não têm
+  (porque foram calculadas antes da regra nova existir), a mudança só deve
+  valer a partir da data em que esse dado passa a existir de verdade — não
+  faz sentido mostrar zero num valor que já tinha sido calculado
+  corretamente antes, só porque falta informação pra aplicar a regra nova
+  retroativamente. Na prática, isso significa usar uma coluna **anulável**
+  (não um valor padrão como `0` ou `false`) pra guardar o resultado da
+  regra nova, e cair de volta pra regra antiga sempre que essa coluna for
+  `null` pra uma data — `null` e "zero de verdade" precisam ser
+  distinguíveis. Caso de origem: `daily_breakfast_settings.eligible_suites_count`
+  (migration `039_eligible_suites_nullable_fallback.sql`) — ver Parte 27.
 - **Fonte de títulos**: "The Seasons" (paga, foundry My Creative Land) não
   foi licenciada ainda — o app usa Playfair Display (Google Fonts) como
   substituta. Trocar em `src/app/layout.tsx` quando os arquivos forem
@@ -1302,13 +1614,16 @@ o escopo mude no futuro.
   changelog de decisões/desvios (seção 4).
 - `PRD_regrasdenegocio.md` — regras de negócio da integração com a API da
   Stays (**implementada e em produção desde a Parte 11, com extensões até
-  a Parte 21**): regra de preferência admin-vs-sincronização (inclusive as
-  lápides de exclusão e a sincronização forçada), regras de Arrumação/
-  Troca por duração da reserva, Saída com Chegada/Somente Saída/Somente
-  Chegada, Chegadas & Saídas e a regra de preenchimento das mesas do café
-  por proximidade da vista do mar. Ler antes de mexer em qualquer parte
-  dessa integração — cada seção tem notas de implementação datadas
-  marcando o que já mudou desde a versão original do documento.
+  a Parte 28**): regra de preferência admin-vs-sincronização (inclusive as
+  lápides de exclusão e a sincronização forçada/não-forçada sob demanda),
+  regras de Arrumação/Troca por duração da reserva, Saída com Chegada/
+  Somente Saída/Somente Chegada, Chegadas & Saídas, a regra de
+  preenchimento das mesas do café por proximidade da vista do mar
+  (refinada na Parte 24: só a Mesa 7 aceita mais de uma suíte) e a busca
+  de reservas a partir de ontem pra não perder saídas de hoje (Parte 23).
+  Ler antes de mexer em qualquer parte dessa integração — cada seção tem
+  notas de implementação datadas marcando o que já mudou desde a versão
+  original do documento.
 - `README.md` — setup local (Docker/Supabase local desde a Parte 08, seção
   15), deploy na Vercel, variáveis de ambiente.
 - `supabase/schema.sql` / `supabase/seed.sql` — schema e dados iniciais.
@@ -1324,19 +1639,29 @@ o escopo mude no futuro.
   `poolbar/` e `mesas/` (só a aba "Layout & mesas") são as subtelas, cada
   uma com `<BackLink>`.
 - `src/app/(admin)/mesas/gerenciar/` — tela "Mesas do café" do menu
-  principal: comissão, alocação de suítes por mesa (`TableRoomAssignments`
-  dentro de `guests-admin-panel.tsx`, Parte 12), hóspedes/observação por
-  mesa individual, e "Total de mesas" + os 4 campos de contagem por
-  tamanho de mesa — esses últimos somente leitura, sempre calculados na
-  hora a partir da alocação suíte↔mesa (Partes 16/17). **Não** inclui mais
-  o layout arrastável, que é `src/app/(admin)/checklists/mesas/`.
+  principal: valor da comissão ("por café servido", Parte 27), alocação
+  de suítes por mesa via diálogo (`table-assignment-dialog.tsx`, aberto
+  ao clicar numa mesa do layout — Parte 26; substitui o antigo
+  `TableRoomAssignments` da Parte 12), observação do dia, e "Total de
+  mesas" + os 4 campos de contagem por tamanho de mesa — todos somente
+  leitura, sempre calculados na hora a partir da alocação suíte↔mesa
+  (Partes 16/17). Não há mais campo de hóspedes por mesa digitado pelo
+  admin (Parte 27: hóspedes por suíte sempre vêm da Stays) nem cards por
+  mesa (a observação de cada mesa individual também está dentro do
+  diálogo agora). **Não** inclui o layout arrastável (mover mesa de
+  posição), que é `src/app/(admin)/checklists/mesas/`.
 - `src/components/shared/table-layout-canvas.tsx` — desenha o layout de
   mesas (formato, posição); único componente usado tanto pelo editor do
   admin quanto pela visão da camareira, e também pela visão só-leitura de
   `mesas/gerenciar`. Desde a Parte 12 também mostra as suítes alocadas em
-  cada mesa (prop `tableRooms`); desde a Parte 20, mesa **ocupada** é a
-  que recebe a cor de destaque do tema (mais escura que o fundo nos temas
-  escuros, sólida no claro) — o inverso do que era originalmente.
+  cada mesa (prop `tableRooms`, única fonte de ocupação/hóspedes desde a
+  Parte 28 — não há mais fallback pro campo legado `daily_breakfast.guest_count`);
+  desde a Parte 20, mesa **ocupada** é a que recebe a cor de destaque do
+  tema (mais escura que o fundo nos temas escuros, sólida no claro); desde
+  a Parte 26, `onTableClick` (só na visão do admin) abre
+  `table-assignment-dialog.tsx`, e `editedTableIds` destaca em amarelo as
+  mesas com alguma suíte travada manualmente (`stays_locked`) — prop que a
+  camareira nunca recebe, então não vê esse destaque.
 - `src/app/(admin)/frigobar/` — tela "Consumo de Bar e Frigobar" do menu
   principal, **só leitura desde a Parte 05** (seção 12): duas abas, "Lista
   de comandas do bar" (`comandas-list-panel.tsx`) e "Consumo por quartos"
@@ -1347,10 +1672,14 @@ o escopo mude no futuro.
   (`comanda-form.tsx`, usado por `novo/page.tsx` e `[id]/editar/page.tsx`).
 - `src/app/(camareira)/bar-piscina/` — tela "Consumo por quartos" da
   camareira (renomeada na Parte 05; era "Consumo de Bar da Piscina" na
-  Parte 04): acordeão por quarto com os totais de frigobar (editável) e bar
-  da piscina (só leitura, vem das comandas) e as ações de
+  Parte 04): acordeão por quarto com os totais de frigobar e bar da
+  piscina (só leitura, vem das comandas) e as ações de
   fechar/reabrir/pagar conta, que passaram do admin para a camareira nesta
-  mesma parte.
+  mesma parte. Lançamento de frigobar (`consumo-quartos-panel.tsx`)
+  sempre aditivo desde a Parte 25: conta aberta soma se a camareira ligar
+  "Lançar consumo adicional"; conta reaberta soma por padrão, com "zerar e
+  lançar tudo novamente" como opção explícita — nenhuma das duas escolhas
+  persiste entre ciclos fechar/reabrir.
 - `src/app/(camareira)/` — telas da camareira.
 - `src/app/manutencao/` — telas do funcionário de manutenção (pasta real,
   não route-group — ver "Parte 02 do projeto").
@@ -1382,9 +1711,20 @@ o escopo mude no futuro.
   vivia só dentro de `(camareira)/tarefas/[taskId]/`) porque passou a ser
   usado também pela visão somente-leitura do admin em
   `(admin)/dashboard/tarefas/[taskId]/` — o mesmo componente já é
-  automaticamente somente-leitura quando `task.status === 'concluido'`,
-  e a prop `minibar` é opcional (a visão do admin não passa essa prop, de
-  propósito — ver Parte 10).
+  automaticamente somente-leitura quando `task.status === 'concluido'`. A
+  prop `minibar` é opcional, mas desde a Parte 24 a visão do admin **também
+  passa essa prop** (reverte a decisão original da Parte 10 de escondê-la
+  ali — ver Parte 24 pro motivo).
+- `src/app/(camareira)/tarefas/tasks-board.tsx` — cancelar a própria
+  escolha de uma suíte (Parte 24, `cancelClaim`/`cancel_own_claimed_task`)
+  fica no mesmo componente que já mostrava "Meus quartos"/"Disponíveis
+  para escolher" desde a Parte 10.
+- `src/app/(admin)/dashboard/service-log-table.tsx` e
+  `src/app/(admin)/historico/history-tables.tsx` — Início/Término/Duração
+  do card "Serviços dos últimos 7 dias" e "Duração média" por camareira no
+  Histórico (Parte 22, a partir de `daily_room_tasks.claimed_at`/
+  `finished_at`); `history-tables.tsx` também tem o cálculo de comissão
+  por suíte elegível com fallback/congelamento histórico (Parte 27).
 - `src/lib/receipt-pdf.tsx` — gera o PDF do recibo de uma conta paga sob
   demanda, sem persistir arquivo (Parte 06), usado tanto pelo e-mail
   automático quanto pela rota `/api/room-bills/[billId]/receipt` ("Ver
@@ -1406,13 +1746,26 @@ o escopo mude no futuro.
   `syncStaysPlanning` (Planejamento Diário), `syncStaysArrivalsDepartures`
   (Chegadas & Saídas) e `syncStaysBreakfastTables` (Mesas do Café), todas
   via cliente admin/service-role, todas aceitando `{ force?: boolean }`
-  (Parte 14) — sem `force`, respeitam `stays_locked` normalmente; com
-  `force: true`, ignoram (mas nunca ignoram um serviço já reivindicado por
-  uma camareira). Cada uma tem seu próprio botão "Forçar sincronização com
-  a Stays" na tela correspondente (sempre `force: true`) **e** roda
-  automaticamente 1x/dia via `src/app/api/cron/stays-sync/route.ts` +
-  `vercel.json` (sempre sem `force`) — ver Parte 14.
+  (Parte 14) — sem `force`, respeitam `stays_locked`/lápides normalmente;
+  com `force: true`, ignoram (mas nunca ignoram um serviço já reivindicado
+  por uma camareira). Todas buscam reservas a partir de **ontem**, não de
+  hoje, pra não perder saídas cujo check-out cai exatamente na data
+  consultada (Parte 23). Cada uma das três telas tem um `sync-stays-button.tsx`
+  próprio com dois botões: "Forçar sincronização com a Stays" (`force: true`)
+  e "Sincronizar agora (preserva edições)" (`force: false`, roda na hora
+  sem esperar o cron — Parte 26). **E** roda automaticamente 1x/dia via
+  `src/app/api/cron/stays-sync/route.ts` + `vercel.json` (sempre sem
+  `force`) — ver Parte 14. `syncStaysBreakfastTables` também grava
+  `eligible_suites_count`/`commission_value_snapshot` em
+  `daily_breakfast_settings` a cada execução, base do cálculo de comissão
+  (Parte 27).
 - `src/lib/task-type.ts` — rótulos centralizados dos tipos de trabalho
   (Arrumação/Preparação Chegada/Troca) — mudar aqui reflete em todo o app.
 - `src/components/shared/back-link.tsx` — link "← Voltar" reutilizável,
   usado nas subtelas de "Listas" e no detalhe de tarefa da camareira.
+- `src/app/(admin)/questoes-respostas/page.tsx` — guia de referência em
+  linguagem simples pra quem opera o app no dia a dia (Parte 18; conteúdo
+  revisado por completo na Parte 29 pra bater com tudo que mudou desde a
+  Parte 18) — conteúdo escrito à mão, não gerado a partir do código, então
+  precisa ser revisado manualmente sempre que uma parte futura mudar algo
+  que uma das 10 perguntas descreve.

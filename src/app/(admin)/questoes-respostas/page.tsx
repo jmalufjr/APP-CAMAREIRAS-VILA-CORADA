@@ -75,6 +75,16 @@ export default function QuestoesRespostasPage() {
                 100% no que está registrado na Stays.
               </P>
 
+              <SubHeading>O botão “Sincronizar agora (preserva edições)”</SubHeading>
+              <P>
+                Ao lado do botão de forçar existe um segundo botão, mais seguro pro dia a dia: ele
+                também roda a sincronização com a Stays na hora, sem esperar a próxima atualização
+                automática da manhã seguinte — mas, ao contrário do “Forçar”, nunca apaga nada que você
+                já editou manualmente hoje ou amanhã, só preenche o que ainda está do jeito que a Stays
+                sugere. Use esse quando quiser só adiantar a atualização do dia (por exemplo, depois de
+                uma reserva nova de última hora), sem correr o risco de perder uma correção sua.
+              </P>
+
               <SubHeading>O que acontece quando você edita um campo manualmente</SubHeading>
               <P>
                 Fora do botão de forçar, sempre que você edita à mão um dos campos que normalmente vêm
@@ -107,21 +117,23 @@ export default function QuestoesRespostasPage() {
                     <strong>Saídas</strong>: qual suíte tem saída prevista naquele dia.
                   </>,
                   <>
-                    <strong>Mesas do café</strong>: em qual mesa cada suíte ocupada vai sentar, e quantos
-                    hóspedes daquela suíte estarão ali (você pode arrastar/reatribuir manualmente a
-                    qualquer momento).
+                    <strong>Mesas do café</strong>: em qual mesa cada suíte ocupada vai sentar. Clique em
+                    qualquer mesa no desenho pra escolher outra suíte pra ela, a qualquer momento — a
+                    quantidade de hóspedes de cada suíte vem sempre da Stays, você nunca digita esse
+                    número.
                   </>,
                 ]}
               />
               <P>
                 Alguns campos, ao contrário, <strong>nunca</strong> vêm da Stays e são sempre de
                 preenchimento manual seu, sem risco de serem sobrescritos por nenhuma sincronização:
-                horário previsto e observações (em Chegadas &amp; saídas), valor da comissão e
-                observação do dia (em Mesas do café), e a observação de cada mesa individual. Já o
-                “Total de mesas” e as contagens por tamanho de mesa (quantas mesas têm 1, 2 ou 3
-                hóspedes, e quantos hóspedes há na Mesa 07) não são editáveis nem sincronizados
-                separadamente — eles são somados automaticamente, na hora, a partir de quem já está
-                sentado em cada mesa.
+                horário previsto e observações (em Chegadas &amp; saídas), o valor em reais da
+                comissão, a observação do dia e a observação de cada mesa individual (em Mesas do
+                café). Já o “Total de mesas”, as contagens por tamanho de mesa (quantas mesas têm 1, 2
+                ou 3 hóspedes, e quantos hóspedes há na Mesa 07) e a quantidade de suítes que conta
+                para a comissão do dia não são editáveis nem sincronizados separadamente — eles são
+                calculados automaticamente, na hora, a partir de quem está ocupando cada suíte e de
+                quem já está sentado em cada mesa (ver pergunta 4).
               </P>
             </div>
           </AccordionPanel>
@@ -171,6 +183,12 @@ export default function QuestoesRespostasPage() {
                 registra qualquer problema encontrado (ver pergunta 6) e, ao final, libera a suíte como
                 concluída. Você acompanha tudo isso em tempo real na tela de Planejamento.
               </P>
+              <P>
+                Se a camareira escolher a suíte errada ou mudar de ideia antes de terminar, ela também
+                pode cancelar a própria escolha a qualquer momento: o serviço volta pra lista de
+                disponíveis pra qualquer uma escolher de novo, e tudo que já tinha sido preenchido
+                naquela tentativa (itens marcados, ocorrências, observação) é apagado.
+              </P>
             </div>
           </AccordionPanel>
         </AccordionItem>
@@ -208,18 +226,31 @@ export default function QuestoesRespostasPage() {
             <div className="space-y-3">
               <P>
                 A tela mostra um desenho do salão com todas as mesas na posição real, e cada mesa
-                ocupada aparece com uma cor mais clara — dá pra ver de relance quais já têm hóspedes
-                marcados, sem precisar ler mesa por mesa. Dentro de cada mesa aparece o nome da suíte
-                alocada ali e quantos hóspedes vêm dessa suíte (a Mesa 07 é a maior e pode receber mais
-                de uma suíte ao mesmo tempo).
+                ocupada recebe a cor de destaque do tema (bem diferente da cor discreta das mesas
+                vagas) — dá pra ver de relance quais já têm hóspedes marcados, sem precisar ler mesa
+                por mesa. Dentro de cada mesa aparece o nome da suíte alocada ali e quantos hóspedes
+                vêm dessa suíte. Só a Mesa 07 pode reunir mais de uma suíte ao mesmo tempo — todas as
+                outras mesas ficam reservadas inteiras pra uma única suíte, exceto no caso raro de não
+                sobrar lugar em nenhuma delas.
               </P>
               <P>
-                Por padrão essa tela abre na aba “Amanhã” (diferente das outras telas, que abrem em
-                “Hoje”) — a ideia é que você organize as mesas do café de amanhã com antecedência. Você
-                pode mover manualmente qualquer suíte para outra mesa, ou tirá-la de uma mesa sem
-                colocar em outra (por exemplo, se aquele hóspede avisou que não vai tomar café). O
-                valor da comissão por mesa e a observação do dia (visível para as camareiras, útil para
-                avisos como “evento especial hoje”) são sempre de preenchimento seu.
+                Igual às outras telas com Hoje/Amanhã, essa aqui também abre sempre em “Hoje” — use o
+                botão “Amanhã” pra organizar o café do dia seguinte com antecedência. Clique em
+                qualquer mesa do desenho pra abrir uma janela com as suítes alocadas ali: adicione,
+                remova, ou escolha uma suíte que já está em outra mesa (ela é movida automaticamente
+                pra essa, sem duplicar — só a mesa de destino fica marcada como editada por você). É
+                nessa mesma janela que fica a observação de cada mesa individual. A observação do dia
+                (visível para as camareiras, útil para avisos como “evento especial hoje”) fica um
+                pouco acima, fora da janela.
+              </P>
+              <SubHeading>Como funciona a comissão</SubHeading>
+              <P>
+                O campo “Valor da comissão por café servido” é multiplicado pela quantidade de suítes
+                elegíveis para o café da manhã naquele dia — toda suíte ocupada nesse dia conta pra
+                comissão, esteja ela alocada numa mesa específica ou não (essa contagem é sempre
+                calculada sozinha, você só edita o valor em reais). Depois que um mês termina, o valor
+                calculado daquele mês fica congelado no Histórico: mudar o valor da comissão hoje nunca
+                altera o que já foi calculado em meses passados, só passa a valer dali pra frente.
               </P>
             </div>
           </AccordionPanel>
@@ -242,12 +273,21 @@ export default function QuestoesRespostasPage() {
               </P>
               <P>
                 O frigobar é lançado item a item, direto pela camareira, com botões de mais/menos (sem
-                precisar digitar números). Já o bar da piscina funciona por <strong>comandas</strong>{" "}
-                — cada pedido feito pela piscina vira um número de comanda, que pode ser editado ou
-                cancelado enquanto a conta da suíte ainda estiver aberta. Fechar a conta, reabrir e
-                marcar como paga são ações feitas pela própria camareira; você, como admin, acompanha
-                tudo pronto pra conferência na tela “Consumo de Bar e Frigobar”, incluindo as comandas
-                de cada suíte.
+                precisar digitar números) — cada lançamento feito durante o atendimento soma ao total
+                da conta, nunca sobrescreve. Com a conta ainda aberta, a camareira pode ligar “Lançar
+                consumo adicional” se precisar somar mais alguma coisa antes de fechar (por exemplo, o
+                consumo do último dia do hóspede); com a conta reaberta pra corrigir algo, a edição já
+                fica sempre disponível e continua somando por padrão — só se ela escolher
+                explicitamente “zerar e lançar tudo novamente” é que o consumo já lançado é apagado
+                pra recomeçar do zero. Essa escolha nunca fica valendo no ciclo seguinte: toda vez que
+                a conta é fechada e reaberta de novo, volta a somar por padrão.
+              </P>
+              <P>
+                Já o bar da piscina funciona por <strong>comandas</strong> — cada pedido feito pela
+                piscina vira um número de comanda, que pode ser editado ou cancelado enquanto a conta
+                da suíte ainda estiver aberta. Fechar a conta, reabrir e marcar como paga são ações
+                feitas pela própria camareira; você, como admin, acompanha tudo pronto pra conferência
+                na tela “Consumo de Bar e Frigobar”, incluindo as comandas de cada suíte.
               </P>
               <P>
                 Ao ser paga, a conta gera automaticamente um recibo em PDF e tenta enviá-lo por e-mail
@@ -346,10 +386,12 @@ export default function QuestoesRespostasPage() {
               <P>
                 É a primeira tela que você vê ao entrar — um retrato rápido do dia: quantas suítes têm
                 trabalho hoje e amanhã, quantas mesas do café estão ocupadas, e os totais de frigobar,
-                bar e comissão do período. Logo abaixo aparece uma lista dos serviços concluídos ou
-                cancelados nos últimos 7 dias — clicando num serviço concluído, você abre o checklist
-                inteiro que a camareira preencheu naquela suíte, só pra consulta (sem poder editar
-                nada ali).
+                bar e comissão do período. Logo abaixo aparece uma lista dos serviços concluídos nos
+                últimos 7 dias, mostrando o horário em que a camareira escolheu a suíte, o horário em
+                que terminou e quanto tempo o serviço levou — útil pra acompanhar o ritmo da equipe.
+                Clicando num serviço, você abre o checklist inteiro que a camareira preencheu naquela
+                suíte (só pra consulta, sem poder editar nada ali), incluindo o consumo de frigobar e
+                bar e qualquer ocorrência de manutenção registrada durante aquele atendimento.
               </P>
             </div>
           </AccordionPanel>
@@ -364,10 +406,12 @@ export default function QuestoesRespostasPage() {
             <div className="space-y-3">
               <P>
                 É onde você olha pra trás: escolhe um período (um mês, uma semana, datas específicas) e
-                vê tabelas com tudo o que aconteceu naquele intervalo — serviços realizados por suíte e
-                por tipo, ocorrências de manutenção mais comuns, consumo de frigobar e bar, mesas do
-                café e comissão total. Também dá pra exportar essas informações em uma planilha (CSV),
-                caso queira analisar os números em outro programa ou guardar um relatório.
+                vê tabelas com tudo o que aconteceu naquele intervalo — serviços realizados por suíte,
+                por tipo e por camareira (incluindo o tempo médio que cada uma leva do início ao fim de
+                um serviço), ocorrências de manutenção mais comuns, consumo de frigobar e bar, mesas do
+                café e comissão total (usando, pra cada mês fechado, o valor congelado daquele mês —
+                ver pergunta 4). Também dá pra exportar essas informações em uma planilha (CSV), caso
+                queira analisar os números em outro programa ou guardar um relatório.
               </P>
             </div>
           </AccordionPanel>

@@ -218,7 +218,7 @@ Cada quarto do app corresponde a um "listing" na Stays. A conta da pousada
 tem exatamente 11 listings, nomeados "Suite 01" a "Suite 11" — o número já
 bate exatamente com o número do quarto no app (`rooms.number`), sem
 ambiguidade. O identificador usado (`rooms.stays_listing_id`, coluna
-adicionada por `supabase/migrations/029_stays_listing_ids.sql`) é o campo
+adicionada por `supabase/migrations/029_stays_integracao_schema.sql`) é o campo
 `_id` retornado por `GET /external/v1/content/listings` (formato longo,
 tipo `678819a8124ceee95d3c8cbb`) — é esse mesmo valor que aparece no campo
 `_idlisting` de cada reserva. **Não** confundir com o campo curto `id`
