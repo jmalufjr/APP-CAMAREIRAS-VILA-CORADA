@@ -36,7 +36,13 @@ export function LoginForm({ options }: { options: LoginOption[] }) {
             <Label htmlFor="user">Usuário</Label>
             <Select value={email} onValueChange={(v) => setEmail(v ?? "")}>
               <SelectTrigger id="user" className="w-full">
-                <SelectValue placeholder="Selecione seu nome" />
+                <SelectValue placeholder="Selecione seu nome">
+                  {(v: string) => {
+                    const opt = options.find((o) => o.email === v);
+                    if (!opt) return v;
+                    return opt.role === "admin" ? "admin" : opt.name;
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {options.map((opt) => (

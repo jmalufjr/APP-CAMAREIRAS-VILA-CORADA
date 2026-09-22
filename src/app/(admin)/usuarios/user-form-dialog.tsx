@@ -76,7 +76,9 @@ export function UserFormDialog({ user }: { user?: Profile }) {
               <Label>Papel</Label>
               <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue>
+                    {(v: string) => (v === "camareira" ? "Camareira" : "Funcionário de Manutenção")}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="camareira">Camareira</SelectItem>

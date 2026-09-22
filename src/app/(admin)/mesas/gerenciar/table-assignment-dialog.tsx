@@ -152,7 +152,15 @@ export function TableAssignmentDialog({
                   <Label className="text-xs text-muted-foreground">Suíte</Label>
                   <Select value={newRoomId} onValueChange={(v) => setNewRoomId(v ?? "")} disabled={isPending}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Escolha a suíte" />
+                      <SelectValue placeholder="Escolha a suíte">
+                        {(v: string) => {
+                          const room = roomById.get(v);
+                          if (!room) return v;
+                          const elsewhereTableId = elsewhereTableIdByRoomId.get(v);
+                          const elsewhereLabel = elsewhereTableId ? tableLabelById.get(elsewhereTableId) : undefined;
+                          return `Suíte ${room.number}${elsewhereLabel ? ` (atualmente na ${elsewhereLabel})` : ""}`;
+                        }}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {selectableRooms.map((r) => {

@@ -338,7 +338,7 @@ function MaintenanceItemFormDialog({
             <Label>Execução</Label>
             <Select value={executionType} onValueChange={(v) => setExecutionType(v as MaintenanceExecutionType)}>
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue>{(v: MaintenanceExecutionType) => EXECUTION_TYPE_LABELS[v]}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="nao_tecnico">{EXECUTION_TYPE_LABELS.nao_tecnico}</SelectItem>
@@ -389,7 +389,12 @@ function MaintenanceItemFormDialog({
             <Label>Posição na lista</Label>
             <Select value={position} onValueChange={(v) => setPosition(v ?? defaultPosition)}>
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue>
+                  {(v: string) => {
+                    const p = Number(v);
+                    return `${p}${p === 1 ? " (primeiro)" : p === maxPosition ? " (último)" : ""}`;
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {Array.from({ length: maxPosition }, (_, i) => i + 1).map((p) => (

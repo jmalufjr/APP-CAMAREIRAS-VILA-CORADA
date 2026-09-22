@@ -151,7 +151,12 @@ export function ComandaForm({
           <label className="text-xs font-medium text-muted-foreground">Suíte</label>
           <Select value={roomId} onValueChange={(v) => setRoomId(v ?? "")} disabled={isPending || isLocked}>
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Selecione a suíte" />
+              <SelectValue placeholder="Selecione a suíte">
+                {(v: string) => {
+                  const room = rooms.find((r) => r.room_id === v);
+                  return room ? `Suíte ${room.room_number}` : v;
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {rooms.map((room) => (

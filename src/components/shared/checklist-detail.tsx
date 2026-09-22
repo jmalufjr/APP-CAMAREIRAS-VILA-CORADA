@@ -334,7 +334,9 @@ export function ChecklistDetail({
             <div className="flex flex-col sm:flex-row gap-2">
               <Select value={categoryId} onValueChange={(v) => setCategoryId(v ?? "")}>
                 <SelectTrigger className="sm:w-56">
-                  <SelectValue placeholder="Categoria da ocorrência" />
+                  <SelectValue placeholder="Categoria da ocorrência">
+                    {(v: string) => categories.find((c) => c.id === v)?.name ?? v}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {categories.map((c) => (

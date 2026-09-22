@@ -107,7 +107,11 @@ function NewTableForm() {
       <Input name="label" placeholder="Nome" className="w-28" required />
       <Select value={shape} onValueChange={(v) => setShape(v ?? "round")}>
         <SelectTrigger className="w-32">
-          <SelectValue />
+          <SelectValue>
+            {(v: string) =>
+              v === "round" ? "Redonda" : v === "square" ? "Quadrada" : "Retangular"
+            }
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="round">Redonda</SelectItem>

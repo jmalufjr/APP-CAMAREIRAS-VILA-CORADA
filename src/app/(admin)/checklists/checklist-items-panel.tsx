@@ -190,7 +190,12 @@ function ItemFormDialog({
             <Label>Posição na lista</Label>
             <Select value={position} onValueChange={(v) => setPosition(v ?? defaultPosition)}>
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue>
+                  {(v: string) => {
+                    const p = Number(v);
+                    return `${p}${p === 1 ? " (primeiro)" : p === maxPosition ? " (último)" : ""}`;
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {Array.from({ length: maxPosition }, (_, i) => i + 1).map((p) => (
