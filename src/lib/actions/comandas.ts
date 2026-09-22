@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import type { ComandaStatus } from "@/lib/types";
 import { SERVICE_CHARGE_RATE } from "@/lib/room-bills";
 import { nowInBrazil, toDateKey } from "@/lib/date";
-import { EXCLUDED_CAMAREIRA_NAME } from "@/lib/commission-math";
+import { EXCLUDED_CAMAREIRA_NAME, closedPeriodRange } from "@/lib/commission-math";
 
 export interface ComandaItemInput {
   item_id: string;
@@ -410,4 +410,40 @@ export async function getBarCommissionByCamareiraForPeriod(
   const supabase = await createClient();
   const rows = await fetchBarCommissionRows(supabase, from, to);
   return summarizeBarCommissionRows(rows);
+}
+
+// ---------- Leitura: comissão de 10% do bar por camareira (tela "Comissões das camareiras") ----------
+
+export interface BarCommissionScreenSummary {
+  currentMonthEstimate: CamareiraBarCommissionRow[];
+  closedPeriod: {
+    periodEnd: string;
+    rows: CamareiraBarCommissionRow[];
+  };
+}
+
+// Mesma comissão de 10% do bar de sempre (ver getBarCommissionByCamareira),
+// mas reorganizada em torno do mesmo conceito de "último período fechado"
+// usado pela comissão de serviços nas suítes e no café (Parte 36): fecha
+// sempre no dia 25, não no fim do mês calendário, pra dar tempo de
+// conferir e pagar antes do mês virar (ver closedPeriodRange). Diferente
+// da comissão de suítes e café, aqui não existe nenhuma nota editável
+// pra capturar num instante — o valor de um período já fechado nunca
+// muda, então basta recalcular ao vivo a cada carregamento da tela, sem
+// precisar de um botão "Calcular" nem de uma tabela de retrato congelado.
+export async function getBarCommissionScreenSummary(): Promise<BarCommissionScreenSummary> {
+  const now = nowInBrazil();
+  const monthStart = toDateKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)));
+  const today = toDateKey(now);
+  const { periodEnd, start, end } = closedPeriodRange(now);
+
+  const [currentMonthEstimate, closedPeriodRows] = await Promise.all([
+    getBarCommissionByCamareiraForPeriod(monthStart, today),
+    getBarCommissionByCamareiraForPeriod(start, end),
+  ]);
+
+  return {
+    currentMonthEstimate,
+    closedPeriod: { periodEnd, rows: closedPeriodRows },
+  };
 }

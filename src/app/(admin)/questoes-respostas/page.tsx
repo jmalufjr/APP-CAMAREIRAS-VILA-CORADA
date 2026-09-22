@@ -438,8 +438,16 @@ export default function QuestoesRespostasPage() {
                   </>,
                   <>
                     <strong>Comissões das camareiras</strong>: as duas comissões da equipe, uma embaixo
-                    da outra. Primeiro a <strong>comissão de 10% do bar por camareira</strong>, com o
-                    mês atual e o mês anterior lado a lado (ver pergunta 5). Depois a{" "}
+                    da outra, seguindo o mesmo conceito de <strong>último período fechado</strong> — que{" "}
+                    <strong>não acompanha o mês calendário</strong>: fecha sempre no dia 25, não no
+                    último dia do mês, pra sobrar tempo de conferir e calcular antes do mês virar. Por
+                    exemplo, o período fechado em 25/09 é “o último período” de 26/09 até 25/10, quando
+                    o período seguinte (fechado em 25/10) toma o lugar dele. Primeiro a{" "}
+                    <strong>comissão de 10% do bar por camareira</strong>, com duas colunas lado a lado:
+                    “Mês corrente (estimativa)” (soma as comandas desde o dia 1º deste mês até hoje,
+                    muda dia a dia) e “Último período (nome do mês)” (o valor definitivo do período já
+                    fechado, que não muda mais — calculado na hora, sem precisar de nenhum botão, já
+                    que a comissão de bar não depende de nada que você edite). Depois a{" "}
                     <strong>comissão de serviços nas suítes e no café</strong>: o campo “Valor da
                     comissão por café servido” (que decide o tamanho do pote do dia, junto com a
                     quantidade de suítes elegíveis pro café), uma tabela do mês corrente mostrando, pra
@@ -451,16 +459,15 @@ export default function QuestoesRespostasPage() {
                     nota representa do total de notas, sempre somando 100% entre todas. Essa tabela do
                     mês corrente é só uma estimativa que muda dia a dia; para fechar de verdade, use o
                     botão “Calcular comissão do último período” — ele grava a nota de cada camareira
-                    exatamente como está naquele instante junto com os números já definitivos do{" "}
-                    <strong>último período fechado</strong>, e libera baixar um PDF ou enviá-lo por
-                    e-mail com as duas comissões de cada camareira e o total geral. Clicar de novo
-                    refaz o cálculo (útil se você corrigir alguma nota depois). Esse período{" "}
-                    <strong>não acompanha o mês calendário</strong> — fecha sempre no dia 25, não no
-                    último dia do mês, pra sobrar tempo de conferir e calcular antes do mês virar:
-                    por exemplo, o período fechado em 25/09 pode ser calculado a qualquer momento entre
-                    26/09 e 25/10, até o período seguinte (fechado em 25/10) tomar o lugar de “último
-                    período”. A camareira de teste “admin-camareira” (usada só por você pra ajustes,
-                    nunca uma camareira de verdade) nunca entra em nenhum desses cálculos.
+                    exatamente como está naquele instante junto com os números já definitivos do último
+                    período fechado, e libera baixar um PDF ou enviá-lo por e-mail com as duas
+                    comissões de cada camareira e o total geral. Clicar de novo refaz o cálculo (útil
+                    se você corrigir alguma nota depois). Em nenhuma das duas comissões a camareira de
+                    teste “admin-camareira” (usada só por você pra ajustes, nunca uma camareira de
+                    verdade) entra no cálculo — mas uma camareira de verdade que deixou de ser usuária
+                    do sistema <strong>continua aparecendo normalmente</strong> em qualquer tabela ou
+                    demonstrativo referente a um período em que ela de fato trabalhou; ela só some das
+                    telas do dia a dia (como o Planejamento), não do histórico de comissões.
                   </>,
                   <>
                     <strong>Cadastrar e-mail de envio</strong>: o e-mail que recebe automaticamente o

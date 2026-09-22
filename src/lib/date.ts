@@ -161,6 +161,19 @@ export function formatDurationPt(startIso: string | null, endIso: string | null)
   return mins === null ? "—" : formatMinutesPt(mins);
 }
 
+// "Setembro de 2026" a partir de uma data qualquer daquele mês (usa só
+// ano/mês da string, ignora o dia) — usado pra rotular "Último período
+// (mês)" nas telas/PDF/e-mail de comissão.
+export function monthYearLabelPt(dateKey: string): string {
+  const [y, m] = dateKey.split("-").map(Number);
+  const label = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 export function formatDatePt(dateKey: string): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("pt-BR", {

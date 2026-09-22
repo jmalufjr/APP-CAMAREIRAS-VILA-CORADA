@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
 import type { CommissionStatement } from "@/lib/actions/commission";
+import { monthYearLabelPt } from "@/lib/date";
 
 const styles = StyleSheet.create({
   page: { padding: 40, fontSize: 11, fontFamily: "Helvetica" },
@@ -27,22 +28,12 @@ const styles = StyleSheet.create({
   colValue: { flex: 1, textAlign: "right" },
 });
 
-function monthLabelPt(monthKey: string): string {
-  const [y, m] = monthKey.split("-").map(Number);
-  const label = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("pt-BR", {
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-  return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
 function StatementDocument({ data }: { data: CommissionStatement }) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         <Text style={styles.title}>Vila Corada — Demonstrativo de comissões das camareiras</Text>
-        <Text style={styles.subtitle}>Último período ({monthLabelPt(data.periodEnd)})</Text>
+        <Text style={styles.subtitle}>Último período ({monthYearLabelPt(data.periodEnd)})</Text>
 
         <View style={styles.headerRow}>
           <Text style={styles.colName}>Camareira</Text>
@@ -71,8 +62,4 @@ function StatementDocument({ data }: { data: CommissionStatement }) {
 
 export async function renderCommissionStatementPdf(data: CommissionStatement): Promise<Buffer> {
   return renderToBuffer(<StatementDocument data={data} />);
-}
-
-export function commissionStatementMonthLabel(monthKey: string): string {
-  return monthLabelPt(monthKey);
 }

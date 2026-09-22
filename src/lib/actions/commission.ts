@@ -3,11 +3,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { Resend } from "resend";
-import { nowInBrazil, toDateKey, todayKey } from "@/lib/date";
+import { nowInBrazil, toDateKey, todayKey, monthYearLabelPt } from "@/lib/date";
 import { getBreakfastCommissionPotForRange } from "@/lib/actions/breakfast-commission";
 import { getBarCommissionByCamareiraForPeriod } from "@/lib/actions/comandas";
 import { getReceiptSettings } from "@/lib/actions/room-bills";
-import { renderCommissionStatementPdf, commissionStatementMonthLabel } from "@/lib/commission-statement-pdf";
+import { renderCommissionStatementPdf } from "@/lib/commission-statement-pdf";
 import {
   computeWeightedSuitesCafeCommission,
   closedPeriodRange,
@@ -15,20 +15,57 @@ import {
   type CamareiraWeightInput,
 } from "@/lib/commission-math";
 
-// ---------- Leitura: camareiras ativas + serviços concluídos por período ----------
+// ---------- Leitura: camareiras do período + serviços concluídos ----------
 
-async function getActiveCamareiras(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const { data } = await supabase
-    .from("profiles")
-    .select("id, name, service_quality_score")
-    .eq("role", "camareira")
-    .eq("active", true)
-    // "admin-camareira" é uma conta de teste/ajuste do admin, não uma
-    // camareira de verdade — nunca entra no cálculo de comissão nem nos
-    // demonstrativos/relatórios (ver EXCLUDED_CAMAREIRA_NAME).
-    .neq("name", EXCLUDED_CAMAREIRA_NAME)
-    .order("name");
-  return (data ?? []) as { id: string; name: string; service_quality_score: number }[];
+type CamareiraRosterRow = { id: string; name: string; service_quality_score: number };
+
+// Todas as camareiras ATIVAS hoje, mais qualquer camareira que já
+// desligou mas tem algum serviço concluído no período pedido — uma
+// camareira que saiu da equipe não pode sumir do histórico só porque não
+// é mais usuária do sistema (ela continua "existindo" nas tabelas,
+// demonstrativos e relatórios de comissão referentes a quando trabalhou).
+// "admin-camareira" é a única exceção: é conta de teste/ajuste do admin,
+// nunca uma camareira de verdade, e nunca entra em nada disso (ver
+// EXCLUDED_CAMAREIRA_NAME).
+async function getCamareiraRoster(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  from: string,
+  to: string
+): Promise<CamareiraRosterRow[]> {
+  const [{ data: active }, { data: taskRows }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, name, service_quality_score")
+      .eq("role", "camareira")
+      .eq("active", true)
+      .neq("name", EXCLUDED_CAMAREIRA_NAME),
+    supabase
+      .from("daily_room_tasks")
+      .select("assigned_to, profiles!daily_room_tasks_assigned_to_fkey(name, service_quality_score)")
+      .eq("status", "concluido")
+      .gte("date", from)
+      .lte("date", to)
+      .not("assigned_to", "is", null),
+  ]);
+
+  const map = new Map<string, CamareiraRosterRow>();
+  (active ?? []).forEach((c) => map.set(c.id, c));
+  (
+    (taskRows ?? []) as unknown as {
+      assigned_to: string | null;
+      profiles: { name: string; service_quality_score: number } | null;
+    }[]
+  ).forEach((t) => {
+    if (!t.assigned_to || map.has(t.assigned_to)) return;
+    const name = t.profiles?.name;
+    if (!name || name === EXCLUDED_CAMAREIRA_NAME) return;
+    map.set(t.assigned_to, {
+      id: t.assigned_to,
+      name,
+      service_quality_score: t.profiles?.service_quality_score ?? 5,
+    });
+  });
+  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 async function getServiceCountsByCamareira(
@@ -95,7 +132,7 @@ export async function getSuitesCafeCurrentMonthEstimate(): Promise<{
   const today = todayKey();
 
   const [camareiras, serviceCounts, totalPot] = await Promise.all([
-    getActiveCamareiras(supabase),
+    getCamareiraRoster(supabase, monthStart, today),
     getServiceCountsByCamareira(supabase, monthStart, today),
     getBreakfastCommissionPotForRange(monthStart, today),
   ]);
@@ -139,7 +176,7 @@ export async function calculateClosedPeriodCommissionStatement() {
   const { periodEnd, start, end } = closedPeriodRange(nowInBrazil());
 
   const [camareiras, serviceCounts, totalPot] = await Promise.all([
-    getActiveCamareiras(supabase),
+    getCamareiraRoster(supabase, start, end),
     getServiceCountsByCamareira(supabase, start, end),
     getBreakfastCommissionPotForRange(start, end),
   ]);
@@ -258,7 +295,7 @@ export async function getSuitesCafeCommissionForPeriod(
 ): Promise<SuitesCafeCommissionByCamareiraRow[]> {
   const supabase = await createClient();
   const [camareiras, serviceCounts, totalPot] = await Promise.all([
-    getActiveCamareiras(supabase),
+    getCamareiraRoster(supabase, from, to),
     getServiceCountsByCamareira(supabase, from, to),
     getBreakfastCommissionPotForRange(from, to),
   ]);
@@ -289,7 +326,7 @@ export async function sendCommissionStatementEmail() {
   try {
     const pdfBuffer = await renderCommissionStatementPdf(demonstrativo);
     const resend = new Resend(process.env.RESEND_API_KEY);
-    const label = commissionStatementMonthLabel(demonstrativo.periodEnd);
+    const label = monthYearLabelPt(demonstrativo.periodEnd);
     const { error } = await resend.emails.send({
       from: process.env.RECEIPT_FROM_EMAIL ?? "Vila Corada <recibos@consumos.vilacorada.com.br>",
       to: accountingEmail,

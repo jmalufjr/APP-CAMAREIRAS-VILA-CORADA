@@ -12,22 +12,13 @@ import {
 } from "@/lib/actions/commission";
 import { updateCommissionValue } from "@/lib/actions/tables";
 import type { CommissionSettings } from "@/lib/types";
+import { monthYearLabelPt } from "@/lib/date";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { QuantityStepper } from "@/components/shared/quantity-stepper";
 import { Download, Mail } from "lucide-react";
-
-function monthLabelPt(monthKey: string): string {
-  const [y, m] = monthKey.split("-").map(Number);
-  const label = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("pt-BR", {
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-  return label.charAt(0).toUpperCase() + label.slice(1);
-}
 
 export function SuitesCafeCommissionPanel({
   commission,
@@ -187,7 +178,7 @@ export function SuitesCafeCommissionPanel({
           {demonstrativo ? (
             <div className="space-y-3 pt-2">
               <p className="text-sm text-muted-foreground">
-                Último período ({monthLabelPt(demonstrativo.periodEnd)})
+                Último período ({monthYearLabelPt(demonstrativo.periodEnd)})
               </p>
               <div className="overflow-x-auto">
                 <Table>

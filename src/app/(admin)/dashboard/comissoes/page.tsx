@@ -3,21 +3,16 @@ import { BackLink } from "@/components/shared/back-link";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CamareiraBarCommissionTable } from "../camareira-bar-commission-table";
-import { getBarCommissionByCamareira } from "@/lib/actions/comandas";
+import { getBarCommissionScreenSummary } from "@/lib/actions/comandas";
 import { getSuitesCafeCurrentMonthEstimate, getClosedPeriodDemonstrativo } from "@/lib/actions/commission";
-import { nowInBrazil } from "@/lib/date";
+import { toDateKey, nowInBrazil, monthYearLabelPt } from "@/lib/date";
 import type { CommissionSettings } from "@/lib/types";
 import { SuitesCafeCommissionPanel } from "./suites-cafe-commission-panel";
-
-function currentMonthLabelPt(): string {
-  const label = nowInBrazil().toLocaleDateString("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" });
-  return label.charAt(0).toUpperCase() + label.slice(1);
-}
 
 export default async function ComissoesPage() {
   const supabase = await createClient();
   const [barCommission, estimate, demonstrativo, { data: commissionSettings }] = await Promise.all([
-    getBarCommissionByCamareira(),
+    getBarCommissionScreenSummary(),
     getSuitesCafeCurrentMonthEstimate(),
     getClosedPeriodDemonstrativo(),
     supabase.from("commission_settings").select("*").single(),
@@ -38,10 +33,14 @@ export default async function ComissoesPage() {
         <CardContent>
           <p className="text-xs text-muted-foreground mb-3">
             10% do valor de cada comanda, atribuído a quem a lançou originalmente — mesmo quando outra
-            camareira editou a comanda depois. Somado pelo mês em que a comanda foi lançada; contas cuja
-            taxa de serviço foi isentada pelo hóspede não entram no cálculo.
+            camareira editou a comanda depois. Contas cuja taxa de serviço foi isentada pelo hóspede não
+            entram no cálculo. Assim como a comissão de serviços nas suítes e no café abaixo, o valor
+            definitivo é sempre o do último período fechado — não do mês calendário.
           </p>
-          <CamareiraBarCommissionTable currentMonth={barCommission.currentMonth} previousMonth={barCommission.previousMonth} />
+          <CamareiraBarCommissionTable
+            currentMonthEstimate={barCommission.currentMonthEstimate}
+            closedPeriod={barCommission.closedPeriod}
+          />
         </CardContent>
       </Card>
 
@@ -49,7 +48,7 @@ export default async function ComissoesPage() {
         commission={commissionSettings as CommissionSettings}
         estimate={estimate}
         demonstrativo={demonstrativo}
-        currentMonthLabel={currentMonthLabelPt()}
+        currentMonthLabel={monthYearLabelPt(toDateKey(nowInBrazil()))}
       />
     </div>
   );

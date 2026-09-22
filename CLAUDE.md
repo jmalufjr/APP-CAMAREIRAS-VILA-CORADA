@@ -1792,6 +1792,66 @@ também é feita em Server Components.
       (`2026-08-25` pra hoje 22/09/2026, batendo com o esperado — antes do
       dia 25 de setembro, o último período fechado ainda é o de agosto).
       Migration aplicada em produção depois do teste local.
+44. **Parte 37 — Camareira desligada não some do histórico de comissão, e
+    corte no dia 25 estendido pra comissão de bar** (22/09/2026, feita
+    direto em `main`, pós parte 36; duas correções pedidas pelo
+    proprietário sobre a Parte 36):
+    - **Camareira que deixou de ser usuária do sistema continua
+      aparecendo nas tabelas/demonstrativos/relatórios de comissão
+      referentes a quando ela trabalhou** — antes, `getActiveCamareiras`
+      (usada pela estimativa do mês corrente, pelo fechamento do último
+      período e pela coluna do Histórico da comissão de serviços nas
+      suítes e no café) só olhava camareiras com `active = true`, então
+      desativar alguém a fazia sumir retroativamente de qualquer período
+      em que ela realmente trabalhou — essa lacuna já tinha sido
+      documentada como "limitação aceita conscientemente" na Parte 35, e
+      o proprietário pediu pra corrigir. Renomeada pra
+      `getCamareiraRoster(supabase, from, to)`: agora soma as camareiras
+      ativas de hoje com qualquer camareira que tenha pelo menos um
+      serviço concluído no intervalo pedido, mesmo já desativada
+      (buscando o nome/nota dela via o join de `daily_room_tasks` com
+      `profiles`, já que a query original só olhava a tabela `profiles`
+      diretamente). "admin-camareira" continua sendo a única exceção
+      (nunca entra, ativa ou não). A comissão de bar já não tinha esse
+      problema — sempre derivou a lista de camareiras diretamente das
+      comandas lançadas (`created_by`), nunca de um filtro por `active`.
+    - **O corte no dia 25 e o termo "último período" passaram a valer
+      também pra comissão de 10% do bar por camareira**, no card
+      "Comissão de 10% do bar por camareira" dentro de "Comissões das
+      camareiras" — antes mostrava "Mês atual"/"Mês anterior" (mês
+      calendário, sempre ao vivo). Diferente da comissão de suítes e
+      café, a comissão de bar não depende de nenhuma nota editável que
+      precise ser capturada num instante — o valor de um período já
+      fechado nunca muda sozinho, então **não precisou de um botão
+      "Calcular" nem de uma tabela de retrato congelado**: nova função
+      `getBarCommissionScreenSummary` (`src/lib/actions/comandas.ts`)
+      simplesmente chama `getBarCommissionByCamareiraForPeriod` (já
+      existente) duas vezes — uma pro mês corrente até hoje ("estimativa",
+      mesmo texto/conceito já usado no card de suítes e café), outra pro
+      intervalo do último período fechado (`closedPeriodRange`, a mesma
+      função pura da Parte 36) — sempre recalculada ao vivo a cada
+      carregamento da tela. `getBarCommissionByCamareira` (mês atual/mês
+      anterior calendário) **não foi tocada**, continua servindo só o
+      card "Comissão Bar" do Resumo Executivo, que não foi pedido pra
+      mudar. `CamareiraBarCommissionTable` foi ajustada pras novas colunas
+      ("Mês corrente (estimativa)" / "Último período (Mês)") com um
+      parágrafo explicativo acima da tabela.
+    - **Helper de rótulo de mês centralizado**: `monthLabelPt`, que vivia
+      duplicada em `commission-statement-pdf.tsx` e
+      `suites-cafe-commission-panel.tsx`, virou `monthYearLabelPt` em
+      `src/lib/date.ts` (usada também pelo novo texto do card de bar) —
+      elimina a duplicação e garante que "Último período (Mês de Ano)"
+      seja formatado exatamente igual em toda parte (tela, PDF, e-mail).
+    - **Testado**: cenário criado direto no Postgres local — uma
+      camareira com `active = false` e duas tarefas concluídas (uma em
+      agosto, dentro do último período fechado; outra em setembro, dentro
+      do mês corrente) — confirmado que ela aparece na estimativa do mês
+      corrente, no demonstrativo do último período fechado (depois de
+      clicar "Calcular") e no Histórico filtrado por agosto, via sessão
+      autenticada real contra o `next dev` local. O card de bar
+      confirmado mostrando as duas colunas novas com os rótulos e o texto
+      explicativo corretos. Fixture de teste removida do banco local
+      depois.
 
 ## Convenções e decisões importantes
 
@@ -2151,10 +2211,13 @@ o escopo mude no futuro.
   RPC `security definer`) e as consultas de leitura `getActiveComandas`
   (lista, com itens já embutidos), `getComandaForEdit`,
   `getRoomsForComandaSelector`. Desde a Parte 30, também
-  `getBarCommissionByCamareira` (mês atual/anterior, Resumo Executivo) e
-  `getBarCommissionByCamareiraForPeriod` (Histórico) — comissão de 10%
-  por camareira responsável (`created_by`), excluindo comandas canceladas
-  e, desde a Parte 31, comandas de contas isentas da taxa de serviço.
+  `getBarCommissionByCamareira` (mês atual/anterior calendário, card
+  "Comissão Bar" do Resumo Executivo — não mudou) e
+  `getBarCommissionByCamareiraForPeriod` (Histórico, e reaproveitada por
+  `getBarCommissionScreenSummary`, Parte 37 — mês corrente/último período
+  pro card de bar em "Comissões das camareiras") — comissão de 10% por
+  camareira responsável (`created_by`), excluindo comandas canceladas e,
+  desde a Parte 31, comandas de contas isentas da taxa de serviço.
 - `src/lib/commission-math.ts` — `computeWeightedSuitesCafeCommission`
   (Parte 35), função pura (peso = média entre % de serviços e % de nota)
   que reparte um pote em R$ entre camareiras; separada de
@@ -2174,9 +2237,10 @@ o escopo mude no futuro.
   (lê o último calculado, combinando com a comissão de bar do mesmo
   período, sempre ao vivo), `getSuitesCafeCommissionForPeriod` (Histórico,
   período arbitrário) e `sendCommissionStatementEmail` (reaproveita o
-  e-mail/remetente já usados pro recibo de conta). `getActiveCamareiras`
-  (interno) e `summarizeBarCommissionRows` (em `comandas.ts`) excluem
-  `EXCLUDED_CAMAREIRA_NAME` de todo cálculo.
+  e-mail/remetente já usados pro recibo de conta). `getCamareiraRoster`
+  (interno, Parte 37 — soma camareiras ativas com quem tem serviço
+  concluído no período, mesmo já desativada) e `summarizeBarCommissionRows`
+  (em `comandas.ts`) excluem `EXCLUDED_CAMAREIRA_NAME` de todo cálculo.
 - `src/lib/actions/breakfast-commission.ts` — `getBreakfastCommissionPotForRange`
   (Parte 35), extraído do cálculo que já existia duplicado no Resumo
   Executivo: soma o pote de comissão do café (suítes elegíveis × valor
@@ -2227,15 +2291,21 @@ o escopo mude no futuro.
   do mês") foi excluído na Parte 32, sem uso desde então.
 - `src/app/(admin)/dashboard/comissoes/` — "Comissões das camareiras"
   (Parte 35; antes "Comissão de 10% do bar por camareira" em
-  `comissao-bar/`): duas seções — a tabela de bar que já existia
-  (`camareira-bar-commission-table.tsx`, Parte 30) e o novo card
+  `comissao-bar/`): duas seções — a tabela de bar
+  (`camareira-bar-commission-table.tsx`, Parte 30; colunas "Mês corrente
+  (estimativa)"/"Último período (Mês)" desde a Parte 37, sempre
+  recalculada ao vivo, sem botão "Calcular" — a comissão de bar não tem
+  nenhuma nota editável que precise ser capturada num instante) e o card
   "Comissão de serviços nas suítes e no café"
   (`suites-cafe-commission-panel.tsx`), com o campo "Valor da comissão
   por café servido" (vindo de `/mesas/gerenciar`), a tabela de estimativa
   ao vivo do mês corrente (nota editável via `QuantityStepper`, exceto pra
   "admin-camareira", excluída desde a Parte 36) e o botão "Calcular
   comissão do último período" (Parte 36 — fecha sempre no dia 25, não no
-  fim do mês; gera o demonstrativo, com PDF e envio por e-mail).
+  fim do mês; gera o demonstrativo, com PDF e envio por e-mail). Desde a
+  Parte 37, uma camareira que deixou de ser usuária do sistema continua
+  aparecendo nas duas tabelas/no demonstrativo pra qualquer período em
+  que ela de fato trabalhou.
 - `src/app/(admin)/dashboard/email-envio/` — "Cadastrar e-mail de envio"
   (Parte 35): card "E-mail de envio" (`email-envio-settings.tsx`, movido
   de `frigobar/frigobar-rooms-panel.tsx`), mesmo e-mail usado pro recibo
