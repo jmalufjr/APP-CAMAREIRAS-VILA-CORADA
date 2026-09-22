@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import type { ComandaStatus } from "@/lib/types";
 import { SERVICE_CHARGE_RATE } from "@/lib/room-bills";
 import { nowInBrazil, toDateKey } from "@/lib/date";
+import { EXCLUDED_CAMAREIRA_NAME } from "@/lib/commission-math";
 
 export interface ComandaItemInput {
   item_id: string;
@@ -347,6 +348,10 @@ function summarizeBarCommissionRows(rows: BarCommissionItemRow[]): CamareiraBarC
   const byCamareira = new Map<string, CamareiraBarCommissionRow>();
   rows.forEach((r) => {
     if (r.bar_comandas.room_bills?.service_charge_waived) return;
+    // "admin-camareira" é uma conta de teste/ajuste do admin, não uma
+    // camareira de verdade — nunca entra no cálculo de comissão nem nos
+    // demonstrativos/relatórios.
+    if (r.bar_comandas.created_by_profile?.name === EXCLUDED_CAMAREIRA_NAME) return;
     const key = r.bar_comandas.created_by ?? "—";
     const entry = byCamareira.get(key) ?? {
       camareira_id: r.bar_comandas.created_by,

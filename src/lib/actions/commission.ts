@@ -8,7 +8,12 @@ import { getBreakfastCommissionPotForRange } from "@/lib/actions/breakfast-commi
 import { getBarCommissionByCamareiraForPeriod } from "@/lib/actions/comandas";
 import { getReceiptSettings } from "@/lib/actions/room-bills";
 import { renderCommissionStatementPdf, commissionStatementMonthLabel } from "@/lib/commission-statement-pdf";
-import { computeWeightedSuitesCafeCommission, type CamareiraWeightInput } from "@/lib/commission-math";
+import {
+  computeWeightedSuitesCafeCommission,
+  closedPeriodRange,
+  EXCLUDED_CAMAREIRA_NAME,
+  type CamareiraWeightInput,
+} from "@/lib/commission-math";
 
 // ---------- Leitura: camareiras ativas + serviços concluídos por período ----------
 
@@ -18,6 +23,10 @@ async function getActiveCamareiras(supabase: Awaited<ReturnType<typeof createCli
     .select("id, name, service_quality_score")
     .eq("role", "camareira")
     .eq("active", true)
+    // "admin-camareira" é uma conta de teste/ajuste do admin, não uma
+    // camareira de verdade — nunca entra no cálculo de comissão nem nos
+    // demonstrativos/relatórios (ver EXCLUDED_CAMAREIRA_NAME).
+    .neq("name", EXCLUDED_CAMAREIRA_NAME)
     .order("name");
   return (data ?? []) as { id: string; name: string; service_quality_score: number }[];
 }
@@ -72,8 +81,10 @@ export interface SuitesCafeEstimateRow {
 // Estimativa do mês corrente: percentual de serviços acumulado até hoje ×
 // pote do mês corrente (também ainda se formando) — os dois sempre do
 // mesmo período, então não há descompasso entre "quanto ela fez" e "sobre
-// que valor". Muda dia a dia; só vira "oficial" com o botão "Calcular
-// comissão do mês passado" (ver calculatePreviousMonthCommissionStatement).
+// que valor". Muda dia a dia; é só informativa — o valor oficialmente
+// pago é sempre o do "último período fechado" (ver
+// calculateClosedPeriodCommissionStatement), que fecha no dia 25, não no
+// fim do mês.
 export async function getSuitesCafeCurrentMonthEstimate(): Promise<{
   rows: SuitesCafeEstimateRow[];
   totalPot: number;
@@ -109,32 +120,28 @@ export async function getSuitesCafeCurrentMonthEstimate(): Promise<{
   };
 }
 
-// ---------- Fechamento do mês passado (botão "Calcular") ----------
+// ---------- Fechamento do último período (botão "Calcular") ----------
 
-function previousMonthRange(): { monthKey: string; monthStart: string; monthEnd: string } {
-  const now = nowInBrazil();
-  const monthStart = toDateKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)));
-  const monthEnd = toDateKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)));
-  return { monthKey: monthStart, monthStart, monthEnd };
-}
-
-// Calcula e grava (substituindo qualquer cálculo anterior do mesmo mês) o
-// demonstrativo de comissão de serviços nas suítes e no café do mês
-// passado: captura a nota de cada camareira NO MOMENTO deste clique,
-// aplicada sobre o percentual de serviços e o pote do mês fechado — os
-// dois já naturalmente estáveis, não precisam de congelamento próprio.
-export async function calculatePreviousMonthCommissionStatement() {
+// Calcula e grava (substituindo qualquer cálculo anterior do mesmo
+// período) o demonstrativo de comissão de serviços nas suítes e no café
+// do último período fechado — fecha sempre no dia 25 (não no fim do mês
+// calendário), pra dar tempo de conferir e pagar antes do mês virar (ver
+// closedPeriodRange). Captura a nota de cada camareira NO MOMENTO deste
+// clique, aplicada sobre o percentual de serviços e o pote do período já
+// fechado — os dois já naturalmente estáveis, não precisam de
+// congelamento próprio.
+export async function calculateClosedPeriodCommissionStatement() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { monthKey, monthStart, monthEnd } = previousMonthRange();
+  const { periodEnd, start, end } = closedPeriodRange(nowInBrazil());
 
   const [camareiras, serviceCounts, totalPot] = await Promise.all([
     getActiveCamareiras(supabase),
-    getServiceCountsByCamareira(supabase, monthStart, monthEnd),
-    getBreakfastCommissionPotForRange(monthStart, monthEnd),
+    getServiceCountsByCamareira(supabase, start, end),
+    getBreakfastCommissionPotForRange(start, end),
   ]);
 
   const inputs: CamareiraWeightInput[] = camareiras.map((c) => ({
@@ -145,13 +152,16 @@ export async function calculatePreviousMonthCommissionStatement() {
   }));
   const results = computeWeightedSuitesCafeCommission(inputs, totalPot);
 
-  const { error: deleteError } = await supabase.from("commission_statements").delete().eq("month", monthKey);
+  const { error: deleteError } = await supabase
+    .from("commission_statements")
+    .delete()
+    .eq("period_end", periodEnd);
   if (deleteError) return { error: deleteError.message };
 
   if (results.length > 0) {
     const { error: insertError } = await supabase.from("commission_statements").insert(
       results.map((r) => ({
-        month: monthKey,
+        period_end: periodEnd,
         camareira_id: r.camareiraId,
         camareira_name: r.camareiraName,
         service_percentage: r.servicePercent,
@@ -164,7 +174,7 @@ export async function calculatePreviousMonthCommissionStatement() {
   }
 
   revalidatePath("/dashboard/comissoes");
-  return { success: true, month: monthKey };
+  return { success: true, periodEnd };
 }
 
 export interface CommissionStatementRow {
@@ -178,7 +188,7 @@ export interface CommissionStatementRow {
 }
 
 export interface CommissionStatement {
-  month: string;
+  periodEnd: string;
   generatedAt: string;
   rows: CommissionStatementRow[];
   totalSuitesCafe: number;
@@ -186,24 +196,25 @@ export interface CommissionStatement {
   grandTotal: number;
 }
 
-// Demonstrativo já calculado do mês passado (relativo a hoje) — combina as
-// linhas congeladas de commission_statements (comissão de suítes e café,
-// com a nota capturada no momento do cálculo) com a comissão de bar do
-// mesmo mês, recalculada ao vivo (também estável pra um mês fechado, não
-// precisa de congelamento próprio). Retorna null se o botão "Calcular
-// comissão do mês passado" ainda não foi clicado nesse mês.
-export async function getPreviousMonthDemonstrativo(): Promise<CommissionStatement | null> {
+// Demonstrativo já calculado do último período fechado (relativo a hoje)
+// — combina as linhas congeladas de commission_statements (comissão de
+// suítes e café, com a nota capturada no momento do cálculo) com a
+// comissão de bar do mesmo período, recalculada ao vivo (também estável
+// pra um período fechado, não precisa de congelamento próprio). Retorna
+// null se o botão "Calcular comissão do último período" ainda não foi
+// clicado depois do fechamento desse período.
+export async function getClosedPeriodDemonstrativo(): Promise<CommissionStatement | null> {
   const supabase = await createClient();
-  const { monthKey, monthStart, monthEnd } = previousMonthRange();
+  const { periodEnd, start, end } = closedPeriodRange(nowInBrazil());
 
   const { data: statementRows } = await supabase
     .from("commission_statements")
     .select("*")
-    .eq("month", monthKey)
+    .eq("period_end", periodEnd)
     .order("camareira_name");
   if (!statementRows || statementRows.length === 0) return null;
 
-  const barRows = await getBarCommissionByCamareiraForPeriod(monthStart, monthEnd);
+  const barRows = await getBarCommissionByCamareiraForPeriod(start, end);
   const barByName = new Map(barRows.map((r) => [r.camareira_name, r.commission]));
 
   const rows: CommissionStatementRow[] = statementRows.map((r) => {
@@ -221,7 +232,7 @@ export async function getPreviousMonthDemonstrativo(): Promise<CommissionStateme
   });
 
   return {
-    month: monthKey,
+    periodEnd,
     generatedAt: statementRows[0].generated_at,
     rows,
     totalSuitesCafe: rows.reduce((sum, r) => sum + r.suites_cafe_amount, 0),
@@ -240,7 +251,7 @@ export interface SuitesCafeCommissionByCamareiraRow {
 // Mesma fórmula de peso (% serviços + % notas, em média) aplicada a um
 // período arbitrário escolhido no filtro do Histórico — sempre ao vivo,
 // com a nota atual de cada camareira (diferente do demonstrativo do botão
-// "Calcular", que é um retrato pontual de um mês inteiro fechado).
+// "Calcular", que é um retrato pontual de um período inteiro fechado).
 export async function getSuitesCafeCommissionForPeriod(
   from: string,
   to: string
@@ -269,8 +280,8 @@ export async function getSuitesCafeCommissionForPeriod(
 // mas aqui não é "melhor esforço" silencioso: o admin clica um botão
 // explícito e recebe o resultado na hora via toast.
 export async function sendCommissionStatementEmail() {
-  const demonstrativo = await getPreviousMonthDemonstrativo();
-  if (!demonstrativo) return { error: "Calcule a comissão do mês passado antes de enviar." };
+  const demonstrativo = await getClosedPeriodDemonstrativo();
+  if (!demonstrativo) return { error: "Calcule a comissão do último período antes de enviar." };
 
   const { accounting_email: accountingEmail } = await getReceiptSettings();
   if (!accountingEmail) return { error: "Cadastre o e-mail de envio antes (menu \"Cadastrar e-mail de envio\")." };
@@ -278,13 +289,14 @@ export async function sendCommissionStatementEmail() {
   try {
     const pdfBuffer = await renderCommissionStatementPdf(demonstrativo);
     const resend = new Resend(process.env.RESEND_API_KEY);
+    const label = commissionStatementMonthLabel(demonstrativo.periodEnd);
     const { error } = await resend.emails.send({
       from: process.env.RECEIPT_FROM_EMAIL ?? "Vila Corada <recibos@consumos.vilacorada.com.br>",
       to: accountingEmail,
-      subject: `Comissões das camareiras — ${commissionStatementMonthLabel(demonstrativo.month)}`,
-      text: `Segue em anexo o demonstrativo de comissões das camareiras de ${commissionStatementMonthLabel(demonstrativo.month)}.`,
+      subject: `Comissões das camareiras — Último período (${label})`,
+      text: `Segue em anexo o demonstrativo de comissões das camareiras do último período fechado (${label}).`,
       attachments: [
-        { filename: `comissoes-${demonstrativo.month}.pdf`, content: pdfBuffer },
+        { filename: `comissoes-${demonstrativo.periodEnd}.pdf`, content: pdfBuffer },
       ],
     });
     if (error) return { error: "Falha ao enviar o e-mail. Verifique o endereço cadastrado e tente novamente." };

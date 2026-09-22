@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   updateCamareiraServiceScore,
-  calculatePreviousMonthCommissionStatement,
+  calculateClosedPeriodCommissionStatement,
   sendCommissionStatementEmail,
   type SuitesCafeEstimateRow,
   type CommissionStatement,
@@ -63,12 +63,12 @@ export function SuitesCafeCommissionPanel({
     });
   }
 
-  function calculatePreviousMonth() {
+  function calculateClosedPeriod() {
     startTransition(async () => {
-      const result = await calculatePreviousMonthCommissionStatement();
+      const result = await calculateClosedPeriodCommissionStatement();
       if (result?.error) toast.error(result.error);
       else {
-        toast.success("Comissão do mês passado calculada.");
+        toast.success("Comissão do último período calculada.");
         router.refresh();
       }
     });
@@ -117,9 +117,9 @@ export function SuitesCafeCommissionPanel({
           <p className="text-xs text-muted-foreground">
             O peso de cada camareira é a média entre o percentual de serviços que ela concluiu no mês (troca,
             arrumação, somente saída, somente chegada, saída com chegada) e o percentual de sua nota em relação à
-            soma de todas as notas — aplicado sobre o pote do mês, que ainda está se formando dia a dia. Só vira
-            valor oficial e recebível quando o mês vira e o botão &ldquo;Calcular comissão do mês passado&rdquo; é
-            clicado.
+            soma de todas as notas — aplicado sobre o pote do mês, que ainda está se formando dia a dia. É só uma
+            estimativa informativa; o valor oficial e recebível é sempre o do último período fechado, calculado
+            abaixo.
           </p>
           <div className="overflow-x-auto">
             <Table>
@@ -171,19 +171,24 @@ export function SuitesCafeCommissionPanel({
         </div>
 
         <div className="space-y-3 border-t border-border pt-5">
-          <p className="text-sm font-medium">Fechamento do mês passado</p>
+          <p className="text-sm font-medium">Fechamento do último período</p>
           <p className="text-xs text-muted-foreground">
-            Ao clicar, a nota de cada camareira é capturada exatamente como está neste momento, e combinada com o
-            percentual de serviços e o pote já fechados do mês passado — o resultado fica salvo até você clicar de
-            novo (por exemplo, depois de corrigir alguma nota).
+            O período de comissão fecha sempre no dia 25 (não no fim do mês), pra dar tempo de conferir e calcular
+            antes do mês virar — por exemplo, o período fechado em 25/09 pode ser calculado de 26/09 até 25/10, até
+            o período seguinte (fechado em 25/10) tomar o lugar de &ldquo;último período&rdquo;. Ao clicar, a nota
+            de cada camareira é capturada exatamente como está neste momento, e combinada com o percentual de
+            serviços e o pote já fechados desse período — o resultado fica salvo até você clicar de novo (por
+            exemplo, depois de corrigir alguma nota).
           </p>
-          <Button variant="outline" disabled={isPending} onClick={calculatePreviousMonth}>
-            Calcular comissão do mês passado
+          <Button variant="outline" disabled={isPending} onClick={calculateClosedPeriod}>
+            Calcular comissão do último período
           </Button>
 
           {demonstrativo ? (
             <div className="space-y-3 pt-2">
-              <p className="text-sm text-muted-foreground">{monthLabelPt(demonstrativo.month)}</p>
+              <p className="text-sm text-muted-foreground">
+                Último período ({monthLabelPt(demonstrativo.periodEnd)})
+              </p>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -237,7 +242,7 @@ export function SuitesCafeCommissionPanel({
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Ainda não calculado para o mês passado. Clique no botão acima para gerar o demonstrativo.
+              Ainda não calculado para o último período. Clique no botão acima para gerar o demonstrativo.
             </p>
           )}
         </div>

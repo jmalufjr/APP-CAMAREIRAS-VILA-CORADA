@@ -102,13 +102,17 @@ insert into commission_settings (id, value_per_table) values (1, 10.00);
 -- ---------- COMMISSION STATEMENTS (demonstrativo de comissão de serviços
 -- nas suítes e no café, gerado sob demanda pelo admin) ----------
 -- Captura a nota de cada camareira no momento do cálculo, junto com o
--- percentual de serviços e o pote do mês fechado (naturalmente estáveis,
--- não precisam de congelamento próprio). Recalcular substitui as linhas
--- daquele mês. A comissão de bar (10%) não é gravada aqui — é sempre
--- recalculada ao vivo, também por ser estável pra um mês fechado.
+-- percentual de serviços e o pote do último período fechado (naturalmente
+-- estáveis, não precisam de congelamento próprio). O período não
+-- acompanha o mês calendário — fecha sempre no dia 25 (ver
+-- closedPeriodRange em src/lib/commission-math.ts), pra dar tempo de
+-- conferir e pagar antes do mês virar; period_end guarda a data desse
+-- fechamento (sempre um dia 25). Recalcular substitui as linhas daquele
+-- período. A comissão de bar (10%) não é gravada aqui — é sempre
+-- recalculada ao vivo, também por ser estável pra um período fechado.
 create table commission_statements (
   id uuid primary key default uuid_generate_v4(),
-  month date not null,
+  period_end date not null,
   camareira_id uuid references profiles(id) on delete set null,
   camareira_name text not null,
   service_percentage numeric(6,3) not null default 0,
@@ -116,7 +120,7 @@ create table commission_statements (
   suites_cafe_amount numeric(10,2) not null default 0,
   generated_at timestamptz not null default now(),
   generated_by uuid references profiles(id) on delete set null,
-  unique (month, camareira_id)
+  unique (period_end, camareira_id)
 );
 
 -- ---------- RECEIPT SETTINGS (e-mail da contabilidade p/ recibo em PDF) ----------

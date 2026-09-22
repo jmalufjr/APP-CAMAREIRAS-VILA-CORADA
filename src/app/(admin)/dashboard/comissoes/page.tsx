@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CamareiraBarCommissionTable } from "../camareira-bar-commission-table";
 import { getBarCommissionByCamareira } from "@/lib/actions/comandas";
-import { getSuitesCafeCurrentMonthEstimate, getPreviousMonthDemonstrativo } from "@/lib/actions/commission";
+import { getSuitesCafeCurrentMonthEstimate, getClosedPeriodDemonstrativo } from "@/lib/actions/commission";
 import { nowInBrazil } from "@/lib/date";
 import type { CommissionSettings } from "@/lib/types";
 import { SuitesCafeCommissionPanel } from "./suites-cafe-commission-panel";
@@ -19,7 +19,7 @@ export default async function ComissoesPage() {
   const [barCommission, estimate, demonstrativo, { data: commissionSettings }] = await Promise.all([
     getBarCommissionByCamareira(),
     getSuitesCafeCurrentMonthEstimate(),
-    getPreviousMonthDemonstrativo(),
+    getClosedPeriodDemonstrativo(),
     supabase.from("commission_settings").select("*").single(),
   ]);
 

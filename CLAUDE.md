@@ -104,8 +104,10 @@ manhã) ganhou nome próprio, "Comissão de serviços nas suítes e no café",
 e passou a ser repartida entre as camareiras por uma nota de qualidade
 de serviço (editável, 0 a 10) combinada com o percentual de serviços de
 cada uma, com um demonstrativo em PDF/e-mail gerado sob demanda pelo
-botão "Calcular comissão do mês passado" na tela "Comissões das
-camareiras" (antes só a comissão de 10% do bar).
+botão "Calcular comissão do último período" na tela "Comissões das
+camareiras" (antes só a comissão de 10% do bar) — esse período fecha
+sempre no dia 25, não no fim do mês, e a conta de teste "admin-camareira"
+nunca entra em nenhum cálculo de comissão.
 
 ## Onde está
 
@@ -1719,6 +1721,77 @@ também é feita em Server Components.
       presentes (Resumo Executivo, Comissões das camareiras, E-mail de
       envio, Histórico) e ausentes nos lugares antigos (Mesas do Café,
       Consumo de Bar e Frigobar).
+43. **Parte 36 — Exclusão da conta "admin-camareira" e fechamento no dia
+    25 em vez do fim do mês** (22/09/2026, feita direto em `main`, pós
+    parte 35; duas correções pedidas pelo proprietário depois de ver a
+    Parte 35 em produção):
+    - **"admin-camareira" excluída de comissões e demonstrativos**: essa
+      conta (mencionada desde a Parte 08, seção 15, como "de origem
+      duvidosa") é usada pelo próprio admin só pra teste/ajuste, nunca uma
+      camareira de verdade — passou a ser ignorada em todo cálculo de
+      comissão e em todo relatório/demonstrativo que lista camareiras.
+      Nova constante `EXCLUDED_CAMAREIRA_NAME` (`src/lib/commission-math.ts`,
+      valor `"admin-camareira"`, comparado pelo nome — não existe nenhum
+      outro sinal no banco pra distinguir essa conta de uma camareira
+      real, já que o papel dela é `camareira`), usada em duas pontas: um
+      `.neq("name", ...)` na busca de camareiras ativas
+      (`getActiveCamareiras`, `src/lib/actions/commission.ts` —
+      afeta a estimativa do mês corrente, o fechamento do período e a
+      coluna do Histórico) e um filtro equivalente dentro de
+      `summarizeBarCommissionRows` (`src/lib/actions/comandas.ts`, afeta
+      `getBarCommissionByCamareira`/`getBarCommissionByCamareiraForPeriod`,
+      logo os cards de comissão de bar do Resumo Executivo, "Comissões das
+      camareiras" e Histórico). Escopo deliberadamente restrito a
+      comissões — a conta continua aparecendo normalmente em telas sem
+      relação com dinheiro (Planejamento Diário, "Por camareira —
+      serviços" do Histórico etc.), que não foram tocadas por não terem
+      sido pedidas.
+    - **Fechamento do período de comissão de serviços nas suítes e no
+      café passou do fim do mês calendário pro dia 25**: a comissão do mês
+      precisa estar pronta e paga **antes** do mês terminar, não só depois
+      — fechar junto com o calendário não deixava tempo hábil. Novo
+      conceito **"último período fechado"**, sempre com ~1 mês de duração
+      mas alinhado ao dia 25 em vez do dia 1: o período que fecha no dia
+      25 de um mês vai do dia 26 do mês anterior até esse dia 25. O dia 25
+      em si ainda conta como parte do período **em formação** (só fecha a
+      partir do dia 26) — ou seja, entre os dias 26 de um mês e 25 do mês
+      seguinte, "o último período fechado" é sempre o mesmo, até o
+      seguinte (fechado no próximo dia 25) tomar o lugar dele. Implementado
+      em `closedPeriodRange` (`src/lib/commission-math.ts`, função pura,
+      testada isolada contra 11 datas de borda antes de integrar —
+      inclusive troca de ano, ex.: 1º/25/26 de janeiro calculando
+      corretamente dezembro do ano anterior como período fechado). O botão
+      "Calcular comissão do mês passado" virou **"Calcular comissão do
+      último período"** (`calculateClosedPeriodCommissionStatement`, ex-
+      `calculatePreviousMonthCommissionStatement`) e
+      `getPreviousMonthDemonstrativo` virou `getClosedPeriodDemonstrativo`.
+      A coluna `commission_statements.month` (que guardava o dia 1 do mês
+      calendário) foi renomeada `period_end` (guarda a data do dia 25 de
+      fechamento) via migration `043_commission_period_cutoff_day25.sql`,
+      que também apaga as linhas já calculadas sob a regra antiga (mês
+      calendário) — não correspondem a nenhum período da regra nova, e o
+      valor em R$ que carregavam era todo zero (dado de teste); a nota de
+      cada camareira (`profiles.service_quality_score`, já ajustada de
+      verdade em produção antes desta parte) não foi afetada, só o
+      cálculo em R$ precisa ser refeito.
+    - **Terminologia "mês passado" → "último período (mês)"**: em todo
+      lugar que mostrava "mês passado" pra esse fechamento — botão,
+      subtítulo do card, mensagem de "ainda não calculado", título do PDF,
+      assunto/corpo do e-mail — passou a mostrar "Último período" seguido,
+      entre parênteses, do nome do mês em que cai o dia 25 de fechamento
+      (ex.: período de 26/07 a 25/08 vira "Último período (Agosto de
+      2026)"). A estimativa do mês corrente (ao vivo, informativa)
+      continua com sua própria rotulagem por mês calendário — não foi
+      pedido pra mudar, e não é o "último período fechado".
+    - **Testado**: `closedPeriodRange` verificada isolada contra 11 casos
+      sintéticos antes de integrar; fluxo completo (clicar "Calcular
+      comissão do último período", conferir "Último período (Agosto de
+      2026)" na tela, baixar o PDF) testado via sessão autenticada real
+      contra o `next dev` local, com o valor gravado em
+      `commission_statements.period_end` conferido direto no Postgres
+      (`2026-08-25` pra hoje 22/09/2026, batendo com o esperado — antes do
+      dia 25 de setembro, o último período fechado ainda é o de agosto).
+      Migration aplicada em produção depois do teste local.
 
 ## Convenções e decisões importantes
 
@@ -2086,18 +2159,24 @@ o escopo mude no futuro.
   (Parte 35), função pura (peso = média entre % de serviços e % de nota)
   que reparte um pote em R$ entre camareiras; separada de
   `src/lib/actions/commission.ts` porque um arquivo `"use server"` só
-  pode exportar Server Actions assíncronas.
+  pode exportar Server Actions assíncronas. Também exporta
+  `EXCLUDED_CAMAREIRA_NAME` (`"admin-camareira"`, Parte 36 — conta de
+  teste/ajuste do admin, nunca entra em cálculo de comissão) e
+  `closedPeriodRange` (Parte 36 — o "último período fechado" pra comissão
+  de suítes e café, que fecha sempre no dia 25, não no fim do mês).
 - `src/lib/actions/commission.ts` — Server Actions da comissão de
-  serviços nas suítes e no café (Parte 35): `updateCamareiraServiceScore`
-  (nota 0-10 de cada camareira, `profiles.service_quality_score`),
-  `getSuitesCafeCurrentMonthEstimate` (estimativa ao vivo do mês
-  corrente), `calculatePreviousMonthCommissionStatement` (grava o
-  demonstrativo congelado do mês passado em `commission_statements`),
-  `getPreviousMonthDemonstrativo` (lê o último calculado, combinando com
-  a comissão de bar do mesmo mês, sempre ao vivo),
-  `getSuitesCafeCommissionForPeriod` (Histórico, período arbitrário) e
-  `sendCommissionStatementEmail` (reaproveita o e-mail/remetente já
-  usados pro recibo de conta).
+  serviços nas suítes e no café (Parte 35, com os ajustes da Parte 36):
+  `updateCamareiraServiceScore` (nota 0-10 de cada camareira, `profiles.
+  service_quality_score`), `getSuitesCafeCurrentMonthEstimate`
+  (estimativa ao vivo do mês corrente), `calculateClosedPeriodCommissionStatement`
+  (grava o demonstrativo congelado do último período fechado em
+  `commission_statements`, chave `period_end`), `getClosedPeriodDemonstrativo`
+  (lê o último calculado, combinando com a comissão de bar do mesmo
+  período, sempre ao vivo), `getSuitesCafeCommissionForPeriod` (Histórico,
+  período arbitrário) e `sendCommissionStatementEmail` (reaproveita o
+  e-mail/remetente já usados pro recibo de conta). `getActiveCamareiras`
+  (interno) e `summarizeBarCommissionRows` (em `comandas.ts`) excluem
+  `EXCLUDED_CAMAREIRA_NAME` de todo cálculo.
 - `src/lib/actions/breakfast-commission.ts` — `getBreakfastCommissionPotForRange`
   (Parte 35), extraído do cálculo que já existia duplicado no Resumo
   Executivo: soma o pote de comissão do café (suítes elegíveis × valor
@@ -2153,9 +2232,10 @@ o escopo mude no futuro.
   "Comissão de serviços nas suítes e no café"
   (`suites-cafe-commission-panel.tsx`), com o campo "Valor da comissão
   por café servido" (vindo de `/mesas/gerenciar`), a tabela de estimativa
-  ao vivo do mês corrente (nota editável via `QuantityStepper`) e o botão
-  "Calcular comissão do mês passado" (gera o demonstrativo, com PDF e
-  envio por e-mail).
+  ao vivo do mês corrente (nota editável via `QuantityStepper`, exceto pra
+  "admin-camareira", excluída desde a Parte 36) e o botão "Calcular
+  comissão do último período" (Parte 36 — fecha sempre no dia 25, não no
+  fim do mês; gera o demonstrativo, com PDF e envio por e-mail).
 - `src/app/(admin)/dashboard/email-envio/` — "Cadastrar e-mail de envio"
   (Parte 35): card "E-mail de envio" (`email-envio-settings.tsx`, movido
   de `frigobar/frigobar-rooms-panel.tsx`), mesmo e-mail usado pro recibo

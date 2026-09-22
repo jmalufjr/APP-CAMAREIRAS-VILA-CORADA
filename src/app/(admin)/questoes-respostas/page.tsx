@@ -449,12 +449,18 @@ export default function QuestoesRespostasPage() {
                     botões de mais/menos) pra reconhecer a qualidade do trabalho de cada uma — o valor
                     que cada camareira recebe é uma média entre o quanto ela trabalhou e o quanto sua
                     nota representa do total de notas, sempre somando 100% entre todas. Essa tabela do
-                    mês corrente é só uma estimativa que muda dia a dia; para fechar de verdade o mês
-                    anterior, use o botão “Calcular comissão do mês passado” — ele grava a nota de cada
-                    camareira exatamente como está naquele instante junto com os números já definitivos
-                    do mês fechado, e libera baixar um PDF ou enviá-lo por e-mail com as duas comissões
-                    de cada camareira e o total geral. Clicar de novo refaz o cálculo (útil se você
-                    corrigir alguma nota depois).
+                    mês corrente é só uma estimativa que muda dia a dia; para fechar de verdade, use o
+                    botão “Calcular comissão do último período” — ele grava a nota de cada camareira
+                    exatamente como está naquele instante junto com os números já definitivos do{" "}
+                    <strong>último período fechado</strong>, e libera baixar um PDF ou enviá-lo por
+                    e-mail com as duas comissões de cada camareira e o total geral. Clicar de novo
+                    refaz o cálculo (útil se você corrigir alguma nota depois). Esse período{" "}
+                    <strong>não acompanha o mês calendário</strong> — fecha sempre no dia 25, não no
+                    último dia do mês, pra sobrar tempo de conferir e calcular antes do mês virar:
+                    por exemplo, o período fechado em 25/09 pode ser calculado a qualquer momento entre
+                    26/09 e 25/10, até o período seguinte (fechado em 25/10) tomar o lugar de “último
+                    período”. A camareira de teste “admin-camareira” (usada só por você pra ajustes,
+                    nunca uma camareira de verdade) nunca entra em nenhum desses cálculos.
                   </>,
                   <>
                     <strong>Cadastrar e-mail de envio</strong>: o e-mail que recebe automaticamente o
@@ -485,10 +491,12 @@ export default function QuestoesRespostasPage() {
                 ocorrências de manutenção, a “Comissão Bar” (contas cuja taxa foi isentada pelo hóspede
                 não entram — ver pergunta 5) e a “Comissão Suítes e Café” de cada camareira no período
                 escolhido — essa última sempre calculada na hora pro período que você escolher, com a
-                nota de cada camareira como está hoje (diferente do “Calcular comissão do mês passado”
-                da pergunta 9, que é um retrato fechado de um mês inteiro). Também dá pra exportar essas
-                informações em uma planilha (CSV), caso queira analisar os números em outro programa ou
-                guardar um relatório.
+                nota de cada camareira como está hoje (diferente do “Calcular comissão do último
+                período” da pergunta 9, que é um retrato fechado de um período de aproximadamente um
+                mês, sempre fechado no dia 25). A camareira de teste “admin-camareira” nunca aparece em
+                nenhuma das colunas de comissão. Também dá pra exportar essas informações em uma
+                planilha (CSV), caso queira analisar os números em outro programa ou guardar um
+                relatório.
               </P>
             </div>
           </AccordionPanel>
