@@ -14,7 +14,7 @@ export default async function ConsumoQuartosPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Consumo por suítes"
+        title="Consumo total por suíte"
         subtitle="Consumo de frigobar e do bar da piscina por suíte, com taxa de serviço de 10% sobre o bar."
       />
       <ConsumoQuartosPanel overview={overview} minibarItems={(minibarItems ?? []) as MinibarItem[]} />

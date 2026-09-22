@@ -52,8 +52,8 @@ const camareiraNav: NavItem[] = [
   { href: "/tarefas", label: "Minhas suítes", icon: ClipboardList },
   { href: "/mesas", label: "Mesas do café", icon: Coffee },
   { href: "/chegadas-saidas", label: "Chegadas & saídas", icon: CalendarClock },
-  { href: "/comanda", label: "Comanda", icon: Martini },
-  { href: "/bar-piscina", label: "Consumo por suítes", icon: Wine },
+  { href: "/comanda", label: "Comandas de Bar da Piscina", icon: Martini },
+  { href: "/bar-piscina", label: "Consumo total por suíte", icon: Wine },
 ];
 
 const manutencaoNav: NavItem[] = [
