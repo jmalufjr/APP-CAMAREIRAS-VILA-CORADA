@@ -59,30 +59,33 @@ export default function QuestoesRespostasPage() {
                 <strong>hoje</strong> e de <strong>amanhã</strong> nas três telas ao mesmo tempo.
               </P>
 
-              <SubHeading>O botão “Forçar sincronização com a Stays”</SubHeading>
+              <SubHeading>O botão “Sincronização Stays Total”</SubHeading>
               <P>
-                Nas três telas mencionadas acima existe também um botão manual, para os casos em que
-                você não quer esperar a próxima atualização automática ou precisa corrigir algo agora.
-                Ele tem um comportamento importante: <strong>ignora qualquer edição manual que você já
-                tenha feito</strong> e substitui pelo que a Stays informa naquele momento. Por isso, ao
-                clicar, o sistema pede uma confirmação antes de prosseguir.
+                No Resumo Executivo, logo abaixo dos 5 cards de consulta rápida, existe um botão manual
+                que sincroniza as três telas de uma vez, para os casos em que você não quer esperar a
+                próxima atualização automática ou precisa corrigir algo agora (até a Parte 34 esse botão
+                existia separado em cada uma das três telas — foi unificado aqui porque sempre teve
+                exatamente o mesmo efeito nos três lugares). Ele tem um comportamento importante:{" "}
+                <strong>ignora qualquer edição manual que você já tenha feito</strong> e substitui pelo
+                que a Stays informa naquele momento. Por isso, ao clicar, o sistema pede uma confirmação
+                antes de prosseguir.
               </P>
               <P>
                 <strong>Exemplo:</strong> você percebeu que uma suíte estava marcada errado no
-                Planejamento e corrigiu manualmente para “Troca”. Se depois alguém clicar em “Forçar
-                sincronização”, essa correção pode ser desfeita e a suíte volta a mostrar o que a Stays
-                calcula — use esse botão só quando quiser mesmo descartar edições feitas e confiar
-                100% no que está registrado na Stays.
+                Planejamento e corrigiu manualmente para “Troca”. Se depois alguém clicar em
+                “Sincronização Stays Total”, essa correção pode ser desfeita e a suíte volta a mostrar o
+                que a Stays calcula — use esse botão só quando quiser mesmo descartar edições feitas e
+                confiar 100% no que está registrado na Stays.
               </P>
 
-              <SubHeading>O botão “Sincronizar agora (preserva edições)”</SubHeading>
+              <SubHeading>O botão “Sincronização Stays Parcial”</SubHeading>
               <P>
-                Ao lado do botão de forçar existe um segundo botão, mais seguro pro dia a dia: ele
-                também roda a sincronização com a Stays na hora, sem esperar a próxima atualização
-                automática da manhã seguinte — mas, ao contrário do “Forçar”, nunca apaga nada que você
-                já editou manualmente hoje ou amanhã, só preenche o que ainda está do jeito que a Stays
-                sugere. Use esse quando quiser só adiantar a atualização do dia (por exemplo, depois de
-                uma reserva nova de última hora), sem correr o risco de perder uma correção sua.
+                Ao lado do botão total existe um segundo botão, mais seguro pro dia a dia: ele também
+                roda a sincronização com a Stays na hora, sem esperar a próxima atualização automática
+                da manhã seguinte — mas, ao contrário do total, nunca apaga nada que você já editou
+                manualmente hoje ou amanhã, só preenche o que ainda está do jeito que a Stays sugere.
+                Use esse quando quiser só adiantar a atualização do dia (por exemplo, depois de uma
+                reserva nova de última hora), sem correr o risco de perder uma correção sua.
               </P>
 
               <SubHeading>O que acontece quando você edita um campo manualmente</SubHeading>
@@ -127,13 +130,13 @@ export default function QuestoesRespostasPage() {
               <P>
                 Alguns campos, ao contrário, <strong>nunca</strong> vêm da Stays e são sempre de
                 preenchimento manual seu, sem risco de serem sobrescritos por nenhuma sincronização:
-                horário previsto e observações (em Chegadas &amp; saídas), o valor em reais da
-                comissão, a observação do dia e a observação de cada mesa individual (em Mesas do
-                café). Já o “Total de mesas”, as contagens por tamanho de mesa (quantas mesas têm 1, 2
-                ou 3 hóspedes, e quantos hóspedes há na Mesa 07) e a quantidade de suítes que conta
-                para a comissão do dia não são editáveis nem sincronizados separadamente — eles são
-                calculados automaticamente, na hora, a partir de quem está ocupando cada suíte e de
-                quem já está sentado em cada mesa (ver pergunta 4).
+                horário previsto e observações (em Chegadas &amp; saídas), a observação do dia e a
+                observação de cada mesa individual (em Mesas do café). Já o “Total de mesas”, as
+                contagens por tamanho de mesa (quantas mesas têm 1, 2 ou 3 hóspedes, e quantos
+                hóspedes há na Mesa 07) e a quantidade de suítes que conta para a comissão do dia não
+                são editáveis nem sincronizados separadamente — eles são calculados automaticamente, na
+                hora, a partir de quem está ocupando cada suíte e de quem já está sentado em cada mesa
+                (ver pergunta 4).
               </P>
             </div>
           </AccordionPanel>
@@ -243,14 +246,12 @@ export default function QuestoesRespostasPage() {
                 (visível para as camareiras, útil para avisos como “evento especial hoje”) fica um
                 pouco acima, fora da janela.
               </P>
-              <SubHeading>Como funciona a comissão</SubHeading>
               <P>
-                O campo “Valor da comissão por café servido” é multiplicado pela quantidade de suítes
-                elegíveis para o café da manhã naquele dia — toda suíte ocupada nesse dia conta pra
-                comissão, esteja ela alocada numa mesa específica ou não (essa contagem é sempre
-                calculada sozinha, você só edita o valor em reais). Depois que um mês termina, o valor
-                calculado daquele mês fica congelado no Histórico: mudar o valor da comissão hoje nunca
-                altera o que já foi calculado em meses passados, só passa a valer dali pra frente.
+                A quantidade de suítes elegíveis para o café da manhã naquele dia (toda suíte ocupada
+                nesse dia conta, esteja ela alocada numa mesa específica ou não) alimenta a comissão de
+                serviços nas suítes e no café — o campo “Valor da comissão por café servido” e a
+                repartição entre as camareiras ficam na tela “Comissões das camareiras”, explicada na
+                pergunta 9.
               </P>
             </div>
           </AccordionPanel>
@@ -303,10 +304,10 @@ export default function QuestoesRespostasPage() {
               </P>
               <P>
                 Ao ser paga, a conta gera automaticamente um recibo em PDF e tenta enviá-lo por e-mail
-                para a contabilidade (configurável por você, sem precisar mexer em nada técnico). Se o
-                envio falhar por algum motivo, você vê um aviso na tela e pode reenviar manualmente. O
-                hóspede pode pagar via PIX direto por uma tela que a camareira abre, mostrando um QR
-                code fixo da pousada.
+                para o endereço cadastrado em “Cadastrar e-mail de envio” (menu do Resumo Executivo,
+                pergunta 9 — sem precisar mexer em nada técnico). Se o envio falhar por algum motivo,
+                você vê um aviso na tela e pode reenviar manualmente. O hóspede pode pagar via PIX
+                direto por uma tela que a camareira abre, mostrando um QR code fixo da pousada.
               </P>
             </div>
           </AccordionPanel>
@@ -397,12 +398,14 @@ export default function QuestoesRespostasPage() {
             <div className="space-y-3">
               <P>
                 É a primeira tela que você vê ao entrar. No topo ficam 5 cards de “Consulta rápida do
-                mês corrente”: suítes concluídas hoje, suítes no café hoje, comissão do mês (café da
-                manhã), 10% bar total (a comissão do bar somada de todas as camareiras) e ocorrências de
-                manutenção hoje.
+                mês corrente”: suítes concluídas hoje, suítes no café hoje, Comissão Suítes e Café (o
+                pote de comissão do café da manhã do mês, antes chamado “comissão do mês”), Comissão Bar
+                (a comissão de 10% do bar somada de todas as camareiras, antes “10% bar total”) e
+                ocorrências de manutenção hoje. Logo abaixo ficam os botões de sincronização com a Stays
+                (ver pergunta 1).
               </P>
               <P>
-                Logo abaixo tem um menu levando a 5 telas com mais detalhes, cada uma com um botão pra
+                Mais abaixo tem um menu levando a 6 telas com mais detalhes, cada uma com um botão pra
                 voltar:
               </P>
               <List
@@ -434,8 +437,29 @@ export default function QuestoesRespostasPage() {
                     separadamente, tanto nas tabelas quanto nos gráficos.
                   </>,
                   <>
-                    <strong>Comissão de 10% do bar por camareira</strong>: quanto cada camareira tem a
-                    receber no mês atual e no mês anterior (ver pergunta 5).
+                    <strong>Comissões das camareiras</strong>: as duas comissões da equipe, uma embaixo
+                    da outra. Primeiro a <strong>comissão de 10% do bar por camareira</strong>, com o
+                    mês atual e o mês anterior lado a lado (ver pergunta 5). Depois a{" "}
+                    <strong>comissão de serviços nas suítes e no café</strong>: o campo “Valor da
+                    comissão por café servido” (que decide o tamanho do pote do dia, junto com a
+                    quantidade de suítes elegíveis pro café), uma tabela do mês corrente mostrando, pra
+                    cada camareira, o percentual de serviços que ela já concluiu no mês (troca,
+                    arrumação, somente saída, somente chegada, saída com chegada) e uma{" "}
+                    <strong>nota de 0 a 10</strong> que você edita quando quiser (começa em 5, com
+                    botões de mais/menos) pra reconhecer a qualidade do trabalho de cada uma — o valor
+                    que cada camareira recebe é uma média entre o quanto ela trabalhou e o quanto sua
+                    nota representa do total de notas, sempre somando 100% entre todas. Essa tabela do
+                    mês corrente é só uma estimativa que muda dia a dia; para fechar de verdade o mês
+                    anterior, use o botão “Calcular comissão do mês passado” — ele grava a nota de cada
+                    camareira exatamente como está naquele instante junto com os números já definitivos
+                    do mês fechado, e libera baixar um PDF ou enviá-lo por e-mail com as duas comissões
+                    de cada camareira e o total geral. Clicar de novo refaz o cálculo (útil se você
+                    corrigir alguma nota depois).
+                  </>,
+                  <>
+                    <strong>Cadastrar e-mail de envio</strong>: o e-mail que recebe automaticamente o
+                    recibo de uma conta paga (ver pergunta 5) e pra onde você pode enviar o demonstrativo
+                    de comissões descrito acima.
                   </>,
                 ]}
               />
@@ -455,13 +479,16 @@ export default function QuestoesRespostasPage() {
                 vê tabelas com tudo o que aconteceu naquele intervalo — serviços realizados por suíte,
                 por tipo e por camareira (incluindo o tempo médio que cada uma leva do início ao fim de
                 um serviço), ocorrências de manutenção mais comuns, consumo de frigobar e bar, mesas do
-                café e comissão total (usando, pra cada mês fechado, o valor congelado daquele mês —
-                ver pergunta 4). A tabela “Por camareira” vem dividida em duas: uma com os serviços
-                realizados (por tipo, total e duração média), outra com as ocorrências de manutenção e o
-                total de comissão de 10% do bar de cada camareira no período escolhido (contas cuja taxa
-                foi isentada pelo hóspede não entram nesse total — ver pergunta 5). Também dá pra
-                exportar essas informações em uma planilha (CSV), caso queira analisar os números em
-                outro programa ou guardar um relatório.
+                café e a coluna “Comissão Suítes e Café” (usando, pra cada mês fechado, o valor
+                congelado daquele mês — ver pergunta 4). A tabela “Por camareira” vem dividida em duas:
+                uma com os serviços realizados (por tipo, total e duração média), outra com as
+                ocorrências de manutenção, a “Comissão Bar” (contas cuja taxa foi isentada pelo hóspede
+                não entram — ver pergunta 5) e a “Comissão Suítes e Café” de cada camareira no período
+                escolhido — essa última sempre calculada na hora pro período que você escolher, com a
+                nota de cada camareira como está hoje (diferente do “Calcular comissão do mês passado”
+                da pergunta 9, que é um retrato fechado de um mês inteiro). Também dá pra exportar essas
+                informações em uma planilha (CSV), caso queira analisar os números em outro programa ou
+                guardar um relatório.
               </P>
             </div>
           </AccordionPanel>

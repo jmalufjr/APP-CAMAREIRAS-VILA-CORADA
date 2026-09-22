@@ -27,7 +27,12 @@ create table profiles (
   email text, -- e-mail de contato (cadastro da camareira)
   login_email text not null unique, -- e-mail sintético usado apenas para autenticação (auth.users.email)
   active boolean not null default true,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Nota de qualidade do serviço (comissão de serviços nas suítes e no
+  -- café) — valor único e contínuo por camareira, não "por mês";
+  -- editável pelo admin a qualquer momento, entre 0 e 10.
+  service_quality_score integer not null default 5
+    check (service_quality_score between 0 and 10)
 );
 
 -- ---------- ROOMS (Quartos) ----------
@@ -93,6 +98,26 @@ create table commission_settings (
   constraint single_row check (id = 1)
 );
 insert into commission_settings (id, value_per_table) values (1, 10.00);
+
+-- ---------- COMMISSION STATEMENTS (demonstrativo de comissão de serviços
+-- nas suítes e no café, gerado sob demanda pelo admin) ----------
+-- Captura a nota de cada camareira no momento do cálculo, junto com o
+-- percentual de serviços e o pote do mês fechado (naturalmente estáveis,
+-- não precisam de congelamento próprio). Recalcular substitui as linhas
+-- daquele mês. A comissão de bar (10%) não é gravada aqui — é sempre
+-- recalculada ao vivo, também por ser estável pra um mês fechado.
+create table commission_statements (
+  id uuid primary key default uuid_generate_v4(),
+  month date not null,
+  camareira_id uuid references profiles(id) on delete set null,
+  camareira_name text not null,
+  service_percentage numeric(6,3) not null default 0,
+  score integer not null,
+  suites_cafe_amount numeric(10,2) not null default 0,
+  generated_at timestamptz not null default now(),
+  generated_by uuid references profiles(id) on delete set null,
+  unique (month, camareira_id)
+);
 
 -- ---------- RECEIPT SETTINGS (e-mail da contabilidade p/ recibo em PDF) ----------
 create table receipt_settings (
@@ -437,6 +462,7 @@ alter table room_checklist_items enable row level security;
 alter table occurrence_categories enable row level security;
 alter table breakfast_tables enable row level security;
 alter table commission_settings enable row level security;
+alter table commission_statements enable row level security;
 alter table receipt_settings enable row level security;
 alter table daily_room_tasks enable row level security;
 alter table daily_room_task_checks enable row level security;
@@ -526,6 +552,9 @@ create policy "bt_admin_delete" on breakfast_tables for delete using (is_admin()
 -- commission_settings
 create policy "cs_select_authenticated" on commission_settings for select using (auth.uid() is not null);
 create policy "cs_admin_update" on commission_settings for update using (is_admin());
+
+-- commission_statements
+create policy "cst_admin_all" on commission_statements for all using (is_admin()) with check (is_admin());
 
 -- receipt_settings
 create policy "rs_select_authenticated" on receipt_settings for select using (auth.uid() is not null);

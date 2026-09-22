@@ -97,7 +97,15 @@ um menu abaixo levando a telas de detalhe, cada uma com botão de voltar;
 e uma nova tela nesse menu, "Suítes vagas e limpas, disponíveis para
 alugar", com a regra de negócio (o que conta como "disponível" e como
 "limpa") desenvolvida junto com o proprietário em várias rodadas de
-crítica antes de implementar.
+crítica antes de implementar. Em seguida, os três pares de botão de
+sincronização com a Stays (antes um em cada tela) foram unificados num
+só, no Resumo Executivo; e a antiga "comissão das camareiras" (café da
+manhã) ganhou nome próprio, "Comissão de serviços nas suítes e no café",
+e passou a ser repartida entre as camareiras por uma nota de qualidade
+de serviço (editável, 0 a 10) combinada com o percentual de serviços de
+cada uma, com um demonstrativo em PDF/e-mail gerado sob demanda pelo
+botão "Calcular comissão do mês passado" na tela "Comissões das
+camareiras" (antes só a comissão de 10% do bar).
 
 ## Onde está
 
@@ -1565,6 +1573,152 @@ também é feita em Server Components.
       validado primeiro em SQL puro, depois confirmado batendo igual na
       tela real via sessão autenticada de verdade (mesma técnica da
       Parte 32).
+41. **Parte 34 — Botões de sincronização com a Stays unificados no Resumo
+    Executivo** (22/09/2026, feita direto em `main`, pós parte 33): os três
+    pares de botão de sincronização (Planejamento Diário, Chegadas &
+    Saídas, Mesas do Café — cada tela com "Forçar sincronização"/
+    "Sincronizar agora") viraram um único par, `SyncStaysAllButton`
+    (`src/app/(admin)/dashboard/sync-stays-all-button.tsx`), colocado no
+    Resumo Executivo entre os 5 cards de "Consulta rápida" e o menu de
+    seções — sem impedimento pra unificar, já que os três botões de cada
+    tipo sempre tiveram exatamente o mesmo efeito (o cron diário, que já
+    existia desde a Parte 14, sempre rodou as três sincronizações juntas
+    também). Nova Server Action `syncStaysAll(options?)`
+    (`src/lib/actions/stays-sync.ts`), que só chama, em sequência,
+    `syncStaysPlanning`/`syncStaysArrivalsDepartures`/
+    `syncStaysBreakfastTables` já existentes, repassando o mesmo `force`
+    pras três — nenhuma lógica de sincronização nova, só a composição.
+    Removidos os `sync-stays-button.tsx` e os botões duplicados das três
+    telas individuais (Planejamento, Chegadas & Saídas, Mesas do Café), que
+    passaram a não ter mais nenhum controle de sincronização próprio.
+    Os nomes dos botões também mudaram, a pedido do proprietário: "Forçar
+    sincronização com a Stays" → "Sincronização Stays Total - sobrescreve
+    alterações inseridas pelo Admin"; "Sincronizar agora (preserva
+    edições)" → "Sincronização Stays Parcial - preserva alterações
+    inseridas pelo Admin".
+42. **Parte 35 — Comissão de serviços nas suítes e no café: nota de
+    qualidade por camareira e repartição do pote do café** (22/09/2026,
+    feita direto em `main`, pós parte 34; análise crítica da proposta do
+    proprietário discutida antes de implementar — ver histórico da
+    conversa para o raciocínio completo): o app já tinha duas comissões
+    diferentes pras camareiras — a antiga "Comissão do mês"/"comissão das
+    camareiras" (café da manhã, calculada por suíte elegível × valor por
+    café servido, sem nenhuma repartição individual até aqui) e a
+    "Comissão de 10% do bar por camareira" (Parte 30). Esta parte deu à
+    primeira um nome próprio, **"Comissão de serviços nas suítes e no
+    café"**, e implementou a repartição dela entre as camareiras.
+    - **Nota de qualidade do serviço**: nova coluna
+      `profiles.service_quality_score` (migration
+      `042_commission_score_and_statements.sql`) — um valor **único e
+      contínuo por camareira** (não "por mês"), inteiro de 0 a 10, padrão
+      5, editável pelo admin a qualquer momento via o mesmo componente
+      `QuantityStepper` já usado em frigobar/comanda (que ganhou `min`/
+      `max` opcionais nesta parte, mantendo compatibilidade com quem já
+      usava só `value`/`onChange`).
+    - **Fórmula de repartição** (`computeWeightedSuitesCafeCommission`,
+      `src/lib/commission-math.ts` — função pura, sem I/O, separada de
+      `src/lib/actions/commission.ts` porque um arquivo `"use server"` só
+      pode exportar Server Actions assíncronas): o peso de cada camareira
+      é a **média entre dois percentuais** — percentual dela na
+      quantidade total de serviços concluídos no período (troca,
+      arrumação, somente saída, somente chegada, saída com chegada, todas
+      as camareiras somadas) e percentual da nota dela na soma de todas
+      as notas. Como os dois percentuais somam 100% cada um, a média
+      também soma 100% — o total distribuído bate exatamente com o pote,
+      sem sobra nem falta, e sem dividir por zero (mês sem nenhum serviço
+      ainda, ou notas todas zeradas, caem pra 0% em vez de travar).
+    - **Duas visões temporais, resolvendo o descompasso identificado na
+      análise crítica**: a proposta original do proprietário aplicava o
+      percentual **congelado do mês passado** sobre o pote do **mês
+      corrente** (ainda se formando) — períodos diferentes sobre o mesmo
+      cálculo. Escolhida, entre as opções apresentadas, a alternativa que
+      mantém sempre os dois do mesmo período: (1) uma **estimativa do mês
+      corrente**, sempre ao vivo (percentual de serviços até hoje × pote
+      do mês até hoje, ambos ainda se formando, recalculados a cada
+      carregamento da tela) e (2) um **fechamento do mês passado**, sob
+      demanda.
+    - **Fechamento sob demanda, não automático por calendário**: botão
+      "Calcular comissão do mês passado" (`calculatePreviousMonthCommissionStatement`,
+      `src/lib/actions/commission.ts`) — ao clicar, captura a nota de cada
+      camareira **exatamente como está naquele momento** e aplica sobre o
+      percentual de serviços e o pote do mês passado inteiro, ambos já
+      naturalmente estáveis (dados de um mês fechado não mudam mais, ao
+      contrário da nota, que é editável a qualquer momento — só ela
+      precisa ser capturada). O resultado é gravado em
+      `commission_statements` (uma linha por camareira por mês,
+      `unique(month, camareira_id)`); clicar de novo apaga e regrava as
+      linhas daquele mês (útil depois de corrigir alguma nota). A
+      comissão de bar do mesmo mês **não** é gravada nessa tabela — é
+      sempre recalculada ao vivo a partir de `bar_comanda_items`
+      (`getBarCommissionByCamareiraForPeriod`, já existente desde a Parte
+      30), por já ser igualmente estável pra um mês fechado.
+    - **Demonstrativo em PDF e por e-mail**: `src/lib/commission-statement-pdf.tsx`
+      (mesmo padrão `@react-pdf/renderer` do recibo de conta, Parte 06) +
+      rota `/api/dashboard/commission-statement` (admin-only, mesmo padrão
+      de checagem de papel da rota do recibo) geram, sob demanda, uma
+      tabela por camareira com as duas comissões (Suítes e Café, Bar) e o
+      total, mais uma linha de total geral — sempre a partir do último
+      demonstrativo calculado do mês passado, nunca recalculado na hora
+      de baixar/enviar (garante que o PDF reflita exatamente o que foi
+      "fechado" no clique). `sendCommissionStatementEmail` reaproveita o
+      mesmo e-mail e o mesmo remetente Resend já usados pro recibo de
+      conta — mas, diferente daquele envio (que é "melhor esforço"
+      silencioso), aqui é uma ação explícita do admin com resultado
+      sempre mostrado por toast.
+    - **"Comissão do mês" saiu de `/mesas/gerenciar` e virou parte de
+      `/dashboard/comissoes`**: a tela "Comissão de 10% do bar por
+      camareira" foi renomeada **"Comissões das camareiras"** (rota
+      renomeada de `/dashboard/comissao-bar` pra `/dashboard/comissoes`)
+      e passou a ter duas seções — a tabela de bar que já existia, e um
+      novo card "Comissão de serviços nas suítes e no café", que também
+      herdou o campo "Valor da comissão por café servido" (removido do
+      admin de `/mesas/gerenciar`, que não tinha mais nenhum motivo pra
+      carregar `commission_settings`). Extraído `getBreakfastCommissionPotForRange`
+      (`src/lib/actions/breakfast-commission.ts`) do cálculo que já
+      existia duplicado no Resumo Executivo — mesma regra de sempre
+      (suítes elegíveis × valor por café servido, com fallback e
+      congelamento por mês já estabelecidos desde a Parte 27), agora numa
+      função só, reaproveitada pelo Resumo Executivo e pela nova tela.
+    - **Cards do Resumo Executivo renomeados**: "Comissão do mês" →
+      "Comissão Suítes e Café"; "10% bar total" → "Comissão Bar" — mesmos
+      valores de sempre, só o rótulo mudou.
+    - **E-mail de envio virou tela própria**: o card "E-mail da
+      contabilidade" (Parte 06) saiu da aba "Consumo por suítes" de
+      `/frigobar` e virou a tela **"Cadastrar e-mail de envio"**
+      (`/dashboard/email-envio`), último item do menu do Resumo Executivo
+      — card renomeado **"E-mail de envio"**, já que agora serve dois
+      propósitos (recibo de conta paga e demonstrativo de comissões). Os
+      nomes internos (`receipt_settings`, `accounting_email`,
+      `getReceiptSettings`/`updateAccountingEmail`) não mudaram, só o
+      texto visível e a tela em que aparece — mesma convenção já registrada
+      na Parte 12 pra "Quarto" → "Suíte".
+    - **Histórico**: coluna "Comissão (R$)" do card "Resumo diário"
+      renomeada "Comissão Suítes e Café" (tabela e CSV); no card "Por
+      camareira — ocorrências e comissão de bar", coluna "Total 10% bar no
+      período" renomeada "Comissão Bar" e nova coluna "Comissão Suítes e
+      Café" acrescentada ao final — essa última **sempre ao vivo**, pra
+      qualquer período arbitrário escolhido no filtro do Histórico (não o
+      retrato pontual gravado pelo botão "Calcular", que é específico de
+      "o mês inteiro anterior a hoje"), via `getSuitesCafeCommissionForPeriod`.
+    - **Limitação aceita conscientemente**: o percentual de serviços e o
+      pote usados na estimativa do mês corrente e no cálculo do mês
+      passado consideram só as camareiras **atualmente ativas** — uma
+      camareira desligada no meio do período não aparece nem tem seus
+      serviços contados (diferente da comissão de bar, que deriva as
+      camareiras diretamente das comandas já lançadas, sem depender de
+      quem está ativa hoje). Não corrigido por não ter sido pedido e por
+      exigir mesclar duas fontes diferentes (roster atual + histórico de
+      tarefas) só pra um caso raro (saída de uma camareira no meio do
+      mês).
+    - **Testado**: fluxo completo via sessão autenticada real (mesma
+      técnica da Parte 32) contra o `next dev` local — nota incrementada
+      de 5 para 6 via stepper, botão "Calcular comissão do mês passado"
+      gravando corretamente em `commission_statements` (conferido também
+      direto no Postgres local), PDF baixado com `Content-Type:
+      application/pdf`, e todas as telas/rótulos renomeados confirmados
+      presentes (Resumo Executivo, Comissões das camareiras, E-mail de
+      envio, Histórico) e ausentes nos lugares antigos (Mesas do Café,
+      Consumo de Bar e Frigobar).
 
 ## Convenções e decisões importantes
 
@@ -1849,17 +2003,18 @@ o escopo mude no futuro.
   `poolbar/` e `mesas/` (só a aba "Layout & mesas") são as subtelas, cada
   uma com `<BackLink>`.
 - `src/app/(admin)/mesas/gerenciar/` — tela "Mesas do café" do menu
-  principal: valor da comissão ("por café servido", Parte 27), alocação
-  de suítes por mesa via diálogo (`table-assignment-dialog.tsx`, aberto
-  ao clicar numa mesa do layout — Parte 26; substitui o antigo
-  `TableRoomAssignments` da Parte 12), observação do dia, e "Total de
-  mesas" + os 4 campos de contagem por tamanho de mesa — todos somente
-  leitura, sempre calculados na hora a partir da alocação suíte↔mesa
-  (Partes 16/17). Não há mais campo de hóspedes por mesa digitado pelo
-  admin (Parte 27: hóspedes por suíte sempre vêm da Stays) nem cards por
-  mesa (a observação de cada mesa individual também está dentro do
-  diálogo agora). **Não** inclui o layout arrastável (mover mesa de
-  posição), que é `src/app/(admin)/checklists/mesas/`.
+  principal: alocação de suítes por mesa via diálogo
+  (`table-assignment-dialog.tsx`, aberto ao clicar numa mesa do layout —
+  Parte 26; substitui o antigo `TableRoomAssignments` da Parte 12),
+  observação do dia, e "Total de mesas" + os 4 campos de contagem por
+  tamanho de mesa — todos somente leitura, sempre calculados na hora a
+  partir da alocação suíte↔mesa (Partes 16/17). Não há mais campo de
+  hóspedes por mesa digitado pelo admin (Parte 27: hóspedes por suíte
+  sempre vêm da Stays) nem cards por mesa (a observação de cada mesa
+  individual também está dentro do diálogo agora). O campo "Valor da
+  comissão por café servido" (Parte 27) saiu daqui na Parte 35, mudou-se
+  pra `/dashboard/comissoes`. **Não** inclui o layout arrastável (mover
+  mesa de posição), que é `src/app/(admin)/checklists/mesas/`.
 - `src/components/shared/table-layout-canvas.tsx` — desenha o layout de
   mesas (formato, posição); único componente usado tanto pelo editor do
   admin quanto pela visão da camareira, e também pela visão só-leitura de
@@ -1877,7 +2032,9 @@ o escopo mude no futuro.
   de comandas do bar" (`comandas-list-panel.tsx`) e "Consumo por quartos"
   (`frigobar-rooms-panel.tsx`, acordeão por quarto, sem ações) — desde a
   Parte 31, mostra "· isenta" junto da taxa de serviço quando a camareira
-  isentou os 10% daquela conta.
+  isentou os 10% daquela conta. O card "E-mail da contabilidade" que
+  vivia no final desta aba saiu daqui na Parte 35, virou a tela
+  "Cadastrar e-mail de envio" em `/dashboard/email-envio`.
 - `src/app/(camareira)/comanda/` — tela "Comanda" da camareira (ver Parte
   05): lista de comandas ativas (`page.tsx` + `comandas-list.tsx`) e o
   formulário de pedido, compartilhado entre criar e editar
@@ -1925,6 +2082,31 @@ o escopo mude no futuro.
   `getBarCommissionByCamareiraForPeriod` (Histórico) — comissão de 10%
   por camareira responsável (`created_by`), excluindo comandas canceladas
   e, desde a Parte 31, comandas de contas isentas da taxa de serviço.
+- `src/lib/commission-math.ts` — `computeWeightedSuitesCafeCommission`
+  (Parte 35), função pura (peso = média entre % de serviços e % de nota)
+  que reparte um pote em R$ entre camareiras; separada de
+  `src/lib/actions/commission.ts` porque um arquivo `"use server"` só
+  pode exportar Server Actions assíncronas.
+- `src/lib/actions/commission.ts` — Server Actions da comissão de
+  serviços nas suítes e no café (Parte 35): `updateCamareiraServiceScore`
+  (nota 0-10 de cada camareira, `profiles.service_quality_score`),
+  `getSuitesCafeCurrentMonthEstimate` (estimativa ao vivo do mês
+  corrente), `calculatePreviousMonthCommissionStatement` (grava o
+  demonstrativo congelado do mês passado em `commission_statements`),
+  `getPreviousMonthDemonstrativo` (lê o último calculado, combinando com
+  a comissão de bar do mesmo mês, sempre ao vivo),
+  `getSuitesCafeCommissionForPeriod` (Histórico, período arbitrário) e
+  `sendCommissionStatementEmail` (reaproveita o e-mail/remetente já
+  usados pro recibo de conta).
+- `src/lib/actions/breakfast-commission.ts` — `getBreakfastCommissionPotForRange`
+  (Parte 35), extraído do cálculo que já existia duplicado no Resumo
+  Executivo: soma o pote de comissão do café (suítes elegíveis × valor
+  por café servido, com fallback e congelamento por mês, Parte 27) num
+  intervalo arbitrário de datas.
+- `src/lib/commission-statement-pdf.tsx` — gera o PDF do demonstrativo de
+  comissões (Parte 35), mesmo padrão `@react-pdf/renderer` do
+  `receipt-pdf.tsx`; servido pela rota `/api/dashboard/commission-statement`
+  (admin-only) e reaproveitado pelo envio por e-mail.
 - `src/lib/room-bills.ts` — helper `getOrCreateCurrentBill` (não é Server
   Action; recebe o client Supabase como parâmetro), usado pelos arquivos de
   actions acima.
@@ -1953,14 +2135,31 @@ o escopo mude no futuro.
   para escolher" desde a Parte 10.
 - `src/app/(admin)/dashboard/` — Resumo Executivo. Desde a Parte 32,
   `page.tsx` só busca dados dos 5 cards de "Consulta rápida do mês
-  corrente" e renderiza o menu (mesmo padrão de `/checklists`) — o resto
-  virou telas próprias, cada uma com `<BackLink href="/dashboard">`:
-  `servicos-suites/` (suítes de hoje/amanhã + serviços dos últimos 7
-  dias, usa `service-log-table.tsx`), `suites-disponiveis/` (Parte 33,
-  ver abaixo), `consumo-frigobar/`, `consumo-bar/` (petiscos/bebidas
-  separados) e `comissao-bar/` (usa `camareira-bar-commission-table.tsx`,
-  criado na Parte 30). `monthly-chart.tsx` (o gráfico "Totais do mês") foi
-  excluído na Parte 32, sem uso desde então.
+  corrente" ("Comissão Suítes e Café"/"Comissão Bar" desde a Parte 35,
+  antes "Comissão do mês"/"10% bar total") e renderiza o menu (mesmo
+  padrão de `/checklists`, também com `<SyncStaysAllButton>` desde a
+  Parte 34) — o resto virou telas próprias, cada uma com
+  `<BackLink href="/dashboard">`: `servicos-suites/` (suítes de hoje/
+  amanhã + serviços dos últimos 7 dias, usa `service-log-table.tsx`),
+  `suites-disponiveis/` (Parte 33, ver abaixo), `consumo-frigobar/`,
+  `consumo-bar/` (petiscos/bebidas separados), `comissoes/` (renomeada de
+  `comissao-bar/` na Parte 35 — ver abaixo) e `email-envio/` (novo na
+  Parte 35, último item do menu). `monthly-chart.tsx` (o gráfico "Totais
+  do mês") foi excluído na Parte 32, sem uso desde então.
+- `src/app/(admin)/dashboard/comissoes/` — "Comissões das camareiras"
+  (Parte 35; antes "Comissão de 10% do bar por camareira" em
+  `comissao-bar/`): duas seções — a tabela de bar que já existia
+  (`camareira-bar-commission-table.tsx`, Parte 30) e o novo card
+  "Comissão de serviços nas suítes e no café"
+  (`suites-cafe-commission-panel.tsx`), com o campo "Valor da comissão
+  por café servido" (vindo de `/mesas/gerenciar`), a tabela de estimativa
+  ao vivo do mês corrente (nota editável via `QuantityStepper`) e o botão
+  "Calcular comissão do mês passado" (gera o demonstrativo, com PDF e
+  envio por e-mail).
+- `src/app/(admin)/dashboard/email-envio/` — "Cadastrar e-mail de envio"
+  (Parte 35): card "E-mail de envio" (`email-envio-settings.tsx`, movido
+  de `frigobar/frigobar-rooms-panel.tsx`), mesmo e-mail usado pro recibo
+  de conta paga (Parte 06) e pro demonstrativo de comissões (Parte 35).
 - `src/app/(admin)/dashboard/suites-disponiveis/page.tsx` — "Suítes vagas
   e limpas, disponíveis para alugar" (Parte 33): duas listas (limpas/
   sujas) calculadas ao vivo a partir de `daily_room_tasks` — suíte com
@@ -1977,8 +2176,12 @@ o escopo mude no futuro.
   `finished_at`); `history-tables.tsx` também tem o cálculo de comissão
   por suíte elegível com fallback/congelamento histórico (Parte 27), e
   desde a Parte 32 a tabela "Por camareira" está dividida em dois cards
-  (serviços; e ocorrências + "Total 10% bar no período", este último
-  vindo de `getBarCommissionByCamareiraForPeriod`).
+  (serviços; e ocorrências + "Comissão Bar" + "Comissão Suítes e Café",
+  Parte 35 — a primeira vindo de `getBarCommissionByCamareiraForPeriod`,
+  a segunda de `getSuitesCafeCommissionForPeriod`, ambas sempre ao vivo
+  pro período do filtro). A coluna "Comissão (R$)" do card "Resumo
+  diário" também foi renomeada "Comissão Suítes e Café" na Parte 35, sem
+  mudar de cálculo.
 - `src/lib/receipt-pdf.tsx` — gera o PDF do recibo de uma conta paga sob
   demanda, sem persistir arquivo (Parte 06), usado tanto pelo e-mail
   automático quanto pela rota `/api/room-bills/[billId]/receipt` ("Ver
@@ -2004,15 +2207,23 @@ o escopo mude no futuro.
   com `force: true`, ignoram (mas nunca ignoram um serviço já reivindicado
   por uma camareira). Todas buscam reservas a partir de **ontem**, não de
   hoje, pra não perder saídas cujo check-out cai exatamente na data
-  consultada (Parte 23). Cada uma das três telas tem um `sync-stays-button.tsx`
-  próprio com dois botões: "Forçar sincronização com a Stays" (`force: true`)
-  e "Sincronizar agora (preserva edições)" (`force: false`, roda na hora
-  sem esperar o cron — Parte 26). **E** roda automaticamente 1x/dia via
+  consultada (Parte 23). `syncStaysAll(options?)` (Parte 34) só chama as
+  três em sequência, repassando o mesmo `force` — é o que
+  `src/app/(admin)/dashboard/sync-stays-all-button.tsx` chama (dois
+  botões: "Sincronização Stays Total - sobrescreve alterações inseridas
+  pelo Admin", `force: true`, e "Sincronização Stays Parcial - preserva
+  alterações inseridas pelo Admin", `force: false`), único gatilho manual
+  desde a Parte 34 — antes existia um `sync-stays-button.tsx` próprio em
+  cada uma das três telas, removidos nessa parte por serem sempre
+  redundantes com o gatilho único. **E** roda automaticamente 1x/dia via
   `src/app/api/cron/stays-sync/route.ts` + `vercel.json` (sempre sem
   `force`) — ver Parte 14. `syncStaysBreakfastTables` também grava
   `eligible_suites_count`/`commission_value_snapshot` em
   `daily_breakfast_settings` a cada execução, base do cálculo de comissão
-  (Parte 27).
+  (Parte 27), lido por `getBreakfastCommissionPotForRange`
+  (`src/lib/actions/breakfast-commission.ts`, Parte 35) pra somar o pote
+  de comissão do café num intervalo arbitrário — usado pelo Resumo
+  Executivo, pelo Histórico e pela nova tela "Comissões das camareiras".
 - `src/lib/task-type.ts` — rótulos centralizados dos tipos de trabalho
   (Arrumação/Preparação Chegada/Troca) — mudar aqui reflete em todo o app.
 - `src/components/shared/back-link.tsx` — link "← Voltar" reutilizável,

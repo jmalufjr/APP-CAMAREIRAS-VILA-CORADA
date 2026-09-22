@@ -5,6 +5,7 @@ import { todayKey, formatDatePt, nowInBrazil } from "@/lib/date";
 import { Card, CardContent } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { getBarCommissionByCamareira } from "@/lib/actions/comandas";
+import { getBreakfastCommissionPotForRange } from "@/lib/actions/breakfast-commission";
 import { SyncStaysAllButton } from "./sync-stays-all-button";
 import {
   BedDouble,
@@ -17,6 +18,7 @@ import {
   History,
   ChevronRight,
   Key,
+  Mail,
 } from "lucide-react";
 
 function monthRange() {
@@ -35,7 +37,8 @@ const menuItems = [
   },
   { href: "/dashboard/consumo-frigobar", label: "Consumo de frigobar", icon: Wine },
   { href: "/dashboard/consumo-bar", label: "Consumo de bar", icon: Martini },
-  { href: "/dashboard/comissao-bar", label: "Comissão de 10% do bar por camareira", icon: Percent },
+  { href: "/dashboard/comissoes", label: "Comissões das camareiras", icon: Percent },
+  { href: "/dashboard/email-envio", label: "Cadastrar e-mail de envio", icon: Mail },
 ];
 
 export default async function DashboardPage() {
@@ -43,59 +46,37 @@ export default async function DashboardPage() {
   const today = todayKey();
   const { start, end } = monthRange();
 
-  const [{ data: todayTasks }, { data: monthEligibility }, { data: monthAssignmentsFallback }, { data: commissionSettings }, { count: occurrencesToday }, barCommission] =
-    await Promise.all([
-      supabase.from("daily_room_tasks").select("status").eq("date", today),
-      // Comissão do dia = quantidade de suítes elegíveis pro café da manhã
-      // naquele dia (independente de terem sido de fato alocadas a uma
-      // mesa) × valor por café servido — gravada a cada sincronização com a
-      // Stays em daily_breakfast_settings. eligible_suites_count é nulo pra
-      // datas anteriores a essa coluna existir; ver fallback abaixo.
-      supabase
-        .from("daily_breakfast_settings")
-        .select("date, eligible_suites_count")
-        .gte("date", start)
-        .lte("date", end),
-      // Fallback pra datas sem eligible_suites_count (regra antiga: conta
-      // suítes alocadas a alguma mesa) — uma mudança de regra não pode
-      // zerar retroativamente um valor que já tinha sido calculado.
-      supabase.from("daily_breakfast_room_assignments").select("date, room_id").gte("date", start).lte("date", end),
-      supabase.from("commission_settings").select("value_per_table").single(),
-      supabase
-        .from("daily_room_task_occurrences")
-        .select("id, daily_room_tasks!inner(date)", { count: "exact", head: true })
-        .eq("daily_room_tasks.date", today),
-      getBarCommissionByCamareira(),
-    ]);
+  const [
+    { data: todayTasks },
+    { data: todayEligibility },
+    { data: todayAssignmentsFallback },
+    { count: occurrencesToday },
+    barCommission,
+    totalCommissionMonth,
+  ] = await Promise.all([
+    supabase.from("daily_room_tasks").select("status").eq("date", today),
+    // Suítes elegíveis pro café da manhã hoje (independente de terem sido
+    // de fato alocadas a uma mesa) — só usada aqui pro card "Suítes no
+    // café hoje"; o total em R$ do mês vem de
+    // getBreakfastCommissionPotForRange, que aplica a mesma regra (com o
+    // mesmo fallback) já compartilhada com o Histórico.
+    supabase.from("daily_breakfast_settings").select("eligible_suites_count").eq("date", today).maybeSingle(),
+    // Fallback pra hoje sem eligible_suites_count (regra antiga: conta
+    // suítes alocadas a alguma mesa) — uma mudança de regra não pode
+    // zerar retroativamente um valor que já tinha sido calculado.
+    supabase.from("daily_breakfast_room_assignments").select("room_id").eq("date", today),
+    supabase
+      .from("daily_room_task_occurrences")
+      .select("id, daily_room_tasks!inner(date)", { count: "exact", head: true })
+      .eq("daily_room_tasks.date", today),
+    getBarCommissionByCamareira(),
+    getBreakfastCommissionPotForRange(start, end),
+  ]);
 
   const doneToday = (todayTasks ?? []).filter((t) => t.status === "concluido").length;
   const totalToday = (todayTasks ?? []).length;
 
-  const commissionRate = Number(commissionSettings?.value_per_table ?? 0);
-
-  // Regra antiga (suítes com alguma mesa naquele dia) só usada como
-  // fallback pra data sem eligible_suites_count.
-  const fallbackSuitesByDate = new Map<string, number>();
-  (monthAssignmentsFallback ?? []).forEach((r) => {
-    fallbackSuitesByDate.set(r.date, (fallbackSuitesByDate.get(r.date) ?? 0) + 1);
-  });
-
-  // eligible_suites_count nulo (ou a data nem aparecer aqui) = nunca
-  // sincronizada sob essa regra — cai pro fallback em vez de zerar um
-  // valor que já existia (nunca uma mudança de regra pode zerar
-  // retroativamente algo que já tinha sido calculado).
-  const eligibilityByDate = new Map<string, number | null>(
-    (monthEligibility ?? []).map((r) => [r.date, r.eligible_suites_count])
-  );
-  const allDates = new Set<string>([...eligibilityByDate.keys(), ...fallbackSuitesByDate.keys()]);
-  const suitesByDate = new Map<string, number>();
-  allDates.forEach((date) => {
-    suitesByDate.set(date, eligibilityByDate.get(date) ?? fallbackSuitesByDate.get(date) ?? 0);
-  });
-
-  const totalSuitesMonth = Array.from(suitesByDate.values()).reduce((sum, n) => sum + n, 0);
-  const totalCommissionMonth = totalSuitesMonth * commissionRate;
-  const suitesToday = suitesByDate.get(today) ?? 0;
+  const suitesToday = todayEligibility?.eligible_suites_count ?? (todayAssignmentsFallback ?? []).length;
 
   const barCommissionCurrentMonthTotal = barCommission.currentMonth.reduce((sum, r) => sum + r.commission, 0);
 
@@ -112,8 +93,8 @@ export default async function DashboardPage() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <StatCard icon={BedDouble} label="Suítes concluídas hoje" value={`${doneToday} / ${totalToday}`} />
           <StatCard icon={Coffee} label="Suítes no café hoje" value={String(suitesToday)} />
-          <StatCard icon={Wallet} label="Comissão do mês" value={`R$ ${totalCommissionMonth.toFixed(2)}`} />
-          <StatCard icon={Percent} label="10% bar total" value={`R$ ${barCommissionCurrentMonthTotal.toFixed(2)}`} />
+          <StatCard icon={Wallet} label="Comissão Suítes e Café" value={`R$ ${totalCommissionMonth.toFixed(2)}`} />
+          <StatCard icon={Percent} label="Comissão Bar" value={`R$ ${barCommissionCurrentMonthTotal.toFixed(2)}`} />
           <StatCard
             icon={AlertTriangle}
             label="Ocorrências Manutenção hoje"

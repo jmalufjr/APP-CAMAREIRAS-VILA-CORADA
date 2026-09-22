@@ -1,14 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type { BreakfastTable, CommissionSettings, DailyBreakfastSettings, DailyBreakfastRoomAssignment, Room } from "@/lib/types";
-import { setBreakfastDayNotes, updateCommissionValue } from "@/lib/actions/tables";
+import type { BreakfastTable, DailyBreakfastSettings, DailyBreakfastRoomAssignment, Room } from "@/lib/types";
+import { setBreakfastDayNotes } from "@/lib/actions/tables";
 import { computeTableSizeCounts } from "@/lib/stays/derive-breakfast";
 import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,7 +44,6 @@ function editedTableIds(assignments: DailyBreakfastRoomAssignment[]): Set<string
 export function GuestsAdminPanel({
   tables,
   rooms,
-  commission,
   todayNotes,
   tomorrowNotes,
   todaySettings,
@@ -57,7 +53,6 @@ export function GuestsAdminPanel({
 }: {
   tables: BreakfastTable[];
   rooms: Room[];
-  commission: CommissionSettings;
   todayNotes: Record<string, string>;
   tomorrowNotes: Record<string, string>;
   todaySettings: DailyBreakfastSettings | null;
@@ -65,9 +60,6 @@ export function GuestsAdminPanel({
   todayAssignments: DailyBreakfastRoomAssignment[];
   tomorrowAssignments: DailyBreakfastRoomAssignment[];
 }) {
-  const [isPending, startTransition] = useTransition();
-  const router = useRouter();
-  const [commissionValue, setCommissionValue] = useState(String(commission?.value_per_table ?? 10));
   // Mesa clicada no layout "Mesas · hoje/amanhã", pra abrir o diálogo de
   // quais suítes estão alocadas ali — substitui os cards de suítes por mesa
   // que existiam antes.
@@ -85,44 +77,6 @@ export function GuestsAdminPanel({
 
   return (
     <div className="space-y-8">
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-heading text-lg">Valor da comissão por café servido</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">R$</span>
-            <Input
-              className="w-32"
-              type="number"
-              step="0.01"
-              min="0"
-              value={commissionValue}
-              onChange={(e) => setCommissionValue(e.target.value)}
-            />
-            <Button
-              disabled={isPending}
-              onClick={() =>
-                startTransition(async () => {
-                  const result = await updateCommissionValue(Number(commissionValue));
-                  if (result?.error) toast.error(result.error);
-                  else {
-                    toast.success("Valor atualizado.");
-                    router.refresh();
-                  }
-                })
-              }
-            >
-              Salvar
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Esse valor será multiplicado pelo número de suítes para as quais será servido o café da manhã
-            para se obter o valor total da comissão do dia.
-          </p>
-        </CardContent>
-      </Card>
-
       <Tabs defaultValue="hoje">
         <TabsList>
           <TabsTrigger value="hoje">Mesas de hoje</TabsTrigger>

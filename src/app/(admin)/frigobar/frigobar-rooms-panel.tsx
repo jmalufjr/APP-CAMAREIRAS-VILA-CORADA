@@ -1,28 +1,25 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { RoomBillOverview, RecentlyPaidBill } from "@/lib/actions/room-bills";
-import { resendRoomBillReceipt, updateAccountingEmail } from "@/lib/actions/room-bills";
-import type { ReceiptSettings } from "@/lib/types";
+import { resendRoomBillReceipt } from "@/lib/actions/room-bills";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
 import { formatDateShortPt, formatDateTimePt } from "@/lib/date";
 
 // Somente leitura: fechar/reabrir/pagamento passaram a ser ações da
 // camareira, na tela "Consumo por quartos" dela (ver Parte 05 do CLAUDE.md).
+// O card de e-mail (antes "E-mail da contabilidade") saiu daqui e virou a
+// tela "Cadastrar e-mail de envio" no menu do Resumo Executivo (Parte 34).
 export function FrigobarRoomsPanel({
   overview,
   recentlyPaid,
-  receiptSettings,
 }: {
   overview: RoomBillOverview[];
   recentlyPaid: RecentlyPaidBill[];
-  receiptSettings: ReceiptSettings;
 }) {
   return (
     <div className="space-y-8">
@@ -51,51 +48,7 @@ export function FrigobarRoomsPanel({
           </Accordion>
         )}
       </div>
-
-      <AccountingEmailSettings receiptSettings={receiptSettings} />
     </div>
-  );
-}
-
-function AccountingEmailSettings({ receiptSettings }: { receiptSettings: ReceiptSettings }) {
-  const [isPending, startTransition] = useTransition();
-  const router = useRouter();
-  const [email, setEmail] = useState(receiptSettings.accounting_email ?? "");
-
-  function handleSave() {
-    startTransition(async () => {
-      const result = await updateAccountingEmail(email);
-      if (result?.error) toast.error(result.error);
-      else {
-        toast.success("E-mail atualizado.");
-        router.refresh();
-      }
-    });
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="font-heading text-lg">E-mail da contabilidade</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-wrap items-center gap-3">
-        <Input
-          type="email"
-          className="w-full sm:w-72"
-          placeholder="contabilidade@exemplo.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          disabled={isPending}
-        />
-        <Button disabled={isPending} onClick={handleSave}>
-          Salvar
-        </Button>
-        <p className="text-xs text-muted-foreground basis-full">
-          É pra este e-mail que o recibo em PDF de cada conta é enviado automaticamente assim que a camareira
-          informa o pagamento.
-        </p>
-      </CardContent>
-    </Card>
   );
 }
 

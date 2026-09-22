@@ -1,17 +1,16 @@
 import { PageHeader } from "@/components/shared/page-header";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { getRoomBillsOverview, getRecentlyPaidRoomBills, getReceiptSettings } from "@/lib/actions/room-bills";
+import { getRoomBillsOverview, getRecentlyPaidRoomBills } from "@/lib/actions/room-bills";
 import { getActiveComandas, getInactiveComandas } from "@/lib/actions/comandas";
 import { FrigobarRoomsPanel } from "./frigobar-rooms-panel";
 import { ComandasListPanel } from "./comandas-list-panel";
 
 export default async function FrigobarPage() {
-  const [overview, recentlyPaid, activeComandas, inactiveComandas, receiptSettings] = await Promise.all([
+  const [overview, recentlyPaid, activeComandas, inactiveComandas] = await Promise.all([
     getRoomBillsOverview(),
     getRecentlyPaidRoomBills(),
     getActiveComandas(),
     getInactiveComandas(),
-    getReceiptSettings(),
   ]);
 
   return (
@@ -29,7 +28,7 @@ export default async function FrigobarPage() {
           <ComandasListPanel activeComandas={activeComandas} inactiveComandas={inactiveComandas} />
         </TabsContent>
         <TabsContent value="quartos" className="pt-4">
-          <FrigobarRoomsPanel overview={overview} recentlyPaid={recentlyPaid} receiptSettings={receiptSettings} />
+          <FrigobarRoomsPanel overview={overview} recentlyPaid={recentlyPaid} />
         </TabsContent>
       </Tabs>
     </div>

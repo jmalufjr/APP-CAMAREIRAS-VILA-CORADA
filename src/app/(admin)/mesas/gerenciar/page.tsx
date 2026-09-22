@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { BreakfastTable, CommissionSettings, DailyBreakfastSettings, Room } from "@/lib/types";
+import type { BreakfastTable, DailyBreakfastSettings, Room } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
 import { todayKey, tomorrowKey } from "@/lib/date";
 import { GuestsAdminPanel } from "./guests-admin-panel";
@@ -9,7 +9,6 @@ export default async function GerenciarMesasPage() {
   const [
     { data: tables },
     { data: rooms },
-    { data: settings },
     { data: todayRows },
     { data: tomorrowRows },
     { data: todaySettings },
@@ -19,7 +18,6 @@ export default async function GerenciarMesasPage() {
   ] = await Promise.all([
     supabase.from("breakfast_tables").select("*").order("created_at", { ascending: true }),
     supabase.from("rooms").select("*").eq("active", true).order("position"),
-    supabase.from("commission_settings").select("*").single(),
     supabase.from("daily_breakfast").select("table_id, notes").eq("date", todayKey()),
     supabase.from("daily_breakfast").select("table_id, notes").eq("date", tomorrowKey()),
     supabase.from("daily_breakfast_settings").select("*").eq("date", todayKey()).maybeSingle(),
@@ -37,7 +35,6 @@ export default async function GerenciarMesasPage() {
       <GuestsAdminPanel
         tables={(tables ?? []) as BreakfastTable[]}
         rooms={(rooms ?? []) as Room[]}
-        commission={settings as CommissionSettings}
         todayNotes={Object.fromEntries((todayRows ?? []).map((r) => [r.table_id, r.notes ?? ""]))}
         tomorrowNotes={Object.fromEntries((tomorrowRows ?? []).map((r) => [r.table_id, r.notes ?? ""]))}
         todaySettings={todaySettings as DailyBreakfastSettings | null}

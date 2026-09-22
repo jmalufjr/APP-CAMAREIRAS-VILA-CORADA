@@ -90,12 +90,14 @@ export function HistoryTables({
   roomAssignments,
   commissionRate,
   barCommission,
+  suitesCafeCommission,
   tasks,
 }: {
   eligibility: EligibilityRow[];
   roomAssignments: RoomAssignmentRow[];
   commissionRate: number;
   barCommission: CamareiraBarCommissionRow[];
+  suitesCafeCommission: { camareira_name: string; amount: number }[];
   tasks: TaskRow[];
 }) {
   // Mês corrente sempre usa o valor atual do campo de comissão (muda na
@@ -160,6 +162,7 @@ export function HistoryTables({
         durationSumMin: number;
         durationCount: number;
         barCommission: number;
+        suitesCafeCommission: number;
       }
     >();
     const empty = () => ({
@@ -169,6 +172,7 @@ export function HistoryTables({
       durationSumMin: 0,
       durationCount: 0,
       barCommission: 0,
+      suitesCafeCommission: 0,
     });
     tasks.forEach((t) => {
       const entry = map.get(t.camareira) ?? empty();
@@ -189,8 +193,13 @@ export function HistoryTables({
       entry.barCommission += c.commission;
       map.set(c.camareira_name, entry);
     });
+    suitesCafeCommission.forEach((c) => {
+      const entry = map.get(c.camareira_name) ?? empty();
+      entry.suitesCafeCommission += c.amount;
+      map.set(c.camareira_name, entry);
+    });
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [tasks, barCommission]);
+  }, [tasks, barCommission, suitesCafeCommission]);
 
   const totals = useMemo(() => {
     const t = emptyDayStats();
@@ -227,7 +236,7 @@ export function HistoryTables({
                   ...TASK_TYPE_OPTIONS.map((o) => `Qtd. ${o.label}`),
                   "Ocorrências Manutenção",
                   "Ocorrências Manutenção resolvidas",
-                  "Comissão (R$)",
+                  "Comissão Suítes e Café",
                 ],
                 ...byDay.map(([date, v]) => [
                   date,
@@ -256,7 +265,7 @@ export function HistoryTables({
                 ))}
                 <TableHead>Ocorrências Manutenção</TableHead>
                 <TableHead>Ocorrências resolvidas</TableHead>
-                <TableHead>Comissão (R$)</TableHead>
+                <TableHead>Comissão Suítes e Café</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -378,7 +387,8 @@ export function HistoryTables({
                 <TableHead>Camareira</TableHead>
                 <TableHead>Ocorrências Manutenção</TableHead>
                 <TableHead>Ocorrências resolvidas</TableHead>
-                <TableHead>Total 10% bar no período</TableHead>
+                <TableHead>Comissão Bar</TableHead>
+                <TableHead>Comissão Suítes e Café</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -388,11 +398,12 @@ export function HistoryTables({
                   <TableCell>{v.ocorrencias}</TableCell>
                   <TableCell>{v.ocorrenciasResolvidas}</TableCell>
                   <TableCell>R$ {v.barCommission.toFixed(2)}</TableCell>
+                  <TableCell>R$ {v.suitesCafeCommission.toFixed(2)}</TableCell>
                 </TableRow>
               ))}
               {byCamareira.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                     Sem dados no período.
                   </TableCell>
                 </TableRow>

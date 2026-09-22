@@ -8,6 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { getMinibarConsumptionForPeriod } from "@/lib/actions/minibar";
 import { getPoolbarConsumptionForPeriod } from "@/lib/actions/poolbar";
 import { getBarCommissionByCamareiraForPeriod } from "@/lib/actions/comandas";
+import { getSuitesCafeCommissionForPeriod } from "@/lib/actions/commission";
 import { toDateKey, nowInBrazil } from "@/lib/date";
 import type { ChecklistType } from "@/lib/types";
 
@@ -52,6 +53,7 @@ export default async function HistoricoPage({
     minibarSummary,
     poolbarSummary,
     barCommission,
+    suitesCafeCommission,
   ] = await Promise.all([
     // Comissão = quantidade de suítes elegíveis pro café da manhã por dia
     // (independente de terem sido de fato alocadas a uma mesa) × valor por
@@ -76,6 +78,7 @@ export default async function HistoricoPage({
     getMinibarConsumptionForPeriod(from, to),
     getPoolbarConsumptionForPeriod(from, to),
     getBarCommissionByCamareiraForPeriod(from, to),
+    getSuitesCafeCommissionForPeriod(from, to),
   ]);
 
   const commissionRate = Number(commissionSettings?.value_per_table ?? 0);
@@ -103,6 +106,7 @@ export default async function HistoricoPage({
         roomAssignments={roomAssignments ?? []}
         commissionRate={commissionRate}
         barCommission={barCommission}
+        suitesCafeCommission={suitesCafeCommission}
         tasks={taskRows.map((t) => ({
           date: t.date,
           task_type: t.task_type,

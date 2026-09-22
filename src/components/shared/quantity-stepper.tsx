@@ -7,10 +7,15 @@ export function QuantityStepper({
   value,
   onChange,
   disabled,
+  min = 0,
+  max,
 }: {
   value: number;
   onChange: (v: number) => void;
   disabled?: boolean;
+  min?: number;
+  // Sem limite superior quando omitido (comportamento original).
+  max?: number;
 }) {
   return (
     <div className="flex items-center gap-1.5">
@@ -18,13 +23,19 @@ export function QuantityStepper({
         type="button"
         variant="outline"
         size="icon-sm"
-        disabled={disabled || value <= 0}
-        onClick={() => onChange(Math.max(0, value - 1))}
+        disabled={disabled || value <= min}
+        onClick={() => onChange(Math.max(min, value - 1))}
       >
         <Minus size={14} />
       </Button>
       <span className="w-6 text-center text-sm tabular-nums">{value}</span>
-      <Button type="button" variant="outline" size="icon-sm" disabled={disabled} onClick={() => onChange(value + 1)}>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon-sm"
+        disabled={disabled || (max !== undefined && value >= max)}
+        onClick={() => onChange(max !== undefined ? Math.min(max, value + 1) : value + 1)}
+      >
         <Plus size={14} />
       </Button>
     </div>
