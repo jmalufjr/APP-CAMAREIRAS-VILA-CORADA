@@ -4,7 +4,6 @@ import { PageHeader } from "@/components/shared/page-header";
 import { DateSwitcher } from "@/components/shared/date-switcher";
 import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
 import { ArrivalsDeparturesPanel } from "./arrivals-departures-panel";
-import { SyncStaysButton } from "./sync-stays-button";
 
 export default async function ChegadasSaidasGerenciarPage({
   searchParams,
@@ -29,12 +28,7 @@ export default async function ChegadasSaidasGerenciarPage({
       <PageHeader
         title="Chegadas & saídas"
         subtitle={`Hóspedes previstos para ${formatDatePt(date)}.`}
-        action={
-          <div className="flex flex-col items-end gap-2">
-            <SyncStaysButton />
-            <DateSwitcher basePath="/chegadas-saidas/gerenciar" current={isToday ? "hoje" : "amanha"} />
-          </div>
-        }
+        action={<DateSwitcher basePath="/chegadas-saidas/gerenciar" current={isToday ? "hoje" : "amanha"} />}
       />
       <ArrivalsDeparturesPanel
         date={date}

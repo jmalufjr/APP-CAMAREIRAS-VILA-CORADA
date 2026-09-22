@@ -3,7 +3,6 @@ import type { BreakfastTable, CommissionSettings, DailyBreakfastSettings, Room }
 import { PageHeader } from "@/components/shared/page-header";
 import { todayKey, tomorrowKey } from "@/lib/date";
 import { GuestsAdminPanel } from "./guests-admin-panel";
-import { SyncStaysButton } from "./sync-stays-button";
 
 export default async function GerenciarMesasPage() {
   const supabase = await createClient();
@@ -34,7 +33,6 @@ export default async function GerenciarMesasPage() {
       <PageHeader
         title="Mesas do café da manhã"
         subtitle="Edite a quantidade de hóspedes e as observações por mesa."
-        action={<SyncStaysButton />}
       />
       <GuestsAdminPanel
         tables={(tables ?? []) as BreakfastTable[]}

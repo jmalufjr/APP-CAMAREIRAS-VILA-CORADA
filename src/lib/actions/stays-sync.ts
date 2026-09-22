@@ -533,3 +533,21 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
   revalidatePath("/historico");
   return { success: true, updated, skipped, errors };
 }
+
+// Roda as três sincronizações (Planejamento Diário, Chegadas & Saídas e
+// Mesas do Café) numa única chamada, com o mesmo `force` pras três — o
+// gatilho manual único do Resumo Executivo usa esta função (cada tela
+// tinha seu próprio botão antes disso; ver CLAUDE.md). Mesmo padrão já
+// usado pelo cron (`src/app/api/cron/stays-sync/route.ts`), que sempre
+// chamou as três em sequência sem `force`; aqui elas rodam com o `force`
+// escolhido no botão. Cada sync já revalida seus próprios caminhos, então
+// esta função não precisa de nenhum `revalidatePath` próprio. As três
+// rodam mesmo que uma delas falhe — são domínios independentes (suítes,
+// hóspedes, mesas), uma falha na Stays num deles não deve impedir as
+// outras duas de completarem.
+export async function syncStaysAll(options?: SyncOptions) {
+  const planning = await syncStaysPlanning(options);
+  const arrivalsDepartures = await syncStaysArrivalsDepartures(options);
+  const breakfastTables = await syncStaysBreakfastTables(options);
+  return { planning, arrivalsDepartures, breakfastTables };
+}

@@ -4,7 +4,6 @@ import { PageHeader } from "@/components/shared/page-header";
 import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
 import { PlanningBoard } from "./planning-board";
 import { DateSwitcher } from "@/components/shared/date-switcher";
-import { SyncStaysButton } from "./sync-stays-button";
 
 export default async function PlanejamentoPage({
   searchParams,
@@ -27,12 +26,7 @@ export default async function PlanejamentoPage({
       <PageHeader
         title="Planejamento diário"
         subtitle={`Defina o tipo de trabalho de cada suíte para ${formatDatePt(date)}. As camareiras escolhem, no próprio app, qual suíte vão realizar.`}
-        action={
-          <div className="flex flex-col items-end gap-2">
-            <SyncStaysButton />
-            <DateSwitcher basePath="/planejamento" current={sp.date === "amanha" ? "amanha" : "hoje"} />
-          </div>
-        }
+        action={<DateSwitcher basePath="/planejamento" current={sp.date === "amanha" ? "amanha" : "hoje"} />}
       />
       <PlanningBoard
         date={date}

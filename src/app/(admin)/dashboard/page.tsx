@@ -5,6 +5,7 @@ import { todayKey, formatDatePt, nowInBrazil } from "@/lib/date";
 import { Card, CardContent } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { getBarCommissionByCamareira } from "@/lib/actions/comandas";
+import { SyncStaysAllButton } from "./sync-stays-all-button";
 import {
   BedDouble,
   Coffee,
@@ -133,6 +134,8 @@ export default async function DashboardPage() {
           />
         </div>
       </div>
+
+      <SyncStaysAllButton />
 
       <nav className="max-w-md space-y-1.5">
         {menuItems.map((item) => (
