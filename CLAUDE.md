@@ -2041,6 +2041,89 @@ também é feita em Server Components.
       da lição já registrada desde a Parte 18: como esse conteúdo é
       escrito à mão, vale revisá-lo sempre que uma parte futura mudar
       algo que ele descreve, em vez de deixar acumular.
+48. **Parte 41 — Forma de pagamento ao confirmar conta paga, e PDF da conta
+    fechada pra camareira** (23/09/2026, feita direto em `main`, pós parte
+    40; dois pedidos do proprietário na mesma leva, o primeiro como recorte
+    de uma proposta maior de integração externa ainda só em análise — ver
+    `PRD_consumos-api-joao-v1.md` — que ele decidiu adiantar como mudança
+    real no app, o segundo pedido separado no meio da implementação do
+    primeiro):
+    - **Forma de pagamento**: `pay_room_bill` (confirmar "Pagamento
+      efetuado") passou a exigir também qual das 5 formas de pagamento foi
+      usada — `payment_method` novo enum (`pix`/`cartao_credito`/
+      `cartao_debito`/`transferencia_bancaria`/`dinheiro`), nova coluna
+      `room_bills.payment_method` (migration `044_payment_method.sql`).
+      **Deliberadamente sem valor nem parcial/estorno**: o proprietário
+      confirmou que o valor cobrado é sempre o total já calculado ao
+      fechar a conta (nunca digitado à parte) e que não existe pagamento
+      parcial nem estorno neste app — só o método precisa ser informado.
+      Na tela "Consumo por quartos" da camareira
+      (`consumo-quartos-panel.tsx`), o botão "Pagamento efetuado" abre um
+      diálogo (`Dialog` + `Select`, mesmo padrão já usado no seletor de
+      suíte da comanda) com as 5 opções; confirmar chama
+      `markRoomBillPaid(roomId, paymentMethod)`. A forma escolhida aparece
+      também pro admin, só leitura, em "Consumo por quartos"
+      (`frigobar-rooms-panel.tsx`) — tanto na lista "Contas pagas" quanto
+      na linha "Última conta paga" de cada suíte.
+    - **"Ver PDF da conta"**: botão novo na tela da camareira, sempre
+      visível ao lado dos outros (não só quando a conta está fechada) mas
+      **habilitado só quando `status === 'fechada'`** — desabilitado
+      enquanto a conta está aberta (original) ou reaberta. Ao clicar, leva
+      a `/bar-piscina/conta/[billId]`, uma tela nova com `<BackLink
+      href="/bar-piscina">` (pro "retorno à página anterior" pedido) e um
+      `<iframe>` apontando pra uma rota de API nova,
+      `/api/room-bills/[billId]/conta` — gera o PDF da conta **ainda não
+      paga** na hora (reaproveitando `renderReceiptPdf`/
+      `@react-pdf/renderer`, mesmo mecanismo do recibo de pagamento da
+      Parte 06), pro hóspede conferir e a camareira poder mostrar antes de
+      cobrar. O visualizador de PDF nativo do navegador já dá os ícones de
+      salvar/baixar e imprimir dentro do iframe, sem precisar de nenhum
+      botão de download construído à mão.
+      **Deliberadamente uma rota nova, separada da já existente**
+      `/api/room-bills/[billId]/receipt` (Parte 06): aquela é o recibo de
+      pagamento, e continua **admin-only** por decisão já tomada
+      ("camareira nunca vê o PDF" do recibo financeiro) — misturar as duas
+      teria enfraquecido essa regra sem necessidade. A rota nova aceita
+      tanto `camareira` quanto `admin`, e **confere de novo no servidor**
+      que a conta está `fechada` bem na hora de gerar o PDF (não só
+      confia no botão desabilitado da UI, mesmo padrão de nunca confiar só
+      no lado do cliente pra estado sensível já usado no resto do app) —
+      se a conta tiver sido paga ou reaberta entre o carregamento da tela
+      e o clique, devolve 404 em vez de vazar o PDF de outro estado.
+      `getRoomBillReceiptData` (Parte 06) foi generalizada pra servir os
+      dois casos (recibo pago e conta fechada): calcula o texto/data do
+      subtítulo do PDF a partir do `status` atual da conta (`"Pagamento
+      registrado em" + paid_at` ou `"Conta fechada em (aguardando
+      pagamento)" + closed_at`) em vez de assumir sempre paga — o campo
+      `ReceiptData.paid_at` foi renomeado pra `statusLabel`/`statusDate`
+      genéricos (`receipt-pdf.tsx`), refletido no único outro lugar que
+      construía esse objeto (`sendReceiptEmail`, sem mudança de
+      comportamento — continua só sendo chamada após pagamento de
+      verdade).
+    - **Risco real evitado, não um bug**: a mudança de assinatura do
+      `pay_room_bill` (de 1 pra 2 parâmetros) exigiu apagar a versão antiga
+      da função (`drop function if exists pay_room_bill(uuid)`) antes de
+      criar a nova — sem isso, as duas ficariam coexistindo como funções
+      sobrecarregadas. A migration foi aplicada em produção **antes** do
+      código novo ser publicado (prática já usada no projeto), o que
+      deixou uma janela real, ainda que curta, em que o código antigo em
+      produção (chamando a função com 1 argumento só) teria falhado ao
+      tentar confirmar um pagamento — por isso o commit+push desta parte
+      foi feito imediatamente após aplicar a migration, sem esperar, para
+      minimizar essa janela.
+    - **Testado**: `npm run eslint`/`npm run build` limpos (rota nova
+      aparece na árvore: `/bar-piscina/conta/[billId]`,
+      `/api/room-bills/[billId]/conta`); migration aplicada com sucesso no
+      Postgres local via Docker e em produção via migration do Supabase.
+      **Não testado ponta a ponta via sessão real desta vez**: o ambiente
+      Supabase local via Docker estava com o gateway (Kong/Auth, porta
+      54321) fora do ar no momento — containers do banco (`db`) e dos
+      outros serviços seguiam saudáveis, mas sem porta publicada pro host
+      nessa leva — impedindo login/sessão local; verificado só por
+      build+lint (checagem de tipos completa) e pela aplicação bem-sucedida
+      das duas migrations, sem checagem funcional de tela via navegador
+      desta vez. Vale investigar essa falha do ambiente local numa próxima
+      sessão antes de testar mudanças futuras dessa forma.
 
 ## Convenções e decisões importantes
 
@@ -2379,7 +2462,11 @@ o escopo mude no futuro.
   Parte 31, mostra "· isenta" junto da taxa de serviço quando a camareira
   isentou os 10% daquela conta. O card "E-mail da contabilidade" que
   vivia no final desta aba saiu daqui na Parte 35, virou a tela
-  "Cadastrar e-mail de envio" em `/dashboard/email-envio`.
+  "Cadastrar e-mail de envio" em `/dashboard/email-envio`. Desde a Parte
+  41, mostra também a forma de pagamento de cada conta paga (`· Pix`,
+  `· Cartão de crédito` etc.), tanto na lista "Contas pagas" quanto na
+  linha "Última conta paga" de cada suíte — só leitura, escolhida pela
+  camareira no momento do pagamento.
 - `src/app/(camareira)/comanda/` — tela "Comanda" da camareira (ver Parte
   05): lista de comandas ativas (`page.tsx` + `comandas-list.tsx`) e o
   formulário de pedido, compartilhado entre criar e editar
@@ -2402,7 +2489,13 @@ o escopo mude no futuro.
   componente tem o botão "Isentar taxa de serviço (10%)" ao lado do valor
   calculado — a taxa não é obrigatória por lei; isentar tira os 10% do
   total daquela conta e da comissão de quem lançou as comandas dela (só
-  dessa conta, nenhuma outra é afetada).
+  dessa conta, nenhuma outra é afetada). Desde a Parte 41, confirmar
+  "Pagamento efetuado" abre um diálogo pedindo a forma de pagamento (Pix/
+  cartão de crédito/cartão de débito/transferência bancária/dinheiro —
+  sem valor, sem parcial, sem estorno); e cada suíte tem um botão "Ver PDF
+  da conta", habilitado só com a conta `fechada`, que leva a
+  `/bar-piscina/conta/[billId]` (PDF gerado na hora, diferente do recibo
+  de pagamento — que continua admin-only).
 - `src/app/(camareira)/` — telas da camareira.
 - `src/app/manutencao/` — telas do funcionário de manutenção (pasta real,
   não route-group — ver "Parte 02 do projeto").
@@ -2413,7 +2506,12 @@ o escopo mude no futuro.
   em `/frigobar` e `/bar-piscina`). Desde a Parte 31, `room-bills.ts`
   também tem `setServiceChargeWaived` (isenção da taxa de 10%, RPC
   `set_room_bill_service_charge_waived`) e `computeBillTotals` recebe um
-  `waived` pra zerar a taxa nos totais quando aplicável.
+  `waived` pra zerar a taxa nos totais quando aplicável. Desde a Parte 41,
+  `markRoomBillPaid` recebe a forma de pagamento (RPC `pay_room_bill`
+  agora com 2 parâmetros, grava em `room_bills.payment_method`), e
+  `getRoomBillReceiptData` foi generalizada pra servir tanto o recibo de
+  pagamento quanto o PDF de uma conta fechada ainda não paga (novo, ver
+  `src/lib/payment-method.ts` e a rota `/api/room-bills/[billId]/conta`).
   `poolbar.ts` > `getPoolbarMonthlySummary` (Resumo Executivo) passou, na
   Parte 32, a devolver petiscos e bebidas separados
   (`PoolbarSplitSummary`) — `getPoolbarConsumptionForPeriod` (Histórico)
@@ -2546,10 +2644,12 @@ o escopo mude no futuro.
   pro período do filtro). A coluna "Comissão (R$)" do card "Resumo
   diário" também foi renomeada "Comissão Suítes e Café" na Parte 35, sem
   mudar de cálculo.
-- `src/lib/receipt-pdf.tsx` — gera o PDF do recibo de uma conta paga sob
-  demanda, sem persistir arquivo (Parte 06), usado tanto pelo e-mail
-  automático quanto pela rota `/api/room-bills/[billId]/receipt` ("Ver
-  PDF" do admin).
+- `src/lib/receipt-pdf.tsx` — gera o PDF de uma conta sob demanda, sem
+  persistir arquivo (Parte 06); usado pelo e-mail automático e pela rota
+  `/api/room-bills/[billId]/receipt` ("Ver PDF" do admin, só contas
+  pagas) e, desde a Parte 41, também por `/api/room-bills/[billId]/conta`
+  (PDF de uma conta fechada ainda não paga, acessível à camareira) — o
+  subtítulo do PDF (`statusLabel`/`statusDate`) muda conforme o status.
 - `src/app/(camareira)/bar-piscina/pix/[roomId]/` — tela de pagamento por
   PIX da camareira (Parte 06): QR code estático (`public/pix-qrcode.png`)
   + valor total da conta.
