@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Key,
   Mail,
+  KeyRound,
 } from "lucide-react";
 
 function monthRange() {
@@ -39,6 +40,7 @@ const menuItems = [
   { href: "/dashboard/consumo-bar", label: "Consumo de bar", icon: Martini },
   { href: "/dashboard/comissoes", label: "Comissões das camareiras", icon: Percent },
   { href: "/dashboard/email-envio", label: "Cadastrar e-mail de envio", icon: Mail },
+  { href: "/dashboard/api-tokens", label: "Chaves de acesso — API de consumos", icon: KeyRound },
 ];
 
 export default async function DashboardPage() {

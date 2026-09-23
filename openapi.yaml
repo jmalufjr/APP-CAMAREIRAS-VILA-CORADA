@@ -1,0 +1,296 @@
+openapi: 3.1.0
+info:
+  title: Vila Corada — API de consumos (frigobar e bar da piscina)
+  version: "1.0.0"
+  description: |
+    Rascunho — descreve a implementação real deste app (não uma cópia dos
+    exemplos originais da proposta). Ver seção "Divergências do contrato
+    original" no final deste documento para tudo que diverge de
+    PRD_consumos-api-joao-v1.md, com o motivo de cada divergência.
+
+    API somente leitura. Nenhum endpoint cria, altera, fecha ou marca como
+    paga nenhuma conta — todas as mutações continuam acontecendo só dentro
+    do app das camareiras.
+servers:
+  - url: https://app-camareiras-vila-corada.vercel.app/api/integration/v1
+    description: Produção
+security:
+  - bearerAuth: []
+
+paths:
+  /rooms:
+    get:
+      summary: Lista as suítes
+      operationId: listRooms
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Room" }
+                  next_cursor: { type: "null" }
+                  has_more: { type: boolean, enum: [false] }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /stay-accounts:
+    get:
+      summary: Carga inicial paginada de contas (inclusive fechadas/pagas)
+      operationId: listStayAccounts
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+          description: Opaco — usar exatamente o `next_cursor` da página anterior.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/StayAccount" }
+                  next_cursor: { type: [string, "null"] }
+                  has_more: { type: boolean }
+                  snapshot_id:
+                    type: string
+                    description: Presente só na primeira página de uma carga inicial.
+                  sync_cursor:
+                    type: string
+                    description: >
+                      Presente só na primeira página — ponto de partida pra
+                      /changes depois de importar todas as páginas.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /stay-accounts/{account_id}:
+    get:
+      summary: Retrato completo e atual de uma conta
+      operationId: getStayAccount
+      parameters:
+        - name: account_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StayAccount" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /changes:
+    get:
+      summary: Mudanças posteriores a um checkpoint
+      operationId: listChanges
+      parameters:
+        - name: cursor
+          in: query
+          required: true
+          schema: { type: string }
+          description: Opaco — usar o `sync_cursor` da carga inicial ou o `next_cursor` da chamada anterior a /changes.
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: "OK — `next_cursor` sempre presente, mesmo com `data` vazio."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/ChangeEvent" }
+                  next_cursor: { type: string }
+                  has_more: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "410": { $ref: "#/components/responses/CursorExpired" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Token de serviço gerado em /dashboard/api-tokens no app admin.
+
+  responses:
+    BadRequest:
+      description: Parâmetro inválido
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Credencial ausente ou inválida
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Conta não encontrada
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    CursorExpired:
+      description: Cursor fora da janela de retenção (90 dias) — reinicie a carga completa via /stay-accounts.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string, example: "CURSOR_EXPIRED" }
+            message: { type: string }
+            request_id: { type: string }
+
+    Room:
+      type: object
+      required: [id, property_id, number, label, active, stays_listing_id]
+      properties:
+        id: { type: string }
+        property_id: { type: string, enum: ["vila-corada"] }
+        number: { type: string }
+        label: { type: string }
+        active: { type: boolean }
+        stays_listing_id: { type: [string, "null"] }
+
+    StayAccountItem:
+      type: object
+      description: >
+        Agregado por (conta, produto) — não por lançamento individual. Ver
+        "Divergências do contrato original".
+      required:
+        [id, category, product_id, description, quantity, unit_price_cents,
+         gross_cents, discount_cents, service_charge_cents, service_charge_waived,
+         total_cents, status]
+      properties:
+        id: { type: string, description: "Opaco, formato `<category>:<product_id>`." }
+        category: { type: string, enum: [minibar, pool_bar] }
+        product_id: { type: string }
+        description: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        unit_price_cents:
+          type: integer
+          description: Preço médio, se o item teve lançamentos em mais de um preço dentro da mesma conta.
+        gross_cents: { type: integer }
+        discount_cents: { type: integer, enum: [0] }
+        service_charge_cents: { type: integer }
+        service_charge_waived: { type: boolean }
+        total_cents: { type: integer }
+        status: { type: string, enum: [active] }
+
+    StayAccountPayment:
+      type: object
+      required: [id, method, amount_cents, occurred_at]
+      properties:
+        id: { type: string }
+        method:
+          type: string
+          enum: [pix, cartao_credito, cartao_debito, transferencia_bancaria, dinheiro]
+        amount_cents: { type: integer, description: "Sempre o total da conta — nunca parcial." }
+        occurred_at: { type: string, format: date-time }
+
+    StayAccount:
+      type: object
+      required:
+        [account_id, property_id, version, status, currency, room_id, room_number,
+         guest_slot, reservation, items, payments, payment_data_quality, totals,
+         created_at, updated_at, closed_at, paid_at, cancelled_at]
+      properties:
+        account_id: { type: string }
+        stay_id:
+          type: [string, "null"]
+          description: "= reservation.stays_id, por conveniência."
+        property_id: { type: string, enum: ["vila-corada"] }
+        version: { type: integer }
+        status:
+          type: string
+          enum: [open, closed_pending_payment, paid]
+          description: "Diverge do contrato original (open/closed/cancelled) — ver Divergências."
+        currency: { type: string, enum: [BRL] }
+        room_id: { type: string }
+        room_number: { type: string }
+        guest_slot:
+          type: string
+          enum: [unica, saida_hoje, chegada_hoje]
+          description: Campo extra, sem equivalente no contrato original — ver Divergências.
+        reservation:
+          type: object
+          required: [stays_id, reference, link_status]
+          properties:
+            stays_id: { type: [string, "null"] }
+            reference: { type: "null", description: "Sempre null — não guardamos o código legível da reserva." }
+            link_status: { type: string, enum: [linked, unlinked] }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StayAccountItem" }
+        payments:
+          type: array
+          items: { $ref: "#/components/schemas/StayAccountPayment" }
+          maxItems: 1
+        payment_data_quality: { type: string, enum: [complete, not_recorded] }
+        totals:
+          type: object
+          required: [gross_cents, discount_cents, service_charge_cents, total_cents, reported_paid_cents, reported_balance_cents]
+          properties:
+            gross_cents: { type: integer }
+            discount_cents: { type: integer, enum: [0] }
+            service_charge_cents: { type: integer }
+            total_cents: { type: integer }
+            reported_paid_cents: { type: [integer, "null"] }
+            reported_balance_cents: { type: [integer, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
+        paid_at: { type: [string, "null"], format: date-time }
+        cancelled_at: { type: "null", description: "Sempre null — não existe cancelamento de conta inteira neste app." }
+
+    ChangeEvent:
+      type: object
+      required: [event_id, occurred_at, account_id, version, type, account]
+      properties:
+        event_id: { type: string }
+        occurred_at: { type: string, format: date-time }
+        account_id: { type: string }
+        version: { type: integer }
+        type: { type: string, enum: ["account.updated"] }
+        account: { $ref: "#/components/schemas/StayAccount" }
+
+# ---------------------------------------------------------------------------
+# Divergências do contrato original (PRD_consumos-api-joao-v1.md)
+# ---------------------------------------------------------------------------
+# - Não há `room_assignments` com hora de início/fim de ocupação de quarto —
+#   este app não rastreia isso; troca de quarto não é modelada.
+# - `items[]` é agregado por (conta, produto), não por lançamento
+#   individual: sem hora nem motivo de cancelamento por item (uma comanda
+#   cancelada simplesmente não aparece).
+# - `payments[]` tem no máximo 1 elemento, sempre o valor total da conta —
+#   não existe pagamento parcial nem estorno neste app.
+# - `reservation.reference` é sempre null — só o `_id` opaco da reserva é
+#   guardado, nunca o código legível.
+# - `status` da conta tem 3 valores (open/closed_pending_payment/paid), não
+#   os 3 originais (open/closed/cancelled) — o "closed" original não tinha
+#   equivalente claro no ciclo real deste app (fechada != paga aqui).
+# - `guest_slot` é um campo novo, sem equivalente no contrato original —
+#   sinaliza quando uma suíte tem duas contas simultâneas (Saída com
+#   Chegada, ou troca de ocupante sem pagamento entre um hóspede e outro).
+# - Rate limiting não está implementado nesta versão.
+# - Retenção do histórico de mudanças: 90 dias (limpeza diária).

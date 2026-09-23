@@ -2303,6 +2303,98 @@ também é feita em Server Components.
       ficaram corretamente sem referência nenhuma, e uma segunda chamada
       logo em seguida confirmou idempotência total (`updated: 0`, nenhuma
       conta duplicada criada). `npm run build`/`eslint` limpos.
+51. **Parte 44 — API de consumos: autenticação, histórico de mudanças, os
+    4 endpoints e o contrato OpenAPI** (23/09/2026, feita direto em
+    `main`, pós parte 43; desenhada em modo de planejamento, escopo
+    aprovado numa leva só cobrindo os itens 4, 5 e o contrato de
+    `PRD_consumos-api-joao-v1.md`; o item 6 — homologação publicada — fica
+    de fora de propósito, sujeito a autorização em separado antes de
+    provisionar qualquer recurso novo):
+    - **Autenticação de serviço (item 5)**: nova tabela
+      `api_service_tokens` (migration `047`) — nunca guarda o token em
+      texto puro, só o hash SHA-256 (`crypto.createHash("sha256")`); o
+      valor gerado (`crypto.randomBytes(32).toString("base64url")`) só
+      existe uma vez, mostrado num diálogo na nova tela do admin
+      `/dashboard/api-tokens` (`src/lib/actions/api-tokens.ts` +
+      `api-tokens-panel.tsx`, item novo no menu do Resumo Executivo).
+      `src/lib/integration/auth.ts` (`validateServiceToken`) valida o
+      header `Authorization: Bearer` de cada rota de
+      `/api/integration/v1/*` contra o hash, via client admin/service-role
+      — sem RLS de usuário, mesmo padrão já usado pela integração com a
+      Stays. `/api/integration` foi somado ao `isPublic` do proxy
+      (`src/lib/supabase/middleware.ts`), já que essas rotas não têm
+      sessão/cookie nenhum, só o token de serviço.
+    - **Histórico de mudanças (item 4), via trigger no banco, não em
+      TypeScript** (migration `048`): `room_bills` ganhou `version`
+      (incrementada a cada mudança) e `updated_at`; nova tabela
+      `room_bill_change_events` (cursor = `id` bigserial, monotônico).
+      Um trigger `before insert or update on room_bills` incrementa
+      `version`/`updated_at` (evita recursão, já que roda antes de gravar
+      a linha); um `after insert or update` grava o evento. Triggers em
+      `room_bill_minibar_items`/`bar_comandas`/`bar_comanda_items` fazem
+      um UPDATE "vazio" (`set version = version`) na `room_bills` pai só
+      pra disparar o mecanismo acima — efeito cascata automático, sem
+      duplicar lógica. **Decisão deliberada**: nenhuma Server Action
+      precisou ser tocada — o objetivo era eliminar de vez o risco (já
+      documentado neste arquivo) de esquecer um ponto de escrita ao
+      instrumentar manualmente cada Server Action/função SQL que grava
+      consumo. Retenção de 90 dias, limpeza somada ao cron diário já
+      existente (`src/app/api/cron/stays-sync/route.ts`).
+    - **Os 4 endpoints** (`src/app/api/integration/v1/`): `rooms`,
+      `stay-accounts` (paginação por keyset, `id` como cursor — mais
+      simples que um mecanismo de snapshot dedicado, dado o volume
+      pequeno de contas desta pousada; `snapshot_id`/`sync_cursor` só na
+      primeira página), `stay-accounts/{id}` e `changes` (cursor expirado
+      → `410 CURSOR_EXPIRED`). Toda a montagem do objeto "conta" fica em
+      `src/lib/integration/stay-accounts.ts`, reaproveitando
+      `computeBillTotals` — que precisou **sair de
+      `src/lib/actions/room-bills.ts` (arquivo `"use server"`, só pode
+      exportar Server Actions assíncronas) e mudar pra
+      `src/lib/room-bills.ts`** (já um módulo comum, sem `"use server"`,
+      onde já vivia `getOrCreateCurrentBill`) — mesmo padrão já usado
+      antes pra `commission-math.ts`/`commission.ts`.
+    - **Bug real encontrado em teste manual, corrigido na mesma leva**: a
+      primeira versão calculava `payment_data_quality`/
+      `reported_paid_cents` só olhando `status === "paga"` — uma conta
+      paga **antes** de a coluna `payment_method` existir (ou paga por
+      algum caminho que nunca gravou o método) aparecia como
+      `payment_data_quality: "complete"` mesmo sem nenhum pagamento
+      registrado de verdade. Corrigido: os dois campos passaram a
+      depender de `payments.length > 0` (se o array de pagamentos está
+      vazio, é `"not_recorded"`, mesmo com a conta paga) — só encontrado
+      testando contra uma conta paga de verdade no banco local, de antes
+      da Parte 41 existir.
+    - **Divergências do contrato original, documentadas no próprio
+      `openapi.yaml`** (seção final do arquivo): sem `room_assignments`
+      (troca de quarto não é rastreada); `items[]` agregado por (conta,
+      produto), não por lançamento individual, sem hora/motivo de
+      cancelamento por item; `payments[]` sempre 0 ou 1 elemento, nunca
+      parcial/estorno; `reservation.reference` sempre `null` (só o `_id`
+      opaco é guardado); `status` da conta com 3 valores próprios
+      (`open`/`closed_pending_payment`/`paid`), não os 3 do contrato
+      original; `guest_slot` é um campo novo, sem equivalente na
+      proposta original; rate limiting não implementado nesta versão
+      (evita depender de um serviço novo só pra isso).
+    - **Testado**: os triggers testados diretamente no Postgres local —
+      UPDATE direto em `room_bills`, insert de item de frigobar, de
+      comanda e de item de comanda, cada um confirmado incrementando
+      `version` e gravando um evento novo, sem tocar em nenhum código
+      TypeScript de escrita. Gestão de token testada via sessão
+      autenticada real (Playwright, login pela tela de verdade): gerar
+      token (diálogo mostra o valor, some depois), token aparecendo como
+      "Ativo" na lista, revogar um segundo token e confirmar "Revogado".
+      Os 4 endpoints testados via `curl` com o token real gerado: `/rooms`
+      (200 com token válido, 401 sem token); `/stay-accounts` (carga
+      inicial com `snapshot_id`/`sync_cursor`, incluindo uma conta paga
+      com itens de frigobar e bar reais); `/stay-accounts/{id}`; `/changes`
+      (vazio antes de uma mudança de teste, mostrando a mudança certa
+      logo depois, com `next_cursor` avançando); token revogado → 401;
+      conta inexistente → 404; `limit` inválido → 400. `openapi.yaml`
+      validado com `js-yaml` (um erro de sintaxe real encontrado e
+      corrigido: um `:` dentro de uma descrição sem aspas quebrava o
+      parser). `npm run build`/`eslint` limpos. Migrations aplicadas em
+      local e produção; nenhum dado de teste (tokens, mudanças
+      provocadas) deixado nos bancos depois.
 
 ## Convenções e decisões importantes
 
@@ -2762,7 +2854,26 @@ o escopo mude no futuro.
   (admin-only) e reaproveitado pelo envio por e-mail.
 - `src/lib/room-bills.ts` — helper `getOrCreateCurrentBill` (não é Server
   Action; recebe o client Supabase como parâmetro), usado pelos arquivos de
-  actions acima.
+  actions acima. Desde a Parte 44, também tem `computeBillTotals`/
+  `sumLines`/`RoomBillLineItem`/`MinibarRow`/`PoolbarRow` — movidos de
+  `src/lib/actions/room-bills.ts` (que só pode exportar Server Actions
+  assíncronas) pra cá, pra poder ser reaproveitados também por
+  `src/lib/integration/stay-accounts.ts` (API de consumos).
+- `src/lib/integration/` (Parte 44) — API externa de consumos
+  (`PRD_consumos-api-joao-v1.md`), somente leitura: `auth.ts`
+  (`validateServiceToken`, valida o token de serviço contra
+  `api_service_tokens`) e `stay-accounts.ts` (monta o objeto "conta" a
+  partir dos dados reais do app — ver a tabela de mapeamento e as
+  divergências do contrato original na Parte 44/`openapi.yaml`). As 4
+  rotas ficam em `src/app/api/integration/v1/` (`rooms`, `stay-accounts`,
+  `stay-accounts/[accountId]`, `changes`) — todas checam
+  `validateServiceToken` primeiro, `Cache-Control: no-store` sempre.
+  Gestão dos tokens (gerar/revogar) é em `/dashboard/api-tokens`
+  (`src/lib/actions/api-tokens.ts`), item do menu do Resumo Executivo.
+  Histórico de mudanças (`room_bill_change_events`) alimentado
+  inteiramente por trigger no banco (migration `048`), não por código —
+  ver Parte 44 pro porquê. Contrato descrito em `openapi.yaml` (raiz do
+  repo), incluindo a seção de divergências do documento original.
 - `src/components/ui/accordion.tsx` — wrapper de `@base-ui/react/accordion`
   (ver Parte 04), usado nas telas de bar/frigobar.
 - `src/components/shared/comanda-detail-dialog.tsx` — modal de

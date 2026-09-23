@@ -28,12 +28,18 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  // /api/cron/*: chamado pelo Vercel Cron sem sessão nenhuma (nem cookie);
-  // autenticado pelo próprio endpoint via CRON_SECRET (Bearer token), não
-  // pela sessão do Supabase — precisa escapar do redirecionamento pra
-  // /login que aconteceria por falta de `user` aqui.
+  // /api/cron/* e /api/integration/*: chamados sem sessão/cookie nenhum —
+  // /api/cron é autenticado por CRON_SECRET, /api/integration/v1/* pela
+  // própria rota via validateServiceToken (token de serviço, ver
+  // src/lib/integration/auth.ts) — nos dois casos, não pela sessão do
+  // Supabase, então precisam escapar do redirecionamento pra /login que
+  // aconteceria por falta de `user` aqui.
   const isPublic =
-    path === "/" || path === "/login" || path.startsWith("/_next") || path.startsWith("/api/cron");
+    path === "/" ||
+    path === "/login" ||
+    path.startsWith("/_next") ||
+    path.startsWith("/api/cron") ||
+    path.startsWith("/api/integration");
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
