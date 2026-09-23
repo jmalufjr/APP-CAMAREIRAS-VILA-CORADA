@@ -10,7 +10,11 @@ export interface ReceiptLineItem {
 
 export interface ReceiptData {
   room_number: string;
-  paid_at: string;
+  // Texto e data mostrados no subtítulo — variam conforme o motivo do PDF:
+  // recibo de pagamento ("Pagamento registrado em", paid_at) ou conta
+  // fechada aguardando pagamento ("Conta fechada em", closed_at).
+  statusLabel: string;
+  statusDate: string;
   minibarItems: ReceiptLineItem[];
   minibarTotal: number;
   poolbarItems: ReceiptLineItem[];
@@ -64,7 +68,9 @@ function ReceiptDocument({ data }: { data: ReceiptData }) {
     <Document>
       <Page size="A4" style={styles.page}>
         <Text style={styles.title}>Vila Corada — Conta da Suíte {data.room_number}</Text>
-        <Text style={styles.subtitle}>Pagamento registrado em {formatDateTimePt(data.paid_at)}</Text>
+        <Text style={styles.subtitle}>
+          {data.statusLabel} {formatDateTimePt(data.statusDate)}
+        </Text>
 
         <Text style={styles.sectionTitle}>Frigobar</Text>
         <LineItemRows items={data.minibarItems} />

@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { getOrCreateCurrentBill, SERVICE_CHARGE_RATE } from "@/lib/room-bills";
 import { renderReceiptPdf, type ReceiptData } from "@/lib/receipt-pdf";
-import type { RoomBillStatus, ReceiptSettings } from "@/lib/types";
+import type { RoomBillStatus, ReceiptSettings, PaymentMethod } from "@/lib/types";
 import { startOfDayBrasiliaUtc, nextDayBrasiliaUtcBoundary } from "@/lib/date";
 import { Resend } from "resend";
 
@@ -35,9 +35,12 @@ export async function reopenRoomBill(roomId: string) {
   return { success: true };
 }
 
-export async function markRoomBillPaid(roomId: string) {
+export async function markRoomBillPaid(roomId: string, paymentMethod: PaymentMethod) {
   const supabase = await createClient();
-  const { data: billId, error } = await supabase.rpc("pay_room_bill", { p_room_id: roomId });
+  const { data: billId, error } = await supabase.rpc("pay_room_bill", {
+    p_room_id: roomId,
+    p_payment_method: paymentMethod,
+  });
   if (error) return { error: error.message };
 
   // Envio do recibo por e-mail é "melhor esforço": a camareira já vê o
@@ -116,7 +119,7 @@ export interface RoomBillOverview {
   // Nome da camareira que fechou a conta corrente (null se ela nunca foi
   // fechada ainda — só existe uma vez que closed_by é gravado).
   closedByName: string | null;
-  lastPaidBill: { total: number; paid_at: string } | null;
+  lastPaidBill: { total: number; paid_at: string; payment_method: PaymentMethod | null } | null;
 }
 
 function sumLines(rows: { id: string; name: string; quantity: number; price_snapshot: number }[]): RoomBillLineItem[] {
@@ -185,6 +188,7 @@ export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
     id: string;
     status: RoomBillStatus;
     paid_at: string | null;
+    payment_method: PaymentMethod | null;
     service_charge_waived: boolean;
     closed_by_profile: { name: string } | null;
   };
@@ -218,7 +222,10 @@ export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
 
   const currentBillIds = Array.from(currentBillByRoom.values()).map((b) => b.id);
 
-  const lastPaidByRoom = new Map<string, { id: string; paid_at: string; serviceChargeWaived: boolean }>();
+  const lastPaidByRoom = new Map<
+    string,
+    { id: string; paid_at: string; serviceChargeWaived: boolean; paymentMethod: PaymentMethod | null }
+  >();
   allBills
     .filter((b) => b.status === "paga" && b.paid_at)
     .forEach((b) => {
@@ -228,6 +235,7 @@ export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
           id: b.id,
           paid_at: b.paid_at as string,
           serviceChargeWaived: b.service_charge_waived,
+          paymentMethod: b.payment_method,
         });
       }
     });
@@ -275,7 +283,7 @@ export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
         .reduce((sum, r) => sum + r.quantity * Number(r.price_snapshot), 0);
       const paidTotal =
         paidMinibarTotal + paidPoolbarSubtotal * (lastPaid.serviceChargeWaived ? 1 : 1 + SERVICE_CHARGE_RATE);
-      lastPaidBill = { total: paidTotal, paid_at: lastPaid.paid_at };
+      lastPaidBill = { total: paidTotal, paid_at: lastPaid.paid_at, payment_method: lastPaid.paymentMethod };
     }
 
     return {
@@ -292,17 +300,32 @@ export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
 
 // ---------- Recibo em PDF de uma conta paga (visualização e e-mail) ----------
 
-// Busca os dados de UMA conta paga específica, no mesmo formato usado pelo
-// PDF do recibo — reaproveitado tanto para gerar o link "Ver PDF" do admin
-// quanto para montar o anexo do e-mail (envio automático e reenvio manual).
+// Busca os dados de UMA conta específica, no mesmo formato usado pelo PDF —
+// reaproveitado para o recibo de pagamento (link "Ver PDF" do admin e
+// anexo do e-mail) e para o PDF da conta fechada, ainda não paga, que a
+// camareira pode ver antes do pagamento. O texto/data do subtítulo do PDF
+// muda conforme o status atual da conta; qualquer outro status (aberta/
+// reaberta) não tem PDF — devolve null.
 export async function getRoomBillReceiptData(billId: string): Promise<ReceiptData | null> {
   const supabase = await createClient();
   const { data: bill } = await supabase
     .from("room_bills")
-    .select("paid_at, service_charge_waived, rooms(number)")
+    .select("status, paid_at, closed_at, service_charge_waived, rooms(number)")
     .eq("id", billId)
     .single();
-  if (!bill || !bill.paid_at) return null;
+  if (!bill) return null;
+
+  let statusLabel: string;
+  let statusDate: string;
+  if (bill.status === "paga" && bill.paid_at) {
+    statusLabel = "Pagamento registrado em";
+    statusDate = bill.paid_at;
+  } else if (bill.status === "fechada" && bill.closed_at) {
+    statusLabel = "Conta fechada em (aguardando pagamento)";
+    statusDate = bill.closed_at;
+  } else {
+    return null;
+  }
 
   const [{ data: minibarRows }, { data: poolbarRows }] = await Promise.all([
     supabase
@@ -324,9 +347,27 @@ export async function getRoomBillReceiptData(billId: string): Promise<ReceiptDat
 
   return {
     room_number: room.rooms?.number ?? "—",
-    paid_at: bill.paid_at,
+    statusLabel,
+    statusDate,
     ...computeBillTotals(billId, mbRows, pbRows, bill.service_charge_waived),
   };
+}
+
+// Confirma que uma conta está com status 'fechada' agora e devolve o número
+// da suíte — usado pela tela da camareira que mostra o PDF da conta fechada
+// antes do pagamento (guarda a página contra abrir para uma conta que já
+// foi paga/reaberta desde então, não só desabilitar o botão na UI).
+export async function getClosedBillRoomNumber(billId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data: bill } = await supabase
+    .from("room_bills")
+    .select("status, rooms(number)")
+    .eq("id", billId)
+    .eq("status", "fechada")
+    .single();
+  if (!bill) return null;
+  const room = bill as unknown as { rooms: { number: string } | null };
+  return room.rooms?.number ?? "—";
 }
 
 // ---------- Retrato do consumo de uma suíte numa data específica ----------
@@ -467,6 +508,7 @@ export interface RecentlyPaidBill {
   room_number: string;
   paid_at: string;
   paidByName: string | null;
+  paymentMethod: PaymentMethod | null;
   receiptEmailSent: boolean;
   minibarItems: RoomBillLineItem[];
   minibarTotal: number;
@@ -488,7 +530,7 @@ export async function getRecentlyPaidRoomBills(days = 7): Promise<RecentlyPaidBi
   const { data: bills } = await supabase
     .from("room_bills")
     .select(
-      "id, room_id, paid_at, receipt_email_sent, service_charge_waived, rooms(number), paid_by_profile:profiles!room_bills_paid_by_fkey(name)"
+      "id, room_id, paid_at, payment_method, receipt_email_sent, service_charge_waived, rooms(number), paid_by_profile:profiles!room_bills_paid_by_fkey(name)"
     )
     .eq("status", "paga")
     .gte("paid_at", cutoff)
@@ -498,6 +540,7 @@ export async function getRecentlyPaidRoomBills(days = 7): Promise<RecentlyPaidBi
     id: string;
     room_id: string;
     paid_at: string;
+    payment_method: PaymentMethod | null;
     receipt_email_sent: boolean;
     service_charge_waived: boolean;
     rooms: { number: string } | null;
@@ -531,6 +574,7 @@ export async function getRecentlyPaidRoomBills(days = 7): Promise<RecentlyPaidBi
     room_number: bill.rooms?.number ?? "—",
     paid_at: bill.paid_at,
     paidByName: bill.paid_by_profile?.name ?? null,
+    paymentMethod: bill.payment_method,
     receiptEmailSent: bill.receipt_email_sent,
     ...computeBillTotals(bill.id, mbRows, pbRows, bill.service_charge_waived),
   }));

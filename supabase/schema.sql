@@ -15,6 +15,15 @@ create type occurrence_status as enum ('pendente', 'selecionada', 'resolvida');
 create type maintenance_execution_type as enum ('nao_tecnico', 'tecnico');
 create type maintenance_item_status as enum ('pendente', 'selecionada');
 create type room_bill_status as enum ('aberta', 'fechada', 'reaberta', 'paga');
+-- Método de pagamento informado pela camareira ao confirmar "Pagamento
+-- efetuado" — não há pagamento parcial nem estorno neste app.
+create type payment_method as enum (
+  'pix',
+  'cartao_credito',
+  'cartao_debito',
+  'transferencia_bancaria',
+  'dinheiro'
+);
 create type comanda_status as enum ('original', 'cancelada', 'editada');
 
 -- ---------- PROFILES ----------
@@ -396,6 +405,9 @@ create table room_bills (
   reopened_by uuid references profiles(id) on delete set null,
   paid_at timestamptz,
   paid_by uuid references profiles(id) on delete set null,
+  -- Forma de pagamento informada pela camareira ao registrar o pagamento
+  -- (ver pay_room_bill mais abaixo) — null até a conta ser paga.
+  payment_method payment_method,
   -- Se o recibo em PDF daquela conta paga foi mandado com sucesso por
   -- e-mail (ver pay_room_bill/mark_receipt_email_sent mais abaixo).
   receipt_email_sent boolean not null default false,
@@ -1264,7 +1276,9 @@ $$ language plpgsql security definer;
 
 -- Devolve o id da conta recém-paga: o código usa isso pra gerar e mandar
 -- por e-mail o recibo em PDF daquela conta específica logo em seguida.
-create or replace function pay_room_bill(p_room_id uuid)
+-- Recebe também o método de pagamento escolhido pela camareira (não há
+-- valor parcial nem estorno neste app — o total é sempre o já calculado).
+create or replace function pay_room_bill(p_room_id uuid, p_payment_method payment_method)
 returns uuid as $$
 declare
   v_bill_id uuid;
@@ -1279,7 +1293,9 @@ begin
     raise exception 'Feche a conta antes de registrar o pagamento.';
   end if;
 
-  update room_bills set status = 'paga', paid_at = now(), paid_by = auth.uid() where id = v_bill_id;
+  update room_bills
+  set status = 'paga', paid_at = now(), paid_by = auth.uid(), payment_method = p_payment_method
+  where id = v_bill_id;
   insert into room_bills (room_id, status) values (p_room_id, 'aberta');
 
   return v_bill_id;

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
 import { formatDateShortPt, formatDateTimePt, dateKeyInBrazil } from "@/lib/date";
+import { PAYMENT_METHOD_LABELS } from "@/lib/payment-method";
 
 // Somente leitura: fechar/reabrir/pagamento passaram a ser ações da
 // camareira, na tela "Consumo por quartos" dela (ver Parte 05 do CLAUDE.md).
@@ -140,6 +141,11 @@ function PaidBillAccordionItem({ bill }: { bill: RecentlyPaidBill }) {
           {bill.paidByName && (
             <p className="text-xs text-muted-foreground">Pagamento informado por: {bill.paidByName}</p>
           )}
+          {bill.paymentMethod && (
+            <p className="text-xs text-muted-foreground">
+              Forma de pagamento: {PAYMENT_METHOD_LABELS[bill.paymentMethod]}
+            </p>
+          )}
 
           {!bill.receiptEmailSent && (
             <p className="text-sm font-medium text-destructive">
@@ -245,6 +251,8 @@ function RoomAccordionItem({ room }: { room: RoomBillOverview }) {
             <p className="text-xs text-muted-foreground">
               Última conta paga: R$ {room.lastPaidBill.total.toFixed(2)} em{" "}
               {formatDateShortPt(dateKeyInBrazil(room.lastPaidBill.paid_at))}
+              {room.lastPaidBill.payment_method &&
+                ` · ${PAYMENT_METHOD_LABELS[room.lastPaidBill.payment_method]}`}
             </p>
           )}
 

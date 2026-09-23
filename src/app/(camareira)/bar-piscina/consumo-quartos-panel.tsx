@@ -14,6 +14,17 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
 import { formatDateShortPt, dateKeyInBrazil } from "@/lib/date";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_OPTIONS } from "@/lib/payment-method";
+import type { PaymentMethod } from "@/lib/types";
 
 export function ConsumoQuartosPanel({
   overview,
@@ -66,6 +77,12 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
   // já reaberta) pra resetar o modo "integral" e recapturar a base — sem
   // useEffect, mesmo padrão de "ajustar estado durante a renderização" já
   // usado no resto do app (ex.: checklist-detail.tsx).
+  // Diálogo de confirmação de pagamento: a camareira só escolhe a forma de
+  // pagamento (não digita valor — o total já é o calculado ao fechar a
+  // conta; não há pagamento parcial nem estorno neste app).
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
+
   const [trackedStatus, setTrackedStatus] = useState(room.status);
   if (room.status !== trackedStatus) {
     setTrackedStatus(room.status);
@@ -153,6 +170,16 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
       setBaseQty(initialMinibarQty);
       setAdditionalQty(zeroQty);
     }
+  }
+
+  function handleConfirmPayment() {
+    if (!paymentMethod) {
+      toast.error("Selecione a forma de pagamento.");
+      return;
+    }
+    runAction(() => markRoomBillPaid(room.room_id, paymentMethod), "Pagamento registrado.");
+    setPaymentDialogOpen(false);
+    setPaymentMethod("");
   }
 
   const showEditableMinibar =
@@ -295,13 +322,18 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
           </div>
 
           <div className="max-w-md space-y-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={room.status !== "fechada" || isPending}
+              onClick={() => router.push(`/bar-piscina/conta/${room.bill_id}`)}
+            >
+              Ver PDF da conta
+            </Button>
+
             {room.status === "fechada" && (
               <div className="flex flex-col sm:flex-row gap-2">
-                <Button
-                  size="sm"
-                  disabled={isPending}
-                  onClick={() => runAction(() => markRoomBillPaid(room.room_id), "Pagamento registrado.")}
-                >
+                <Button size="sm" disabled={isPending} onClick={() => setPaymentDialogOpen(true)}>
                   Pagamento efetuado
                 </Button>
                 <Button
@@ -338,11 +370,51 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
               <p className="text-xs text-muted-foreground">
                 Última conta paga: R$ {room.lastPaidBill.total.toFixed(2)} em{" "}
                 {formatDateShortPt(dateKeyInBrazil(room.lastPaidBill.paid_at))}
+                {room.lastPaidBill.payment_method &&
+                  ` · ${PAYMENT_METHOD_LABELS[room.lastPaidBill.payment_method]}`}
               </p>
             )}
           </div>
         </div>
       </AccordionPanel>
+
+      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar pagamento — Suíte {room.room_number}</DialogTitle>
+            <DialogDescription>
+              Valor total: R$ {room.grandTotal.toFixed(2)}. Selecione a forma de pagamento usada pelo hóspede.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Forma de pagamento</label>
+            <Select
+              value={paymentMethod}
+              onValueChange={(v) => setPaymentMethod((v as PaymentMethod) ?? "")}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Selecione a forma de pagamento">
+                  {(v: string) => PAYMENT_METHOD_LABELS[v as PaymentMethod] ?? v}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {PAYMENT_METHOD_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DialogFooter>
+            <Button disabled={isPending || !paymentMethod} onClick={handleConfirmPayment}>
+              Confirmar pagamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AccordionItem>
   );
 }

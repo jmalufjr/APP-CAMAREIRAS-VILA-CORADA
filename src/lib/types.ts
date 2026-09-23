@@ -6,6 +6,7 @@ export type OccurrenceStatus = "pendente" | "selecionada" | "resolvida";
 export type MaintenanceExecutionType = "nao_tecnico" | "tecnico";
 export type MaintenanceItemStatus = "pendente" | "selecionada";
 export type RoomBillStatus = "aberta" | "fechada" | "reaberta" | "paga";
+export type PaymentMethod = "pix" | "cartao_credito" | "cartao_debito" | "transferencia_bancaria" | "dinheiro";
 export type ComandaStatus = "original" | "cancelada" | "editada";
 
 export interface Profile {
