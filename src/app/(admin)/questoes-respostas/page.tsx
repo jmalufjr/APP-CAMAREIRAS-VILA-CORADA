@@ -250,8 +250,7 @@ export default function QuestoesRespostasPage() {
                 A quantidade de suítes elegíveis para o café da manhã naquele dia (toda suíte ocupada
                 nesse dia conta, esteja ela alocada numa mesa específica ou não) alimenta a comissão de
                 serviços nas suítes e no café — o campo “Valor da comissão por café servido” e a
-                repartição entre as camareiras ficam na tela “Comissões das camareiras”, explicada na
-                pergunta 9.
+                repartição entre as camareiras ficam na tela “Comissões das camareiras” (ver pergunta 11).
               </P>
             </div>
           </AccordionPanel>
@@ -296,7 +295,7 @@ export default function QuestoesRespostasPage() {
               <P>
                 Sobre o consumo do bar da piscina incide uma taxa de serviço de 10%, que funciona como
                 comissão pra equipe: cada camareira recebe os 10% referentes às comandas que ela
-                lançou (ver pergunta 9). Como essa taxa não é uma cobrança obrigatória por lei, se o
+                lançou (ver pergunta 11). Como essa taxa não é uma cobrança obrigatória por lei, se o
                 hóspede não quiser pagá-la a camareira pode isentá-la ao fechar a conta — nesse caso o
                 total da conta fica sem os 10%, e a comissão daquela conta específica também deixa de
                 contar pra quem lançou as comandas dela (o que ela lançou em qualquer outra conta
@@ -419,14 +418,8 @@ export default function QuestoesRespostasPage() {
                     ocorrência de manutenção daquele atendimento.
                   </>,
                   <>
-                    <strong>Suítes vagas e limpas, disponíveis para alugar</strong>: duas listas —
-                    suítes limpas e suítes sujas — só das suítes sem hóspede previsto para hoje à
-                    noite (uma suíte com Troca, Arrumação, Saída com Chegada ou Somente Chegada hoje
-                    nunca aparece aqui, porque está ocupada). Uma suíte entra em “limpas” quando o
-                    serviço de saída dela já foi concluído; caso contrário — ou se ela já estava vaga e
-                    o último serviço registrado nela não foi uma saída concluída — aparece em “sujas”.
-                    Atualiza na hora: se uma suíte “disponível” receber uma reserva nova a qualquer
-                    momento do dia, ela sai das duas listas imediatamente.
+                    <strong>Suítes vagas e limpas, disponíveis para alugar</strong>: duas listas, suítes
+                    limpas e suítes sujas — explicado com detalhe na pergunta 10.
                   </>,
                   <>
                     <strong>Consumo de frigobar</strong>: os totais do mês atual e do mês anterior, item
@@ -437,45 +430,13 @@ export default function QuestoesRespostasPage() {
                     separadamente, tanto nas tabelas quanto nos gráficos.
                   </>,
                   <>
-                    <strong>Comissões das camareiras</strong>: as duas comissões da equipe, uma embaixo
-                    da outra, seguindo o mesmo conceito de <strong>último período fechado</strong> — que{" "}
-                    <strong>não acompanha o mês calendário</strong>: fecha sempre no dia 25, não no
-                    último dia do mês, pra sobrar tempo de conferir e calcular antes do mês virar. Por
-                    exemplo, o período fechado em 25/09 é “o último período” de 26/09 até 25/10, quando
-                    o período seguinte (fechado em 25/10) toma o lugar dele. Primeiro a{" "}
-                    <strong>comissão de 10% do bar por camareira</strong>, com duas colunas lado a lado:
-                    “Mês corrente (estimativa)” (soma as comandas desde o dia 1º deste mês até hoje,
-                    muda dia a dia) e “Último período (nome do mês)” (o valor definitivo do período já
-                    fechado, que não muda mais — calculado na hora, sem precisar de nenhum botão, já
-                    que a comissão de bar não depende de nada que você edite). Depois a{" "}
-                    <strong>comissão de serviços nas suítes e no café</strong>: o campo “Valor da
-                    comissão por café servido” (que decide o tamanho do pote do dia, junto com a
-                    quantidade de suítes elegíveis pro café), uma tabela do mês corrente mostrando, pra
-                    cada camareira, o percentual de serviços que ela já concluiu no mês (troca,
-                    arrumação, somente saída, somente chegada, saída com chegada) e uma{" "}
-                    <strong>nota de 0 a 10</strong> que você edita quando quiser (começa em 5, com
-                    botões de mais/menos) pra reconhecer a qualidade do trabalho de cada uma — o valor
-                    que cada camareira recebe é uma média entre o quanto ela trabalhou e o quanto sua
-                    nota representa do total de notas, sempre somando 100% entre todas. Essa tabela do
-                    mês corrente é só uma estimativa que muda dia a dia; para fechar de verdade, use o
-                    botão “Calcular comissão do último período” — ele grava a nota de cada camareira
-                    exatamente como está naquele instante junto com os números já definitivos do último
-                    período fechado, e libera baixar um PDF ou enviá-lo por e-mail com as duas
-                    comissões de cada camareira e o total geral. Clicar de novo refaz o cálculo (útil
-                    se você corrigir alguma nota depois). Em nenhuma das duas comissões a camareira de
-                    teste “admin-camareira” (usada só por você pra ajustes, nunca uma camareira de
-                    verdade) entra no cálculo — mas uma camareira de verdade que deixou de ser usuária
-                    do sistema <strong>continua aparecendo normalmente</strong> em qualquer tabela ou
-                    demonstrativo referente a um período em que ela de fato trabalhou; ela só some das
-                    telas do dia a dia (como o Planejamento), não do histórico de comissões. Vale
-                    também na direção contrária: uma camareira recém-cadastrada só passa a contar a
-                    partir do momento do cadastro dela — uma consulta ao Histórico de um período
-                    anterior a esse não mostra ela, mesmo que hoje ela já esteja ativa.
+                    <strong>Comissões das camareiras</strong>: as duas comissões da equipe, de bar e de
+                    serviços nas suítes e no café — explicado com detalhe na pergunta 11.
                   </>,
                   <>
                     <strong>Cadastrar e-mail de envio</strong>: o e-mail que recebe automaticamente o
                     recibo de uma conta paga (ver pergunta 5) e pra onde você pode enviar o demonstrativo
-                    de comissões descrito acima.
+                    de comissões (pergunta 11).
                   </>,
                 ]}
               />
@@ -483,10 +444,164 @@ export default function QuestoesRespostasPage() {
           </AccordionPanel>
         </AccordionItem>
 
-        {/* 10. Histórico */}
+        {/* 10. Suítes disponíveis para alugar */}
+        <AccordionItem value="suites-disponiveis">
+          <AccordionTrigger>
+            <span className="font-heading text-base">
+              10. Como o sistema decide quais suítes estão disponíveis pra alugar, e se estão limpas
+              ou sujas?
+            </span>
+          </AccordionTrigger>
+          <AccordionPanel>
+            <div className="space-y-3">
+              <P>
+                Essa tela (menu do Resumo Executivo, “Suítes vagas e limpas, disponíveis para alugar”)
+                mostra duas listas — <strong>suítes limpas</strong> e <strong>suítes sujas</strong> —
+                com todas as suítes que não têm hóspede previsto pra ficar hospedado hoje à noite. É
+                sempre calculada na hora, sem nenhum horário de corte: se uma suíte “disponível” receber
+                uma reserva nova a qualquer momento do dia, ela sai das duas listas imediatamente — de
+                propósito, pra nunca correr o risco de mostrar uma suíte como “disponível” quando na
+                verdade já tem hóspede chegando.
+              </P>
+              <SubHeading>Suíte com serviço previsto hoje</SubHeading>
+              <List
+                items={[
+                  <>
+                    <strong>Troca, Arrumação, Saída com Chegada ou Somente Chegada</strong>: a suíte
+                    nunca aparece em nenhuma das duas listas — qualquer um desses quatro tipos de
+                    serviço pressupõe que vai ter hóspede na suíte essa noite, então ela está ocupada.
+                  </>,
+                  <>
+                    <strong>Somente Saída</strong>: a suíte é considerada disponível — entra em
+                    “limpas” se esse serviço de saída já estiver concluído, ou em “sujas” se ainda não
+                    tiver sido feito.
+                  </>,
+                ]}
+              />
+              <SubHeading>Suíte sem nenhum serviço previsto hoje (já vaga)</SubHeading>
+              <P>
+                Nesse caso a suíte sempre entra numa das duas listas — a pergunta é só limpa ou suja.
+                Pra decidir, o sistema olha a <strong>última tarefa registrada</strong> pra ela, de{" "}
+                <strong>qualquer tipo</strong>, entre os dias anteriores:
+              </P>
+              <List
+                items={[
+                  <>
+                    Se essa última tarefa foi especificamente uma <strong>Somente Saída concluída</strong>,
+                    a suíte entra em “limpas”.
+                  </>,
+                  <>
+                    Em qualquer outro caso — a última tarefa foi de outro tipo (mesmo uma Saída com
+                    Chegada), ou foi uma Somente Saída ainda não concluída, ou a suíte não tem nenhuma
+                    tarefa registrada no histórico — ela entra em “sujas”.
+                  </>,
+                ]}
+              />
+              <P>
+                <strong>Por que uma Saída com Chegada mais antiga não conta como sinal de limpeza,
+                mesmo concluída?</strong> Porque uma Saída com Chegada sempre implica um hóspede na
+                suíte naquela noite — se ela aparece como a tarefa mais recente de uma suíte que hoje
+                está vaga, é sinal de que falta algum registro entre aquele dia e hoje, não uma garantia
+                de que a suíte continua limpa desde então.
+              </P>
+            </div>
+          </AccordionPanel>
+        </AccordionItem>
+
+        {/* 11. Comissões das camareiras */}
+        <AccordionItem value="comissoes">
+          <AccordionTrigger>
+            <span className="font-heading text-base">
+              11. Como funciona o cálculo das comissões das camareiras?
+            </span>
+          </AccordionTrigger>
+          <AccordionPanel>
+            <div className="space-y-3">
+              <P>
+                A tela “Comissões das camareiras” (menu do Resumo Executivo) mostra as{" "}
+                <strong>duas comissões diferentes</strong> que a equipe recebe, uma embaixo da outra:
+                a comissão de 10% do bar por camareira, e a comissão de serviços nas suítes e no café.
+                As duas usam o mesmo conceito de <strong>“último período fechado”</strong>, explicado
+                primeiro abaixo porque vale pras duas.
+              </P>
+
+              <SubHeading>O “último período fechado”: por que não é o mês calendário</SubHeading>
+              <P>
+                A comissão do mês precisa estar pronta e paga <strong>antes</strong> do mês terminar,
+                não só depois — por isso o fechamento não acompanha o calendário (dia 1 a dia 31/30):
+                ele fecha sempre no <strong>dia 25</strong>, sobrando até o dia 25 do mês seguinte pra
+                conferir e pagar com tranquilidade. O período que fecha no dia 25 de um mês vai do dia
+                26 do mês anterior até esse dia 25. Por exemplo: o período fechado em 25/09 é “o último
+                período” de 26/09 até 25/10 — só no dia 25/10, quando o período seguinte fecha, é que
+                ele deixa de ser “o último”.
+              </P>
+
+              <SubHeading>Comissão de 10% do bar por camareira</SubHeading>
+              <P>
+                Cada camareira recebe 10% do valor de toda comanda de bar da piscina que ela lançou
+                originalmente (mesmo que outra camareira tenha editado a comanda depois — quem lançou
+                é sempre quem recebe; ver pergunta 5). Contas cuja taxa de serviço foi isentada pelo
+                hóspede não entram no cálculo. A tela mostra duas colunas lado a lado: “Mês corrente
+                (estimativa)” (soma as comandas desde o dia 1º deste mês até hoje, muda dia a dia) e
+                “Último período (nome do mês)” — o valor definitivo do período já fechado, que não muda
+                mais. Essa segunda coluna é sempre calculada na hora, sem precisar de nenhum botão,
+                porque a comissão de bar não depende de nada que você edite manualmente.
+              </P>
+
+              <SubHeading>Comissão de serviços nas suítes e no café</SubHeading>
+              <P>
+                O valor total a repartir (“o pote”) é o campo “Valor da comissão por café servido”
+                multiplicado pela quantidade de suítes elegíveis pro café da manhã (ver pergunta 4),
+                acumulado dia a dia. Pra decidir a fatia de cada camareira, você atribui a cada uma uma{" "}
+                <strong>nota de 0 a 10</strong> (começa em 5, com botões de mais/menos) reconhecendo a
+                qualidade do trabalho dela — pode editar quando quiser, não é uma nota mensal. O valor
+                que cada camareira recebe é a <strong>média entre dois percentuais</strong>: o
+                percentual dela na quantidade total de serviços concluídos no período (troca, arrumação,
+                somente saída, somente chegada, saída com chegada, de todas as camareiras somadas) e o
+                percentual da nota dela na soma das notas de todas. Como os dois percentuais somam 100%
+                cada um, essa média também soma 100% — o total repartido sempre bate certinho com o
+                pote, sem sobra nem falta.
+              </P>
+              <P>
+                A tela mostra uma tabela do mês corrente, que é só uma <strong>estimativa</strong> que
+                muda dia a dia (percentual de serviços até hoje, sobre o pote até hoje). Pra fechar de
+                verdade, use o botão <strong>“Calcular comissão do último período”</strong>: ele grava a
+                nota de cada camareira exatamente como está naquele instante, aplicada sobre o
+                percentual de serviços e o pote já definitivos do último período fechado, e libera
+                baixar um PDF ou enviar por e-mail (pra “Cadastrar e-mail de envio”, pergunta 9) um
+                demonstrativo com as duas comissões de cada camareira e o total geral. Clicar de novo
+                refaz o cálculo do zero — útil se você corrigir alguma nota depois de já ter calculado.
+              </P>
+
+              <SubHeading>Quem entra no cálculo</SubHeading>
+              <P>
+                A camareira de teste “admin-camareira” (usada só por você pra ajustes, nunca uma
+                camareira de verdade) nunca entra em nenhuma das duas comissões. Já uma camareira de
+                verdade que deixou de ser usuária do sistema <strong>continua aparecendo</strong> em
+                qualquer tabela ou demonstrativo referente a um período em que ela de fato trabalhou —
+                ela só some das telas do dia a dia (como o Planejamento), nunca do histórico de
+                comissões. Na direção contrária, uma camareira recém-cadastrada só passa a contar a
+                partir do momento do cadastro dela — uma consulta a um período anterior a esse (no
+                Histórico, por exemplo) não mostra ela, mesmo que hoje ela já esteja ativa.
+              </P>
+
+              <SubHeading>No Histórico</SubHeading>
+              <P>
+                A coluna “Comissão Suítes e Café” do Histórico (ver pergunta 12) é diferente do{" "}
+                <strong>“Calcular comissão do último período”</strong> descrito acima: ali, o valor é
+                sempre calculado na hora pro período arbitrário que você escolher no filtro, usando a
+                nota de cada camareira como está <strong>hoje</strong> — não é o retrato fechado e
+                congelado do botão “Calcular”, que é específico do último período de ~1 mês, fechado
+                sempre no dia 25.
+              </P>
+            </div>
+          </AccordionPanel>
+        </AccordionItem>
+
+        {/* 12. Histórico */}
         <AccordionItem value="historico">
           <AccordionTrigger>
-            <span className="font-heading text-base">10. Para que serve a tela “Histórico”?</span>
+            <span className="font-heading text-base">12. Para que serve a tela “Histórico”?</span>
           </AccordionTrigger>
           <AccordionPanel>
             <div className="space-y-3">
@@ -502,7 +617,7 @@ export default function QuestoesRespostasPage() {
                 não entram — ver pergunta 5) e a “Comissão Suítes e Café” de cada camareira no período
                 escolhido — essa última sempre calculada na hora pro período que você escolher, com a
                 nota de cada camareira como está hoje (diferente do “Calcular comissão do último
-                período” da pergunta 9, que é um retrato fechado de um período de aproximadamente um
+                período” da pergunta 11, que é um retrato fechado de um período de aproximadamente um
                 mês, sempre fechado no dia 25). A camareira de teste “admin-camareira” nunca aparece em
                 nenhuma das colunas de comissão. Também dá pra exportar essas informações em uma
                 planilha (CSV), caso queira analisar os números em outro programa ou guardar um

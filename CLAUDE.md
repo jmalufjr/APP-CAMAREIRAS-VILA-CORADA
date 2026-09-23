@@ -1998,6 +1998,49 @@ também é feita em Server Components.
       percorrendo todas as telas do app (admin, camareira, manutenção)
       sem nenhum erro de console/hidratação. Sem migration — só mudanças
       de código, nenhuma alteração de schema.
+47. **Parte 40 — "Questões e Respostas" reestruturada: duas novas
+    perguntas dedicadas (comissões e suítes disponíveis)** (23/09/2026,
+    feita direto em `main`, pós parte 39): a pergunta 9 ("Resumo
+    executivo") tinha acumulado, ao longo das Partes 33/35/36/37/38, dois
+    parágrafos muito longos dentro da própria lista de itens do menu — a
+    regra completa de "Suítes vagas e limpas, disponíveis para alugar" e
+    a explicação completa das duas comissões (bar e suítes/café,
+    incluindo o conceito de "último período fechado", a fórmula de
+    repartição por nota, e quem entra/não entra no cálculo). Pedido do
+    proprietário pra separar os dois em perguntas próprias, deixando na
+    pergunta 9 só uma frase curta remetendo a cada uma.
+    - **Pergunta 10 (nova) — "Como o sistema decide quais suítes estão
+      disponíveis pra alugar, e se estão limpas ou sujas?"**: a regra de
+      negócio completa da Parte 33 (Troca/Arrumação/Saída com
+      Chegada/Somente Chegada = ocupada; Somente Saída = disponível,
+      limpa se concluída; suíte já vaga = olha a última tarefa de
+      qualquer tipo, só conta como limpa se for especificamente uma
+      Somente Saída concluída), incluindo o porquê de uma Saída com
+      Chegada antiga não servir de sinal de limpeza.
+    - **Pergunta 11 (nova) — "Como funciona o cálculo das comissões das
+      camareiras?"**: reúne, numa pergunta só, o que estava espalhado
+      entre a Parte 35 (fórmula de repartição, nota editável) e as Partes
+      36-38 (conceito de "último período fechado" no dia 25 — explicado
+      uma vez só, já que vale pras duas comissões — exclusão de
+      "admin-camareira", e as duas regras de camareira desligada/nova).
+      Estruturada com subtítulos (mesmo padrão já usado na pergunta 1)
+      pra ficar navegável apesar do tamanho: "O último período fechado",
+      "Comissão de 10% do bar por camareira", "Comissão de serviços nas
+      suítes e no café", "Quem entra no cálculo" e "No Histórico" (essa
+      última explicando por que a coluna do Histórico usa a nota atual,
+      ao vivo, diferente do retrato congelado do botão "Calcular").
+    - **Pergunta 9 enxugada**: os dois itens da lista viraram uma frase
+      cada, remetendo pra pergunta 10/11 — mesmo padrão de
+      referência cruzada ("ver pergunta N") já usado no resto da página.
+      As referências a essas duas perguntas em outros pontos da página
+      (pergunta 4 sobre Mesas do café, pergunta 5 sobre bar/frigobar,
+      pergunta 12 — ex-pergunta 10, Histórico, renumerada por causa das
+      duas inserções) foram todas atualizadas pros novos números.
+    - Nenhuma mudança de comportamento do app — só reorganização de
+      conteúdo já existente na tela de referência, mais uma reafirmação
+      da lição já registrada desde a Parte 18: como esse conteúdo é
+      escrito à mão, vale revisá-lo sempre que uma parte futura mudar
+      algo que ele descreve, em vez de deixar acumular.
 
 ## Convenções e decisões importantes
 
@@ -2564,6 +2607,11 @@ o escopo mude no futuro.
   linguagem simples pra quem opera o app no dia a dia (Parte 18; revisado
   por completo na Parte 29, e de novo nas Partes 30-33 — comanda
   "responsável" e comissão de 10%, isenção da taxa, e a reestruturação
-  inteira do Resumo Executivo) — conteúdo escrito à mão, não gerado a
-  partir do código, então precisa ser revisado manualmente sempre que uma
-  parte futura mudar algo que uma das perguntas descreve.
+  inteira do Resumo Executivo). Desde a Parte 40, 12 perguntas (era 10):
+  a 10 ("Suítes vagas e limpas, disponíveis para alugar") e a 11 ("Como
+  funciona o cálculo das comissões das camareiras?") saíram de dentro da
+  pergunta 9 (Resumo Executivo) e viraram perguntas próprias, com a 11
+  explicando também o "último período fechado" (dia 25) comum às duas
+  comissões — Histórico virou pergunta 12. Conteúdo escrito à mão, não
+  gerado a partir do código, então precisa ser revisado manualmente
+  sempre que uma parte futura mudar algo que uma das perguntas descreve.
