@@ -6,9 +6,25 @@ import { trocaNights } from "./troca-schedule";
 // Usa meia-noite UTC nas duas pontas de propósito — comparar strings de
 // data com fuso horário embutido já causou bug real neste projeto antes
 // (commit "Fix date logic using UTC calendar day instead of Brasília's").
+//
+// IMPORTANTE: `Date.UTC(ano, mês, dia)` espera o mês 0-indexado (0 =
+// janeiro) — o mês vindo do split de "YYYY-MM-DD" é 1-indexado, então
+// precisa de "- 1". Faltar essa conversão foi um bug real desta função
+// (corrigido na auditoria de fuso horário): como o erro é sistemático
+// (sempre desloca a data em ~1 mês), ele cancelava certinho quando as
+// duas datas caíam no mesmo mês, mas produzia uma contagem de noites
+// ERRADA sempre que a estadia cruzava uma virada de mês — ex.:
+// daysBetween("2026-08-30", "2026-09-02") tinha que dar 3 e dava 2,
+// porque agosto (31 dias) e "setembro deslocado pra outubro" (30 dias)
+// têm tamanhos diferentes. Isso alimentava direto a fórmula de troca de
+// roupa de cama (trocaNights) e a contagem de noites de Chegadas &
+// Saídas — qualquer estadia atravessando fim de mês podia sair com o
+// tipo de trabalho errado no Planejamento Diário.
 export function daysBetween(fromDateKey: string, toDateKey: string): number {
-  const a = Date.UTC(...(fromDateKey.split("-").map(Number) as [number, number, number]));
-  const b = Date.UTC(...(toDateKey.split("-").map(Number) as [number, number, number]));
+  const [fy, fm, fd] = fromDateKey.split("-").map(Number);
+  const [ty, tm, td] = toDateKey.split("-").map(Number);
+  const a = Date.UTC(fy, fm - 1, fd);
+  const b = Date.UTC(ty, tm - 1, td);
   return Math.round((b - a) / 86_400_000);
 }
 

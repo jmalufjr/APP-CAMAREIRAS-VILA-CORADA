@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getOrCreateCurrentBill, SERVICE_CHARGE_RATE } from "@/lib/room-bills";
 import { renderReceiptPdf, type ReceiptData } from "@/lib/receipt-pdf";
 import type { RoomBillStatus, ReceiptSettings } from "@/lib/types";
+import { startOfDayBrasiliaUtc, nextDayBrasiliaUtcBoundary } from "@/lib/date";
 import { Resend } from "resend";
 
 // Fechar/reabrir/marcar como paga a conta do quarto: ação da camareira (a
@@ -357,8 +358,12 @@ export async function getRoomBillSnapshotForDate(roomId: string, dateKey: string
     .from("room_bills")
     .select("id, status, opened_at, paid_at, service_charge_waived")
     .eq("room_id", roomId)
-    .lte("opened_at", `${dateKey}T23:59:59`)
-    .or(`paid_at.is.null,paid_at.gte.${dateKey}T00:00:00`)
+    // opened_at/paid_at são instantes reais (timestamptz) — comparar
+    // contra strings ingênuas tipo `${dateKey}T23:59:59` erraria por até
+    // 3h, já que Brasília é UTC-3 (ver
+    // startOfDayBrasiliaUtc/nextDayBrasiliaUtcBoundary).
+    .lt("opened_at", nextDayBrasiliaUtcBoundary(dateKey))
+    .or(`paid_at.is.null,paid_at.gte.${startOfDayBrasiliaUtc(dateKey)}`)
     .order("opened_at", { ascending: false })
     .limit(1)
     .maybeSingle();

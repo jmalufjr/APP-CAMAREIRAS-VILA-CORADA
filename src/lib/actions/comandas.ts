@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { ComandaStatus } from "@/lib/types";
 import { SERVICE_CHARGE_RATE } from "@/lib/room-bills";
-import { nowInBrazil, toDateKey } from "@/lib/date";
+import { nowInBrazil, toDateKey, dateKeyInBrazil, startOfDayBrasiliaUtc, nextDayBrasiliaUtcBoundary } from "@/lib/date";
 import { EXCLUDED_CAMAREIRA_NAME, closedPeriodRange } from "@/lib/commission-math";
 
 export interface ComandaItemInput {
@@ -337,8 +337,11 @@ async function fetchBarCommissionRows(
       "quantity, price_snapshot, bar_comandas!inner(status, created_at, created_by, created_by_profile:profiles!bar_comandas_created_by_fkey(name), room_bills(service_charge_waived))"
     )
     .neq("bar_comandas.status", "cancelada")
-    .gte("bar_comandas.created_at", `${from}T00:00:00`)
-    .lte("bar_comandas.created_at", `${to}T23:59:59`)
+    // created_at é um instante real (timestamptz) — comparar contra
+    // strings ingênuas tipo `${to}T23:59:59` erraria por até 3h, já que
+    // Brasília é UTC-3 (ver startOfDayBrasiliaUtc/nextDayBrasiliaUtcBoundary).
+    .gte("bar_comandas.created_at", startOfDayBrasiliaUtc(from))
+    .lt("bar_comandas.created_at", nextDayBrasiliaUtcBoundary(to))
     .gt("quantity", 0);
 
   return (data ?? []) as unknown as BarCommissionItemRow[];
@@ -386,11 +389,11 @@ export async function getBarCommissionByCamareira(): Promise<BarCommissionByCama
   const rows = await fetchBarCommissionRows(supabase, prevStart, currentEnd);
 
   const currentMonthRows = rows.filter((r) => {
-    const d = r.bar_comandas.created_at.slice(0, 10);
+    const d = dateKeyInBrazil(r.bar_comandas.created_at);
     return d >= currentStart && d <= currentEnd;
   });
   const previousMonthRows = rows.filter((r) => {
-    const d = r.bar_comandas.created_at.slice(0, 10);
+    const d = dateKeyInBrazil(r.bar_comandas.created_at);
     return d >= prevStart && d <= prevEnd;
   });
 

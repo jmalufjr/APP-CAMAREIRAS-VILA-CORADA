@@ -1904,6 +1904,100 @@ também é feita em Server Components.
       estimativa do mês corrente (que inclui hoje, dia do cadastro) — via
       sessão autenticada real contra o `next dev` local. Fixture removida
       do banco local depois.
+46. **Parte 39 — Auditoria geral de horário/fuso horário/data em todo o
+    app** (23/09/2026, feita direto em `main`, pós parte 38; pedido
+    explícito do proprietário depois de ver a "comparação ingênua de
+    data" da Parte 38 — corrigir tudo dessa categoria em todo o sistema,
+    não só onde já tinha sido encontrado). Passado o codebase inteiro a
+    limpo (todo `new Date(`, toda comparação/filtro contra coluna
+    `timestamptz`, todo `.slice(0, 10)` em timestamp, toda formatação de
+    data/hora exibida na tela) — 12 pontos de correção encontrados, um
+    deles um bug real de matemática de datas (não só de fuso):
+    - **Bug crítico, não é de fuso horário**: `daysBetween`
+      (`src/lib/stays/derive-planning.ts`), usada pela fórmula de troca
+      de roupa de cama e pela contagem de noites de Chegadas & Saídas,
+      construía `Date.UTC(...)` passando o mês 1-indexado (vindo direto
+      do split de "YYYY-MM-DD") sem subtrair 1 — `Date.UTC` espera o mês
+      0-indexado. O erro é sistemático (desloca a data ~1 mês pra
+      frente), então cancelava certinho quando as duas datas caíam no
+      mesmo mês calendário (por isso nunca foi percebido), mas dava
+      contagem de noites **errada** sempre que uma estadia cruzava uma
+      virada de mês — verificado: `daysBetween("2026-08-30",
+      "2026-09-02")` tinha que dar 3 e dava 2, porque agosto (31 dias) e
+      "setembro deslocado pra outubro" (30 dias) têm tamanhos diferentes.
+      Corrigido subtraindo 1 do mês nos dois lados antes de `Date.UTC`;
+      verificado contra 5 casos sintéticos (mesmo mês, virada de mês,
+      virada de ano, ano bissexto e não-bissexto) antes de integrar.
+    - **Comparações ingênuas de data contra coluna `timestamptz`** (mesma
+      categoria do bug já corrigido na Parte 38 pra `profiles.created_at`
+      — comparar contra uma string tipo `${to}T23:59:59` faz o Postgres
+      interpretar como UTC, errando por até 3h já que Brasília é UTC-3):
+      corrigidas em `fetchBarCommissionRows`
+      (`src/lib/actions/comandas.ts` — a própria pendência já registrada
+      na Parte 38) e em `getRoomBillSnapshotForDate`
+      (`src/lib/actions/room-bills.ts`, usada pela visão do admin de um
+      serviço concluído). Ambas passaram a usar as novas funções
+      `startOfDayBrasiliaUtc`/`nextDayBrasiliaUtcBoundary`
+      (`src/lib/date.ts`).
+    - **`.slice(0, 10)` num timestamp real pra "descobrir a data"**: dá o
+      dia em **UTC**, que já é o dia seguinte pra qualquer horário entre
+      21h e 23h59 em Brasília — um pagamento feito às 23h de um dia podia
+      ser contado no dia (e potencialmente no mês) seguinte. Encontrado
+      em `getPaidPoolbarRows`/`getPaidMinibarRows` (`poolbar.ts`/
+      `minibar.ts` — agrupamento de consumo por dia/mês, usado no
+      Histórico e no Resumo Executivo), em `getBarCommissionByCamareira`
+      (`comandas.ts` — o bucketing "mês atual/mês anterior" do card
+      "Comissão Bar" do Resumo Executivo) e em dois lugares de exibição
+      (`frigobar-rooms-panel.tsx`/`consumo-quartos-panel.tsx`, a data da
+      "última conta paga"). Todos corrigidos com a nova função
+      `dateKeyInBrazil` (`src/lib/date.ts`), que usa
+      `Intl.DateTimeFormat` com `timeZone: "America/Sao_Paulo"` em vez de
+      fatiar a string.
+    - **Exibição de hora sem fuso explícito**: três componentes
+      reimplementavam localmente uma formatação "dd/mm hh:mm" (ou com
+      ano) via `toLocaleString("pt-BR", {...})` sem `timeZone` — usa o
+      fuso de quem executa o código, não o de Brasília. Em componentes de
+      **servidor** (`week-maintenance-table.tsx`,
+      `(admin)/ocorrencias/occurrence-list.tsx`), isso rodava na Vercel
+      (UTC) e mostrava a hora **3h adiantada** pro admin — bug ativo em
+      produção, não só teórico. Em `manutencao/ocorrencias/occurrence-work-list.tsx`
+      (componente de **cliente**), o risco era menor na prática (o
+      navegador de quem usa o app já costuma estar no fuso de Brasília),
+      mas igualmente corrigido por consistência. `week-maintenance-table.tsx`
+      passou a usar `formatDateTimePt` (`src/lib/date.ts`, já correto,
+      mesmo formato "dd/mm hh:mm"); os outros dois mantiveram sua própria
+      função local (formato com ano, diferente do padrão) só acrescentando
+      `timeZone: BRAZIL_TIME_ZONE` (agora exportada de `date.ts`).
+    - **`addDaysKey`/`mondayKey` (`src/lib/date.ts`)**: construíam a data
+      com `new Date(y, m-1, d)` (construtor **local**, dependente do fuso
+      do processo que roda o código) e depois liam de volta com
+      `toISOString()` (sempre **UTC**) — mistura que o próprio comentário
+      de `nowInBrazil()` já alertava pra nunca fazer. Na prática nunca
+      quebrou (Brasília é UTC-3 e a Vercel roda em UTC — os dois "atrás"
+      ou iguais a UTC, então meia-noite local nunca vira o dia anterior
+      em UTC), mas era frágil e violava a convenção já estabelecida no
+      arquivo. Corrigido pra `Date.UTC`/`getUTCDate`/`setUTCDate`,
+      igual ao resto do arquivo; `fridayKey` (que depende dos dois) ganha
+      a correção de graça.
+    - **Bug de UI encontrado no meio do teste, não relacionado a fuso
+      horário**: ao testar a tela `/ocorrencias/historico`, apareceu um
+      erro de hidratação do React. Investigado a fundo (inclusive
+      isolando as mudanças desta parte com `git stash` pra confirmar que
+      já existia antes) — não é bug de data, é o mesmo padrão de HTML
+      inválido já documentado e corrigido uma vez antes no projeto
+      (Parte 04, seção "Convenções e decisões importantes"): uma
+      `<TableRow>` de totais como filha direta de `<Table>`, fora de
+      `<TableBody>`/`<TableFooter>`. Corrigido no mesmo padrão
+      (envolvendo com `<TableFooter>`), aproveitando que já estava sendo
+      testado. Depois de corrigido, varredura via sessão real em todas as
+      25 telas do admin + 5 da camareira + 2 da manutenção não encontrou
+      mais nenhum erro de hidratação.
+    - **Testado**: `daysBetween` e as funções novas de `date.ts` testadas
+      isoladas (fora do Next.js, funções puras) contra casos sintéticos;
+      depois, sessão autenticada real contra o `next dev` local
+      percorrendo todas as telas do app (admin, camareira, manutenção)
+      sem nenhum erro de console/hidratação. Sem migration — só mudanças
+      de código, nenhuma alteração de schema.
 
 ## Convenções e decisões importantes
 
@@ -1946,6 +2040,29 @@ também é feita em Server Components.
   execuções separadas (o Postgres não permite usar um valor de enum recém
   criado na mesma transação em que foi criado) — ver
   `supabase/migrations/003_troca_task_type.sql` como exemplo.
+- **Data e hora sempre no fuso oficial de Brasília** (regra geral por
+  trás de `src/lib/date.ts`, reforçada por uma auditoria completa do
+  projeto na Parte 39): "hoje"/"agora" nunca vem de `new Date()` puro,
+  sempre de `nowInBrazil()`. Uma coluna `date` (sem hora, ex.:
+  `daily_room_tasks.date`) pode ser comparada direto com uma string
+  "YYYY-MM-DD", sem risco nenhum de fuso. Já uma coluna `timestamptz`
+  (um instante real, ex.: `created_at`, `paid_at`) exige cuidado redobrado
+  em duas situações: (1) **nunca** comparar/filtrar contra uma string de
+  data ingênua tipo `` `${dateKey}T23:59:59` `` — o Postgres interpreta
+  isso como UTC, e Brasília é UTC-3, então o limite erra por até 3h; usar
+  `startOfDayBrasiliaUtc`/`nextDayBrasiliaUtcBoundary` (`src/lib/date.ts`).
+  (2) **nunca** fazer `isoString.slice(0, 10)` pra descobrir "em que dia"
+  um instante caiu — isso dá o dia em UTC, que já é o dia seguinte pra
+  qualquer horário entre 21h e 23h59 em Brasília; usar `dateKeyInBrazil`
+  (`src/lib/date.ts`). Vale também para exibição: formatar um timestamp
+  com `toLocaleString`/`toLocaleDateString` sem passar `timeZone:
+  BRAZIL_TIME_ZONE` explicitamente usa o fuso de quem executa o
+  código — em um componente de servidor rodando na Vercel (UTC), isso
+  mostra a hora errada pro usuário em Brasília. Um bug real da Parte 39
+  (`daysBetween` em `src/lib/stays/derive-planning.ts`) também mostra que
+  nem todo bug de data é de fuso horário: `Date.UTC(ano, mês, dia)`
+  espera o mês **0-indexado**— um mês vindo direto do split de
+  "YYYY-MM-DD" (1-indexado) sempre precisa de `- 1`.
 - **Segurança**: `SUPABASE_SERVICE_ROLE_KEY` só é lida em
   `src/lib/supabase/admin.ts`, importado exclusivamente por Server Actions
   (`"use server"`); nunca é usada em componentes `"use client"`. Variáveis
@@ -2393,6 +2510,17 @@ o escopo mude no futuro.
 - `src/app/(camareira)/bar-piscina/pix/[roomId]/` — tela de pagamento por
   PIX da camareira (Parte 06): QR code estático (`public/pix-qrcode.png`)
   + valor total da conta.
+- `src/lib/date.ts` — todo o tratamento de data/hora do app, sempre no
+  fuso de Brasília (ver "Data e hora sempre no fuso oficial de Brasília"
+  acima): `nowInBrazil`/`todayKey`/`tomorrowKey`/`yesterdayKey`/
+  `daysAgoKey`/`monthsAgoKey`/`addDaysKey`/`mondayKey`/`fridayKey` (datas
+  de calendário), `formatDateTimePt`/`formatTimePt`/`dateKeyInBrazil`
+  (Parte 39 — timestamp real → hora/data em Brasília, nunca fatiar a
+  string),`startOfDayBrasiliaUtc`/`nextDayBrasiliaUtcBoundary` (Parte
+  38/39 — limites de intervalo pra filtrar uma coluna `timestamptz`),
+  `monthYearLabelPt` (Parte 35, "Setembro de 2026"),
+  `durationMinutes`/`formatMinutesPt`/`formatDurationPt`/
+  `effectiveServiceStart` (duração de serviço, Parte 22).
 - `src/lib/actions/` — Server Actions (toda escrita no banco).
 - `src/lib/stays/` — integração com a API da Stays (Parte 11 + Parte 13):
   `client.ts` (busca de reservas + `getStaysClientName` pro nome do

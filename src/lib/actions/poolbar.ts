@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { toDateKey, nowInBrazil } from "@/lib/date";
+import { toDateKey, nowInBrazil, dateKeyInBrazil } from "@/lib/date";
 
 // ---------- Admin: CRUD do catálogo de itens do bar da piscina ----------
 
@@ -114,7 +114,11 @@ async function getPaidPoolbarRows(supabase: Awaited<ReturnType<typeof createClie
       price_snapshot: r.price_snapshot,
       name: r.poolbar_items?.name ?? "—",
       category: r.poolbar_items?.category ?? "Bebidas",
-      date: (r.bar_comandas.room_bills.paid_at as string).slice(0, 10),
+      // dateKeyInBrazil, não .slice(0,10): paid_at é um instante real
+      // (timestamptz) — fatiar os 10 primeiros caracteres dá o dia em
+      // UTC, que já é o dia seguinte pra pagamentos feitos entre 21h e
+      // 23h59 em Brasília (UTC-3).
+      date: dateKeyInBrazil(r.bar_comandas.room_bills.paid_at as string),
     }));
 }
 

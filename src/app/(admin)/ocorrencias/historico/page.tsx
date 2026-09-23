@@ -5,6 +5,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -128,13 +129,15 @@ export default async function OcorrenciasHistoricoPage() {
               )}
             </TableBody>
             {byDay.length > 0 && (
-              <TableRow className="font-medium bg-muted/50">
-                <TableCell>Total</TableCell>
-                <TableCell>{totals.ocorrencias}</TableCell>
-                <TableCell>{totals.resolvidas}</TableCell>
-                <TableCell>{totals.quartos}</TableCell>
-                <TableCell>{totals.observacoes}</TableCell>
-              </TableRow>
+              <TableFooter>
+                <TableRow className="font-medium bg-muted/50">
+                  <TableCell>Total</TableCell>
+                  <TableCell>{totals.ocorrencias}</TableCell>
+                  <TableCell>{totals.resolvidas}</TableCell>
+                  <TableCell>{totals.quartos}</TableCell>
+                  <TableCell>{totals.observacoes}</TableCell>
+                </TableRow>
+              </TableFooter>
             )}
           </Table>
         </CardContent>

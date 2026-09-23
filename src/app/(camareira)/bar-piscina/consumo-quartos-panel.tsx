@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
-import { formatDateShortPt } from "@/lib/date";
+import { formatDateShortPt, dateKeyInBrazil } from "@/lib/date";
 
 export function ConsumoQuartosPanel({
   overview,
@@ -337,7 +337,7 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
             {room.lastPaidBill && (
               <p className="text-xs text-muted-foreground">
                 Última conta paga: R$ {room.lastPaidBill.total.toFixed(2)} em{" "}
-                {formatDateShortPt(room.lastPaidBill.paid_at.slice(0, 10))}
+                {formatDateShortPt(dateKeyInBrazil(room.lastPaidBill.paid_at))}
               </p>
             )}
           </div>

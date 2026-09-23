@@ -1,5 +1,6 @@
 import type { WeekMaintenanceRow } from "@/lib/actions/maintenance";
 import { EXECUTION_TYPE_LABELS, MAINTENANCE_STATUS_LABELS } from "@/lib/maintenance";
+import { formatDateTimePt } from "@/lib/date";
 import {
   Table,
   TableBody,
@@ -13,15 +14,6 @@ import { Badge } from "@/components/ui/badge";
 
 function formatBr(dateKey: string) {
   return dateKey.split("-").reverse().join("/");
-}
-
-function formatDateTimeBr(iso: string) {
-  return new Date(iso).toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 export function WeekMaintenanceTable({ rows }: { rows: WeekMaintenanceRow[] }) {
@@ -56,9 +48,9 @@ export function WeekMaintenanceTable({ rows }: { rows: WeekMaintenanceRow[] }) {
                 </TableCell>
                 <TableCell>
                   {row.selected_by_name ?? "—"}
-                  {row.selected_at && ` · ${formatDateTimeBr(row.selected_at)}`}
+                  {row.selected_at && ` · ${formatDateTimePt(row.selected_at)}`}
                 </TableCell>
-                <TableCell>{row.completed_at ? formatDateTimeBr(row.completed_at) : "—"}</TableCell>
+                <TableCell>{row.completed_at ? formatDateTimePt(row.completed_at) : "—"}</TableCell>
                 <TableCell>{row.completed_by_name ?? "—"}</TableCell>
                 <TableCell>{row.external_technician_name ?? "—"}</TableCell>
               </TableRow>

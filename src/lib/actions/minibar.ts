@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { toDateKey, nowInBrazil } from "@/lib/date";
+import { toDateKey, nowInBrazil, dateKeyInBrazil } from "@/lib/date";
 import { getOrCreateCurrentBill } from "@/lib/room-bills";
 
 // ---------- Admin: CRUD do catálogo de itens de frigobar ----------
@@ -162,7 +162,11 @@ async function getPaidMinibarRows(supabase: Awaited<ReturnType<typeof createClie
       quantity: r.quantity,
       price_snapshot: r.price_snapshot,
       name: r.minibar_items?.name ?? "—",
-      date: (r.room_bills.paid_at as string).slice(0, 10),
+      // dateKeyInBrazil, não .slice(0,10): paid_at é um instante real
+      // (timestamptz) — fatiar os 10 primeiros caracteres dá o dia em
+      // UTC, que já é o dia seguinte pra pagamentos feitos entre 21h e
+      // 23h59 em Brasília (UTC-3).
+      date: dateKeyInBrazil(r.room_bills.paid_at as string),
     }));
 }
 

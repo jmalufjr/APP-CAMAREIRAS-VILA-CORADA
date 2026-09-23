@@ -2,7 +2,7 @@ export function toDateKey(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-const BRAZIL_TIME_ZONE = "America/Sao_Paulo";
+export const BRAZIL_TIME_ZONE = "America/Sao_Paulo";
 
 // "Agora", mas nos valores de calendário/relógio de Brasília — não os do
 // processo que executa o código (a Vercel roda em UTC; localhost pode estar
@@ -58,10 +58,15 @@ export function daysAgoKey(n: number): string {
   return toDateKey(d);
 }
 
+// Construído com `Date.UTC(...)` (não o construtor local `new Date(y,m,d)`)
+// pela mesma razão de `nowInBrazil`: o construtor local depende do fuso do
+// processo que roda o código, e `toDateKey` sempre lê de volta em UTC — se
+// os dois usarem fusos diferentes, a data final pode sair errada. Com
+// `Date.UTC`, o resultado é sempre o mesmo, não importa o fuso do sistema.
 export function addDaysKey(dateKey: string, days: number): string {
   const [y, m, d] = dateKey.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
-  date.setDate(date.getDate() + days);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  date.setUTCDate(date.getUTCDate() + days);
   return toDateKey(date);
 }
 
@@ -71,13 +76,14 @@ export function monthsAgoKey(months: number): string {
   return toDateKey(d);
 }
 
-// Segunda-feira da semana (seg-sex) que contém a data informada.
+// Segunda-feira da semana (seg-sex) que contém a data informada. Mesmo
+// motivo de `addDaysKey` pra usar `Date.UTC`/métodos UTC em vez dos locais.
 export function mondayKey(dateKey: string): string {
   const [y, m, d] = dateKey.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
-  const day = date.getDay(); // 0 = domingo, 1 = segunda, ... 6 = sábado
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const day = date.getUTCDay(); // 0 = domingo, 1 = segunda, ... 6 = sábado
   const diff = day === 0 ? -6 : 1 - day;
-  date.setDate(date.getDate() + diff);
+  date.setUTCDate(date.getUTCDate() + diff);
   return toDateKey(date);
 }
 
@@ -171,6 +177,32 @@ export function formatDurationPt(startIso: string | null, endIso: string | null)
 export function nextDayBrasiliaUtcBoundary(dateKey: string): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d + 1, 3, 0, 0)).toISOString();
+}
+
+// Limite inferior INCLUSIVO complementar a `nextDayBrasiliaUtcBoundary`:
+// meia-noite de Brasília de `dateKey`, já em UTC (03:00 UTC desse mesmo
+// dia) — pra filtrar uma coluna timestamptz de forma que só entrem
+// valores que caem em `dateKey` (ou depois) na hora de Brasília.
+export function startOfDayBrasiliaUtc(dateKey: string): string {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 3, 0, 0)).toISOString();
+}
+
+// Em que dia de calendário, na hora de Brasília, um instante real caiu —
+// nunca fatiar os primeiros 10 caracteres de um ISO string pra isso (dá o
+// dia em UTC, que já é o dia seguinte pra qualquer horário entre 21h e
+// 23h59 de Brasília, já que Brasília é UTC-3). Usado sempre que um
+// timestamptz do banco (ex.: paid_at, created_at) precisa virar uma
+// "data" pra agrupar por dia/mês/período.
+export function dateKeyInBrazil(isoString: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: BRAZIL_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(isoString));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
 // "Setembro de 2026" a partir de uma data qualquer daquele mês (usa só

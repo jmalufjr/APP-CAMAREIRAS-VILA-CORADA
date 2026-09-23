@@ -8,7 +8,7 @@ import { resendRoomBillReceipt } from "@/lib/actions/room-bills";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
-import { formatDateShortPt, formatDateTimePt } from "@/lib/date";
+import { formatDateShortPt, formatDateTimePt, dateKeyInBrazil } from "@/lib/date";
 
 // Somente leitura: fechar/reabrir/pagamento passaram a ser ações da
 // camareira, na tela "Consumo por quartos" dela (ver Parte 05 do CLAUDE.md).
@@ -244,7 +244,7 @@ function RoomAccordionItem({ room }: { room: RoomBillOverview }) {
           {room.lastPaidBill && (
             <p className="text-xs text-muted-foreground">
               Última conta paga: R$ {room.lastPaidBill.total.toFixed(2)} em{" "}
-              {formatDateShortPt(room.lastPaidBill.paid_at.slice(0, 10))}
+              {formatDateShortPt(dateKeyInBrazil(room.lastPaidBill.paid_at))}
             </p>
           )}
 

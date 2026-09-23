@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import { selectOccurrence, resolveOccurrence, type ManutencaoOccurrenceRow } from "@/lib/actions/occurrences";
+import { BRAZIL_TIME_ZONE } from "@/lib/date";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,8 +16,13 @@ const STATUS_LABELS = {
   resolvida: "Resolvida",
 } as const;
 
+// Com year (diferente de formatDateTimePt em src/lib/date.ts) — mantido
+// local de propósito pra não mudar o formato já exibido aqui; só o fuso
+// horário estava faltando (sem `timeZone`, usava o fuso do navegador de
+// quem vê a tela em vez do horário oficial de Brasília).
 function formatDateTimePt(iso: string) {
   return new Date(iso).toLocaleString("pt-BR", {
+    timeZone: BRAZIL_TIME_ZONE,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
