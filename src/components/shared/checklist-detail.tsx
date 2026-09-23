@@ -3,7 +3,13 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type { DailyRoomTask, DailyRoomTaskCheck, DailyRoomTaskOccurrence, OccurrenceCategory } from "@/lib/types";
+import type {
+  DailyRoomTask,
+  DailyRoomTaskCheck,
+  DailyRoomTaskOccurrence,
+  OccurrenceCategory,
+  RoomBillGuestSlot,
+} from "@/lib/types";
 import { toggleCheck, addOccurrence, removeOccurrence, releaseTask } from "@/lib/actions/tasks";
 import { setMinibarConsumption, type MinibarRoomConsumption } from "@/lib/actions/minibar";
 import type { RoomBillSnapshot } from "@/lib/actions/room-bills";
@@ -80,6 +86,13 @@ export function ChecklistDetail({
   // salva), não precisa de uma coluna própria no banco.
   const minibarItems = minibar?.items ?? [];
   const isMinibarClosed = minibar?.billStatus === "fechada";
+  // O frigobar conferido pela camareira num checklist de Saída com Chegada
+  // só pode ser do hóspede que está saindo — o novo hóspede ainda não
+  // pôde entrar na suíte (só entra depois que a camareira libera), e quem
+  // saiu não pode ter voltado (já retirou as malas). Os demais tipos nunca
+  // coexistem com uma divisão de conta, então 'unica' sempre resolve pra
+  // conta certa sem precisar perguntar nada à camareira.
+  const minibarGuestSlot: RoomBillGuestSlot = task.task_type === "preparacao" ? "saida_hoje" : "unica";
   const initialQuantities = Object.fromEntries(minibarItems.map((item) => [item.id, item.quantity]));
   const [minibarQuantities, setMinibarQuantities] = useState<Record<string, number>>(initialQuantities);
   const [hasMinibarConsumption, setHasMinibarConsumption] = useState(
@@ -93,7 +106,7 @@ export function ChecklistDetail({
   function saveMinibarQuantity(itemId: string, quantity: number) {
     setMinibarPendingIds((prev) => new Set(prev).add(itemId));
     startTransition(async () => {
-      const result = await setMinibarConsumption(task.room_id, itemId, quantity);
+      const result = await setMinibarConsumption(task.room_id, itemId, quantity, minibarGuestSlot);
       setMinibarPendingIds((prev) => {
         const copy = new Set(prev);
         copy.delete(itemId);
@@ -199,6 +212,11 @@ export function ChecklistDetail({
               />
             </div>
           </div>
+          {isMinibarClosed && (
+            <p className="text-xs text-muted-foreground">
+              Lance esse consumo em Consumo por quartos &gt; Lançar consumo adicional.
+            </p>
+          )}
           {hasMinibarConsumption && (
             <div className="space-y-2">
               {minibarItems.map((item) => (

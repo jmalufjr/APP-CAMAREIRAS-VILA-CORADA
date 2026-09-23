@@ -3,10 +3,13 @@ import { BackLink } from "@/components/shared/back-link";
 import { PageHeader } from "@/components/shared/page-header";
 import { getRoomBillsOverview } from "@/lib/actions/room-bills";
 
-export default async function PixPaymentPage({ params }: { params: Promise<{ roomId: string }> }) {
-  const { roomId } = await params;
+// Identificada por bill_id, não room_id: numa suíte com Saída com Chegada
+// em andamento, a conta do hóspede que sai e a do que chega são duas
+// contas diferentes na mesma suíte, e o PIX precisa apontar pra uma só.
+export default async function PixPaymentPage({ params }: { params: Promise<{ billId: string }> }) {
+  const { billId } = await params;
   const overview = await getRoomBillsOverview();
-  const room = overview.find((r) => r.room_id === roomId);
+  const room = overview.find((r) => r.bill_id === billId);
   if (!room) notFound();
 
   return (

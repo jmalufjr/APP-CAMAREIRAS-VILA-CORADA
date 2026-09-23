@@ -23,6 +23,11 @@ export default async function TaskDetailPage({
 
   if (!task) notFound();
 
+  // O frigobar de um checklist de Saída com Chegada só pode ser do
+  // hóspede que está saindo (ver checklist-detail.tsx) — os demais tipos
+  // nunca coexistem com uma divisão de conta, então 'unica' resolve certo.
+  const minibarGuestSlot = task.task_type === "preparacao" ? "saida_hoje" : "unica";
+
   const [{ data: checks }, { data: occurrences }, { data: categories }, minibar] = await Promise.all([
     supabase
       .from("daily_room_task_checks")
@@ -34,7 +39,7 @@ export default async function TaskDetailPage({
       .select("*, occurrence_categories(name)")
       .eq("daily_room_task_id", taskId),
     supabase.from("occurrence_categories").select("*").eq("active", true).order("position"),
-    getMinibarConsumptionForRoom(task.room_id),
+    getMinibarConsumptionForRoom(task.room_id, minibarGuestSlot),
   ]);
 
   const room = (task as unknown as { rooms: { number: string; name: string | null } }).rooms;

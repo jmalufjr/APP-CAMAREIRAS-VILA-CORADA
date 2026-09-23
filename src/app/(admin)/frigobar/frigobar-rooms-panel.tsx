@@ -31,7 +31,7 @@ export function FrigobarRoomsPanel({
         ) : (
           <Accordion className="space-y-2">
             {overview.map((room) => (
-              <RoomAccordionItem key={room.room_id} room={room} />
+              <RoomAccordionItem key={room.bill_id} room={room} />
             ))}
           </Accordion>
         )}
@@ -176,12 +176,22 @@ function PaidBillAccordionItem({ bill }: { bill: RecentlyPaidBill }) {
   );
 }
 
+// Quase sempre "Suíte N" — só some a "saída de hoje"/"chegada de hoje" (+
+// nome, se a Stays informou) numa suíte com Saída com Chegada em
+// andamento, quando a conta do hóspede que sai ainda não foi paga.
+function roomSlotLabel(room: RoomBillOverview): string {
+  if (room.guestSlot === "unica") return `Suíte ${room.room_number}`;
+  const situacao = room.guestSlot === "saida_hoje" ? "saída de hoje" : "chegada de hoje";
+  const name = room.guestNameHint ? ` (${room.guestNameHint})` : "";
+  return `Suíte ${room.room_number} — ${situacao}${name}`;
+}
+
 function RoomAccordionItem({ room }: { room: RoomBillOverview }) {
   return (
-    <AccordionItem value={room.room_id}>
+    <AccordionItem value={room.bill_id}>
       <AccordionTrigger>
         <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <span className="font-heading text-base">Suíte {room.room_number}</span>
+          <span className="font-heading text-base">{roomSlotLabel(room)}</span>
           {room.status === "fechada" && <Badge variant="secondary">Conta fechada</Badge>}
           {room.status === "reaberta" && <Badge variant="outline">Conta reaberta</Badge>}
         </span>

@@ -26,6 +26,7 @@ export default async function EditarComandaPage({ params }: { params: Promise<{ 
         poolbarItems={(poolbarItems ?? []) as PoolbarItem[]}
         rooms={rooms}
         initialRoomId={formData.room_id}
+        initialGuestSlot={formData.guest_slot}
         initialQuantities={formData.quantities}
         initialComandaStatus={formData.comanda_status}
         initialBillStatus={formData.bill_status}

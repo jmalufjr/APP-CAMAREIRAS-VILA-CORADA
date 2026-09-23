@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { ComandaStatus } from "@/lib/types";
+import type { ComandaStatus, RoomBillGuestSlot } from "@/lib/types";
 import { SERVICE_CHARGE_RATE } from "@/lib/room-bills";
 import { nowInBrazil, toDateKey, dateKeyInBrazil, startOfDayBrasiliaUtc, nextDayBrasiliaUtcBoundary } from "@/lib/date";
 import { EXCLUDED_CAMAREIRA_NAME, closedPeriodRange } from "@/lib/commission-math";
@@ -18,7 +18,11 @@ function revalidateComandaPaths() {
   revalidatePath("/frigobar");
 }
 
-export async function submitComanda(roomId: string, items: ComandaItemInput[]) {
+export async function submitComanda(
+  roomId: string,
+  items: ComandaItemInput[],
+  guestSlot: RoomBillGuestSlot = "unica"
+) {
   if (!roomId) return { error: "Selecione a suíte." };
   const validItems = items.filter((i) => i.quantity > 0);
   if (validItems.length === 0) return { error: "Selecione ao menos um item com quantidade." };
@@ -27,6 +31,7 @@ export async function submitComanda(roomId: string, items: ComandaItemInput[]) {
   const { data, error } = await supabase.rpc("submit_comanda", {
     p_room_id: roomId,
     p_items: validItems,
+    p_guest_slot: guestSlot,
   });
   if (error) return { error: error.message };
 
@@ -34,7 +39,12 @@ export async function submitComanda(roomId: string, items: ComandaItemInput[]) {
   return { success: true, comandaId: data as string };
 }
 
-export async function editComanda(comandaId: string, roomId: string, items: ComandaItemInput[]) {
+export async function editComanda(
+  comandaId: string,
+  roomId: string,
+  items: ComandaItemInput[],
+  guestSlot: RoomBillGuestSlot = "unica"
+) {
   if (!roomId) return { error: "Selecione a suíte." };
   const validItems = items.filter((i) => i.quantity > 0);
   if (validItems.length === 0) return { error: "Selecione ao menos um item com quantidade." };
@@ -44,6 +54,7 @@ export async function editComanda(comandaId: string, roomId: string, items: Coma
     p_comanda_id: comandaId,
     p_room_id: roomId,
     p_items: validItems,
+    p_guest_slot: guestSlot,
   });
   if (error) return { error: error.message };
 
@@ -244,19 +255,27 @@ export interface ComandaFormData {
   // própria comanda) que decide se o formulário pode ficar editável.
   comanda_status: ComandaStatus;
   bill_status: "aberta" | "fechada" | "reaberta" | "paga";
+  // Qual conta da suíte esta comanda pertence hoje — quase sempre 'unica';
+  // só é 'saida_hoje'/'chegada_hoje' se a suíte estiver com a conta
+  // dividida (Saída com Chegada).
+  guest_slot: RoomBillGuestSlot;
 }
 
 export async function getComandaForEdit(comandaId: string): Promise<ComandaFormData | null> {
   const supabase = await createClient();
   const { data: comanda } = await supabase
     .from("bar_comandas")
-    .select("room_id, status, room_bills(status)")
+    .select("room_id, status, room_bills(status, guest_slot)")
     .eq("id", comandaId)
     .single();
   if (!comanda) return null;
 
-  const billStatus = (comanda as unknown as { room_bills: { status: ComandaFormData["bill_status"] } | null })
-    .room_bills?.status;
+  const billInfo = (
+    comanda as unknown as {
+      room_bills: { status: ComandaFormData["bill_status"]; guest_slot: RoomBillGuestSlot } | null;
+    }
+  ).room_bills;
+  const billStatus = billInfo?.status;
 
   const { data: itemRows } = await supabase
     .from("bar_comanda_items")
@@ -273,29 +292,67 @@ export async function getComandaForEdit(comandaId: string): Promise<ComandaFormD
     quantities,
     comanda_status: comanda.status,
     bill_status: billStatus ?? "aberta",
+    guest_slot: billInfo?.guest_slot ?? "unica",
   };
 }
 
 export interface RoomOption {
   room_id: string;
+  bill_id: string;
   room_number: string;
   billStatus: "aberta" | "fechada" | "reaberta" | "paga";
+  guestSlot: RoomBillGuestSlot;
+  guestNameHint: string | null;
 }
 
+// Numa suíte com Saída com Chegada em andamento (conta do hóspede que sai
+// ainda não paga quando o novo chega), aparece 2 vezes aqui — uma opção
+// por conta. Em qualquer outro dia, aparece só 1 vez, igual a sempre.
 export async function getRoomsForComandaSelector(): Promise<RoomOption[]> {
   const supabase = await createClient();
   const [{ data: rooms }, { data: bills }] = await Promise.all([
     supabase.from("rooms").select("id, number").eq("active", true).order("position"),
-    supabase.from("room_bills").select("room_id, status").neq("status", "paga"),
+    supabase
+      .from("room_bills")
+      .select("id, room_id, status, guest_slot, guest_name_hint")
+      .neq("status", "paga"),
   ]);
 
-  const statusByRoom = new Map((bills ?? []).map((b) => [b.room_id, b.status]));
+  const billsByRoom = new Map<
+    string,
+    { id: string; status: "aberta" | "fechada" | "reaberta" | "paga"; guest_slot: RoomBillGuestSlot; guest_name_hint: string | null }[]
+  >();
+  (bills ?? []).forEach((b) => {
+    const list = billsByRoom.get(b.room_id) ?? [];
+    list.push(b);
+    billsByRoom.set(b.room_id, list);
+  });
 
-  return (rooms ?? []).map((room) => ({
-    room_id: room.id,
-    room_number: room.number,
-    billStatus: statusByRoom.get(room.id) ?? "aberta",
-  }));
+  return (rooms ?? []).flatMap((room) => {
+    const roomBills = billsByRoom.get(room.id);
+    if (!roomBills || roomBills.length === 0) {
+      // Suíte sem conta ainda (nunca teve consumo lançado) — a comanda
+      // cria a conta 'unica' na hora, via a mesma RPC de sempre.
+      return [
+        {
+          room_id: room.id,
+          bill_id: "",
+          room_number: room.number,
+          billStatus: "aberta" as const,
+          guestSlot: "unica" as const,
+          guestNameHint: null,
+        },
+      ];
+    }
+    return roomBills.map((b) => ({
+      room_id: room.id,
+      bill_id: b.id,
+      room_number: room.number,
+      billStatus: b.status,
+      guestSlot: b.guest_slot,
+      guestNameHint: b.guest_name_hint,
+    }));
+  });
 }
 
 // ---------- Leitura: comissão de 10% do bar por camareira (Resumo Executivo) ----------

@@ -7,6 +7,10 @@ export type MaintenanceExecutionType = "nao_tecnico" | "tecnico";
 export type MaintenanceItemStatus = "pendente" | "selecionada";
 export type RoomBillStatus = "aberta" | "fechada" | "reaberta" | "paga";
 export type PaymentMethod = "pix" | "cartao_credito" | "cartao_debito" | "transferencia_bancaria" | "dinheiro";
+// 'unica' cobre o dia normal (1 conta por suíte, como sempre foi); os
+// outros dois só existem num dia de Saída com Chegada em que a conta do
+// hóspede que sai ainda não foi paga quando o hóspede novo chega.
+export type RoomBillGuestSlot = "unica" | "saida_hoje" | "chegada_hoje";
 export type ComandaStatus = "original" | "cancelada" | "editada";
 
 export interface Profile {
@@ -231,6 +235,8 @@ export interface RoomBill {
   id: string;
   room_id: string;
   status: RoomBillStatus;
+  guest_slot: RoomBillGuestSlot;
+  guest_name_hint: string | null;
   opened_at: string;
   closed_at: string | null;
   closed_by: string | null;

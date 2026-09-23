@@ -7,6 +7,61 @@ import { assignRoomsToTables, tableNumber, type RoomGuestCount } from "@/lib/sta
 import { todayKey, tomorrowKey, yesterdayKey } from "@/lib/date";
 import { revalidatePath } from "next/cache";
 
+// Divide a conta corrente da suíte em duas só quando há realmente uma
+// Saída com Chegada hoje e a conta do hóspede que sai ainda não foi paga:
+// relabela a conta existente como 'saida_hoje' (preservando os itens já
+// lançados, sem apagar/recriar nada) e cria a conta nova 'chegada_hoje',
+// vazia, pro hóspede que está chegando. Idempotente (não faz nada se a
+// divisão já aconteceu). Roda sempre, com ou sem `force` — diferente de
+// stays_locked/lápides, isso não é uma preferência do admin, é
+// integridade de cobrança: nunca faz sentido "preservar" uma mistura de
+// consumo entre dois hóspedes só porque a sincronização não foi forçada.
+async function splitRoomBillForTurnover(
+  supabase: ReturnType<typeof createAdminClient>,
+  roomId: string,
+  checkingOut: StaysReservationRaw,
+  checkingIn: StaysReservationRaw,
+  nameCache: Map<string, string>
+) {
+  const { data: existingChegada } = await supabase
+    .from("room_bills")
+    .select("id")
+    .eq("room_id", roomId)
+    .eq("guest_slot", "chegada_hoje")
+    .neq("status", "paga")
+    .maybeSingle();
+  if (existingChegada) return;
+
+  async function resolveName(clientId: string): Promise<string | null> {
+    const cached = nameCache.get(clientId);
+    if (cached) return cached;
+    const name = await getStaysClientName(clientId).catch(() => null);
+    if (name) nameCache.set(clientId, name);
+    return name;
+  }
+
+  const { data: existingUnica } = await supabase
+    .from("room_bills")
+    .select("id")
+    .eq("room_id", roomId)
+    .eq("guest_slot", "unica")
+    .neq("status", "paga")
+    .maybeSingle();
+
+  if (existingUnica) {
+    const outName = await resolveName(checkingOut._idclient);
+    await supabase
+      .from("room_bills")
+      .update({ guest_slot: "saida_hoje", guest_name_hint: outName })
+      .eq("id", existingUnica.id);
+  }
+
+  const inName = await resolveName(checkingIn._idclient);
+  await supabase
+    .from("room_bills")
+    .insert({ room_id: roomId, status: "aberta", guest_slot: "chegada_hoje", guest_name_hint: inName });
+}
+
 export interface SyncOptions {
   // Sincronização forçada (botão manual): ignora a trava `stays_locked`
   // (regra de preferência do admin, PRD_regrasdenegocio.md seção 1) e
@@ -76,11 +131,23 @@ export async function syncStaysPlanning(options?: SyncOptions) {
 
   let updated = 0;
   let skipped = 0;
+  const planningClientNameCache = new Map<string, string>();
 
   for (const date of dates) {
     for (const room of rooms as { id: string; stays_listing_id: string }[]) {
       const roomReservations = byListing.get(room.stays_listing_id) ?? [];
       const desiredType = deriveWorkType(roomReservations, date);
+
+      // A divisão de conta só importa pro dia corrente (é sobre cobrança
+      // acontecendo agora, não sobre planejamento de amanhã) e só quando
+      // há de fato uma Saída com Chegada.
+      if (date === todayKey() && desiredType === "preparacao") {
+        const checkingOut = roomReservations.find((r) => r.checkOutDate === date);
+        const checkingIn = roomReservations.find((r) => r.checkInDate === date);
+        if (checkingOut && checkingIn) {
+          await splitRoomBillForTurnover(supabase, room.id, checkingOut, checkingIn, planningClientNameCache);
+        }
+      }
 
       const { data: existing } = await supabase
         .from("daily_room_tasks")

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { submitComanda, editComanda, cancelComanda } from "@/lib/actions/comandas";
 import type { RoomOption } from "@/lib/actions/comandas";
-import type { PoolbarItem } from "@/lib/types";
+import type { PoolbarItem, RoomBillGuestSlot } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { QuantityStepper } from "@/components/shared/quantity-stepper";
 import {
@@ -16,12 +16,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+// Chave só do lado do cliente, combinando suíte + qual conta — necessária
+// porque uma suíte com Saída com Chegada em andamento aparece 2 vezes na
+// lista (uma opção por conta), então room_id sozinho deixa de ser único.
+function optionKey(roomId: string, guestSlot: RoomBillGuestSlot): string {
+  return `${roomId}::${guestSlot}`;
+}
+
+function roomOptionLabel(room: RoomOption, isSplit: boolean): string {
+  if (!isSplit || room.guestSlot === "unica") return `Suíte ${room.room_number}`;
+  const situacao = room.guestSlot === "saida_hoje" ? "saída de hoje" : "chegada de hoje";
+  const name = room.guestNameHint ? ` (${room.guestNameHint})` : "";
+  return `Suíte ${room.room_number} — ${situacao}${name}`;
+}
+
 export function ComandaForm({
   mode,
   comandaId,
   poolbarItems,
   rooms,
   initialRoomId,
+  initialGuestSlot,
   initialQuantities,
   initialComandaStatus,
   initialBillStatus,
@@ -31,6 +46,7 @@ export function ComandaForm({
   poolbarItems: PoolbarItem[];
   rooms: RoomOption[];
   initialRoomId?: string;
+  initialGuestSlot?: RoomBillGuestSlot;
   initialQuantities?: Record<string, number>;
   initialComandaStatus?: "original" | "cancelada" | "editada";
   initialBillStatus?: "aberta" | "fechada" | "reaberta" | "paga";
@@ -40,8 +56,14 @@ export function ComandaForm({
   // Sempre uma string (nunca undefined) para o Select ficar controlado
   // desde o primeiro render — alternar undefined/string faz o Base UI
   // acusar o componente de trocar de não controlado para controlado.
-  const [roomId, setRoomId] = useState<string>(initialRoomId ?? "");
+  const [selectedKey, setSelectedKey] = useState<string>(
+    initialRoomId ? optionKey(initialRoomId, initialGuestSlot ?? "unica") : ""
+  );
   const [quantities, setQuantities] = useState<Record<string, number>>(initialQuantities ?? {});
+
+  const selectedRoom = rooms.find((r) => optionKey(r.room_id, r.guestSlot) === selectedKey);
+  const roomIdCounts = new Map<string, number>();
+  rooms.forEach((r) => roomIdCounts.set(r.room_id, (roomIdCounts.get(r.room_id) ?? 0) + 1));
 
   // Uma vez cancelada a própria comanda, ou fechada/paga a conta A QUE ELA
   // PERTENCE (não a conta corrente do quarto — uma comanda antiga pode
@@ -66,7 +88,7 @@ export function ComandaForm({
 
   function handleSubmit() {
     if (isLocked) return;
-    if (!roomId) {
+    if (!selectedRoom) {
       toast.error("Selecione a suíte.");
       return;
     }
@@ -81,8 +103,8 @@ export function ComandaForm({
     startTransition(async () => {
       const result =
         mode === "create"
-          ? await submitComanda(roomId, items)
-          : await editComanda(comandaId!, roomId, items);
+          ? await submitComanda(selectedRoom.room_id, items, selectedRoom.guestSlot)
+          : await editComanda(comandaId!, selectedRoom.room_id, items, selectedRoom.guestSlot);
       if (result?.error) {
         toast.error(result.error);
         return;
@@ -149,22 +171,26 @@ export function ComandaForm({
       <div className="sticky bottom-0 -mx-4 border-t border-border bg-background px-4 py-3 space-y-3 sm:mx-0 sm:rounded-lg sm:border">
         <div className="max-w-xs space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground">Suíte</label>
-          <Select value={roomId} onValueChange={(v) => setRoomId(v ?? "")} disabled={isPending || isLocked}>
+          <Select value={selectedKey} onValueChange={(v) => setSelectedKey(v ?? "")} disabled={isPending || isLocked}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Selecione a suíte">
                 {(v: string) => {
-                  const room = rooms.find((r) => r.room_id === v);
-                  return room ? `Suíte ${room.room_number}` : v;
+                  const room = rooms.find((r) => optionKey(r.room_id, r.guestSlot) === v);
+                  return room ? roomOptionLabel(room, (roomIdCounts.get(room.room_id) ?? 1) > 1) : v;
                 }}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              {rooms.map((room) => (
-                <SelectItem key={room.room_id} value={room.room_id} disabled={room.billStatus === "fechada"}>
-                  Suíte {room.room_number}
-                  {room.billStatus === "fechada" ? " (conta fechada)" : ""}
-                </SelectItem>
-              ))}
+              {rooms.map((room) => {
+                const key = optionKey(room.room_id, room.guestSlot);
+                const isSplit = (roomIdCounts.get(room.room_id) ?? 1) > 1;
+                return (
+                  <SelectItem key={key} value={key} disabled={room.billStatus === "fechada"}>
+                    {roomOptionLabel(room, isSplit)}
+                    {room.billStatus === "fechada" ? " (conta fechada)" : ""}
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         </div>

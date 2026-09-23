@@ -24,6 +24,10 @@ create type payment_method as enum (
   'transferencia_bancaria',
   'dinheiro'
 );
+-- 'unica' cobre o dia normal (1 conta por quarto, como sempre foi); os
+-- outros dois só existem num dia de Saída com Chegada em que a conta do
+-- hóspede que sai ainda não foi paga quando o hóspede novo chega.
+create type room_bill_guest_slot as enum ('unica', 'saida_hoje', 'chegada_hoje');
 create type comanda_status as enum ('original', 'cancelada', 'editada');
 
 -- ---------- PROFILES ----------
@@ -393,11 +397,19 @@ create table poolbar_items (
 -- Ciclo único por quarto que governa tanto frigobar quanto bar da piscina:
 -- aberta -> fechada (camareira bloqueada) -> reaberta (volta a aceitar
 -- lançamentos, admin pode editar itens) -> paga (uma conta 'aberta' nova
--- nasce automaticamente). Cada quarto tem no máximo 1 conta não-paga.
+-- nasce automaticamente). Cada (quarto, guest_slot) tem no máximo 1 conta
+-- não-paga — guest_slot é 'unica' quase sempre (mesmo comportamento de
+-- sempre: 1 conta por quarto); só vira 'saida_hoje'/'chegada_hoje' num dia
+-- de Saída com Chegada em que o hóspede que sai ainda não pagou quando o
+-- novo chega, pra nunca misturar o consumo dos dois.
 create table room_bills (
   id uuid primary key default uuid_generate_v4(),
   room_id uuid not null references rooms(id) on delete cascade,
   status room_bill_status not null default 'aberta',
+  guest_slot room_bill_guest_slot not null default 'unica',
+  -- Só para exibição (nunca usado como chave) — nome do hóspede buscado
+  -- na Stays, melhor esforço, pode ficar null.
+  guest_name_hint text,
   opened_at timestamptz not null default now(),
   closed_at timestamptz,
   closed_by uuid references profiles(id) on delete set null,
@@ -417,7 +429,8 @@ create table room_bills (
   -- lançou (ver set_room_bill_service_charge_waived mais abaixo).
   service_charge_waived boolean not null default false
 );
-create unique index room_bills_one_active_per_room on room_bills(room_id) where status <> 'paga';
+create unique index room_bills_one_active_per_room_slot
+  on room_bills(room_id, guest_slot) where status <> 'paga';
 
 -- ---------- ROOM BILL MINIBAR ITEMS (lançamentos de frigobar por conta) ----------
 -- price_snapshot preserva o preço vigente no momento do lançamento; a
@@ -1050,7 +1063,7 @@ insert into poolbar_items (category, name, price, position) values
 -- qualquer usuário autenticado (inclusive camareira, ao lançar consumo pela
 -- primeira vez num quarto novo) precisa conseguir garantir essa conta —
 -- daí a função security definer, no mesmo padrão de select_occurrence etc.
-create or replace function ensure_room_bill(p_room_id uuid)
+create or replace function ensure_room_bill(p_room_id uuid, p_guest_slot room_bill_guest_slot default 'unica')
 returns room_bills as $$
 declare
   v_bill room_bills;
@@ -1059,12 +1072,12 @@ begin
     raise exception 'not authorized';
   end if;
 
-  select * into v_bill from room_bills where room_id = p_room_id and status <> 'paga' limit 1;
+  select * into v_bill from room_bills where room_id = p_room_id and guest_slot = p_guest_slot and status <> 'paga' limit 1;
   if v_bill.id is not null then
     return v_bill;
   end if;
 
-  insert into room_bills (room_id, status) values (p_room_id, 'aberta') returning * into v_bill;
+  insert into room_bills (room_id, status, guest_slot) values (p_room_id, 'aberta', p_guest_slot) returning * into v_bill;
   return v_bill;
 end;
 $$ language plpgsql security definer;
@@ -1072,7 +1085,7 @@ $$ language plpgsql security definer;
 -- Cria uma comanda nova para o quarto informado, na conta corrente dele.
 -- p_items: jsonb tipo [{"item_id": "uuid", "quantity": 2}, ...] (itens com
 -- quantidade 0 são ignorados). Bloqueia se a conta do quarto está fechada.
-create or replace function submit_comanda(p_room_id uuid, p_items jsonb)
+create or replace function submit_comanda(p_room_id uuid, p_items jsonb, p_guest_slot room_bill_guest_slot default 'unica')
 returns uuid as $$
 declare
   v_bill_id uuid;
@@ -1087,11 +1100,11 @@ begin
   end if;
 
   select id, status into v_bill_id, v_bill_status
-  from room_bills where room_id = p_room_id and status <> 'paga'
+  from room_bills where room_id = p_room_id and guest_slot = p_guest_slot and status <> 'paga'
   for update;
 
   if v_bill_id is null then
-    insert into room_bills (room_id, status) values (p_room_id, 'aberta')
+    insert into room_bills (room_id, status, guest_slot) values (p_room_id, 'aberta', p_guest_slot)
     returning id, status into v_bill_id, v_bill_status;
   end if;
 
@@ -1128,7 +1141,7 @@ $$ language plpgsql security definer;
 -- pelos informados. Bloqueia se a comanda já foi cancelada, se a conta
 -- atual da comanda está fechada ou já foi paga, ou se a conta de destino
 -- está fechada.
-create or replace function edit_comanda(p_comanda_id uuid, p_room_id uuid, p_items jsonb)
+create or replace function edit_comanda(p_comanda_id uuid, p_room_id uuid, p_items jsonb, p_guest_slot room_bill_guest_slot default 'unica')
 returns void as $$
 declare
   v_old_bill_id uuid;
@@ -1162,11 +1175,11 @@ begin
   end if;
 
   select id, status into v_new_bill_id, v_new_bill_status
-  from room_bills where room_id = p_room_id and status <> 'paga'
+  from room_bills where room_id = p_room_id and guest_slot = p_guest_slot and status <> 'paga'
   for update;
 
   if v_new_bill_id is null then
-    insert into room_bills (room_id, status) values (p_room_id, 'aberta')
+    insert into room_bills (room_id, status, guest_slot) values (p_room_id, 'aberta', p_guest_slot)
     returning id, status into v_new_bill_id, v_new_bill_status;
   end if;
 
@@ -1233,7 +1246,7 @@ $$ language plpgsql security definer;
 
 -- Fechar/reabrir/marcar como paga a conta do quarto: agora ação da
 -- camareira (antes era do admin).
-create or replace function close_room_bill(p_room_id uuid)
+create or replace function close_room_bill(p_room_id uuid, p_guest_slot room_bill_guest_slot default 'unica')
 returns void as $$
 declare
   v_bill_id uuid;
@@ -1243,9 +1256,12 @@ begin
     raise exception 'not authorized';
   end if;
 
-  select id, status into v_bill_id, v_status from room_bills where room_id = p_room_id and status <> 'paga' for update;
+  select id, status into v_bill_id, v_status
+  from room_bills where room_id = p_room_id and guest_slot = p_guest_slot and status <> 'paga'
+  for update;
   if v_bill_id is null then
-    insert into room_bills (room_id, status) values (p_room_id, 'aberta') returning id, status into v_bill_id, v_status;
+    insert into room_bills (room_id, status, guest_slot) values (p_room_id, 'aberta', p_guest_slot)
+    returning id, status into v_bill_id, v_status;
   end if;
   if v_status = 'fechada' then
     raise exception 'A conta deste quarto já está fechada.';
@@ -1255,7 +1271,7 @@ begin
 end;
 $$ language plpgsql security definer;
 
-create or replace function reopen_room_bill(p_room_id uuid)
+create or replace function reopen_room_bill(p_room_id uuid, p_guest_slot room_bill_guest_slot default 'unica')
 returns void as $$
 declare
   v_bill_id uuid;
@@ -1265,7 +1281,9 @@ begin
     raise exception 'not authorized';
   end if;
 
-  select id, status into v_bill_id, v_status from room_bills where room_id = p_room_id and status <> 'paga' for update;
+  select id, status into v_bill_id, v_status
+  from room_bills where room_id = p_room_id and guest_slot = p_guest_slot and status <> 'paga'
+  for update;
   if v_status is distinct from 'fechada' then
     raise exception 'Só é possível reabrir uma conta fechada.';
   end if;
@@ -1278,7 +1296,10 @@ $$ language plpgsql security definer;
 -- por e-mail o recibo em PDF daquela conta específica logo em seguida.
 -- Recebe também o método de pagamento escolhido pela camareira (não há
 -- valor parcial nem estorno neste app — o total é sempre o já calculado).
-create or replace function pay_room_bill(p_room_id uuid, p_payment_method payment_method)
+-- Ao pagar, só nasce uma conta nova 'única' se não sobrar nenhuma outra
+-- conta não-paga pro mesmo quarto — evita criar uma terceira conta quando
+-- a de "chegada de hoje" já está ativa ao pagar a de "saída de hoje".
+create or replace function pay_room_bill(p_room_id uuid, p_payment_method payment_method, p_guest_slot room_bill_guest_slot default 'unica')
 returns uuid as $$
 declare
   v_bill_id uuid;
@@ -1288,7 +1309,9 @@ begin
     raise exception 'not authorized';
   end if;
 
-  select id, status into v_bill_id, v_status from room_bills where room_id = p_room_id and status <> 'paga' for update;
+  select id, status into v_bill_id, v_status
+  from room_bills where room_id = p_room_id and guest_slot = p_guest_slot and status <> 'paga'
+  for update;
   if v_status is distinct from 'fechada' then
     raise exception 'Feche a conta antes de registrar o pagamento.';
   end if;
@@ -1296,7 +1319,10 @@ begin
   update room_bills
   set status = 'paga', paid_at = now(), paid_by = auth.uid(), payment_method = p_payment_method
   where id = v_bill_id;
-  insert into room_bills (room_id, status) values (p_room_id, 'aberta');
+
+  if not exists (select 1 from room_bills where room_id = p_room_id and status <> 'paga') then
+    insert into room_bills (room_id, status, guest_slot) values (p_room_id, 'aberta', 'unica');
+  end if;
 
   return v_bill_id;
 end;
@@ -1318,7 +1344,7 @@ $$ language plpgsql security definer;
 
 -- Isenta (ou volta a cobrar) a taxa de serviço de 10% da conta corrente do
 -- quarto — ação da camareira, permitida em qualquer status não pago.
-create or replace function set_room_bill_service_charge_waived(p_room_id uuid, p_waived boolean)
+create or replace function set_room_bill_service_charge_waived(p_room_id uuid, p_waived boolean, p_guest_slot room_bill_guest_slot default 'unica')
 returns void as $$
 declare
   v_bill_id uuid;
@@ -1327,9 +1353,11 @@ begin
     raise exception 'not authorized';
   end if;
 
-  select id into v_bill_id from room_bills where room_id = p_room_id and status <> 'paga' for update;
+  select id into v_bill_id
+  from room_bills where room_id = p_room_id and guest_slot = p_guest_slot and status <> 'paga'
+  for update;
   if v_bill_id is null then
-    insert into room_bills (room_id, status) values (p_room_id, 'aberta') returning id into v_bill_id;
+    insert into room_bills (room_id, status, guest_slot) values (p_room_id, 'aberta', p_guest_slot) returning id into v_bill_id;
   end if;
 
   update room_bills set service_charge_waived = p_waived where id = v_bill_id;

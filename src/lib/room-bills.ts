@@ -1,5 +1,5 @@
 import type { createClient } from "@/lib/supabase/server";
-import type { RoomBill } from "@/lib/types";
+import type { RoomBill, RoomBillGuestSlot } from "@/lib/types";
 
 // Taxa de serviço sobre o consumo do bar da piscina — usada tanto no
 // total da conta do quarto (room-bills.ts) quanto no cálculo da comissão
@@ -16,9 +16,13 @@ export const SERVICE_CHARGE_RATE = 0.1;
 // essa conta na primeira vez que lança consumo num quarto sem conta ainda.
 export async function getOrCreateCurrentBill(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  roomId: string
+  roomId: string,
+  guestSlot: RoomBillGuestSlot = "unica"
 ): Promise<RoomBill> {
-  const { data, error } = await supabase.rpc("ensure_room_bill", { p_room_id: roomId });
+  const { data, error } = await supabase.rpc("ensure_room_bill", {
+    p_room_id: roomId,
+    p_guest_slot: guestSlot,
+  });
   if (error || !data) throw new Error(error?.message ?? "Erro ao obter a conta do quarto.");
   return data as RoomBill;
 }

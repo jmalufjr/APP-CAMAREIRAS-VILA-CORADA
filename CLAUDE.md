@@ -2124,6 +2124,119 @@ também é feita em Server Components.
       das duas migrations, sem checagem funcional de tela via navegador
       desta vez. Vale investigar essa falha do ambiente local numa próxima
       sessão antes de testar mudanças futuras dessa forma.
+49. **Parte 42 — Conta dividida por hóspede em dias de Saída com Chegada**
+    (23/09/2026, feita direto em `main`, pós parte 41; desenhada em modo de
+    planejamento antes de implementar — ver
+    `PRD_consumos-api-joao-v1.md` pra origem do problema e o histórico de
+    decisão completo na conversa): até aqui, `room_bills` era sempre 1
+    conta por **suíte**, nunca por hóspede — um índice único garantia no
+    máximo 1 conta não-paga por quarto. Isso quebrava exatamente no dia de
+    "Saída com Chegada": se o hóspede que sai não pagasse antes de o
+    hóspede novo chegar e começar a consumir, os dois consumos se
+    misturavam na mesma conta, sem nenhuma forma de separar depois quem
+    consumiu o quê.
+    - **Decisão de design, descartando a alternativa mais óbvia**: a
+      solução **não** faz a camareira escolher o hóspede por nome numa
+      lista vinda da Stays — a identidade do hóspede lá não é uma chave
+      estável, e depender dela travaria o lançamento de consumo (uma ação
+      com dinheiro envolvido, todo dia) se a Stays estivesse fora do ar.
+      Em vez disso: a conta da suíte só se divide em duas **nos dias em
+      que isso realmente acontece**, rotuladas pela própria situação do
+      hóspede — **"saída de hoje"** / **"chegada de hoje"** (algo que o
+      hóspede sempre sabe sobre si mesmo, sem precisar de nome) — com o
+      nome vindo da Stays aparecendo só como reforço opcional entre
+      parênteses, nunca bloqueando nada se a busca falhar. Em qualquer dia
+      sem troca (a esmagadora maioria), nada muda — zero telas novas, zero
+      perguntas novas, continua exatamente 1 conta por suíte como sempre.
+    - **Schema** (migration `045_room_bill_guest_slot.sql`): novo enum
+      `room_bill_guest_slot` (`'unica'` | `'saida_hoje'` | `'chegada_hoje'`),
+      nova coluna `room_bills.guest_slot` (padrão `'unica'`) e
+      `guest_name_hint` (só exibição, nunca chave). O índice único virou
+      `(room_id, guest_slot) where status <> 'paga'` — permite até 2
+      contas não-pagas por suíte, uma por slot. As 7 funções `security
+      definer` que resolviam "a conta da suíte" só por `room_id`
+      (`ensure_room_bill`, `close_room_bill`, `reopen_room_bill`,
+      `pay_room_bill`, `set_room_bill_service_charge_waived`,
+      `submit_comanda`, `edit_comanda`) ganharam `p_guest_slot` com valor
+      padrão `'unica'` — como é um parâmetro opcional, toda chamada
+      existente continuou funcionando sem nenhuma mudança de
+      comportamento. `pay_room_bill` ganhou uma guarda a mais: só cria uma
+      conta `'unica'` nova depois de pagar se não sobrar **nenhuma** outra
+      conta não-paga pro mesmo quarto — sem isso, pagar a conta de quem
+      sai num dia dividido criaria uma terceira conta desnecessária, com a
+      de "chegada de hoje" já ativa.
+    - **Quem cria a divisão**: `syncStaysPlanning`
+      (`src/lib/actions/stays-sync.ts`) — no mesmo loop que já calcula
+      `deriveWorkType` pra cada quarto/dia, quando o tipo é `'preparacao'`
+      (Saída com Chegada) e a data é hoje, `splitRoomBillForTurnover`
+      relabela a conta `'unica'` existente (preservando os itens já
+      lançados, sem apagar/recriar nada) como `'saida_hoje'` e cria a
+      conta nova `'chegada_hoje'`, vazia — idempotente (não faz nada se a
+      divisão já aconteceu) e roda sempre, com ou sem `force`: diferente
+      de `stays_locked`/lápides, isso não é preferência do admin, é
+      integridade de cobrança.
+    - **Frigobar no checklist de Saída com Chegada — correção importante
+      ao entendimento inicial**: o frigobar conferido pela camareira
+      nesse checklist só pode ser do hóspede que está **saindo** — o
+      hóspede novo ainda não pôde entrar na suíte (só entra depois que a
+      camareira libera) e quem saiu não pode ter voltado (já retirou as
+      malas). `checklist-detail.tsx` resolve isso automaticamente
+      (`task.task_type === 'preparacao' ? 'saida_hoje' : 'unica'`), sem
+      perguntar nada à camareira.
+    - **Sinal de "frigobar já conferido", sem nenhuma coluna nova**: a
+      conversa expôs um problema real já existente (não introduzido por
+      esta parte): o frigobar do hóspede que sai pode ser lançado em dois
+      lugares — no checklist (se a conta ainda estiver aberta quando a
+      camareira limpa a suíte) ou em "Consumo por quartos" > "Lançar
+      consumo adicional" (se a conta já tiver fechado antes disso
+      acontecer) — sem nenhum aviso dizendo qual dos dois já aconteceu.
+      Resolvido reaproveitando `daily_room_tasks.status`: em
+      `getRoomBillsOverview` (`room-bills.ts`), `departureFrigobarStatus`
+      vira `"confirmed_via_checklist"` se a tarefa de saída (`preparacao`
+      ou `somente_saida`) está `concluido`, ou
+      `"pending_needs_manual_entry"` se a conta já está `fechada` e a
+      tarefa não está `concluido` — mostrado como nota ao lado do campo
+      "Lançar consumo adicional" em `consumo-quartos-panel.tsx`.
+    - **Telas**: `getRoomBillsOverview`/`getRoomsForComandaSelector`
+      passaram de "1 entrada por quarto" pra "1 entrada por conta não-paga
+      daquele quarto" (`flatMap` em vez de `map`) — numa suíte dividida,
+      aparecem 2 linhas em vez de 1, tanto no acordeão de "Consumo por
+      quartos" (camareira e admin, `key` trocado de `room_id` pra
+      `bill_id`) quanto no seletor de suíte da comanda (`comanda-form.tsx`,
+      chave composta `room_id::guestSlot` já que `room_id` sozinho deixa
+      de ser único). Em qualquer dia sem divisão, o comportamento e a
+      aparência são idênticos a antes.
+    - **PIX renomeado por `bill_id`**: `/bar-piscina/pix/[roomId]` virou
+      `/bar-piscina/pix/[billId]` — numa suíte dividida, "pagar com PIX"
+      precisa apontar pra uma conta específica, não mais só pro quarto.
+    - **Ambiente local (Docker) travado no meio da sessão**: ao tentar
+      `npx supabase stop`/`start` pra reparar a falha já registrada na
+      Parte 41 (Kong sem porta publicada), o Windows passou a recusar a
+      porta 54322 inteira (`ports are not available... forbidden by its
+      access permissions`) — uma exclusão de porta do
+      Windows/Hyper-V/WSL, não um problema do Docker nem deste projeto.
+      Resolvido pelo proprietário reiniciando o serviço de rede
+      (`net stop winnat` / `net start winnat`, terminal administrador) —
+      vale como primeiro remédio a tentar se esse erro específico
+      ("access forbidden by its access permissions" numa porta do
+      Supabase local) aparecer de novo no futuro.
+    - **Testado**: cenário de divisão simulado diretamente no Postgres
+      local (relabela uma conta existente com item de frigobar já
+      lançado, cria a nova) pra dois quartos — um representando "checklist
+      já concluído" (nota "já conferido" esperada) e outro "conta fechada
+      antes do checklist" (nota "ainda não foi lançado" esperada).
+      Verificado via sessão autenticada real (Playwright, login pela tela
+      de verdade) contra o `next dev` local: as duas linhas aparecem com
+      os rótulos e nomes corretos em "Consumo por quartos"; o item de
+      frigobar pré-existente continua correto na conta relabelada; as
+      duas notas aparecem nos cenários certos; o seletor de suíte da
+      comanda mostra as duas opções, com a fechada desabilitada; pagar a
+      conta de "saída de hoje" a marca como paga (com o método escolhido)
+      sem criar uma terceira conta e sem afetar a conta de "chegada de
+      hoje", que permanece intacta — confirmado também direto no Postgres
+      depois do teste. Fixtures de teste removidas do banco local depois.
+      `npm run build`/`eslint` limpos, com as rotas `/bar-piscina/pix/
+      [billId]` e a árvore inteira do app compilando sem erros de tipo.
 
 ## Convenções e decisões importantes
 
@@ -2475,7 +2588,11 @@ o escopo mude no futuro.
   comanda originalmente, `created_by` — nunca muda numa edição) em vez de
   "Última ação: X", e a numeração "Comanda #N" é o `monthly_number`
   (sequencial pra pousada inteira, reinicia todo mês), não mais o antigo
-  `sequence_number` por conta.
+  `sequence_number` por conta. Desde a Parte 42, o seletor de suíte
+  (`comanda-form.tsx`) mostra 2 opções pra uma suíte com a conta dividida
+  ("Suíte N — saída de hoje" / "— chegada de hoje") — chave composta
+  `room_id::guestSlot`, já que `room_id` sozinho deixa de ser único nesse
+  caso; em qualquer outro dia, aparece só 1 opção, igual a sempre.
 - `src/app/(camareira)/bar-piscina/` — tela "Consumo por quartos" da
   camareira (renomeada na Parte 05; era "Consumo de Bar da Piscina" na
   Parte 04): acordeão por quarto com os totais de frigobar e bar da
@@ -2495,7 +2612,15 @@ o escopo mude no futuro.
   sem valor, sem parcial, sem estorno); e cada suíte tem um botão "Ver PDF
   da conta", habilitado só com a conta `fechada`, que leva a
   `/bar-piscina/conta/[billId]` (PDF gerado na hora, diferente do recibo
-  de pagamento — que continua admin-only).
+  de pagamento — que continua admin-only). Desde a Parte 42, uma suíte com
+  Saída com Chegada em andamento (conta do hóspede que sai ainda não paga
+  quando o novo chega) aparece como 2 cards separados ("Suíte N — saída de
+  hoje" / "— chegada de hoje", com o nome da Stays entre parênteses se
+  disponível) — em qualquer outro dia, aparece só 1 card, igual a sempre.
+  Uma nota ao lado de "Lançar consumo adicional" avisa se o frigobar do
+  hóspede que sai já foi conferido pela camareira no checklist ou ainda
+  está pendente (`departureFrigobarStatus`, calculado a partir do status
+  da tarefa do dia, sem coluna nova).
 - `src/app/(camareira)/` — telas da camareira.
 - `src/app/manutencao/` — telas do funcionário de manutenção (pasta real,
   não route-group — ver "Parte 02 do projeto").
@@ -2512,6 +2637,13 @@ o escopo mude no futuro.
   `getRoomBillReceiptData` foi generalizada pra servir tanto o recibo de
   pagamento quanto o PDF de uma conta fechada ainda não paga (novo, ver
   `src/lib/payment-method.ts` e a rota `/api/room-bills/[billId]/conta`).
+  Desde a Parte 42, `getRoomBillsOverview` devolve 1 entrada por **conta**
+  não-paga de cada quarto (não mais 1 por quarto) — numa suíte dividida
+  (Saída com Chegada, `room_bills.guest_slot`), aparecem 2 entradas; as 4
+  Server Actions de ação (`closeRoomBill`/`reopenRoomBill`/
+  `markRoomBillPaid`/`setServiceChargeWaived`) e `getOrCreateCurrentBill`
+  (`src/lib/room-bills.ts`) ganharam um parâmetro `guestSlot` opcional
+  (padrão `'unica'`, preserva o comportamento de sempre).
   `poolbar.ts` > `getPoolbarMonthlySummary` (Resumo Executivo) passou, na
   Parte 32, a devolver petiscos e bebidas separados
   (`PoolbarSplitSummary`) — `getPoolbarConsumptionForPeriod` (Histórico)
@@ -2583,7 +2715,12 @@ o escopo mude no futuro.
   automaticamente somente-leitura quando `task.status === 'concluido'`. A
   prop `minibar` é opcional, mas desde a Parte 24 a visão do admin **também
   passa essa prop** (reverte a decisão original da Parte 10 de escondê-la
-  ali — ver Parte 24 pro motivo).
+  ali — ver Parte 24 pro motivo). Desde a Parte 42, o frigobar lançado
+  dentro de um checklist de Saída com Chegada resolve sozinho pra qual
+  conta vai (`task.task_type === 'preparacao' ? 'saida_hoje' : 'unica'`) —
+  o frigobar conferido nesse checklist só pode ser do hóspede que está
+  saindo, nunca do que está chegando, já que ele ainda não pôde entrar na
+  suíte.
 - `src/app/(camareira)/tarefas/tasks-board.tsx` — cancelar a própria
   escolha de uma suíte (Parte 24, `cancelClaim`/`cancel_own_claimed_task`)
   fica no mesmo componente que já mostrava "Meus quartos"/"Disponíveis
@@ -2682,7 +2819,11 @@ o escopo mude no futuro.
   com `force: true`, ignoram (mas nunca ignoram um serviço já reivindicado
   por uma camareira). Todas buscam reservas a partir de **ontem**, não de
   hoje, pra não perder saídas cujo check-out cai exatamente na data
-  consultada (Parte 23). `syncStaysAll(options?)` (Parte 34) só chama as
+  consultada (Parte 23). Desde a Parte 42, `syncStaysPlanning` também
+  divide a conta de bar/frigobar da suíte em dois dias de Saída com
+  Chegada (`splitRoomBillForTurnover`) — roda sempre, com ou sem `force`,
+  já que não é uma preferência do admin, é integridade de cobrança.
+  `syncStaysAll(options?)` (Parte 34) só chama as
   três em sequência, repassando o mesmo `force` — é o que
   `src/app/(admin)/dashboard/sync-stays-all-button.tsx` chama (dois
   botões: "Sincronização Stays Total - sobrescreve alterações inseridas

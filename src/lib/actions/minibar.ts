@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { toDateKey, nowInBrazil, dateKeyInBrazil } from "@/lib/date";
 import { getOrCreateCurrentBill } from "@/lib/room-bills";
+import type { RoomBillGuestSlot } from "@/lib/types";
 
 // ---------- Admin: CRUD do catálogo de itens de frigobar ----------
 
@@ -59,10 +60,15 @@ export async function deleteMinibarItem(id: string) {
 
 // ---------- Camareira/admin: registrar consumo de frigobar na conta corrente do quarto ----------
 
-export async function setMinibarConsumption(roomId: string, itemId: string, quantity: number) {
+export async function setMinibarConsumption(
+  roomId: string,
+  itemId: string,
+  quantity: number,
+  guestSlot: RoomBillGuestSlot = "unica"
+) {
   const supabase = await createClient();
 
-  const bill = await getOrCreateCurrentBill(supabase, roomId);
+  const bill = await getOrCreateCurrentBill(supabase, roomId, guestSlot);
   if (bill.status === "fechada") {
     return { error: "A conta desta suíte está fechada. Não é possível registrar consumo." };
   }
@@ -94,9 +100,12 @@ export interface MinibarRoomConsumption {
   items: { id: string; name: string; price: number; quantity: number }[];
 }
 
-export async function getMinibarConsumptionForRoom(roomId: string): Promise<MinibarRoomConsumption> {
+export async function getMinibarConsumptionForRoom(
+  roomId: string,
+  guestSlot: RoomBillGuestSlot = "unica"
+): Promise<MinibarRoomConsumption> {
   const supabase = await createClient();
-  const bill = await getOrCreateCurrentBill(supabase, roomId);
+  const bill = await getOrCreateCurrentBill(supabase, roomId, guestSlot);
 
   const [{ data: items }, { data: lines }] = await Promise.all([
     supabase.from("minibar_items").select("*").eq("active", true).order("position"),
