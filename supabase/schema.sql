@@ -410,6 +410,9 @@ create table room_bills (
   -- Só para exibição (nunca usado como chave) — nome do hóspede buscado
   -- na Stays, melhor esforço, pode ficar null.
   guest_name_hint text,
+  -- Referência opaca (_id da reserva) — nunca o nome do hóspede — pra uma
+  -- futura API de consumos ligar a conta paga à reserva correspondente.
+  stays_reservation_id text,
   opened_at timestamptz not null default now(),
   closed_at timestamptz,
   closed_by uuid references profiles(id) on delete set null,

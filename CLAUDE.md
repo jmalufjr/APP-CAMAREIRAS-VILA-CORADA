@@ -2237,6 +2237,72 @@ também é feita em Server Components.
       depois do teste. Fixtures de teste removidas do banco local depois.
       `npm run build`/`eslint` limpos, com as rotas `/bar-piscina/pix/
       [billId]` e a árvore inteira do app compilando sem erros de tipo.
+50. **Parte 43 — Conta ligada à reserva da Stays (`stays_reservation_id`)**
+    (23/09/2026, feita direto em `main`, pós parte 42; desenhada em modo de
+    planejamento — plano aprovado depois de o proprietário simplificar o
+    requisito original dos itens 1 e 2 do `PRD_consumos-api-joao-v1.md`: o
+    sistema financeiro não precisa de nenhuma hora — nem de início/fim de
+    estadia, nem de início/fim de consumo —, só precisa saber, quando uma
+    conta é **paga**, a qual reserva da Stays ela corresponde. Como uma
+    reserva já é identificada de forma única por suíte + período +
+    hóspede, não foi preciso nenhuma entidade "estadia" nova — só uma
+    referência opaca à reserva, no mesmo espírito do `guest_slot` da Parte
+    42: nunca o nome do hóspede como chave):
+    - **Nova coluna `room_bills.stays_reservation_id`** (migration
+      `046_room_bill_stays_reservation.sql`, texto livre, nullable, sem
+      índice — só existe pra ser lida por uma futura API externa, nunca
+      consultada por este app) — guarda o `_id` opaco da reserva
+      (`StaysReservationRaw._id`, `src/lib/stays/client.ts`), nunca nome
+      de hóspede.
+    - **`splitRoomBillForTurnover` (Parte 42) virou
+      `syncRoomBillForActiveReservation`, mais abrangente** — a função
+      antiga só rodava no dia de Saída com Chegada; a nova roda **pra
+      toda suíte com alguma reserva tocando hoje** (prioridade: chegando
+      > ficando > saindo, decide qual é "a reserva ativa"), e resolve 3
+      casos com a mesma lógica: (1) a conta que representa o ocupante de
+      hoje já tem a referência certa → nada a fazer; (2) nunca foi
+      carimbada → só preenche (cobre tanto o backfill de contas antigas
+      quanto o primeiro ciclo depois de uma conta nova nascer); (3) tem
+      uma referência **diferente** da reserva ativa hoje → a suíte trocou
+      de ocupante (seja Saída com Chegada no mesmo dia, seja uma
+      **vacância de alguns dias entre hóspedes**, sem pagamento entre
+      eles — cenário que o `guest_slot` sozinho não cobria) → relabela a
+      conta antiga pra `saida_hoje` (preservada intacta, ainda correta
+      pra quem ficou devendo) e cria uma conta nova `chegada_hoje`,
+      carimbada com a reserva ativa. Chamada de dentro do loop de
+      `syncStaysPlanning` (`src/lib/actions/stays-sync.ts`), sempre, com
+      ou sem `force` — não é preferência do admin, é integridade de
+      cobrança.
+    - **Limitação aceita conscientemente, documentada no código**: no
+      caso (3) reaproveitando o rótulo "saída de hoje" pra uma vacância de
+      vários dias, o texto fica um pouco impreciso (o hóspede pode ter
+      saído há dias, não hoje) — aceitável porque o objetivo da tela ali é
+      só sinalizar "essa conta não é do ocupante atual, alguém ainda
+      deve", não a data exata da saída.
+    - **Limitação relacionada, também aceita**: a referência só é gravada
+      quando a sincronização roda — se uma conta nascer e for paga no
+      mesmo dia antes de qualquer sincronização rodar depois disso, fica
+      sem `stays_reservation_id`. Na prática isso quase nunca acontece: o
+      proprietário confirmou que, sempre que uma reserva nova entra na
+      Stays no meio do dia, o admin já roda a "Sincronização Stays
+      Parcial" como procedimento operacional padrão — precisa disso de
+      qualquer forma pra o serviço da suíte aparecer no Planejamento
+      Diário (Somente Chegada, ou promover uma Somente Saída pra Saída
+      com Chegada) — então esse carimbo já fica coberto de graça por um
+      hábito que já existia antes desta parte.
+    - **Testado**: os 3 casos da função simulados diretamente no Postgres
+      local com valores fictícios (backfill de referência nula; já
+      correto, sem mudança; referência divergente → relabela e preserva
+      o item de frigobar já lançado na conta antiga, cria a nova
+      carimbada) — todos bateram exatamente com o esperado. Além disso,
+      **testado contra dados reais de produção da Stays** (mesmo truque
+      de rota de API temporária já usado nas Partes 11/13/23, removida
+      depois do teste): rodando a sincronização de verdade contra o banco
+      local, as 4 suítes realmente ocupadas hoje foram carimbadas com IDs
+      de reserva reais (formato de ObjectId da Stays), as suítes vagas
+      ficaram corretamente sem referência nenhuma, e uma segunda chamada
+      logo em seguida confirmou idempotência total (`updated: 0`, nenhuma
+      conta duplicada criada). `npm run build`/`eslint` limpos.
 
 ## Convenções e decisões importantes
 
@@ -2819,11 +2885,14 @@ o escopo mude no futuro.
   com `force: true`, ignoram (mas nunca ignoram um serviço já reivindicado
   por uma camareira). Todas buscam reservas a partir de **ontem**, não de
   hoje, pra não perder saídas cujo check-out cai exatamente na data
-  consultada (Parte 23). Desde a Parte 42, `syncStaysPlanning` também
-  divide a conta de bar/frigobar da suíte em dois dias de Saída com
-  Chegada (`splitRoomBillForTurnover`) — roda sempre, com ou sem `force`,
-  já que não é uma preferência do admin, é integridade de cobrança.
-  `syncStaysAll(options?)` (Parte 34) só chama as
+  consultada (Parte 23). Desde a Parte 43, `syncStaysPlanning` também
+  liga a conta de bar/frigobar de cada suíte ocupada à reserva ativa da
+  Stays (`syncRoomBillForActiveReservation`, `stays_reservation_id`) —
+  dividindo a conta em duas (mesmo mecanismo `guest_slot` da Parte 42)
+  sempre que detecta troca de ocupante, seja Saída com Chegada no mesmo
+  dia ou uma suíte vaga por alguns dias entre hóspedes. Roda sempre, com
+  ou sem `force`, já que não é uma preferência do admin, é integridade de
+  cobrança. `syncStaysAll(options?)` (Parte 34) só chama as
   três em sequência, repassando o mesmo `force` — é o que
   `src/app/(admin)/dashboard/sync-stays-all-button.tsx` chama (dois
   botões: "Sincronização Stays Total - sobrescreve alterações inseridas
