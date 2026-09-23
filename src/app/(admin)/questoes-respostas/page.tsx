@@ -467,7 +467,10 @@ export default function QuestoesRespostasPage() {
                     verdade) entra no cálculo — mas uma camareira de verdade que deixou de ser usuária
                     do sistema <strong>continua aparecendo normalmente</strong> em qualquer tabela ou
                     demonstrativo referente a um período em que ela de fato trabalhou; ela só some das
-                    telas do dia a dia (como o Planejamento), não do histórico de comissões.
+                    telas do dia a dia (como o Planejamento), não do histórico de comissões. Vale
+                    também na direção contrária: uma camareira recém-cadastrada só passa a contar a
+                    partir do momento do cadastro dela — uma consulta ao Histórico de um período
+                    anterior a esse não mostra ela, mesmo que hoje ela já esteja ativa.
                   </>,
                   <>
                     <strong>Cadastrar e-mail de envio</strong>: o e-mail que recebe automaticamente o

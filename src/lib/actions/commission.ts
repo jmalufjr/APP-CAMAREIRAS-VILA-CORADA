@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { Resend } from "resend";
-import { nowInBrazil, toDateKey, todayKey, monthYearLabelPt } from "@/lib/date";
+import { nowInBrazil, toDateKey, todayKey, monthYearLabelPt, nextDayBrasiliaUtcBoundary } from "@/lib/date";
 import { getBreakfastCommissionPotForRange } from "@/lib/actions/breakfast-commission";
 import { getBarCommissionByCamareiraForPeriod } from "@/lib/actions/comandas";
 import { getReceiptSettings } from "@/lib/actions/room-bills";
@@ -19,13 +19,20 @@ import {
 
 type CamareiraRosterRow = { id: string; name: string; service_quality_score: number };
 
-// Todas as camareiras ATIVAS hoje, mais qualquer camareira que já
-// desligou mas tem algum serviço concluído no período pedido — uma
-// camareira que saiu da equipe não pode sumir do histórico só porque não
-// é mais usuária do sistema (ela continua "existindo" nas tabelas,
-// demonstrativos e relatórios de comissão referentes a quando trabalhou).
-// "admin-camareira" é a única exceção: é conta de teste/ajuste do admin,
-// nunca uma camareira de verdade, e nunca entra em nada disso (ver
+// Todas as camareiras ATIVAS hoje que já existiam até o fim do período
+// pedido, mais qualquer camareira que já desligou mas tem algum serviço
+// concluído no período pedido — uma camareira que saiu da equipe não
+// pode sumir do histórico só porque não é mais usuária do sistema (ela
+// continua "existindo" nas tabelas, demonstrativos e relatórios de
+// comissão referentes a quando trabalhou). Na direção contrária, uma
+// camareira cadastrada DEPOIS do fim do período consultado não pode
+// aparecer num período em que ela nem existia ainda — na comissão de
+// suítes e café, isso diluiria indevidamente a nota dela na fatia de
+// quem realmente trabalhou naquele período (a comissão de bar não sofre
+// desse problema, por nunca repartir um pote comum entre todas — é
+// sempre 10% direto do que a própria camareira vendeu). "admin-camareira"
+// é a única exceção: é conta de teste/ajuste do admin, nunca uma
+// camareira de verdade, e nunca entra em nada disso (ver
 // EXCLUDED_CAMAREIRA_NAME).
 async function getCamareiraRoster(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -38,7 +45,11 @@ async function getCamareiraRoster(
       .select("id, name, service_quality_score")
       .eq("role", "camareira")
       .eq("active", true)
-      .neq("name", EXCLUDED_CAMAREIRA_NAME),
+      .neq("name", EXCLUDED_CAMAREIRA_NAME)
+      // created_at é um instante real (timestamptz) — comparar contra
+      // `${to}T23:59:59` ingenuamente erraria por até 3h, já que Brasília
+      // é UTC-3 (ver nextDayBrasiliaUtcBoundary).
+      .lt("created_at", nextDayBrasiliaUtcBoundary(to)),
     supabase
       .from("daily_room_tasks")
       .select("assigned_to, profiles!daily_room_tasks_assigned_to_fkey(name, service_quality_score)")

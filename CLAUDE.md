@@ -1852,6 +1852,58 @@ também é feita em Server Components.
       confirmado mostrando as duas colunas novas com os rótulos e o texto
       explicativo corretos. Fixture de teste removida do banco local
       depois.
+45. **Parte 38 — Camareira nova não pode "existir" em períodos anteriores
+    ao próprio cadastro** (23/09/2026, feita direto em `main`, pós parte
+    37; lacuna encontrada numa pergunta de verificação do proprietário
+    depois de ver a Parte 37): a Parte 37 corrigiu a metade "quem já
+    saiu" do problema (uma camareira desligada não podia sumir de um
+    período em que trabalhou de verdade), mas deixou passar a metade
+    oposta — `getCamareiraRoster` incluía **todas** as camareiras ativas
+    hoje em **qualquer** período consultado, mesmo um período de antes de
+    ela sequer ter sido cadastrada. Isso não era só uma linha "0%" a
+    mais: no cálculo de comissão de serviços nas suítes e no café, a nota
+    dela entra numa soma compartilhada (percentual da nota de cada
+    camareira sobre a soma de todas) — incluir uma camareira que nem
+    existia ainda diluía indevidamente a fatia de quem realmente
+    trabalhou naquele período antigo. A comissão de bar nunca teve esse
+    risco, por não repartir pote nenhum — é sempre 10% direto do que a
+    própria camareira vendeu.
+    - **Correção**: a metade "ativas hoje" de `getCamareiraRoster` ganhou
+      `.lt("created_at", nextDayBrasiliaUtcBoundary(to))` — só entra
+      automaticamente quem já existia até o fim do período consultado.
+      Sem limite pro início: cadastrada no meio de um período (inclusive
+      o mês corrente em andamento), ela conta normalmente desde que já
+      exista até o fim do intervalo.
+    - **Bug real encontrado ao testar, corrigido na mesma leva**: a
+      primeira tentativa comparou `profiles.created_at` (um instante real
+      em UTC) contra uma string ingênua tipo `"2026-09-22T23:59:59"` —
+      como o Postgres interpreta essa string sem fuso como já sendo UTC,
+      e Brasília é UTC-3, uma camareira cadastrada às 21h de um dia
+      (horário de Brasília, ainda "hoje" pro app) já corresponde a 00h do
+      dia seguinte em UTC — ficando de fora por engano numa janela de até
+      3 horas por dia. Descoberto testando o cenário na prática (camareira
+      criada "agora" não aparecia na própria estimativa do mês corrente,
+      que deveria obviamente incluí-la). Corrigido com
+      `nextDayBrasiliaUtcBoundary` (nova função em `src/lib/date.ts`):
+      calcula meia-noite de Brasília do dia seguinte ao limite pedido,
+      já convertida pra UTC (`Date.UTC(..., 3, 0, 0)` — Brasil não observa
+      horário de verão desde 2019, então o deslocamento fixo de 3h é
+      suficiente, sem precisar tratar DST). **Limitação relacionada,
+      identificada mas deliberadamente não corrigida nesta parte**: as
+      consultas de comissão de bar por período (`fetchBarCommissionRows`,
+      `src/lib/actions/comandas.ts`, desde a Parte 05) comparam
+      `bar_comandas.created_at` contra strings igualmente ingênuas
+      (`${from}T00:00:00`/`${to}T23:59:59`) — mesma categoria de erro de
+      fuso, pré-existente, fora do escopo desta parte (não foi pedida) —
+      registrado aqui como pendência conhecida caso vire relevante no
+      futuro (ex.: uma comanda lançada bem tarde da noite podendo cair no
+      "dia errado" num relatório por período).
+    - **Testado**: camareira de teste criada "agora" (sem nenhum dado em
+      agosto) — confirmado que ela **não** aparece no Histórico filtrado
+      por agosto (antes do cadastro dela) e **aparece** normalmente na
+      estimativa do mês corrente (que inclui hoje, dia do cadastro) — via
+      sessão autenticada real contra o `next dev` local. Fixture removida
+      do banco local depois.
 
 ## Convenções e decisões importantes
 
@@ -2238,9 +2290,11 @@ o escopo mude no futuro.
   período, sempre ao vivo), `getSuitesCafeCommissionForPeriod` (Histórico,
   período arbitrário) e `sendCommissionStatementEmail` (reaproveita o
   e-mail/remetente já usados pro recibo de conta). `getCamareiraRoster`
-  (interno, Parte 37 — soma camareiras ativas com quem tem serviço
-  concluído no período, mesmo já desativada) e `summarizeBarCommissionRows`
-  (em `comandas.ts`) excluem `EXCLUDED_CAMAREIRA_NAME` de todo cálculo.
+  (interno, Parte 37/38 — soma camareiras ativas que já existiam até o
+  fim do período pedido, via `nextDayBrasiliaUtcBoundary` em
+  `src/lib/date.ts`, com quem tem serviço concluído no período mesmo já
+  desativada) e `summarizeBarCommissionRows` (em `comandas.ts`) excluem
+  `EXCLUDED_CAMAREIRA_NAME` de todo cálculo.
 - `src/lib/actions/breakfast-commission.ts` — `getBreakfastCommissionPotForRange`
   (Parte 35), extraído do cálculo que já existia duplicado no Resumo
   Executivo: soma o pote de comissão do café (suítes elegíveis × valor

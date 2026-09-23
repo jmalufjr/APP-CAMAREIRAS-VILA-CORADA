@@ -161,6 +161,18 @@ export function formatDurationPt(startIso: string | null, endIso: string | null)
   return mins === null ? "—" : formatMinutesPt(mins);
 }
 
+// Limite superior EXCLUSIVO pra filtrar uma coluna timestamptz (instante
+// real, ex.: profiles.created_at) de forma que só entrem valores que
+// caem em `dateKey` (ou antes) na hora de Brasília — não um "23:59:59"
+// ingênuo comparado como se já fosse UTC, que erraria por até 3h (Brasil
+// é UTC-3 e não observa horário de verão desde 2019, sem complicação
+// extra de DST). Meia-noite de Brasília do dia seguinte a `dateKey`
+// corresponde a 03:00 UTC desse mesmo dia seguinte.
+export function nextDayBrasiliaUtcBoundary(dateKey: string): string {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + 1, 3, 0, 0)).toISOString();
+}
+
 // "Setembro de 2026" a partir de uma data qualquer daquele mês (usa só
 // ano/mês da string, ignora o dia) — usado pra rotular "Último período
 // (mês)" nas telas/PDF/e-mail de comissão.
