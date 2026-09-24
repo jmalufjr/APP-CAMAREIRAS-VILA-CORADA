@@ -1,0 +1,47 @@
+{
+  "account_id": "8f14e45f-ceea-4a3f-a1b0-000000000001",
+  "stay_id": "63f1a2b4c5d6e7f890120001",
+  "property_id": "vila-corada",
+  "version": 3,
+  "status": "open",
+  "currency": "BRL",
+  "room_id": "3c9c4a1e-1111-4a1a-9a1a-000000000007",
+  "room_number": "7",
+  "guest_slot": "unica",
+  "reservation": {
+    "stays_id": "63f1a2b4c5d6e7f890120001",
+    "reference": null,
+    "link_status": "linked"
+  },
+  "items": [
+    {
+      "id": "minibar:9b1d3f2a-0000-4000-8000-0000000000a1",
+      "category": "minibar",
+      "product_id": "9b1d3f2a-0000-4000-8000-0000000000a1",
+      "description": "Água sem gás",
+      "quantity": 2,
+      "unit_price_cents": 500,
+      "gross_cents": 1000,
+      "discount_cents": 0,
+      "service_charge_cents": 0,
+      "service_charge_waived": false,
+      "total_cents": 1000,
+      "status": "active"
+    }
+  ],
+  "payments": [],
+  "payment_data_quality": "not_recorded",
+  "totals": {
+    "gross_cents": 1000,
+    "discount_cents": 0,
+    "service_charge_cents": 0,
+    "total_cents": 1000,
+    "reported_paid_cents": null,
+    "reported_balance_cents": null
+  },
+  "created_at": "2026-09-20T13:05:00Z",
+  "updated_at": "2026-09-20T18:40:00Z",
+  "closed_at": null,
+  "paid_at": null,
+  "cancelled_at": null
+}

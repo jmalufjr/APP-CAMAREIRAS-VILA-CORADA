@@ -1,0 +1,61 @@
+{
+  "account_id": "8f14e45f-ceea-4a3f-a1b0-000000000002",
+  "stay_id": "63f1a2b4c5d6e7f890120002",
+  "property_id": "vila-corada",
+  "version": 7,
+  "status": "closed_pending_payment",
+  "currency": "BRL",
+  "room_id": "3c9c4a1e-1111-4a1a-9a1a-000000000003",
+  "room_number": "3",
+  "guest_slot": "unica",
+  "reservation": {
+    "stays_id": "63f1a2b4c5d6e7f890120002",
+    "reference": null,
+    "link_status": "linked"
+  },
+  "items": [
+    {
+      "id": "minibar:9b1d3f2a-0000-4000-8000-0000000000a2",
+      "category": "minibar",
+      "product_id": "9b1d3f2a-0000-4000-8000-0000000000a2",
+      "description": "Refrigerante",
+      "quantity": 3,
+      "unit_price_cents": 1000,
+      "gross_cents": 3000,
+      "discount_cents": 0,
+      "service_charge_cents": 0,
+      "service_charge_waived": false,
+      "total_cents": 3000,
+      "status": "active"
+    },
+    {
+      "id": "pool_bar:9b1d3f2a-0000-4000-8000-0000000000b7",
+      "category": "pool_bar",
+      "product_id": "9b1d3f2a-0000-4000-8000-0000000000b7",
+      "description": "Caipirinha",
+      "quantity": 4,
+      "unit_price_cents": 2500,
+      "gross_cents": 10000,
+      "discount_cents": 0,
+      "service_charge_cents": 1000,
+      "service_charge_waived": false,
+      "total_cents": 11000,
+      "status": "active"
+    }
+  ],
+  "payments": [],
+  "payment_data_quality": "not_recorded",
+  "totals": {
+    "gross_cents": 13000,
+    "discount_cents": 0,
+    "service_charge_cents": 1000,
+    "total_cents": 14000,
+    "reported_paid_cents": null,
+    "reported_balance_cents": null
+  },
+  "created_at": "2026-09-18T15:20:00Z",
+  "updated_at": "2026-09-21T11:00:00Z",
+  "closed_at": "2026-09-21T11:00:00Z",
+  "paid_at": null,
+  "cancelled_at": null
+}

@@ -1,0 +1,67 @@
+{
+  "data": [
+    {
+      "event_id": "43",
+      "occurred_at": "2026-09-22T20:15:00Z",
+      "account_id": "8f14e45f-ceea-4a3f-a1b0-000000000003",
+      "version": 9,
+      "type": "account.updated",
+      "account": {
+        "account_id": "8f14e45f-ceea-4a3f-a1b0-000000000003",
+        "stay_id": "63f1a2b4c5d6e7f890120003",
+        "property_id": "vila-corada",
+        "version": 9,
+        "status": "paid",
+        "currency": "BRL",
+        "room_id": "3c9c4a1e-1111-4a1a-9a1a-000000000005",
+        "room_number": "5",
+        "guest_slot": "unica",
+        "reservation": {
+          "stays_id": "63f1a2b4c5d6e7f890120003",
+          "reference": null,
+          "link_status": "linked"
+        },
+        "items": [
+          {
+            "id": "pool_bar:9b1d3f2a-0000-4000-8000-0000000000c1",
+            "category": "pool_bar",
+            "product_id": "9b1d3f2a-0000-4000-8000-0000000000c1",
+            "description": "Bolinho de Bacalhau (10un)",
+            "quantity": 1,
+            "unit_price_cents": 6000,
+            "gross_cents": 6000,
+            "discount_cents": 0,
+            "service_charge_cents": 600,
+            "service_charge_waived": false,
+            "total_cents": 6600,
+            "status": "active"
+          }
+        ],
+        "payments": [
+          {
+            "id": "8f14e45f-ceea-4a3f-a1b0-000000000003-payment",
+            "method": "pix",
+            "amount_cents": 6600,
+            "occurred_at": "2026-09-22T20:15:00Z"
+          }
+        ],
+        "payment_data_quality": "complete",
+        "totals": {
+          "gross_cents": 6000,
+          "discount_cents": 0,
+          "service_charge_cents": 600,
+          "total_cents": 6600,
+          "reported_paid_cents": 6600,
+          "reported_balance_cents": 0
+        },
+        "created_at": "2026-09-22T09:00:00Z",
+        "updated_at": "2026-09-22T20:15:00Z",
+        "closed_at": "2026-09-22T19:00:00Z",
+        "paid_at": "2026-09-22T20:15:00Z",
+        "cancelled_at": null
+      }
+    }
+  ],
+  "next_cursor": "43",
+  "has_more": false
+}

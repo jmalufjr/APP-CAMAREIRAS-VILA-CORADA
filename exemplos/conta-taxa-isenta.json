@@ -1,0 +1,54 @@
+{
+  "account_id": "8f14e45f-ceea-4a3f-a1b0-000000000004",
+  "stay_id": null,
+  "property_id": "vila-corada",
+  "version": 5,
+  "status": "paid",
+  "currency": "BRL",
+  "room_id": "3c9c4a1e-1111-4a1a-9a1a-000000000009",
+  "room_number": "9",
+  "guest_slot": "unica",
+  "reservation": {
+    "stays_id": null,
+    "reference": null,
+    "link_status": "unlinked"
+  },
+  "items": [
+    {
+      "id": "pool_bar:9b1d3f2a-0000-4000-8000-0000000000d4",
+      "category": "pool_bar",
+      "product_id": "9b1d3f2a-0000-4000-8000-0000000000d4",
+      "description": "Água de Coco",
+      "quantity": 5,
+      "unit_price_cents": 800,
+      "gross_cents": 4000,
+      "discount_cents": 0,
+      "service_charge_cents": 0,
+      "service_charge_waived": true,
+      "total_cents": 4000,
+      "status": "active"
+    }
+  ],
+  "payments": [
+    {
+      "id": "8f14e45f-ceea-4a3f-a1b0-000000000004-payment",
+      "method": "dinheiro",
+      "amount_cents": 4000,
+      "occurred_at": "2026-09-19T12:30:00Z"
+    }
+  ],
+  "payment_data_quality": "complete",
+  "totals": {
+    "gross_cents": 4000,
+    "discount_cents": 0,
+    "service_charge_cents": 0,
+    "total_cents": 4000,
+    "reported_paid_cents": 4000,
+    "reported_balance_cents": 0
+  },
+  "created_at": "2026-09-19T10:00:00Z",
+  "updated_at": "2026-09-19T12:30:00Z",
+  "closed_at": "2026-09-19T12:00:00Z",
+  "paid_at": "2026-09-19T12:30:00Z",
+  "cancelled_at": null
+}
