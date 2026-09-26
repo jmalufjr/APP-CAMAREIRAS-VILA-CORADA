@@ -9,7 +9,7 @@ export function MinibarSummaryTable({ items, total }: { items: MinibarItemTotal[
           <TableRow>
             <TableHead>Item</TableHead>
             <TableHead>Quantidade</TableHead>
-            <TableHead className="text-right">Total</TableHead>
+            <TableHead className="text-right">Valor</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

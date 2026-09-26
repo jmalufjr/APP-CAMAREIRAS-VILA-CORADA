@@ -3,6 +3,7 @@ import { BackLink } from "@/components/shared/back-link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MinibarPieChart } from "../minibar-pie-chart";
 import { MinibarSummaryTable } from "@/components/shared/minibar-summary-table";
+import { MinibarPercentTable } from "@/components/shared/minibar-percent-table";
 import { getPoolbarMonthlySummary, type PoolbarCategorySummary } from "@/lib/actions/poolbar";
 
 function CategorySection({
@@ -31,15 +32,31 @@ function CategorySection({
           <MinibarSummaryTable items={previousMonth.items} total={previousMonth.total} />
         </div>
       </div>
-      <div className="grid md:grid-cols-2 gap-6">
-        <div>
-          <p className="text-sm font-medium mb-2 text-center">% de consumo no mês</p>
-          <MinibarPieChart items={currentMonth.items} />
+      <div className="space-y-4">
+        <div className="grid md:grid-cols-2 gap-6">
+          <div>
+            <p className="text-sm font-medium mb-2 text-center">Consumo no mês (valor)</p>
+            <MinibarPieChart items={currentMonth.items} valueKey="total" />
+          </div>
+          <div>
+            <p className="text-sm font-medium mb-2 text-center">Consumo no mês (quantidade)</p>
+            <MinibarPieChart items={currentMonth.items} valueKey="quantity" />
+          </div>
         </div>
-        <div>
-          <p className="text-sm font-medium mb-2 text-center">% de consumo desde o início</p>
-          <MinibarPieChart items={allTime.items} />
+        <MinibarPercentTable items={currentMonth.items} />
+      </div>
+      <div className="space-y-4">
+        <div className="grid md:grid-cols-2 gap-6">
+          <div>
+            <p className="text-sm font-medium mb-2 text-center">Consumo desde o início (valor)</p>
+            <MinibarPieChart items={allTime.items} valueKey="total" />
+          </div>
+          <div>
+            <p className="text-sm font-medium mb-2 text-center">Consumo desde o início (quantidade)</p>
+            <MinibarPieChart items={allTime.items} valueKey="quantity" />
+          </div>
         </div>
+        <MinibarPercentTable items={allTime.items} />
       </div>
     </div>
   );

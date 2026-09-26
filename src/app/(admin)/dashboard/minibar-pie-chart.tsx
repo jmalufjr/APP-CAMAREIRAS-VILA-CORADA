@@ -50,69 +50,75 @@ function makeSliceLabelRenderer(namesToLabel: Set<string>) {
   };
 }
 
-export function MinibarPieChart({ items }: { items: MinibarItemTotal[] }) {
+// "total" = gráfico por valor (R$); "quantity" = gráfico por quantidade
+// consumida — mesmo componente, só troca qual campo vira o percentual de
+// cada fatia.
+export function MinibarPieChart({
+  items,
+  valueKey,
+}: {
+  items: MinibarItemTotal[];
+  valueKey: "total" | "quantity";
+}) {
   if (items.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-8 text-center">Sem consumo registrado.</p>
     );
   }
 
-  const total = items.reduce((sum, i) => sum + i.total, 0);
+  const sum = items.reduce((s, i) => s + i[valueKey], 0);
+  // A ordem dos itens (e, com ela, a cor de cada um) segue sempre `items`
+  // (por total/valor decrescente, ver summarizeRows em minibar.ts/poolbar.ts)
+  // — assim o mesmo item usa a mesma cor no gráfico de valor e no de
+  // quantidade, lado a lado, o que facilita comparar os dois visualmente.
   const data = items.map((item, i) => ({
     name: item.name,
-    total: item.total,
-    percent: total > 0 ? (item.total / total) * 100 : 0,
+    value: item[valueKey],
+    percent: sum > 0 ? (item[valueKey] / sum) * 100 : 0,
     color: COLORS[i % COLORS.length],
   }));
-  // `items` já vem ordenado por total decrescente (ver summarizeRows em
-  // src/lib/actions/minibar.ts e poolbar.ts), então os 5 primeiros são os
-  // 5 maiores itens.
-  const top5Names = new Set(data.slice(0, 5).map((d) => d.name));
+  // As 5 maiores fatias DESTE gráfico específico (por valor no gráfico de
+  // valor, por quantidade no de quantidade) ganham o nome sobreposto —
+  // pode não ser exatamente os 5 primeiros de `data` quando valueKey é
+  // "quantity", já que a ordem de `data` segue sempre o total em R$.
+  const top5Names = new Set(
+    [...data]
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5)
+      .map((d) => d.name)
+  );
   const renderSliceLabel = makeSliceLabelRenderer(top5Names);
 
   return (
-    <div className="space-y-3">
-      <div className="h-56 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="percent"
-              nameKey="name"
-              innerRadius={45}
-              outerRadius={80}
-              paddingAngle={2}
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              label={renderSliceLabel as any}
-              labelLine={false}
-            >
-              {data.map((item) => (
-                <Cell key={item.name} fill={item.color} />
-              ))}
-            </Pie>
-            <Tooltip
-              formatter={(value) => `${Number(value ?? 0).toFixed(1)}%`}
-              contentStyle={{
-                background: "var(--popover)",
-                border: "1px solid var(--border)",
-                borderRadius: 8,
-                fontSize: 12,
-              }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-      {/* Legenda própria em lista (em vez da <Legend> do Recharts): nomes +
-          percentuais organizados, sem disputar espaço com os rótulos das fatias. */}
-      <ul className="space-y-1">
-        {data.map((item) => (
-          <li key={item.name} className="flex items-center gap-2 text-xs">
-            <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
-            <span className="min-w-0 flex-1 truncate text-muted-foreground">{item.name}</span>
-            <span className="shrink-0 font-medium">{item.percent.toFixed(1)}%</span>
-          </li>
-        ))}
-      </ul>
+    <div className="h-56 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey="percent"
+            nameKey="name"
+            innerRadius={45}
+            outerRadius={80}
+            paddingAngle={2}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            label={renderSliceLabel as any}
+            labelLine={false}
+          >
+            {data.map((item) => (
+              <Cell key={item.name} fill={item.color} />
+            ))}
+          </Pie>
+          <Tooltip
+            formatter={(value) => `${Number(value ?? 0).toFixed(1)}%`}
+            contentStyle={{
+              background: "var(--popover)",
+              border: "1px solid var(--border)",
+              borderRadius: 8,
+              fontSize: 12,
+            }}
+          />
+        </PieChart>
+      </ResponsiveContainer>
     </div>
   );
 }

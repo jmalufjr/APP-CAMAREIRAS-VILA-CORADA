@@ -3,6 +3,7 @@ import { BackLink } from "@/components/shared/back-link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MinibarPieChart } from "../minibar-pie-chart";
 import { MinibarSummaryTable } from "@/components/shared/minibar-summary-table";
+import { MinibarPercentTable } from "@/components/shared/minibar-percent-table";
 import { getMinibarMonthlySummary } from "@/lib/actions/minibar";
 
 export default async function ConsumoFrigobarPage() {
@@ -40,15 +41,31 @@ export default async function ConsumoFrigobarPage() {
               />
             </div>
           </div>
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <p className="text-sm font-medium mb-2 text-center">% de consumo no mês</p>
-              <MinibarPieChart items={minibarSummary.currentMonth.items} />
+          <div className="space-y-4">
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <p className="text-sm font-medium mb-2 text-center">Consumo no mês (valor)</p>
+                <MinibarPieChart items={minibarSummary.currentMonth.items} valueKey="total" />
+              </div>
+              <div>
+                <p className="text-sm font-medium mb-2 text-center">Consumo no mês (quantidade)</p>
+                <MinibarPieChart items={minibarSummary.currentMonth.items} valueKey="quantity" />
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-medium mb-2 text-center">% de consumo desde o início</p>
-              <MinibarPieChart items={minibarSummary.allTime.items} />
+            <MinibarPercentTable items={minibarSummary.currentMonth.items} />
+          </div>
+          <div className="space-y-4">
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <p className="text-sm font-medium mb-2 text-center">Consumo desde o início (valor)</p>
+                <MinibarPieChart items={minibarSummary.allTime.items} valueKey="total" />
+              </div>
+              <div>
+                <p className="text-sm font-medium mb-2 text-center">Consumo desde o início (quantidade)</p>
+                <MinibarPieChart items={minibarSummary.allTime.items} valueKey="quantity" />
+              </div>
             </div>
+            <MinibarPercentTable items={minibarSummary.allTime.items} />
           </div>
         </CardContent>
       </Card>
