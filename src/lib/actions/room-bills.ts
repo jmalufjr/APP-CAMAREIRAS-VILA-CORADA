@@ -382,6 +382,22 @@ export async function getClosedBillRoomNumber(billId: string): Promise<string | 
   return room.rooms?.number ?? "—";
 }
 
+// Mesma ideia de getClosedBillRoomNumber, mas para o PDF do recibo de uma
+// conta já paga (tela do admin) — guarda a página contra abrir para uma
+// conta que não está (ou não está mais) paga.
+export async function getPaidBillRoomNumber(billId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data: bill } = await supabase
+    .from("room_bills")
+    .select("status, rooms(number)")
+    .eq("id", billId)
+    .eq("status", "paga")
+    .single();
+  if (!bill) return null;
+  const room = bill as unknown as { rooms: { number: string } | null };
+  return room.rooms?.number ?? "—";
+}
+
 // ---------- Retrato do consumo de uma suíte numa data específica ----------
 
 export interface RoomBillSnapshot {
@@ -486,30 +502,85 @@ export async function updateAccountingEmail(email: string) {
   return { success: true };
 }
 
+// Monta o PDF (a partir dos mesmos dados usados pela visualização) e manda
+// pro e-mail cadastrado em receipt_settings — usado tanto pelo envio
+// automático/reenvio (sendReceiptEmail, "melhor esforço", boolean) quanto
+// pelo botão explícito "Enviar por e-mail" das telas de visualização do PDF
+// (sendRoomBillPdfEmail, abaixo, que devolve o motivo da falha pra UI
+// mostrar). Funciona tanto para conta paga quanto para conta fechada ainda
+// não paga — o assunto do e-mail muda conforme statusLabel.
+async function buildAndSendReceiptPdf(billId: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const data = await getRoomBillReceiptData(billId);
+  if (!data) return { ok: false, reason: "Conta não encontrada, ou ainda não fechada." };
+
+  const { accounting_email: accountingEmail } = await getReceiptSettings();
+  if (!accountingEmail) {
+    return {
+      ok: false,
+      reason: "Nenhum e-mail de destino cadastrado. Peça para o admin cadastrar em 'E-mail de envio'.",
+    };
+  }
+
+  try {
+    const pdfBuffer = await renderReceiptPdf(data);
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const subject = data.statusLabel.startsWith("Pagamento")
+      ? `Conta paga — Suíte ${data.room_number}`
+      : `Conta fechada, aguardando pagamento — Suíte ${data.room_number}`;
+    const { error } = await resend.emails.send({
+      from: process.env.RECEIPT_FROM_EMAIL ?? "Vila Corada <recibos@consumos.vilacorada.com.br>",
+      to: accountingEmail,
+      subject,
+      text: `Segue em anexo o PDF da conta da suíte ${data.room_number}.`,
+      attachments: [{ filename: `conta-suite-${data.room_number}.pdf`, content: pdfBuffer }],
+    });
+    if (error) return { ok: false, reason: "Falha ao enviar o e-mail. Tente novamente." };
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: "Falha ao enviar o e-mail. Tente novamente." };
+  }
+}
+
 // "Melhor esforço": nunca lança — quem chama trata o retorno (true/false)
 // e grava o resultado via mark_receipt_email_sent, sem travar o fluxo de
 // pagamento por causa de um problema de rede/credencial do provedor de e-mail.
 async function sendReceiptEmail(billId: string): Promise<boolean> {
-  try {
-    const data = await getRoomBillReceiptData(billId);
-    if (!data) return false;
+  const result = await buildAndSendReceiptPdf(billId);
+  return result.ok;
+}
 
-    const { accounting_email: accountingEmail } = await getReceiptSettings();
-    if (!accountingEmail) return false;
+// Envio explícito sob demanda, acionado pelo botão "Enviar por e-mail" nas
+// telas de visualização do PDF (tanto a da camareira, conta fechada ainda
+// não paga, quanto a do admin, conta paga) — diferente do envio automático
+// no pagamento, aqui o resultado real é sempre mostrado (toast), nunca
+// silencioso. Mesma checagem de papel da rota /api/room-bills/[billId]/conta
+// (camareira ou admin), já que serve as duas telas.
+export async function sendRoomBillPdfEmail(billId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Não autorizado." };
 
-    const pdfBuffer = await renderReceiptPdf(data);
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    const { error } = await resend.emails.send({
-      from: process.env.RECEIPT_FROM_EMAIL ?? "Vila Corada <recibos@consumos.vilacorada.com.br>",
-      to: accountingEmail,
-      subject: `Conta paga — Suíte ${data.room_number}`,
-      text: `Segue em anexo o recibo da conta paga da suíte ${data.room_number}.`,
-      attachments: [{ filename: `conta-suite-${data.room_number}.pdf`, content: pdfBuffer }],
-    });
-    return !error;
-  } catch {
-    return false;
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  if (profile?.role !== "camareira" && profile?.role !== "admin") {
+    return { error: "Não autorizado." };
   }
+
+  const result = await buildAndSendReceiptPdf(billId);
+  if (!result.ok) return { error: result.reason };
+
+  // Se a conta já está paga, isso também conta como o recibo ter sido
+  // enviado — limpa o badge "E-mail não enviado" da lista do admin, se
+  // esse era o caso. Sem efeito relevante para uma conta ainda não paga
+  // (a coluna é só usada/exibida no contexto de conta paga).
+  const { data: bill } = await supabase.from("room_bills").select("status").eq("id", billId).single();
+  if (bill?.status === "paga") {
+    await supabase.rpc("mark_receipt_email_sent", { p_bill_id: billId, p_sent: true });
+    revalidatePath("/frigobar");
+  }
+
+  return { success: true };
 }
 
 // ---------- Leitura: contas pagas recentemente (rodapé de "Consumo por quartos" do admin) ----------

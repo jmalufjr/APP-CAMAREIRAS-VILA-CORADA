@@ -154,14 +154,7 @@ function PaidBillAccordionItem({ bill }: { bill: RecentlyPaidBill }) {
           )}
 
           <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              render={
-                <a href={`/api/room-bills/${bill.bill_id}/receipt`} target="_blank" rel="noopener noreferrer" />
-              }
-              nativeButton={false}
-            >
+            <Button size="sm" variant="outline" onClick={() => router.push(`/frigobar/conta/${bill.bill_id}`)}>
               Ver PDF
             </Button>
             {!bill.receiptEmailSent && (
