@@ -436,7 +436,13 @@ create table room_bills (
   -- hóspede pode recusar o pagamento dela ao fechar a conta. Quando isso
   -- acontece, nenhuma comanda desta conta gera comissão de 10% pra quem a
   -- lançou (ver set_room_bill_service_charge_waived mais abaixo).
-  service_charge_waived boolean not null default false
+  service_charge_waived boolean not null default false,
+  -- Falso quando o hóspede desta conta já tem uma reserva ativa em OUTRA
+  -- suíte hoje (trocou de quarto) — a conta continua existindo/visível
+  -- pra fechar/pagar, só sai do seletor de "novo pedido" de comanda, que
+  -- passa a oferecer somente a conta da suíte nova (ver
+  -- syncRoomBillForActiveReservation/stays-sync.ts).
+  available_for_new_orders boolean not null default true
 );
 create unique index room_bills_one_active_per_room_slot
   on room_bills(room_id, guest_slot) where status <> 'paga';

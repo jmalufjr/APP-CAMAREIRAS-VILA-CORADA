@@ -1,0 +1,18 @@
+-- Corrige duas regras da sincronização com a Stays sobre a conta de
+-- consumo de bar/frigobar quando um hóspede sai de uma suíte:
+--
+-- 1) A conta de quem fez check-out hoje (dormiu na suíte essa noite e sai
+--    pela manhã) nunca pode ser apagada automaticamente no mesmo dia,
+--    mesmo zerada — o hóspede pode ainda estar na pousada consumindo
+--    (ex.: bar da piscina) depois do check-out da suíte. Só vira
+--    candidata à limpeza automática (zerada, sem consumo) a partir do dia
+--    seguinte, quando deixa de ser "o checkout de hoje" daquela suíte.
+--    Vale tanto para quem está saindo de vez quanto para quem troca de
+--    suíte (ex.: Hudson Lima saindo da Suíte 10 pra entrar na Suíte 3).
+--
+-- 2) Quando o hóspede troca de suíte (já tem reserva ativa em outra suíte
+--    hoje), a conta antiga não deve mais poder receber comandas novas de
+--    bar — só a conta da suíte nova. A coluna abaixo marca isso sem
+--    apagar nem esconder a conta em nenhuma outra tela (ela continua
+--    aparecendo em "Consumo por quartos" pra fechar/pagar normalmente).
+alter table room_bills add column if not exists available_for_new_orders boolean not null default true;

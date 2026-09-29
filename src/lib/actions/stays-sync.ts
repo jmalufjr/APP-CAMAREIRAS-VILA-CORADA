@@ -31,22 +31,32 @@ async function billHasAnyConsumption(
 
 // Apaga sozinha qualquer conta não-paga da suíte cujo número de reserva
 // não seja o da reserva ativa de hoje (ou não haja reserva ativa nenhuma)
-// — desde que ela esteja zerada (sem nenhum consumo lançado). Cobre tanto
-// uma suíte que ficou vaga depois de um "Somente Saída" sem chegada no
-// mesmo dia (a conta 'única' antiga nunca era revisitada nesse caso) —
-// exemplo real: reserva de uma hóspede que já fez checkout, sem nenhum
-// consumo, ficava pendurada como se precisasse ser fechada manualmente,
-// sem necessidade nenhuma — quanto a conta "chegada de hoje" órfã de um
-// hóspede que mudou de suíte dentro da própria Stays. Contas com alguma
-// reserva ainda não carimbada (`stays_reservation_id` nulo) nunca são
-// tocadas aqui — não temos como saber se "acabaram" sem esse número.
-// Nunca apaga uma conta com consumo real lançado, mesmo que a reserva
-// dela não seja mais a ativa — fica visível em "Consumo por quartos" até
-// alguém fechar manualmente (integridade de cobrança em primeiro lugar).
+// — desde que ela esteja zerada (sem nenhum consumo lançado) E não seja a
+// conta de quem fez check-out justamente HOJE. Cobre suítes que ficaram
+// vagas depois de um "Somente Saída" sem chegada no mesmo dia (a conta
+// 'única' antiga nunca era revisitada nesse caso) — exemplo real: reserva
+// de uma hóspede que já tinha feito checkout **em dias anteriores**, sem
+// nenhum consumo, ficava pendurada como se precisasse ser fechada
+// manualmente, sem necessidade nenhuma.
+//
+// **Nunca apaga no mesmo dia do check-out** (mesmo zerada): o hóspede pode
+// ainda estar na pousada consumindo (ex.: bar da piscina) depois do
+// check-out da suíte — vale tanto pra quem está saindo de vez quanto pra
+// quem troca de suíte no mesmo dia (a conta antiga só passa a ser
+// candidata à limpeza automática a partir de amanhã, quando deixar de ser
+// "o checkout de hoje" desta suíte — ver `checkingOutReservationId`).
+//
+// Contas com alguma reserva ainda não carimbada (`stays_reservation_id`
+// nulo) nunca são tocadas aqui — não temos como saber se "acabaram" sem
+// esse número. Nunca apaga uma conta com consumo real lançado, mesmo que a
+// reserva dela não seja mais a ativa — fica visível em "Consumo por
+// quartos" até alguém fechar manualmente (integridade de cobrança em
+// primeiro lugar).
 async function cleanupStaleBills(
   supabase: ReturnType<typeof createAdminClient>,
   roomId: string,
-  activeReservationId: string | null
+  activeReservationId: string | null,
+  checkingOutReservationId: string | null
 ): Promise<void> {
   const { data: bills } = await supabase
     .from("room_bills")
@@ -57,6 +67,7 @@ async function cleanupStaleBills(
   for (const bill of bills ?? []) {
     if (!bill.stays_reservation_id) continue; // nunca foi carimbada — a lógica normal decide o que fazer com ela
     if (bill.stays_reservation_id === activeReservationId) continue; // é a conta do ocupante atual, nunca mexe
+    if (bill.stays_reservation_id === checkingOutReservationId) continue; // check-out de hoje — nunca no mesmo dia, ver comentário acima
 
     const hasConsumption = await billHasAnyConsumption(supabase, bill.id);
     if (!hasConsumption) {
@@ -89,6 +100,7 @@ async function syncRoomBillForActiveReservation(
   roomId: string,
   activeReservation: StaysReservationRaw | null,
   checkingOutReservation: StaysReservationRaw | null,
+  arrivingClientToRoomToday: Map<string, string>,
   nameCache: Map<string, string>
 ) {
   async function resolveName(clientId: string): Promise<string | null> {
@@ -99,7 +111,25 @@ async function syncRoomBillForActiveReservation(
     return name;
   }
 
-  await cleanupStaleBills(supabase, roomId, activeReservation?._id ?? null);
+  await cleanupStaleBills(supabase, roomId, activeReservation?._id ?? null, checkingOutReservation?._id ?? null);
+
+  // Troca de suíte: se quem faz check-out hoje já tem uma reserva ativa em
+  // OUTRA suíte hoje (ex.: Hudson Lima saindo da Suíte 10 pra entrar na
+  // Suíte 3), a conta desta suíte não deve mais poder receber comandas
+  // novas — só a conta da suíte nova, que o hóspede já ocupa. A conta em
+  // si continua existindo e visível normalmente (fechar/pagar) até a
+  // camareira encerrar; só sai do seletor de "novo pedido" de comanda.
+  if (checkingOutReservation) {
+    const newRoomId = arrivingClientToRoomToday.get(checkingOutReservation._idclient);
+    if (newRoomId && newRoomId !== roomId) {
+      await supabase
+        .from("room_bills")
+        .update({ available_for_new_orders: false })
+        .eq("room_id", roomId)
+        .eq("stays_reservation_id", checkingOutReservation._id)
+        .neq("status", "paga");
+    }
+  }
 
   if (!activeReservation) return; // nada mais a fazer sem reserva ativa hoje
 
@@ -233,6 +263,18 @@ export async function syncStaysPlanning(options?: SyncOptions) {
     byListing.set(r._idlisting, list);
   });
 
+  // Quem chega em qual suíte HOJE, por cliente — usado só pra detectar
+  // troca de suíte (o mesmo hóspede saindo de uma suíte e entrando em
+  // outra no mesmo dia): a conta da suíte antiga não pode mais receber
+  // comandas novas depois disso (ver syncRoomBillForActiveReservation).
+  const today = todayKey();
+  const arrivingClientToRoomToday = new Map<string, string>();
+  (rooms as { id: string; stays_listing_id: string }[]).forEach((room) => {
+    const roomReservations = byListing.get(room.stays_listing_id) ?? [];
+    const checkingIn = roomReservations.find((r) => r.checkInDate === today);
+    if (checkingIn) arrivingClientToRoomToday.set(checkingIn._idclient, room.id);
+  });
+
   // Lápides de "Sem trabalho" explícito (ver `setRoomTask`/CLAUDE.md Parte
   // 15) — ignoradas com `force`, igual a `stays_locked`.
   let exclusions: { date: string; room_id: string }[] = [];
@@ -270,6 +312,7 @@ export async function syncStaysPlanning(options?: SyncOptions) {
           room.id,
           activeReservation,
           checkingOut ?? null,
+          arrivingClientToRoomToday,
           planningClientNameCache
         );
       }

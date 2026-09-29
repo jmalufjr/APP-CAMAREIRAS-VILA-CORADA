@@ -315,19 +315,30 @@ export interface RoomOption {
 // Numa suíte com Saída com Chegada em andamento (conta do hóspede que sai
 // ainda não paga quando o novo chega), aparece 2 vezes aqui — uma opção
 // por conta. Em qualquer outro dia, aparece só 1 vez, igual a sempre.
+// Uma conta cujo hóspede já trocou de suíte (`available_for_new_orders =
+// false`, ver stays-sync.ts) nunca aparece aqui — continua existindo e
+// visível em "Consumo por quartos" pra fechar/pagar, só não é mais opção
+// de destino pra uma comanda nova (essa passa a ser lançada na suíte
+// nova, que o hóspede já ocupa).
 export async function getRoomsForComandaSelector(): Promise<RoomOption[]> {
   const supabase = await createClient();
   const [{ data: rooms }, { data: bills }] = await Promise.all([
     supabase.from("rooms").select("id, number").eq("active", true).order("position"),
     supabase
       .from("room_bills")
-      .select("id, room_id, status, guest_slot, guest_name_hint")
+      .select("id, room_id, status, guest_slot, guest_name_hint, available_for_new_orders")
       .neq("status", "paga"),
   ]);
 
   const billsByRoom = new Map<
     string,
-    { id: string; status: "aberta" | "fechada" | "reaberta" | "paga"; guest_slot: RoomBillGuestSlot; guest_name_hint: string | null }[]
+    {
+      id: string;
+      status: "aberta" | "fechada" | "reaberta" | "paga";
+      guest_slot: RoomBillGuestSlot;
+      guest_name_hint: string | null;
+      available_for_new_orders: boolean;
+    }[]
   >();
   (bills ?? []).forEach((b) => {
     const list = billsByRoom.get(b.room_id) ?? [];
@@ -336,8 +347,11 @@ export async function getRoomsForComandaSelector(): Promise<RoomOption[]> {
   });
 
   return (rooms ?? []).flatMap((room) => {
-    const roomBills = billsByRoom.get(room.id);
-    if (!roomBills || roomBills.length === 0) {
+    const allBills = billsByRoom.get(room.id) ?? [];
+    const selectableBills = allBills.filter((b) => b.available_for_new_orders);
+
+    if (selectableBills.length === 0) {
+      if (allBills.length > 0) return []; // só sobrou conta de hóspede que já trocou de suíte — nada disponível aqui
       // Suíte sem conta ainda (nunca teve consumo lançado) — a comanda
       // cria a conta 'unica' na hora, via a mesma RPC de sempre.
       return [
@@ -351,7 +365,7 @@ export async function getRoomsForComandaSelector(): Promise<RoomOption[]> {
         },
       ];
     }
-    return roomBills.map((b) => ({
+    return selectableBills.map((b) => ({
       room_id: room.id,
       bill_id: b.id,
       room_number: room.number,

@@ -2579,6 +2579,80 @@ também é feita em Server Components.
       confirmado que só 1 conta em toda a produção se qualificava pra
       essa limpeza agora — a própria conta da Maria Leal — apagada com a
       mesma checagem de segurança (zerada) embutida na consulta.
+53. **Parte 46 — Conta de quem sai não pode ser apagada no mesmo dia, e
+    troca de suíte tira a conta antiga do seletor de comandas**
+    (29/09/2026, feita direto em `main`, pós parte 45; correção pedida
+    pelo proprietário depois de ver, em produção, a conta de Hudson Lima
+    (Suíte 10, saindo no mesmo dia em que se mudou pra Suíte 3) sumir
+    sozinha da tela "Consumo por quartos"): a regra da Parte 45
+    (`cleanupStaleBills`) apagava sozinha qualquer conta zerada cuja
+    reserva não fosse mais a ativa da suíte **no mesmo dia** em que isso
+    acontecesse — certa pra uma conta de dias atrás (caso "Maria Leal"),
+    mas errada pro dia exato do check-out: o hóspede pode continuar na
+    pousada consumindo (ex.: bar da piscina) depois de já ter saído da
+    suíte, então a conta dele precisa continuar existindo até a camareira
+    fechá-la/pagá-la, ou até o **dia seguinte** ser apagada sozinha (só
+    então, e só se continuar zerada). A mesma regra vale tanto pra quem
+    sai de vez quanto pra quem troca de suíte (fica na pousada, só muda de
+    quarto) — nos dois casos, a suíte antiga não pode sumir no mesmo dia.
+    - **`cleanupStaleBills`** ganhou um segundo parâmetro,
+      `checkingOutReservationId` (a reserva que faz check-out **hoje**
+      nessa suíte, já calculada no loop de `syncStaysPlanning`) — uma
+      conta cujo número de reserva bate com esse valor nunca é apagada,
+      mesmo zerada, mesmo que não seja mais "a reserva ativa" da suíte
+      (porque uma reserva nova está chegando no lugar). Só no dia
+      seguinte, quando essa reserva deixar de ser "o checkout de hoje"
+      desta suíte, ela volta a ser candidata à limpeza automática de
+      sempre (zerada → apagada; com consumo real → nunca apagada,
+      continua precisando de fechamento manual).
+    - **Troca de suíte tira a conta antiga do seletor de "novo pedido" de
+      comanda**: pedido explícito do proprietário — uma vez que o hóspede
+      já tem reserva ativa em **outra** suíte hoje, qualquer comanda nova
+      dele deve ser lançada na suíte nova, não mais na antiga (só a suíte
+      nova aparece como opção). Nova coluna
+      `room_bills.available_for_new_orders` (migration
+      `050_room_bill_relocation_guard.sql`, padrão `true`) — a conta
+      continua existindo e visível normalmente em "Consumo por quartos"
+      (fechar/pagar), só sai do seletor de comanda. Detectado em
+      `syncStaysPlanning` (`stays-sync.ts`): um mapa novo,
+      `arrivingClientToRoomToday` (cliente → suíte em que ele chega hoje,
+      calculado uma vez por sincronização a partir das mesmas reservas já
+      buscadas), permite comparar o `_idclient` de quem sai de uma suíte
+      hoje contra quem chega em **outra** suíte hoje — se bater, a conta
+      da suíte antiga (identificada pelo número da reserva de saída) é
+      marcada `available_for_new_orders = false`. Quem sai de vez (sem
+      reserva nova em nenhuma outra suíte) não é afetado — a conta dele
+      continua aparecendo no seletor normalmente, já que ele pode
+      continuar na pousada e querer pedir algo antes de ir embora de
+      verdade. `getRoomsForComandaSelector` (`comandas.ts`) passou a
+      filtrar por essa coluna; se uma suíte só tem contas marcadas assim
+      (o hóspede se mudou, ainda sem consumo novo na suíte nova), ela
+      simplesmente não aparece no seletor — diferente de uma suíte sem
+      conta nenhuma, que continua oferecendo a opção de criar uma 'unica'
+      nova na hora. Frigobar não foi tocado (é sempre por checklist da
+      própria suíte sendo limpa, não por um seletor entre suítes — regra
+      não se aplica).
+    - **Nenhum dado perdido em produção**: a conta de Hudson Lima que
+      tinha sumido da Suíte 10 já estava, de fato, zerada no momento em
+      que a versão anterior da regra a apagou (confirmado antes desta
+      correção) — não havia frigobar nem comanda lançados nela, então não
+      houve perda de consumo real, só a violação da regra "nunca no mesmo
+      dia" (sem consequência financeira neste caso específico).
+    - **Testado**: 4 cenários fabricados via rota de API temporária contra
+      o banco local, sem depender da API real da Stays (mesmo padrão já
+      usado nas partes anteriores) — (1) troca de suíte: conta da suíte
+      antiga sobrevive no mesmo dia E fica `available_for_new_orders =
+      false`; (2) saída de vez (sem troca): conta sobrevive no mesmo dia E
+      continua `true` (selecionável); (3) conta antiga de verdade (checkout
+      de dias atrás), zerada: apagada sozinha, confirmando que o
+      comportamento da Parte 45 não regrediu; (4) conta antiga com consumo
+      real: nunca apagada. Confirmado também, via sessão autenticada real
+      (mesma técnica de sempre — login local + cookie `sb-127-auth-token`),
+      que `getRoomsForComandaSelector` deixa de oferecer a suíte antiga do
+      cenário (1) como opção, oferece a suíte nova normalmente, e continua
+      oferecendo a suíte do cenário (2) sem nenhuma mudança — tudo
+      removido do banco local depois. `npm run lint`/`npm run build`
+      limpos. Migration aplicada em produção.
 
 ## Convenções e decisões importantes
 
@@ -3189,7 +3263,14 @@ o escopo mude no futuro.
   sempre que detecta troca de ocupante, seja Saída com Chegada no mesmo
   dia ou uma suíte vaga por alguns dias entre hóspedes. Roda sempre, com
   ou sem `force`, já que não é uma preferência do admin, é integridade de
-  cobrança. `syncStaysAll(options?)` (Parte 34) só chama as
+  cobrança. Desde a Parte 46, `cleanupStaleBills` (dentro da mesma função)
+  nunca apaga a conta de quem faz check-out **hoje**, mesmo zerada — só a
+  partir de amanhã — e, se esse hóspede já tem reserva ativa em outra
+  suíte hoje (trocou de quarto), a conta antiga é marcada
+  `available_for_new_orders = false`, saindo do seletor de "novo pedido"
+  de comanda (`getRoomsForComandaSelector`, `comandas.ts`) sem deixar de
+  existir/aparecer em "Consumo por quartos". `syncStaysAll(options?)`
+  (Parte 34) só chama as
   três em sequência, repassando o mesmo `force` — é o que
   `src/app/(admin)/dashboard/sync-stays-all-button.tsx` chama (dois
   botões: "Sincronização Stays Total - sobrescreve alterações inseridas
