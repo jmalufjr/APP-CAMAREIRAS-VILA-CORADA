@@ -40,6 +40,7 @@ export function ChecklistDetail({
   occurrences,
   categories,
   minibar,
+  minibarGuestSlot,
   minibarSnapshot,
 }: {
   task: DailyRoomTask;
@@ -49,6 +50,11 @@ export function ChecklistDetail({
   // Só passado pela tela da camareira: consumo editável da conta corrente
   // do quarto (steppers, grava a cada clique).
   minibar?: MinibarRoomConsumption;
+  // A conta certa pra lançar esse frigobar (resolvida pela página, a
+  // partir das contas que já existem pra suíte — ver
+  // resolveAutoMinibarGuestSlot em room-bills.ts) — sempre passado junto
+  // com `minibar`.
+  minibarGuestSlot?: RoomBillGuestSlot;
   // Só passado pela visão somente-leitura do admin: retrato (não editável)
   // da conta vigente na data da tarefa, no mesmo formato usado em
   // "Consumo de Bar e Frigobar" > Consumo por quartos. Ver
@@ -86,13 +92,6 @@ export function ChecklistDetail({
   // salva), não precisa de uma coluna própria no banco.
   const minibarItems = minibar?.items ?? [];
   const isMinibarClosed = minibar?.billStatus === "fechada";
-  // O frigobar conferido pela camareira num checklist de Saída com Chegada
-  // só pode ser do hóspede que está saindo — o novo hóspede ainda não
-  // pôde entrar na suíte (só entra depois que a camareira libera), e quem
-  // saiu não pode ter voltado (já retirou as malas). Os demais tipos nunca
-  // coexistem com uma divisão de conta, então 'unica' sempre resolve pra
-  // conta certa sem precisar perguntar nada à camareira.
-  const minibarGuestSlot: RoomBillGuestSlot = task.task_type === "preparacao" ? "saida_hoje" : "unica";
   const initialQuantities = Object.fromEntries(minibarItems.map((item) => [item.id, item.quantity]));
   const [minibarQuantities, setMinibarQuantities] = useState<Record<string, number>>(initialQuantities);
   const [hasMinibarConsumption, setHasMinibarConsumption] = useState(
@@ -106,7 +105,7 @@ export function ChecklistDetail({
   function saveMinibarQuantity(itemId: string, quantity: number) {
     setMinibarPendingIds((prev) => new Set(prev).add(itemId));
     startTransition(async () => {
-      const result = await setMinibarConsumption(task.room_id, itemId, quantity, minibarGuestSlot);
+      const result = await setMinibarConsumption(task.room_id, itemId, quantity, minibarGuestSlot ?? "unica");
       setMinibarPendingIds((prev) => {
         const copy = new Set(prev);
         copy.delete(itemId);

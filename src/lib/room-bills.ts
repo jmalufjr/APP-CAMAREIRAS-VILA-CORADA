@@ -92,3 +92,29 @@ export async function getOrCreateCurrentBill(
   if (error || !data) throw new Error(error?.message ?? "Erro ao obter a conta do quarto.");
   return data as RoomBill;
 }
+
+// Frigobar lançado dentro de um checklist sempre pertence a quem já
+// estava na suíte antes de hoje (quem dormiu a noite passada) — nunca a
+// quem está chegando agora, já que só pode entrar depois que o quarto é
+// liberado. Resolvido a partir das contas não-pagas que já existem pra
+// suíte, sem nenhuma suposição sobre o tipo de serviço do dia. Antes, o
+// código "adivinhava" pelo tipo de checklist (Saída com Chegada = quem
+// sai, qualquer outro tipo = sempre 'única') — e isso criava uma conta
+// nova vazia à toa sempre que a suíte já tinha uma divisão de conta em
+// andamento por outro motivo (ex.: um checklist "Somente Chegada" numa
+// suíte que a Stays já indicava estar trocando de hóspede).
+export async function resolveAutoMinibarGuestSlot(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  roomId: string
+): Promise<RoomBillGuestSlot> {
+  const { data: bills } = await supabase
+    .from("room_bills")
+    .select("guest_slot")
+    .eq("room_id", roomId)
+    .neq("status", "paga");
+  const slots = new Set((bills ?? []).map((b) => b.guest_slot as RoomBillGuestSlot));
+  if (slots.has("saida_hoje")) return "saida_hoje";
+  if (slots.has("unica")) return "unica";
+  if (slots.has("chegada_hoje")) return "chegada_hoje";
+  return "unica";
+}

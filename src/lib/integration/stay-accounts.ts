@@ -49,6 +49,13 @@ export interface IntegrationAccount {
   room_id: string;
   room_number: string;
   guest_slot: RoomBillGuestSlot;
+  // Nome completo do hóspede a quem esta conta pertence — mesmo campo
+  // usado nas telas internas (guest_name_hint), exposto aqui de propósito
+  // pra fechar a trinca suíte/hóspede/reserva também do lado do sistema
+  // consumidor. Nullable: pode não ter sido resolvido ainda (conta muito
+  // recente, sincronização ainda não rodou) ou ser de antes de este campo
+  // existir.
+  guest_name: string | null;
   reservation: { stays_id: string | null; reference: null; link_status: "linked" | "unlinked" };
   items: IntegrationAccountItem[];
   payments: IntegrationPayment[];
@@ -83,6 +90,7 @@ type BillRow = {
   room_id: string;
   status: RoomBillStatus;
   guest_slot: RoomBillGuestSlot;
+  guest_name_hint: string | null;
   stays_reservation_id: string | null;
   version: number;
   service_charge_waived: boolean;
@@ -95,7 +103,7 @@ type BillRow = {
 };
 
 const BILL_SELECT =
-  "id, room_id, status, guest_slot, stays_reservation_id, version, service_charge_waived, payment_method, opened_at, updated_at, closed_at, paid_at, rooms(number)";
+  "id, room_id, status, guest_slot, guest_name_hint, stays_reservation_id, version, service_charge_waived, payment_method, opened_at, updated_at, closed_at, paid_at, rooms(number)";
 
 async function fetchItemsAndTotals(supabase: SupabaseClient, billId: string, waived: boolean) {
   const [{ data: minibarRows }, { data: poolbarRows }] = await Promise.all([
@@ -184,6 +192,7 @@ export async function buildIntegrationAccount(supabase: SupabaseClient, bill: Bi
     room_id: bill.room_id,
     room_number: bill.rooms?.number ?? "—",
     guest_slot: bill.guest_slot,
+    guest_name: bill.guest_name_hint,
     reservation: {
       stays_id: bill.stays_reservation_id,
       reference: null,

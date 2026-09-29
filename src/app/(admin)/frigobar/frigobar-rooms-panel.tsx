@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
 import { formatDateShortPt, formatDateTimePt, dateKeyInBrazil } from "@/lib/date";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment-method";
+import { roomSlotLabel } from "@/lib/room-bill-label";
 
 // Somente leitura: fechar/reabrir/pagamento passaram a ser ações da
 // camareira, na tela "Consumo por quartos" dela (ver Parte 05 do CLAUDE.md).
@@ -167,16 +168,6 @@ function PaidBillAccordionItem({ bill }: { bill: RecentlyPaidBill }) {
       </AccordionPanel>
     </AccordionItem>
   );
-}
-
-// Quase sempre "Suíte N" — só some a "saída de hoje"/"chegada de hoje" (+
-// nome, se a Stays informou) numa suíte com Saída com Chegada em
-// andamento, quando a conta do hóspede que sai ainda não foi paga.
-function roomSlotLabel(room: RoomBillOverview): string {
-  if (room.guestSlot === "unica") return `Suíte ${room.room_number}`;
-  const situacao = room.guestSlot === "saida_hoje" ? "saída de hoje" : "chegada de hoje";
-  const name = room.guestNameHint ? ` (${room.guestNameHint})` : "";
-  return `Suíte ${room.room_number} — ${situacao}${name}`;
 }
 
 function RoomAccordionItem({ room }: { room: RoomBillOverview }) {

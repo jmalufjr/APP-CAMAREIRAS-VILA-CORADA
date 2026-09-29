@@ -28,6 +28,7 @@
 | `status` | `room_bills.status` mapeado | `aberta`/`reaberta` → `open`; `fechada` → `closed_pending_payment`; `paga` → `paid`. Não existe `cancelled` — não há cancelamento de conta inteira neste app |
 | `room_id` / `room_number` | `room_bills.room_id` / `rooms.number` | join direto |
 | `guest_slot` | `room_bills.guest_slot` | `unica` (padrão, imensa maioria dos dias) / `saida_hoje` / `chegada_hoje` — ver "Como este app separa estadias" abaixo |
+| `guest_name` | `room_bills.guest_name_hint` | nome completo do hóspede, preenchido automaticamente pela sincronização assim que a reserva é identificada; nullable enquanto isso não acontece |
 | `items[]` | `room_bill_minibar_items` + `bar_comanda_items` (via `bar_comandas`) | **agregados por (conta, produto)**, não por lançamento individual — ver limitação abaixo |
 | `items[].id` | `"<category>:<product_id>"` | string opaca composta |
 | `items[].unit_price_cents` | preço médio | se o mesmo produto foi lançado em mais de um preço dentro da mesma conta (ex.: cardápio mudou no meio do ciclo), o preço unitário exibido é a média — `gross_cents`/`total_cents` continuam exatos, só o unitário é aproximado nesse caso raro |

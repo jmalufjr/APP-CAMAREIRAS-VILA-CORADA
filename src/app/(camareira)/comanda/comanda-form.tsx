@@ -24,10 +24,10 @@ function optionKey(roomId: string, guestSlot: RoomBillGuestSlot): string {
 }
 
 function roomOptionLabel(room: RoomOption, isSplit: boolean): string {
+  if (room.guestNameHint) return `Suíte ${room.room_number} — ${room.guestNameHint}`;
   if (!isSplit || room.guestSlot === "unica") return `Suíte ${room.room_number}`;
   const situacao = room.guestSlot === "saida_hoje" ? "saída de hoje" : "chegada de hoje";
-  const name = room.guestNameHint ? ` (${room.guestNameHint})` : "";
-  return `Suíte ${room.room_number} — ${situacao}${name}`;
+  return `Suíte ${room.room_number} (${situacao})`;
 }
 
 export function ComandaForm({

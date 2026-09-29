@@ -1433,13 +1433,17 @@ before insert or update on room_bills
 for each row execute function bump_room_bill_version();
 
 -- Registra o evento depois que a linha (já com version/updated_at certos)
--- foi de fato gravada.
+-- foi de fato gravada. `security definer` porque uma mudança feita pela
+-- camareira chega aqui via um UPDATE em room_bills que ela mesma não tem
+-- permissão de fazer direto (só via funções security definer específicas)
+-- — sem isso, o INSERT falharia sob RLS pra qualquer papel que não seja
+-- admin (ver migration 049).
 create or replace function log_room_bill_change_event() returns trigger as $$
 begin
   insert into room_bill_change_events (bill_id, version) values (new.id, new.version);
   return new;
 end;
-$$ language plpgsql;
+$$ language plpgsql security definer;
 
 create trigger room_bills_log_change
 after insert or update on room_bills
@@ -1449,6 +1453,10 @@ for each row execute function log_room_bill_change_event();
 -- como mudança da conta — dispara o mesmo mecanismo acima com um UPDATE
 -- "vazio" na conta pai (o SET não muda valor nenhum por si só; quem
 -- incrementa version de verdade é o trigger BEFORE já criado acima).
+-- `security definer`: a camareira não tem policy de UPDATE direta em
+-- room_bills (só via funções específicas), então esse UPDATE combinaria
+-- zero linhas sob RLS pra ela — sem erro nenhum, mas também sem nunca
+-- disparar o gatilho de version/log (ver migration 049).
 create or replace function bump_parent_bill_direct() returns trigger as $$
 declare
   v_bill_id uuid;
@@ -1457,7 +1465,7 @@ begin
   update room_bills set version = version where id = v_bill_id;
   return coalesce(new, old);
 end;
-$$ language plpgsql;
+$$ language plpgsql security definer;
 
 create trigger room_bill_minibar_items_bump_bill
 after insert or update or delete on room_bill_minibar_items
@@ -1468,7 +1476,8 @@ after insert or update or delete on bar_comandas
 for each row execute function bump_parent_bill_direct();
 
 -- bar_comanda_items só tem comanda_id — resolve bill_id via bar_comandas
--- antes do mesmo UPDATE "vazio".
+-- antes do mesmo UPDATE "vazio". `security definer` pelo mesmo motivo de
+-- bump_parent_bill_direct acima.
 create or replace function bump_parent_bill_via_comanda() returns trigger as $$
 declare
   v_comanda_id uuid;
@@ -1481,7 +1490,7 @@ begin
   end if;
   return coalesce(new, old);
 end;
-$$ language plpgsql;
+$$ language plpgsql security definer;
 
 create trigger bar_comanda_items_bump_bill
 after insert or update or delete on bar_comanda_items

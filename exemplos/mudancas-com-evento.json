@@ -58,7 +58,8 @@
         "updated_at": "2026-09-22T20:15:00Z",
         "closed_at": "2026-09-22T19:00:00Z",
         "paid_at": "2026-09-22T20:15:00Z",
-        "cancelled_at": null
+        "cancelled_at": null,
+        "guest_name": "Marina Torres"
       }
     }
   ],

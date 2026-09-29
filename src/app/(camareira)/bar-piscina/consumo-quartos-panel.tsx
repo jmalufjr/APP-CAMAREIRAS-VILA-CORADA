@@ -25,16 +25,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_OPTIONS } from "@/lib/payment-method";
 import type { PaymentMethod } from "@/lib/types";
-
-// Quase sempre "Suíte N" — só some a "saída de hoje"/"chegada de hoje" (+
-// nome, se a Stays informou) numa suíte com Saída com Chegada em
-// andamento, quando a conta do hóspede que sai ainda não foi paga.
-function roomSlotLabel(room: RoomBillOverview): string {
-  if (room.guestSlot === "unica") return `Suíte ${room.room_number}`;
-  const situacao = room.guestSlot === "saida_hoje" ? "saída de hoje" : "chegada de hoje";
-  const name = room.guestNameHint ? ` (${room.guestNameHint})` : "";
-  return `Suíte ${room.room_number} — ${situacao}${name}`;
-}
+import { roomSlotLabel } from "@/lib/room-bill-label";
 
 export function ConsumoQuartosPanel({
   overview,

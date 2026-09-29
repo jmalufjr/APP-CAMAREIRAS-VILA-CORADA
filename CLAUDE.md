@@ -2395,6 +2395,129 @@ também é feita em Server Components.
       parser). `npm run build`/`eslint` limpos. Migrations aplicadas em
       local e produção; nenhum dado de teste (tokens, mudanças
       provocadas) deixado nos bancos depois.
+52. **Parte 45 — Contas identificadas pela dupla suíte/hóspede (não mais
+    "saída/chegada de hoje"), correção da conta fantasma, e bug real do
+    histórico de mudanças** (28-29/09/2026, feita direto em `main`, pós
+    parte 44; motivada por um caso real reportado pelo proprietário —
+    "Fernanda Raquel Carvalho" aparecendo simultaneamente nas contas das
+    Suítes 1, 3 e 5, e três suítes com 3 contas em vez de 2 — analisado a
+    fundo com dados reais de produção antes de qualquer mudança, depois
+    de uma primeira correção pontual ter sido proposta e substituída, a
+    pedido do proprietário, por esta mudança de modelo mais profunda):
+    - **Dois bugs reais confirmados na investigação**: (1) o frigobar
+      lançado num checklist decidia a conta certa **adivinhando pelo tipo
+      de serviço do dia** (`task.task_type === "preparacao" ? "saida_hoje"
+      : "unica"`, em `checklist-detail.tsx` e no `page.tsx` do checklist da
+      camareira) — mas a divisão de conta (Parte 43) pode acontecer em
+      **qualquer** tipo de serviço (ex.: "Somente Chegada"), não só
+      "Saída com Chegada"; nesses casos, a suposição "unica" criava uma
+      terceira conta vazia à toa, já que a conta 'unica' de verdade tinha
+      sido relabeada pra 'saida_hoje'. (2) quando um hóspede é **movido de
+      suíte dentro da própria Stays** antes do check-in (reparado pelo
+      mesmo número de reserva aparecendo em duas suítes diferentes),
+      `syncRoomBillForActiveReservation` criava certinho a conta na suíte
+      nova, mas nunca era chamada de novo pra suíte antiga (só rodava
+      quando havia uma reserva ativa pra aquele dia) — a conta órfã da
+      suíte antiga ficava presa pra sempre, mostrando o nome do hóspede
+      que já não estava mais lá.
+    - **Mudança de modelo, a pedido do proprietário**: em vez de reformar
+      o esquema do banco (o par `guest_slot` 'saida_hoje'/'chegada_hoje'
+      continua existindo, por baixo dos panos, exatamente como
+      implementado na Parte 42 — decisão deliberada de não reescrever o
+      schema numa mudança já grande o bastante, já que o par já cobre
+      exatamente as mesmas garantias que o modelo novo pede), a mudança
+      real foi de **postura**: o nome do hóspede (`guest_name_hint`) deixou
+      de ser um "apelido" opcional só usado numa suíte dividida — agora é
+      preenchido automaticamente para **toda** conta (inclusive uma
+      estadia contínua comum, `guest_slot = 'unica'`) assim que a
+      sincronização souber quem é, e vira a forma **primária** de
+      identificar cada conta em toda tela — "Suíte N — Nome do Hóspede",
+      no lugar de "Suíte N — saída de hoje"/"chegada de hoje" (esse texto
+      só continua aparecendo como *fallback*, quando o nome ainda não foi
+      resolvido). Novo helper compartilhado
+      `src/lib/room-bill-label.ts` (`roomSlotLabel`), usado por
+      `consumo-quartos-panel.tsx` (camareira) e `frigobar-rooms-panel.tsx`
+      (admin); `comanda-form.tsx` tem sua própria versão equivalente (tipo
+      `RoomOption`, ligeiramente diferente).
+    - **`syncRoomBillForActiveReservation` (stays-sync.ts) reescrita**: (1)
+      passou a **sempre preencher o nome do hóspede**, não só o número da
+      reserva — inclusive fazendo backfill do nome numa conta 'unica'
+      comum que já tinha o número da reserva mas nunca tinha resolvido o
+      nome (contas de antes de o campo ser levado a sério), e tentando
+      preencher também o nome de **quem está saindo** ao relabear pra
+      'saida_hoje' (usando a reserva de checkout do dia, só quando bate
+      exatamente com o número já gravado na conta — evita atribuir nome
+      errado por engano). (2) Passou a **rodar sempre, mesmo sem nenhuma
+      reserva ativa pra suíte naquele dia** (antes só rodava dentro de
+      `if (activeReservation)`) — é essa mudança que permite detectar e
+      limpar a conta órfã do bug (2): se a suíte tem uma conta
+      'chegada_hoje' cujo número de reserva não bate com a reserva ativa
+      de hoje (ou não há reserva ativa nenhuma), e essa conta **ainda está
+      zerada** (nenhum frigobar ou item de comanda lançado —
+      `billHasAnyConsumption`, nova função auxiliar), ela é apagada
+      sozinha; se já tem consumo lançado, fica intacta e visível em
+      "Consumo por quartos" até alguém fechar manualmente — nunca apaga
+      dinheiro de verdade sem decisão humana (mesmo critério já
+      estabelecido no projeto, ver "Convenções e decisões importantes").
+    - **Frigobar do checklist não adivinha mais**: nova função
+      `resolveAutoMinibarGuestSlot(supabase, roomId)`
+      (`src/lib/room-bills.ts`) — olha as contas não-pagas que já existem
+      pra suíte (nenhuma suposição sobre o tipo de serviço do dia) e
+      resolve por prioridade: 'saida_hoje' (se existir) > 'unica' (se
+      existir) > 'chegada_hoje' (se for a única, ex.: suíte que estava
+      vaga recebendo o primeiro hóspede) > 'unica' nova, só se a suíte
+      realmente não tiver conta nenhuma ainda. Chamada uma vez pela página
+      do checklist (`(camareira)/tarefas/[taskId]/page.tsx`) e passada como
+      prop `minibarGuestSlot` pra `ChecklistDetail`, que não decide mais
+      isso sozinho.
+    - **API de consumos ganhou o nome do hóspede**: `guest_name` novo em
+      `IntegrationAccount` (`src/lib/integration/stay-accounts.ts`,
+      `openapi.yaml`, `MAPEAMENTO-E-LIMITACOES.md`, `exemplos/*.json`) —
+      o proprietário dispensou explicitamente a cautela original de não
+      expor nome de hóspede (documentada desde a Parte 44/PRD) por não
+      considerar isso um dado sensível/crítico; a tríade suíte + hóspede +
+      `reservation.stays_id` passou a ser, também pro lado do sistema
+      financeiro, a forma de identificar cada conta.
+    - **Bug real incidental, descoberto testando esta parte**: os gatilhos
+      do histórico de mudanças (Parte 44) não eram `security definer` —
+      passava despercebido porque uma mudança feita pelo **admin** (que
+      tem policy de UPDATE em `room_bills`) disparava o gatilho
+      normalmente, mas uma mudança feita pela **camareira** (sem policy de
+      UPDATE direta em `room_bills`, só via funções `security definer`
+      específicas) fazia o UPDATE interno de
+      `bump_parent_bill_direct`/`bump_parent_bill_via_comanda` combinar
+      **zero linhas** sob RLS — sem erro nenhum, mas também sem nunca
+      disparar o gatilho de `version`/log. Como a esmagadora maioria dos
+      lançamentos de frigobar/comanda do dia a dia é feita por camareiras,
+      isso deixava o histórico de mudanças incompleto na prática — o
+      problema exato que a Parte 44 tinha sido desenhada pra eliminar.
+      Corrigido em `log_room_bill_change_event`/`bump_parent_bill_direct`/
+      `bump_parent_bill_via_comanda` (migration
+      `049_change_log_trigger_security_definer.sql`), aplicada em local,
+      produção e homologação.
+    - **Limpeza pontual em produção**: 4 contas fantasma/órfãs confirmadas
+      zeradas (Suítes 1, 3 — duas — e 10) apagadas diretamente; a conta
+      "chegada de hoje" órfã da Suíte 5 (outra reserva de Fernanda, dias
+      atrás) e a conta "única" fantasma da mesma suíte **já tinham
+      consumo real lançado** entre a análise e a correção — deixadas
+      intactas de propósito, precisam ser fechadas manualmente pela
+      camareira como qualquer outra conta (agora aparecem com o nome da
+      hóspede, não mais anônimas).
+    - **Testado**: os 4 cenários da função reescrita (órfã zerada →
+      apagada; órfã com consumo → preservada; conta antiga → divide
+      corretamente; conta já certa sem nome → só preenche o nome)
+      simulados diretamente contra o banco local, com reservas fabricadas
+      (sem depender da API real da Stays), via uma rota de API temporária
+      — removida depois. `resolveAutoMinibarGuestSlot` testada com sessão
+      real de camareira, confirmando resolver 'saida_hoje' numa suíte com
+      "Somente Chegada" + divisão simultânea (o cenário exato do bug
+      original). Rótulo "Suíte N — Nome" confirmado nas 3 telas (Consumo
+      por quartos da camareira e do admin, seletor de suítes da comanda)
+      via sessão real. O bug do histórico de mudanças confirmado e
+      corrigido comparando o comportamento antes/depois via sessão real de
+      admin e de camareira (`version`/evento não avançavam pra camareira
+      antes da correção; avançam depois). `npm run build`/`eslint`
+      limpos. Nenhuma fixture de teste deixada nos bancos depois.
 
 ## Convenções e decisões importantes
 
@@ -2892,12 +3015,14 @@ o escopo mude no futuro.
   automaticamente somente-leitura quando `task.status === 'concluido'`. A
   prop `minibar` é opcional, mas desde a Parte 24 a visão do admin **também
   passa essa prop** (reverte a decisão original da Parte 10 de escondê-la
-  ali — ver Parte 24 pro motivo). Desde a Parte 42, o frigobar lançado
-  dentro de um checklist de Saída com Chegada resolve sozinho pra qual
-  conta vai (`task.task_type === 'preparacao' ? 'saida_hoje' : 'unica'`) —
-  o frigobar conferido nesse checklist só pode ser do hóspede que está
-  saindo, nunca do que está chegando, já que ele ainda não pôde entrar na
-  suíte.
+  ali — ver Parte 24 pro motivo). Desde a Parte 45, a conta certa pra
+  lançar frigobar (prop `minibarGuestSlot`) não é mais decidida aqui —
+  vem resolvida da página (`resolveAutoMinibarGuestSlot`, ver
+  `src/lib/room-bills.ts`), que olha as contas que já existem pra suíte
+  em vez de adivinhar pelo tipo de checklist (a versão antiga, baseada em
+  `task.task_type === 'preparacao'`, criava uma conta fantasma sempre que
+  a divisão de conta acontecia num serviço que não fosse Saída com
+  Chegada).
 - `src/app/(camareira)/tarefas/tasks-board.tsx` — cancelar a própria
   escolha de uma suíte (Parte 24, `cancelClaim`/`cancel_own_claimed_task`)
   fica no mesmo componente que já mostrava "Meus quartos"/"Disponíveis

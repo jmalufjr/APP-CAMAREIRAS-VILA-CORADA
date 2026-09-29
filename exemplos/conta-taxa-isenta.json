@@ -50,5 +50,6 @@
   "updated_at": "2026-09-19T12:30:00Z",
   "closed_at": "2026-09-19T12:00:00Z",
   "paid_at": "2026-09-19T12:30:00Z",
-  "cancelled_at": null
+  "cancelled_at": null,
+  "guest_name": null
 }

@@ -212,7 +212,7 @@ components:
       type: object
       required:
         [account_id, property_id, version, status, currency, room_id, room_number,
-         guest_slot, reservation, items, payments, payment_data_quality, totals,
+         guest_slot, guest_name, reservation, items, payments, payment_data_quality, totals,
          created_at, updated_at, closed_at, paid_at, cancelled_at]
       properties:
         account_id: { type: string }
@@ -232,6 +232,14 @@ components:
           type: string
           enum: [unica, saida_hoje, chegada_hoje]
           description: Campo extra, sem equivalente no contrato original — ver Divergências.
+        guest_name:
+          type: [string, "null"]
+          description: >
+            Nome completo do hóspede a quem esta conta pertence — junto com
+            `room_number` e `reservation.stays_id`, forma a tríade
+            suíte/hóspede/reserva que identifica cada conta. Nullable:
+            conta recém-criada, ainda sem sincronização, ou anterior a este
+            campo existir.
         reservation:
           type: object
           required: [stays_id, reference, link_status]
@@ -292,5 +300,10 @@ components:
 # - `guest_slot` é um campo novo, sem equivalente no contrato original —
 #   sinaliza quando uma suíte tem duas contas simultâneas (Saída com
 #   Chegada, ou troca de ocupante sem pagamento entre um hóspede e outro).
+# - `guest_name` também é um campo novo — o contrato original (seção 3) dizia
+#   não precisar do nome do hóspede nesta API ("o nome já pode ser
+#   apresentado a partir da reserva local"); ainda assim, o proprietário
+#   deste app pediu para incluí-lo, já que cada conta agora é identificada
+#   visualmente pela dupla suíte/hóspede internamente também.
 # - Rate limiting não está implementado nesta versão.
 # - Retenção do histórico de mudanças: 90 dias (limpeza diária).

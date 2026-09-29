@@ -57,5 +57,6 @@
   "updated_at": "2026-09-21T11:00:00Z",
   "closed_at": "2026-09-21T11:00:00Z",
   "paid_at": null,
-  "cancelled_at": null
+  "cancelled_at": null,
+  "guest_name": "Carlos Eduardo Lima"
 }

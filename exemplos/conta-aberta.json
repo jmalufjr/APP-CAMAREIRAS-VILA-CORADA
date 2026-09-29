@@ -43,5 +43,6 @@
   "updated_at": "2026-09-20T18:40:00Z",
   "closed_at": null,
   "paid_at": null,
-  "cancelled_at": null
+  "cancelled_at": null,
+  "guest_name": "Ana Beatriz Souza"
 }

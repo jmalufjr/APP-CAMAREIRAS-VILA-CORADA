@@ -5,6 +5,7 @@ import { BackLink } from "@/components/shared/back-link";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import type { ChecklistType } from "@/lib/types";
 import { getMinibarConsumptionForRoom } from "@/lib/actions/minibar";
+import { resolveAutoMinibarGuestSlot } from "@/lib/room-bills";
 import { ChecklistDetail } from "@/components/shared/checklist-detail";
 
 export default async function TaskDetailPage({
@@ -23,10 +24,9 @@ export default async function TaskDetailPage({
 
   if (!task) notFound();
 
-  // O frigobar de um checklist de Saída com Chegada só pode ser do
-  // hóspede que está saindo (ver checklist-detail.tsx) — os demais tipos
-  // nunca coexistem com uma divisão de conta, então 'unica' resolve certo.
-  const minibarGuestSlot = task.task_type === "preparacao" ? "saida_hoje" : "unica";
+  // Resolvido a partir das contas que já existem pra suíte, não do tipo
+  // de checklist (ver resolveAutoMinibarGuestSlot).
+  const minibarGuestSlot = await resolveAutoMinibarGuestSlot(supabase, task.room_id);
 
   const [{ data: checks }, { data: occurrences }, { data: categories }, minibar] = await Promise.all([
     supabase
@@ -57,6 +57,7 @@ export default async function TaskDetailPage({
         occurrences={occurrences ?? []}
         categories={categories ?? []}
         minibar={minibar}
+        minibarGuestSlot={minibarGuestSlot}
       />
     </div>
   );
