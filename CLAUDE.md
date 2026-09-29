@@ -2544,6 +2544,41 @@ também é feita em Server Components.
       pra essas, não há como descobrir o nome automaticamente; continuam
       mostrando só "Suíte N"/"(saída de hoje)" até serem fechadas
       manualmente pela camareira, o que já era esperado.
+    - **Complemento pedido no dia seguinte, com print da tela**: a limpeza
+      automática (`cleanupStaleBills`, dentro de `syncRoomBillForActiveReservation`)
+      até aqui só cobria a conta "chegada de hoje" órfã de uma troca de
+      suíte — uma conta comum (`unica`) ou "saída de hoje" (`saida_hoje`)
+      cuja reserva já tinha simplesmente **encerrado** (checkout já
+      passado, sem chegada no mesmo dia — o padrão mais comum de todos,
+      "Somente Saída") nunca era revisitada, então nunca era limpa,
+      mesmo zerada. Exemplo real que expôs isso: a reserva de "Maria
+      Leal" (Suíte 1) tinha feito checkout sem nenhum consumo, mas a
+      conta continuava lá, dando a impressão de que precisava ser fechada
+      manualmente pela camareira — sem necessidade nenhuma, já que não
+      há nada a cobrar.
+    - **Correção**: extraída uma função só,
+      `cleanupStaleBills(supabase, roomId, activeReservationId)`, chamada
+      **sempre**, logo no início de `syncRoomBillForActiveReservation` —
+      varre **todas** as contas não-pagas da suíte (não só
+      "chegada de hoje") e apaga qualquer uma cujo número de reserva não
+      seja o da reserva ativa de hoje e que esteja zerada; contas com
+      número de reserva ainda não carimbado (`stays_reservation_id` nulo)
+      nunca são tocadas (não há como saber se "acabaram" sem esse
+      número). Isso tornou o bloco específico de limpeza da
+      "chegada de hoje" órfã (que já existia) redundante — removido, já
+      coberto pela varredura genérica, que roda antes de qualquer outra
+      decisão da função.
+    - **Testado**: 4 cenários fabricados (conta comum zerada sem reserva
+      ativa → apagada; "saída de hoje" zerada sem reserva ativa → apagada,
+      o cenário exato da Maria Leal; conta com consumo real sem reserva
+      ativa → preservada; conta zerada que É a reserva ativa de hoje →
+      preservada) via rota de API temporária, removida depois — os 4
+      bateram exatamente com o esperado.
+    - **Aplicado direto em produção**: calculada a reserva ativa de hoje
+      de cada suíte com dados reais da Stays (mesma rota temporária), e
+      confirmado que só 1 conta em toda a produção se qualificava pra
+      essa limpeza agora — a própria conta da Maria Leal — apagada com a
+      mesma checagem de segurança (zerada) embutida na consulta.
 
 ## Convenções e decisões importantes
 

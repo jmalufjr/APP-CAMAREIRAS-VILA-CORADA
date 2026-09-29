@@ -29,6 +29,42 @@ async function billHasAnyConsumption(
   return (mb?.length ?? 0) > 0 || (pb?.length ?? 0) > 0;
 }
 
+// Apaga sozinha qualquer conta não-paga da suíte cujo número de reserva
+// não seja o da reserva ativa de hoje (ou não haja reserva ativa nenhuma)
+// — desde que ela esteja zerada (sem nenhum consumo lançado). Cobre tanto
+// uma suíte que ficou vaga depois de um "Somente Saída" sem chegada no
+// mesmo dia (a conta 'única' antiga nunca era revisitada nesse caso) —
+// exemplo real: reserva de uma hóspede que já fez checkout, sem nenhum
+// consumo, ficava pendurada como se precisasse ser fechada manualmente,
+// sem necessidade nenhuma — quanto a conta "chegada de hoje" órfã de um
+// hóspede que mudou de suíte dentro da própria Stays. Contas com alguma
+// reserva ainda não carimbada (`stays_reservation_id` nulo) nunca são
+// tocadas aqui — não temos como saber se "acabaram" sem esse número.
+// Nunca apaga uma conta com consumo real lançado, mesmo que a reserva
+// dela não seja mais a ativa — fica visível em "Consumo por quartos" até
+// alguém fechar manualmente (integridade de cobrança em primeiro lugar).
+async function cleanupStaleBills(
+  supabase: ReturnType<typeof createAdminClient>,
+  roomId: string,
+  activeReservationId: string | null
+): Promise<void> {
+  const { data: bills } = await supabase
+    .from("room_bills")
+    .select("id, stays_reservation_id")
+    .eq("room_id", roomId)
+    .neq("status", "paga");
+
+  for (const bill of bills ?? []) {
+    if (!bill.stays_reservation_id) continue; // nunca foi carimbada — a lógica normal decide o que fazer com ela
+    if (bill.stays_reservation_id === activeReservationId) continue; // é a conta do ocupante atual, nunca mexe
+
+    const hasConsumption = await billHasAnyConsumption(supabase, bill.id);
+    if (!hasConsumption) {
+      await supabase.from("room_bills").delete().eq("id", bill.id);
+    }
+  }
+}
+
 // Garante que a conta que representa quem está na suíte hoje (chegando,
 // ficando, ou saindo, nessa ordem de prioridade — ver "reserva ativa" no
 // loop de syncStaysPlanning) está ligada à reserva certa da Stays, com o
@@ -38,18 +74,15 @@ async function billHasAnyConsumption(
 // depois de outro sem pagar), abre uma conta nova pro ocupante atual em
 // vez de misturar consumo.
 //
-// Também limpa contas órfãs: quando um hóspede é movido de suíte dentro
-// da própria Stays (ou uma reserva simplesmente deixa de existir), a
-// conta "chegada de hoje" que tinha sido criada pra ele na suíte antiga
-// fica sem nenhuma reserva ativa correspondente — se ela ainda estiver
-// zerada (sem nenhum consumo lançado), é apagada sozinha; se já tiver
-// algum consumo, fica intacta e visível em "Consumo por quartos" até
-// alguém fechar manualmente (nunca apaga dinheiro de verdade sozinho).
+// Antes de tudo, roda cleanupStaleBills (acima) — por isso qualquer conta
+// zerada e desatualizada já não existe mais neste ponto; o que sobra e
+// não bate com a reserva ativa de hoje sempre tem consumo real, e por
+// isso nunca é mexido além de ficar visível pra fechamento manual.
 //
 // Idempotente (não faz nada além do necessário se já está tudo certo).
 // Roda sempre, com ou sem `force`, e mesmo quando não há reserva ativa
 // nenhuma pra suíte hoje (`activeReservation` pode ser `null`, só pra
-// permitir essa limpeza) — diferente de stays_locked/lápides, isso não é
+// permitir a limpeza) — diferente de stays_locked/lápides, isso não é
 // uma preferência do admin, é integridade de cobrança.
 async function syncRoomBillForActiveReservation(
   supabase: ReturnType<typeof createAdminClient>,
@@ -66,28 +99,17 @@ async function syncRoomBillForActiveReservation(
     return name;
   }
 
-  let { data: chegada } = await supabase
+  await cleanupStaleBills(supabase, roomId, activeReservation?._id ?? null);
+
+  if (!activeReservation) return; // nada mais a fazer sem reserva ativa hoje
+
+  const { data: chegada } = await supabase
     .from("room_bills")
     .select("id, stays_reservation_id, guest_name_hint")
     .eq("room_id", roomId)
     .eq("guest_slot", "chegada_hoje")
     .neq("status", "paga")
     .maybeSingle();
-
-  // A "chegada de hoje" que já existia não corresponde mais à reserva
-  // ativa da suíte (ou não há mais reserva ativa nenhuma) — o hóspede foi
-  // movido pra outra suíte, ou a reserva sumiu.
-  if (chegada && chegada.stays_reservation_id && chegada.stays_reservation_id !== activeReservation?._id) {
-    const hasConsumption = await billHasAnyConsumption(supabase, chegada.id);
-    if (!hasConsumption) {
-      await supabase.from("room_bills").delete().eq("id", chegada.id);
-      chegada = null; // libera o slot 'chegada_hoje' pra suíte poder processar a reserva ativa de hoje normalmente
-    } else {
-      return; // tem dinheiro — fica como está, precisa de fechamento manual
-    }
-  }
-
-  if (!activeReservation) return; // nada mais a fazer sem reserva ativa hoje
 
   const currentSlot: "chegada_hoje" | "unica" = chegada ? "chegada_hoje" : "unica";
   const current =
@@ -127,8 +149,10 @@ async function syncRoomBillForActiveReservation(
 
   // Referência já preenchida, mas pra uma reserva diferente da ativa hoje
   // — a suíte trocou de ocupante. Só sabemos "recomeçar do zero" a partir
-  // do slot 'unica' (o par saida_hoje/chegada_hoje já foi usado); o caso
-  // de 'chegada_hoje' já carimbado errado é raro demais pra tratar aqui.
+  // do slot 'unica' (o par saida_hoje/chegada_hoje já foi usado); se essa
+  // 'chegada_hoje' chegou até aqui apesar de não bater com a reserva ativa,
+  // é porque cleanupStaleBills já confirmou que ela tem consumo real —
+  // fica como está, precisa de fechamento manual.
   if (currentSlot !== "unica") return;
 
   // Tenta preencher também o nome de quem está saindo, se ainda não
