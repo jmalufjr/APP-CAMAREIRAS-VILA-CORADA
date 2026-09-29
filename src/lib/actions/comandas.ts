@@ -95,6 +95,11 @@ export interface ComandaListItem {
   // rotular como "Paga" em vez de "Original"/"Editada", já que não existe
   // um status "paga" na própria comanda — é a conta do quarto que é paga).
   bill_paid_at: string | null;
+  // Da conta a que esta comanda pertence — usados pra identificar a
+  // comanda por suíte/hóspede (ver src/lib/room-bill-label.ts), no lugar
+  // de mostrar só o número da suíte.
+  guestSlot: RoomBillGuestSlot;
+  guestNameHint: string | null;
 }
 
 export interface ComandaListItemLine {
@@ -117,7 +122,7 @@ type ComandaRow = {
   rooms: { number: string } | null;
   created_by_profile: { name: string } | null;
   last_action_by_profile: { name: string } | null;
-  room_bills: { paid_at: string | null } | null;
+  room_bills: { paid_at: string | null; guest_slot: RoomBillGuestSlot; guest_name_hint: string | null } | null;
 };
 
 type ComandaItemRow = {
@@ -129,7 +134,7 @@ type ComandaItemRow = {
 };
 
 const COMANDA_ROW_SELECT =
-  "id, room_id, sequence_number, monthly_number, status, created_at, last_action_at, rooms(number), created_by_profile:profiles!bar_comandas_created_by_fkey(name), last_action_by_profile:profiles!bar_comandas_last_action_by_fkey(name), room_bills!inner(status, paid_at)";
+  "id, room_id, sequence_number, monthly_number, status, created_at, last_action_at, rooms(number), created_by_profile:profiles!bar_comandas_created_by_fkey(name), last_action_by_profile:profiles!bar_comandas_last_action_by_fkey(name), room_bills!inner(status, paid_at, guest_slot, guest_name_hint)";
 
 // Busca os itens de um conjunto de comandas já embutidos no resultado da
 // lista (em vez de buscar item a item quando o usuário abre o modal de
@@ -177,6 +182,8 @@ async function attachItemsAndMap(
       items,
       total: items.reduce((sum, i) => sum + i.subtotal, 0),
       bill_paid_at: r.room_bills?.paid_at ?? null,
+      guestSlot: r.room_bills?.guest_slot ?? "unica",
+      guestNameHint: r.room_bills?.guest_name_hint ?? null,
     };
   });
 }

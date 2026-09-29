@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ComandaDetailDialog } from "@/components/shared/comanda-detail-dialog";
 import { comandaDisplayStatus } from "@/lib/comanda-status";
 import { formatDateTimePt } from "@/lib/date";
+import { roomSlotLabel } from "@/lib/room-bill-label";
 
 function ComandaRow({ comanda, onClick }: { comanda: ComandaListItem; onClick: () => void }) {
   return (
@@ -17,7 +18,12 @@ function ComandaRow({ comanda, onClick }: { comanda: ComandaListItem; onClick: (
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium flex flex-wrap items-center gap-2">
-          Comanda #{comanda.monthly_number ?? comanda.sequence_number} · Suíte {comanda.room_number}
+          Comanda #{comanda.monthly_number ?? comanda.sequence_number} ·{" "}
+          {roomSlotLabel({
+            room_number: comanda.room_number,
+            guestSlot: comanda.guestSlot,
+            guestNameHint: comanda.guestNameHint,
+          })}
           <Badge variant={comanda.status === "cancelada" ? "secondary" : "outline"}>
             {comandaDisplayStatus(comanda)}
           </Badge>

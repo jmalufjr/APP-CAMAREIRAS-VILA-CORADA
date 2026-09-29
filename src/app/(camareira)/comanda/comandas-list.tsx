@@ -6,6 +6,7 @@ import { Pencil } from "lucide-react";
 import type { ComandaListItem } from "@/lib/actions/comandas";
 import { Button } from "@/components/ui/button";
 import { ComandaDetailDialog } from "@/components/shared/comanda-detail-dialog";
+import { roomSlotLabel } from "@/lib/room-bill-label";
 
 export function ComandasList({ comandas }: { comandas: ComandaListItem[] }) {
   const router = useRouter();
@@ -28,7 +29,8 @@ export function ComandasList({ comandas }: { comandas: ComandaListItem[] }) {
           >
             <div className="min-w-0">
               <p className="text-sm font-medium">
-                Comanda #{c.monthly_number ?? c.sequence_number} · Suíte {c.room_number}
+                Comanda #{c.monthly_number ?? c.sequence_number} ·{" "}
+                {roomSlotLabel({ room_number: c.room_number, guestSlot: c.guestSlot, guestNameHint: c.guestNameHint })}
               </p>
               <p className="text-xs text-muted-foreground truncate">Responsável: {c.created_by_name}</p>
             </div>

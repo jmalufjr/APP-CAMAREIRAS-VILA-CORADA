@@ -2518,6 +2518,32 @@ também é feita em Server Components.
       admin e de camareira (`version`/evento não avançavam pra camareira
       antes da correção; avançam depois). `npm run build`/`eslint`
       limpos. Nenhuma fixture de teste deixada nos bancos depois.
+    - **Complemento no dia seguinte, pedido pelo proprietário depois de ver
+      a tela em produção**: as listas de comanda ("Comanda" da camareira e
+      "Lista de comandas do bar" do admin) também passaram a mostrar
+      "Suíte N — Nome do hóspede" (antes só mostravam "Suíte N", sem
+      nenhuma referência ao hóspede) — `getActiveComandas`/
+      `getInactiveComandas` (`src/lib/actions/comandas.ts`) passaram a
+      trazer `guest_slot`/`guest_name_hint` da conta junto (join já
+      existente com `room_bills`, só precisou pedir as duas colunas a
+      mais), reaproveitando o mesmo `roomSlotLabel` compartilhado.
+    - **Investigação do caso real que motivou a Parte 45** (Fernanda
+      Raquel Carvalho aparecendo em mais de uma suíte): confirmado que
+      **não era mais um bug** depois da correção — são duas reservas
+      genuinamente diferentes (números de reserva da Stays distintos),
+      quase certamente a mesma hóspede repetindo visita em datas
+      diferentes. Nada foi apagado por causa disso — apagar uma conta só
+      porque duas contas têm o mesmo nome destruiria consumo real.
+    - **Backfill pontual em produção**: 8 contas que já tinham o número da
+      reserva carimbado (de antes desta parte existir) mas nunca tinham
+      tido o nome resolvido — buscado o nome de cada uma direto na API da
+      Stays (mesmo truque de rota de API temporária, sem escrever nada
+      via ela) e gravado direto via SQL. **Três contas antigas** (duas na
+      Suíte 5, uma na Suíte 4) têm consumo real lançado mas nunca tiveram
+      nenhum número de reserva capturado (de antes da Parte 43 existir) —
+      pra essas, não há como descobrir o nome automaticamente; continuam
+      mostrando só "Suíte N"/"(saída de hoje)" até serem fechadas
+      manualmente pela camareira, o que já era esperado.
 
 ## Convenções e decisões importantes
 
