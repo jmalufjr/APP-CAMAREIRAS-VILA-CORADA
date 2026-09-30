@@ -2709,6 +2709,104 @@ também é feita em Server Components.
       real rodada em produção logo após o deploy do código novo, pra já
       preencher os nomes das saídas de hoje sem esperar o próximo ciclo
       automático do cron.
+55. **Parte 48 — Fotos numa ocorrência de manutenção** (30/09/2026, feita
+    direto em `main`, pós parte 47; pedido do proprietário depois de ver o
+    campo de ocorrências do checklist da camareira e querer uma forma mais
+    prática de registrar o problema do que só escrever uma descrição — a
+    camareira usa celular Android (Xiaomi/Samsung), o admin usa iOS;
+    analisado antes de implementar, com alternativas mais simples
+    apresentadas caso a solução completa não fosse viável — ver histórico
+    da conversa pro raciocínio completo):
+    - **Nova tabela `daily_room_task_occurrence_photos`** (migration
+      `052_occurrence_photos.sql`) — uma ocorrência pode ter **várias**
+      fotos (sem limite), cada uma como uma linha própria
+      (`occurrence_id`, `storage_path`, `uploaded_by`). Foto e descrição
+      continuam **as duas opcionais e independentes** (a camareira pode
+      usar uma, outra, ou as duas) — só a categoria continua obrigatória,
+      como já era. As fotos **nunca são apagadas automaticamente**, nem
+      quando a ocorrência é resolvida pelo funcionário de manutenção —
+      viram parte do histórico permanente daquela tarefa (só somem se a
+      camareira apagar a foto ou a ocorrência inteira antes de liberar a
+      suíte).
+    - **Bucket de armazenamento privado** (`occurrence-photos`, criado via
+      `insert into storage.buckets` na própria migration — primeiro uso de
+      Supabase Storage neste projeto, que até aqui nunca guardava nenhum
+      arquivo enviado por usuário) — nunca público; a leitura de uma foto
+      sempre passa por uma **URL assinada gerada na hora pelo servidor**
+      (válida por 1h, nunca persistida), mesmo espírito já usado pro PDF
+      de recibo (gerado sob demanda). **Todo acesso ao arquivo em si
+      (upload e leitura) passa pelo client admin/service-role dentro de
+      Server Actions** (`src/lib/actions/occurrence-photos.ts`,
+      `src/lib/occurrence-photos.ts`) — decisão deliberada que evita
+      precisar de nenhuma policy de `storage.objects`: a autorização de
+      quem pode subir/ver a foto é conferida contra a tabela de metadados
+      (`daily_room_task_occurrence_photos`, com RLS normal espelhando o
+      acesso já existente à ocorrência) antes de tocar no arquivo.
+    - **Compressão no navegador antes do envio**: `src/lib/image-compression.ts`
+      (`compressImageForUpload`) usa só `createImageBitmap`/`<canvas>`
+      nativos do navegador (sem nenhuma biblioteca nova) pra reduzir a
+      foto (redimensiona pro máximo de 1600px no lado maior, reencoda em
+      JPEG qualidade ~0.72) antes de enviar — importante com sinal de
+      internet fraco e pra não estourar o limite de 5MB por arquivo do
+      bucket. Se a compressão falhar por qualquer motivo, envia o arquivo
+      original sem travar o registro da ocorrência.
+    - **Fluxo na tela da camareira** (`checklist-detail.tsx`): a mesma
+      seção "Ocorrências Manutenção" ganhou um botão "Adicionar foto(s)"
+      (`<input type="file" accept="image/*" multiple>`, sem o atributo
+      `capture` de propósito — assim o celular oferece tanto "Câmera"
+      quanto "Galeria", deixando a camareira tirar uma foto na hora ou
+      escolher uma já tirada) com pré-visualização das fotos escolhidas
+      antes de enviar (removível uma a uma). Como a foto só pode ser
+      anexada a uma ocorrência que já existe (chave estrangeira), o botão
+      "Registrar" agora: (1) cria a ocorrência (`addOccurrence` passou a
+      devolver o `occurrenceId`); (2) comprime e envia as fotos escolhidas
+      pra ela (`uploadOccurrencePhotos`); (3) limpa o formulário. Se o
+      envio das fotos falhar depois de a ocorrência já ter sido criada, a
+      ocorrência (com categoria/descrição) permanece registrada mesmo
+      assim — só um aviso é mostrado. Ocorrências já registradas mostram
+      miniaturas clicáveis (abrem a foto em tamanho real numa aba nova) com
+      botão de apagar individual, enquanto a suíte não for liberada.
+    - **Funcionário de manutenção** (`occurrence-work-list.tsx`) e a
+      **visão somente-leitura do admin** (`/dashboard/tarefas/[taskId]`,
+      reaproveita o mesmo `ChecklistDetail`) passaram a mostrar as mesmas
+      miniaturas — é o objetivo principal do pedido: o funcionário
+      reconhecer visualmente o problema sem depender só da descrição
+      escrita. As telas de navegação separadas do admin
+      (`/ocorrencias`, `/ocorrencias/historico`) não foram alteradas
+      (fora do escopo pedido) — o histórico de fotos já fica garantido
+      via a visão por tarefa do admin, que nunca deixa de mostrar a
+      ocorrência (resolvida ou não).
+    - **Bug real pré-existente, encontrado testando esta parte** (não
+      introduzido por ela): nunca existiu uma policy de RLS de **DELETE**
+      pra camareira em `daily_room_task_occurrences` — só existiam
+      select/insert. O botão "X" de apagar uma ocorrência inteira sempre
+      falhou silenciosamente (a "linha" simplesmente não existia sob RLS
+      pra a camareira mesmo sendo dona da tarefa; o `DELETE ... WHERE ...`
+      combinava 0 linhas, sem erro nenhum — mesma categoria de bug já
+      registrada em "Convenções e decisões importantes": checar `.error`
+      não ajuda quando o problema é RLS aceitando silenciosamente 0 linhas
+      afetadas). Corrigido com a policy `drto_camareira_delete` (mesma
+      migration `052`), espelhando exatamente a condição já usada pelas
+      policies de select/insert da mesma tabela. Descoberto porque
+      `removeOccurrence` (que passou a também limpar os arquivos de foto
+      da ocorrência) foi testado ponta a ponta e a ocorrência continuava
+      visível depois do clique — investigação revelou a policy ausente.
+    - **Testado**: fluxo completo via sessão autenticada real (Playwright,
+      login pela tela de verdade — três contas: a camareira de teste já
+      existente, "admin", e uma conta de manutenção criada só pra este
+      teste e apagada depois) contra o `next dev` local, com o bucket
+      criado de verdade no Supabase local via Docker — registrar uma
+      ocorrência com descrição + 2 fotos reais (upload de arquivo de
+      verdade, não simulado); confirmado que as miniaturas aparecem nas
+      três telas (camareira, funcionário de manutenção, admin) e que a URL
+      assinada de uma das fotos responde `200` de verdade (não é um link
+      quebrado); apagar 1 foto das 2 (confirmado tanto na tela quanto no
+      banco — a linha E o arquivo no armazenamento somem juntos, sem
+      sobrar nenhum órfão); apagar a ocorrência inteira (só depois de
+      corrigir o bug da policy acima) confirmado zerando ocorrência, foto
+      e arquivo de armazenamento ao mesmo tempo. `npm run lint`/
+      `npm run build` limpos. Fixtures (tarefa de teste, conta de
+      manutenção de teste, fotos de teste) removidas do banco local depois.
 
 ## Convenções e decisões importantes
 

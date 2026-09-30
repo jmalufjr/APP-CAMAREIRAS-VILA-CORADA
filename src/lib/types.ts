@@ -140,6 +140,21 @@ export interface DailyRoomTaskOccurrence {
   created_at: string;
 }
 
+export interface DailyRoomTaskOccurrencePhoto {
+  id: string;
+  occurrence_id: string;
+  storage_path: string;
+  uploaded_by: string | null;
+  created_at: string;
+}
+
+// Foto já resolvida pra exibição: url é a URL assinada gerada na hora pelo
+// servidor (null só se a assinatura falhar por algum motivo).
+export interface OccurrencePhotoView {
+  id: string;
+  url: string | null;
+}
+
 export interface DailyBreakfast {
   id: string;
   date: string;

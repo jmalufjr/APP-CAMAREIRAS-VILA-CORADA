@@ -1,8 +1,9 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { signOccurrencePhotoUrls } from "@/lib/occurrence-photos";
 import { revalidatePath } from "next/cache";
-import type { ChecklistType, OccurrenceStatus } from "@/lib/types";
+import type { ChecklistType, OccurrencePhotoView, OccurrenceStatus } from "@/lib/types";
 
 export interface OccurrenceRow {
   id: string;
@@ -51,6 +52,7 @@ export interface ManutencaoOccurrenceRow extends OccurrenceRow {
   task_type: ChecklistType;
   room_number: string;
   camareira_name: string;
+  photos: OccurrencePhotoView[];
 }
 
 // Ocorrências visíveis para o funcionário de manutenção: hoje/ontem + qualquer
@@ -60,11 +62,12 @@ export async function getManutencaoOccurrences(): Promise<ManutencaoOccurrenceRo
   const { data } = await supabase
     .from("daily_room_task_occurrences")
     .select(
-      `${OCCURRENCE_SELECT}, daily_room_tasks!inner(id, date, task_type, rooms(number), profiles!daily_room_tasks_assigned_to_fkey(name))`
+      `${OCCURRENCE_SELECT}, daily_room_task_occurrence_photos(id, storage_path), daily_room_tasks!inner(id, date, task_type, rooms(number), profiles!daily_room_tasks_assigned_to_fkey(name))`
     )
     .order("created_at", { ascending: false });
 
   type Raw = OccurrenceRow & {
+    daily_room_task_occurrence_photos: { id: string; storage_path: string }[];
     daily_room_tasks: {
       id: string;
       date: string;
@@ -74,13 +77,18 @@ export async function getManutencaoOccurrences(): Promise<ManutencaoOccurrenceRo
     };
   };
 
-  return ((data ?? []) as unknown as Raw[]).map((o) => ({
+  const rows = (data ?? []) as unknown as Raw[];
+  const allPaths = rows.flatMap((o) => o.daily_room_task_occurrence_photos.map((p) => p.storage_path));
+  const urlMap = await signOccurrencePhotoUrls(allPaths);
+
+  return rows.map((o) => ({
     ...o,
     daily_room_task_id: o.daily_room_tasks.id,
     task_date: o.daily_room_tasks.date,
     task_type: o.daily_room_tasks.task_type,
     room_number: o.daily_room_tasks.rooms?.number ?? "—",
     camareira_name: o.daily_room_tasks.profiles?.name ?? "—",
+    photos: o.daily_room_task_occurrence_photos.map((p) => ({ id: p.id, url: urlMap.get(p.storage_path) ?? null })),
   }));
 }
 

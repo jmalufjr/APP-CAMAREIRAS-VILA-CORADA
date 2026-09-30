@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { OCCURRENCE_PHOTOS_BUCKET } from "@/lib/occurrence-photos";
 import { revalidatePath } from "next/cache";
 
 export async function claimTask(taskId: string) {
@@ -66,18 +68,34 @@ export async function toggleCheck(checkId: string, checked: boolean) {
 
 export async function addOccurrence(taskId: string, categoryId: string, description: string) {
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("daily_room_task_occurrences")
-    .insert({ daily_room_task_id: taskId, occurrence_category_id: categoryId, description });
+    .insert({ daily_room_task_id: taskId, occurrence_category_id: categoryId, description: description || null })
+    .select("id")
+    .single();
   if (error) return { error: error.message };
   revalidatePath("/tarefas", "layout");
-  return { success: true };
+  return { success: true, occurrenceId: data.id as string };
 }
 
 export async function removeOccurrence(id: string) {
   const supabase = await createClient();
+  // Busca os caminhos das fotos antes de apagar a ocorrência (o delete em
+  // cascata some com os registros no banco, mas não com os arquivos no
+  // armazenamento — isso é feito aqui, à parte, via client admin).
+  const { data: photos } = await supabase
+    .from("daily_room_task_occurrence_photos")
+    .select("storage_path")
+    .eq("occurrence_id", id);
+
   const { error } = await supabase.from("daily_room_task_occurrences").delete().eq("id", id);
   if (error) return { error: error.message };
+
+  if (photos && photos.length > 0) {
+    const admin = createAdminClient();
+    await admin.storage.from(OCCURRENCE_PHOTOS_BUCKET).remove(photos.map((p) => p.storage_path));
+  }
+
   revalidatePath("/tarefas", "layout");
   return { success: true };
 }

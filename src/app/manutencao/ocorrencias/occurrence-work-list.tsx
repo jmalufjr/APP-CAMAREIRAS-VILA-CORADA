@@ -62,6 +62,23 @@ export function OccurrenceWorkList({
               </div>
               <Badge variant="secondary">{o.occurrence_categories?.name ?? "—"}</Badge>
               {o.description && <p className="text-sm">{o.description}</p>}
+              {o.photos.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {o.photos.map(
+                    (p) =>
+                      p.url && (
+                        <a key={p.id} href={p.url} target="_blank" rel="noopener noreferrer">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={p.url}
+                            alt="Foto da ocorrência"
+                            className="h-20 w-20 rounded-lg object-cover border border-border"
+                          />
+                        </a>
+                      )
+                  )}
+                </div>
+              )}
               <p className="text-xs text-muted-foreground">Camareira: {o.camareira_name}</p>
               <p className="text-xs text-muted-foreground">Registrado em: {formatDateTimePt(o.created_at)}</p>
 

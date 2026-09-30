@@ -211,6 +211,23 @@ create table daily_room_task_occurrences (
   created_at timestamptz not null default now()
 );
 
+-- ---------- DAILY ROOM TASK OCCURRENCE PHOTOS (fotos de uma ocorrência) ----------
+-- Uma ocorrência pode ter várias fotos (sem limite). storage_path aponta pro
+-- arquivo dentro do bucket privado "occurrence-photos" (ver mais abaixo);
+-- a leitura sempre passa por uma URL assinada gerada na hora (nunca um link
+-- público permanente) — mesmo espírito de nunca persistir arquivo/link que
+-- já existia pro PDF de recibo (gerado sob demanda). As fotos permanecem
+-- indefinidamente, mesmo depois da ocorrência ser resolvida — viram parte
+-- do histórico da tarefa (só são apagadas se a camareira remover a foto ou
+-- a ocorrência inteira antes de liberar a suíte).
+create table daily_room_task_occurrence_photos (
+  id uuid primary key default uuid_generate_v4(),
+  occurrence_id uuid not null references daily_room_task_occurrences(id) on delete cascade,
+  storage_path text not null,
+  uploaded_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
 -- ---------- DAILY BREAKFAST (mesas de café por dia) ----------
 create table daily_breakfast (
   id uuid primary key default uuid_generate_v4(),
@@ -514,6 +531,7 @@ alter table receipt_settings enable row level security;
 alter table daily_room_tasks enable row level security;
 alter table daily_room_task_checks enable row level security;
 alter table daily_room_task_occurrences enable row level security;
+alter table daily_room_task_occurrence_photos enable row level security;
 alter table daily_breakfast enable row level security;
 alter table daily_breakfast_room_assignments enable row level security;
 alter table daily_breakfast_room_exclusions enable row level security;
@@ -639,12 +657,50 @@ create policy "drto_camareira_select" on daily_room_task_occurrences for select
   using (exists (select 1 from daily_room_tasks t where t.id = daily_room_task_id and t.assigned_to = auth.uid()));
 create policy "drto_camareira_insert" on daily_room_task_occurrences for insert
   with check (exists (select 1 from daily_room_tasks t where t.id = daily_room_task_id and t.assigned_to = auth.uid()));
+-- Bug real pré-existente, encontrado ao testar a Parte 48 (fotos de
+-- ocorrência): nunca existiu uma policy de DELETE pra camareira nesta
+-- tabela — o botão "X" de apagar uma ocorrência inteira sempre falhava
+-- silenciosamente (RLS bloqueava, 0 linhas afetadas, sem erro nenhum).
+create policy "drto_camareira_delete" on daily_room_task_occurrences for delete
+  using (exists (select 1 from daily_room_tasks t where t.id = daily_room_task_id and t.assigned_to = auth.uid()));
 
 -- daily_room_task_occurrences: funcionário de manutenção vê toda ocorrência ainda não
 -- resolvida (garante pelo menos hoje/ontem, e mantém as mais antigas até serem
 -- resolvidas); some da tela assim que marcada como resolvida.
 create policy "drto_manutencao_select" on daily_room_task_occurrences for select
   using (is_manutencao() and status <> 'resolvida');
+
+-- daily_room_task_occurrence_photos: mesmo espelhamento de acesso da
+-- ocorrência a que a foto pertence — admin tudo; camareira lê/insere/apaga
+-- só fotos de ocorrências das próprias tarefas; manutenção lê fotos de
+-- ocorrências ainda não resolvidas. O upload/leitura do arquivo em si
+-- (bytes no bucket) sempre passa pelo client admin/service-role dentro de
+-- Server Actions (ver src/lib/actions/occurrence-photos.ts) — só esta
+-- tabela de metadados (caminho do arquivo) é que passa por RLS normal.
+create policy "drtop_admin_all" on daily_room_task_occurrence_photos for all using (is_admin()) with check (is_admin());
+create policy "drtop_camareira_select" on daily_room_task_occurrence_photos for select
+  using (exists (
+    select 1 from daily_room_task_occurrences o
+    join daily_room_tasks t on t.id = o.daily_room_task_id
+    where o.id = occurrence_id and t.assigned_to = auth.uid()
+  ));
+create policy "drtop_camareira_insert" on daily_room_task_occurrence_photos for insert
+  with check (exists (
+    select 1 from daily_room_task_occurrences o
+    join daily_room_tasks t on t.id = o.daily_room_task_id
+    where o.id = occurrence_id and t.assigned_to = auth.uid()
+  ));
+create policy "drtop_camareira_delete" on daily_room_task_occurrence_photos for delete
+  using (exists (
+    select 1 from daily_room_task_occurrences o
+    join daily_room_tasks t on t.id = o.daily_room_task_id
+    where o.id = occurrence_id and t.assigned_to = auth.uid()
+  ));
+create policy "drtop_manutencao_select" on daily_room_task_occurrence_photos for select
+  using (exists (
+    select 1 from daily_room_task_occurrences o
+    where o.id = occurrence_id and is_manutencao() and o.status <> 'resolvida'
+  ));
 
 -- Selecionar/resolver uma ocorrência é feito por funções security definer
 -- (abaixo), não por policy de UPDATE: evita depender da combinação de
@@ -1504,3 +1560,21 @@ $$ language plpgsql security definer;
 create trigger bar_comanda_items_bump_bill
 after insert or update or delete on bar_comanda_items
 for each row execute function bump_parent_bill_via_comanda();
+
+-- ---------- STORAGE (fotos de ocorrência de manutenção) ----------
+-- Bucket privado (nunca público) — leitura sempre via URL assinada gerada
+-- na hora pelo servidor, nunca um link permanente. Todo acesso ao arquivo
+-- em si (upload e leitura) passa pelo client admin/service-role dentro de
+-- Server Actions (ver src/lib/actions/occurrence-photos.ts e
+-- src/lib/occurrence-photos.ts), então não é preciso nenhuma policy de
+-- storage.objects — o service role já ignora RLS. Só a tabela de metadados
+-- (daily_room_task_occurrence_photos, acima) passa por RLS normal.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'occurrence-photos',
+  'occurrence-photos',
+  false,
+  5242880, -- 5 MB por arquivo (fotos já chegam comprimidas pelo navegador antes do envio)
+  array['image/jpeg', 'image/png', 'image/webp']
+)
+on conflict (id) do nothing;

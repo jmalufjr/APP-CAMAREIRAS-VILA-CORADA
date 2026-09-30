@@ -3,9 +3,10 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { BackLink } from "@/components/shared/back-link";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
-import type { ChecklistType } from "@/lib/types";
+import type { ChecklistType, DailyRoomTaskOccurrence } from "@/lib/types";
 import { getMinibarConsumptionForRoom } from "@/lib/actions/minibar";
 import { resolveAutoMinibarGuestSlot } from "@/lib/room-bills";
+import { signOccurrencePhotoUrls } from "@/lib/occurrence-photos";
 import { ChecklistDetail } from "@/components/shared/checklist-detail";
 
 export default async function TaskDetailPage({
@@ -28,7 +29,7 @@ export default async function TaskDetailPage({
   // de checklist (ver resolveAutoMinibarGuestSlot).
   const minibarGuestSlot = await resolveAutoMinibarGuestSlot(supabase, task.room_id);
 
-  const [{ data: checks }, { data: occurrences }, { data: categories }, minibar] = await Promise.all([
+  const [{ data: checks }, { data: occurrencesRaw }, { data: categories }, minibar] = await Promise.all([
     supabase
       .from("daily_room_task_checks")
       .select("*, checklist_items(label, description, position)")
@@ -36,11 +37,23 @@ export default async function TaskDetailPage({
       .order("checklist_items(position)"),
     supabase
       .from("daily_room_task_occurrences")
-      .select("*, occurrence_categories(name)")
+      .select("*, occurrence_categories(name), daily_room_task_occurrence_photos(id, storage_path)")
       .eq("daily_room_task_id", taskId),
     supabase.from("occurrence_categories").select("*").eq("active", true).order("position"),
     getMinibarConsumptionForRoom(task.room_id, minibarGuestSlot),
   ]);
+
+  type OccurrenceRawRow = DailyRoomTaskOccurrence & {
+    occurrence_categories: { name: string };
+    daily_room_task_occurrence_photos: { id: string; storage_path: string }[];
+  };
+  const occurrenceRows = (occurrencesRaw ?? []) as unknown as OccurrenceRawRow[];
+  const photoPaths = occurrenceRows.flatMap((o) => o.daily_room_task_occurrence_photos.map((p) => p.storage_path));
+  const photoUrlMap = await signOccurrencePhotoUrls(photoPaths);
+  const occurrences = occurrenceRows.map((o) => ({
+    ...o,
+    photos: o.daily_room_task_occurrence_photos.map((p) => ({ id: p.id, url: photoUrlMap.get(p.storage_path) ?? null })),
+  }));
 
   const room = (task as unknown as { rooms: { number: string; name: string | null } }).rooms;
 
@@ -54,7 +67,7 @@ export default async function TaskDetailPage({
       <ChecklistDetail
         task={task}
         checks={checks ?? []}
-        occurrences={occurrences ?? []}
+        occurrences={occurrences}
         categories={categories ?? []}
         minibar={minibar}
         minibarGuestSlot={minibarGuestSlot}
