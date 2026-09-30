@@ -85,7 +85,10 @@ function DayLists({
               {departures.map((d) => (
                 <Card key={d.id}>
                   <CardContent>
-                    <p className="font-medium text-sm">Suíte {roomMap.get(d.room_id) ?? "—"}</p>
+                    <p className="font-medium text-sm">
+                      Suíte {roomMap.get(d.room_id) ?? "—"}
+                      {d.guest_name ? ` · ${d.guest_name}` : ""}
+                    </p>
                     {d.notes && <p className="text-xs text-muted-foreground mt-1">{d.notes}</p>}
                   </CardContent>
                 </Card>

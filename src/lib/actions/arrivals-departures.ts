@@ -91,6 +91,7 @@ export async function deleteArrival(id: string) {
 
 export async function createDeparture(date: string, formData: FormData) {
   const room_id = String(formData.get("room_id") ?? "");
+  const guest_name = String(formData.get("guest_name") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
   if (!room_id) return { error: "Selecione a suíte." };
@@ -98,7 +99,9 @@ export async function createDeparture(date: string, formData: FormData) {
   const supabase = await createClient();
   // Cadastro manual: passa a ter preferência sobre a sincronização para
   // essa suíte/dia (ver PRD_regrasdenegocio.md seção 1).
-  const { error } = await supabase.from("daily_departures").insert({ date, room_id, notes, stays_locked: true });
+  const { error } = await supabase
+    .from("daily_departures")
+    .insert({ date, room_id, guest_name, notes, stays_locked: true });
 
   if (error) {
     if (error.code === "23505") {
@@ -111,12 +114,29 @@ export async function createDeparture(date: string, formData: FormData) {
 }
 
 export async function updateDeparture(id: string, formData: FormData) {
+  const guest_name = String(formData.get("guest_name") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
   const supabase = await createClient();
+
+  // Mesma regra de daily_arrivals: só travar a sincronização quando o
+  // nome (campo sincronizável) realmente mudou — observações nunca travam.
+  const { data: existing } = await supabase
+    .from("daily_departures")
+    .select("guest_name, stays_locked")
+    .eq("id", id)
+    .single();
+
+  const changedSyncedField = existing && existing.guest_name !== guest_name;
+
   const { error } = await supabase
     .from("daily_departures")
-    .update({ notes, updated_at: new Date().toISOString() })
+    .update({
+      guest_name,
+      notes,
+      updated_at: new Date().toISOString(),
+      stays_locked: changedSyncedField ? true : existing?.stays_locked ?? true,
+    })
     .eq("id", id);
 
   if (error) return { error: error.message };

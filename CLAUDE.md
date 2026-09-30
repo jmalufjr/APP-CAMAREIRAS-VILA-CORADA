@@ -2653,6 +2653,62 @@ também é feita em Server Components.
       oferecendo a suíte do cenário (2) sem nenhuma mudança — tudo
       removido do banco local depois. `npm run lint`/`npm run build`
       limpos. Migration aplicada em produção.
+54. **Parte 47 — Nome do hóspede na coluna "Saídas" de Chegadas & Saídas**
+    (30/09/2026, feita direto em `main`, pós parte 46; pedido do
+    proprietário pra igualar a coluna "Saídas" à coluna "Chegadas", que já
+    mostrava o nome do hóspede): até aqui `daily_departures` só guardava a
+    existência da linha (a suíte com saída prevista) — nenhum campo de
+    nome, diferente de `daily_arrivals.guest_name`, já sincronizado desde
+    a Parte 13.
+    - **Nova coluna `daily_departures.guest_name`** (migration
+      `051_daily_departures_guest_name.sql`, nullable — texto livre; ao
+      contrário de `daily_arrivals.guest_name`, que é `not null`, aqui
+      fica anulável porque uma saída cadastrada manualmente sem reserva
+      da Stays por trás pode legitimamente não ter nome nenhum).
+      `syncStaysArrivalsDepartures` (`stays-sync.ts`) passou a resolver o
+      nome de quem está saindo com a mesma `resolveGuestName`/cache já
+      usada pras chegadas, gravando no insert de uma saída nova e também
+      fazendo *backfill*/correção numa saída já existente sem nome (ou com
+      nome desatualizado) — sempre respeitando `stays_locked`, igual a
+      todo campo sincronizável do projeto.
+    - **Telas**: `Suíte N · Nome` nas duas telas de leitura (admin em
+      `/chegadas-saidas/gerenciar`, camareira em `/chegadas-saidas`),
+      mesmo formato já usado pra chegadas — cai pra só `Suíte N` quando o
+      nome ainda não foi resolvido (`guest_name` nulo). O formulário
+      manual "Nova saída"/"Editar saída" do admin
+      (`arrivals-departures-panel.tsx`) ganhou um campo "Nome do hóspede"
+      (opcional, ao contrário do de chegada que é obrigatório) —
+      `createDeparture`/`updateDeparture`
+      (`src/lib/actions/arrivals-departures.ts`) passaram a gravá-lo, com
+      `updateDeparture` só travando a sincronização (`stays_locked`)
+      quando o nome de fato mudou, mesmo padrão já usado por
+      `updateArrival`.
+    - **Bug de ambiente encontrado e corrigido no meio do teste, não
+      relacionado a esta parte**: o gateway local do Supabase (Kong/Auth,
+      porta 54321) estava respondendo "Empty reply from server" — mesma
+      categoria de falha já registrada como pendência na Parte 41, mas
+      desta vez isolada a dois containers específicos
+      (`supabase_auth`/`supabase_kong`), com `supabase_vector` preso num
+      loop de reinício. Resolvido com `docker restart` nesses dois
+      containers (mais simples que o `net stop winnat`/`net start winnat`
+      já documentado pra um sintoma parecido mas de causa diferente,
+      porta recusada pelo Windows) — o login via password grant voltou a
+      funcionar normalmente depois. `supabase_vector` continuou
+      reiniciando sozinho sem impedir o teste (não é usado por
+      autenticação/dados, só telemetria) — não investigado a fundo por
+      não ser bloqueante.
+    - **Testado**: sessão autenticada real (login local + cookie
+      `sb-127-auth-token`) confirmou "Suíte 1 · Teste Saída Nome" nas duas
+      telas (admin e camareira) com uma linha fabricada; depois, a função
+      de sincronização rodada de verdade contra a API real da Stays (via
+      rota de API temporária, removida depois) confirmou as 3 suítes reais
+      com saída hoje recebendo o nome certo (Nelson Guimaraes, Steffany
+      Figueiredo, Leticia De Moraes Tavares) — exatamente as que
+      apareciam em branco no print que motivou o pedido. `npm run lint`/
+      `npm run build` limpos. Migration aplicada em produção; sincronização
+      real rodada em produção logo após o deploy do código novo, pra já
+      preencher os nomes das saídas de hoje sem esperar o próximo ciclo
+      automático do cron.
 
 ## Convenções e decisões importantes
 

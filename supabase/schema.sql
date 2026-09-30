@@ -308,11 +308,14 @@ create table daily_arrivals (
 );
 
 -- ---------- DAILY DEPARTURES (saídas previstas do dia) ----------
--- notes nunca é tocado pela sincronização, de propósito.
+-- guest_name: sincronizável com a Stays (nome de quem está saindo, mesmo
+-- padrão de daily_arrivals.guest_name); notes nunca é tocado pela
+-- sincronização, de propósito.
 create table daily_departures (
   id uuid primary key default uuid_generate_v4(),
   date date not null,
   room_id uuid not null references rooms(id) on delete cascade,
+  guest_name text,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

@@ -94,7 +94,10 @@ export function ArrivalsDeparturesPanel({
           {departures.map((d) => (
             <div key={d.id} className="rounded-lg border border-border p-3 flex items-start justify-between gap-3">
               <div>
-                <p className="font-medium text-sm">Suíte {roomById.get(d.room_id)?.number ?? "—"}</p>
+                <p className="font-medium text-sm">
+                  Suíte {roomById.get(d.room_id)?.number ?? "—"}
+                  {d.guest_name ? ` · ${d.guest_name}` : ""}
+                </p>
                 {d.notes && <p className="text-xs text-muted-foreground mt-1">{d.notes}</p>}
               </div>
               <div className="flex gap-1 shrink-0">
@@ -290,6 +293,10 @@ function DepartureFormDialog({
               Suíte {rooms.find((r) => r.id === departure.room_id)?.number}
             </p>
           )}
+          <div className="space-y-2">
+            <Label htmlFor="guest_name_dep">Nome do hóspede</Label>
+            <Input id="guest_name_dep" name="guest_name" defaultValue={departure?.guest_name ?? ""} />
+          </div>
           <div className="space-y-2">
             <Label htmlFor="notes_dep">Observações</Label>
             <Textarea id="notes_dep" name="notes" defaultValue={departure?.notes ?? ""} />

@@ -169,6 +169,7 @@ export interface DailyDeparture {
   id: string;
   date: string;
   room_id: string;
+  guest_name: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;

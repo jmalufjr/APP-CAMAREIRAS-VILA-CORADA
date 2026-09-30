@@ -483,11 +483,12 @@ export async function syncStaysArrivalsDepartures(options?: SyncOptions) {
         updated++;
       }
 
-      // Saídas: só a existência da linha (a "suíte" com saída) é
-      // sincronizada — observações nunca são tocadas.
+      // Saídas: existência da linha e nome do hóspede são sincronizados
+      // (mesmo padrão de daily_arrivals.guest_name) — observações nunca
+      // são tocadas.
       const { data: existingDeparture } = await supabase
         .from("daily_departures")
-        .select("id, stays_locked")
+        .select("id, guest_name, stays_locked")
         .eq("date", date)
         .eq("room_id", room.id)
         .maybeSingle();
@@ -495,10 +496,19 @@ export async function syncStaysArrivalsDepartures(options?: SyncOptions) {
       if (existingDeparture?.stays_locked && !force) {
         skipped++;
       } else if (checkingOut) {
+        const departureGuestName = await resolveGuestName(checkingOut._idclient);
         if (!existingDeparture) {
           const { error } = await supabase
             .from("daily_departures")
-            .insert({ date, room_id: room.id, stays_locked: false });
+            .insert({ date, room_id: room.id, guest_name: departureGuestName, stays_locked: false });
+          if (!error) updated++;
+        } else if (existingDeparture.guest_name !== departureGuestName) {
+          // Backfill do nome em linhas antigas (de antes desta coluna
+          // existir) ou correção se o nome resolvido mudou.
+          const { error } = await supabase
+            .from("daily_departures")
+            .update({ guest_name: departureGuestName, updated_at: new Date().toISOString() })
+            .eq("id", existingDeparture.id);
           if (!error) updated++;
         }
       } else if (existingDeparture) {
