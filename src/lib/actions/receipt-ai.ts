@@ -18,8 +18,8 @@ export interface ParsedReceipt {
   items: ParsedReceiptItem[];
 }
 
-const SYSTEM_PROMPT = `Você lê fotos de notas fiscais, cupons fiscais e comprovantes de pagamento
-de uma pousada brasileira e devolve SOMENTE um JSON (sem texto antes ou
+const SYSTEM_PROMPT = `Você lê fotos ou PDFs de notas fiscais, cupons fiscais e comprovantes de
+pagamento de uma pousada brasileira e devolve SOMENTE um JSON (sem texto antes ou
 depois, sem bloco de código markdown) no formato:
 
 {
@@ -66,11 +66,12 @@ export async function parseReceiptWithAI(formData: FormData): Promise<{ error: s
   }
 
   const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) return { error: "Selecione uma foto da nota/recibo." };
+  if (!(file instanceof File) || file.size === 0) return { error: "Selecione uma foto ou um PDF da nota/recibo." };
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const base64 = buffer.toString("base64");
-  const mediaType = (file.type || "image/jpeg") as "image/jpeg" | "image/png" | "image/webp";
+  const mediaType = file.type || "image/jpeg";
+  const isPdf = mediaType === "application/pdf";
 
   try {
     const client = new Anthropic({ apiKey });
@@ -82,7 +83,12 @@ export async function parseReceiptWithAI(formData: FormData): Promise<{ error: s
         {
           role: "user",
           content: [
-            { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+            isPdf
+              ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
+              : {
+                  type: "image",
+                  source: { type: "base64", media_type: mediaType as "image/jpeg" | "image/png" | "image/webp", data: base64 },
+                },
             { type: "text", text: "Leia esta nota/recibo/comprovante e devolva o JSON pedido." },
           ],
         },

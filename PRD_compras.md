@@ -706,6 +706,138 @@ instalada (não por teste funcional num Safari de verdade, que este
 ambiente não tem como simular) — vale confirmar na prática assim que o
 admin testar pelo iPhone dele.
 
+## 17. Quarta leva — reorganização de menus, leitura de PDF, edição de despesa, ativo permanente
+
+> Lote grande de mudanças de navegação e de duas lacunas reais encontradas
+> pelo proprietário usando o app de verdade (seção 17.6).
+
+### 17.1 Reorganização do menu principal do admin
+
+- **"Lançar Compra"** (antigo "Lançar compra/despesa", dentro do hub
+  "Compras e Estoque") virou item próprio do menu principal, entre
+  "Resumo executivo" e "Planejamento diário".
+- **"Lista de compras"** saiu do hub e também virou item próprio do menu
+  principal, logo depois de "Lançar Compra".
+- **"Compras e Estoque"** (o hub) virou só **"Estoque"** — ficou só com
+  baixa de estoque, itens, categorias, grupos de giro e contagem física.
+- **"Histórico de compras e despesas"** saiu do hub de Estoque e passou a
+  aparecer como uma seção própria, ao final da tela **"Histórico"** já
+  existente — reaproveitando o mesmo filtro de data da página (sem um
+  filtro próprio separado, pra não duplicar controles).
+- Nova tela **"Ativo Permanente"**, logo depois de "Estoque" — ver 17.4.
+
+Pro funcionário de manutenção: o item de menu "Compras" virou **"Lançar
+Compra"** e passou a abrir o formulário direto — o antigo submenu (que só
+tinha "Lançar compra/despesa" e "Histórico de compras") deixou de existir.
+**O funcionário de manutenção não tem mais acesso a histórico de compras
+nenhum** — só lança.
+
+### 17.2 Nota fiscal em foto ou PDF, com câmera de verdade
+
+- O upload de recibo/nota aceita agora **foto ou PDF** (bucket e leitura
+  por IA atualizados pra aceitar `application/pdf`, lido como documento,
+  não como imagem).
+- O botão único "Tirar/escolher foto" foi separado em dois: **"Tirar
+  foto"** (abre a câmera com pré-visualização ao vivo e um botão
+  "Capturar" explícito — funciona igual no celular e no computador, sem
+  depender do atributo `capture` de um input de arquivo, que no desktop
+  simplesmente ignora a câmera) e **"Escolher arquivo"** (seletor de
+  arquivo de verdade, aceitando foto ou PDF).
+- O mesmo botão "Capturar" explícito foi adicionado ao **leitor de código
+  de barras** (usado na baixa de estoque e na leitura do QR da nota
+  fiscal) — complementa a detecção contínua automática já existente, útil
+  quando o foco/iluminação não deixam a detecção automática pegar.
+
+### 17.3 Editar uma despesa já lançada
+
+Rota nova `/historico/compras/[id]/editar` (reaproveita o mesmo
+`ExpenseForm`, em modo edição) — admin only, acessível pelo lápis na linha
+da tabela em "Histórico". Detalhes de como o ajuste de estoque acontece
+sozinho na edição já estão na seção 16.2.
+
+### 17.4 Ativo Permanente
+
+Tela nova no menu principal, com dois submenus:
+
+- **"Relação de Ativo Permanente"**: lista somente leitura, agrupada por
+  categoria, com todos os campos (marca/modelo, data da compra, valor,
+  garantia, fornecedor, local).
+- **"Itens de ativo permanente"**: cadastro de categorias e dos itens em
+  si (nome, categoria, marca, modelo, data e valor da compra, garantia,
+  fornecedor, local, observações).
+
+13 categorias iniciais já cadastradas (televisores, ar-condicionados,
+frigobares/geladeiras, boilers/aquecedores, bombas, camas/colchões,
+móveis, eletrodomésticos de cozinha, equipamentos de lavanderia,
+computadores/notebooks, veículos, ferramentas/manutenção, outros) —
+**nenhum item ainda**, serão inseridos no inventário físico inicial.
+Deliberadamente **fora** do catálogo de "itens de estoque": um ativo
+permanente não tem saldo que se consome.
+
+### 17.5 Relatório de estoque no Resumo Executivo
+
+O card "Compras e Estoque" do Resumo Executivo deixou de ser um simples
+link pro hub de Estoque — agora é ele mesmo um relatório
+(`/dashboard/estoque`): dois gráficos de barra horizontal lado a lado (20
+itens mais comprados no mês e desde sempre, por valor) e uma tabela
+agrupada por categoria com, por item, quantidade comprada no mês, saldo
+atual, estimativa de dias restantes (saldo ÷ consumo médio diário, a
+partir do mesmo giro já usado na Lista de compras) e um aviso quando o
+item está na lista de compras.
+
+### 17.6 Bug real: compra lida pela IA não virava item de estoque — causa e correção
+
+O proprietário relatou ter lançado duas compras reais (frutas e polpa de
+fruta) sem encontrá-las depois em "Itens de estoque". Investigando as
+duas despesas já registradas no banco:
+
+- A compra de **frutas** foi lançada **sem nenhuma linha de item**
+  (só o valor total, R$ 41,95) — nesse caso nunca haveria onde vincular
+  um item de estoque, porque não existe nenhuma linha. Pra aproveitar
+  essa despesa específica, é preciso editá-la (seção 17.3) e acrescentar
+  a linha do item.
+- A compra de **polpa de fruta** tinha 4 linhas de item (uma por sabor),
+  mas **nenhuma delas tinha `inventory_item_id` vinculado** — porque até
+  então o sistema só permitia *vincular* a um item **já existente**; nunca
+  criava um item novo a partir de uma compra. Como "polpa de fruta" nunca
+  tinha sido cadastrada manualmente em "Itens de estoque", a pessoa que
+  lançou a compra (ou a própria leitura por IA) deixou essas linhas sem
+  vínculo, por não ter como criar o item ali mesmo.
+
+**Correção**: o seletor "Vincular a item de estoque" de cada linha ganhou
+uma terceira opção, **"+ Criar novo item de estoque"** — ao escolher, a
+linha pede a categoria (obrigatória) e a unidade do item novo; ao salvar,
+o item é criado automaticamente e já fica vinculado a essa compra. Pra
+nunca duplicar um item por engano (ex.: "Frutas" cadastrado manualmente
+num dia, "frutas" criado por uma compra depois), toda criação confere
+antes por nome exato (sem diferenciar maiúscula/minúscula) contra o
+catálogo já existente — se achar, usa o item que já existe em vez de
+criar outro. Quando a leitura por IA identifica um item cujo nome já bate
+com um item existente, o vínculo já vem pré-selecionado sozinho, sem
+precisar de nenhuma ação manual.
+
+As duas despesas reais que motivaram esse relato foram preservadas
+intactas (não apagadas, nem alteradas) — o proprietário pode agora
+editá-las e vincular/criar os itens de estoque correspondentes, usando a
+tela de edição nova (seção 17.3).
+
+### 17.7 Testado
+
+Simulação completa via chamadas reais às Server Actions (não só SQL
+direto): lançamento com "criar novo item" pra dois itens diferentes
+("Frutas Teste", "Polpa de Frutas Teste"), confirmando a criação e o
+vínculo corretos; segunda compra com o nome em caixa diferente
+("frutas teste") confirmando que reaproveita o item existente em vez de
+duplicar (saldo final bateu exatamente com a soma das duas compras);
+edição de uma despesa reduzindo a quantidade de um item, confirmando o
+ajuste automático do saldo; upload de um PDF de teste de verdade,
+confirmando a extensão salva (.pdf, não mais .jpg fixo) e o Content-Type
+correto servido pela URL assinada. Sessão real do admin e da manutenção
+confirmando a navegação nova (ordem do menu, rotas antigas retornando 404,
+rotas novas carregando os dados certos) e que o realce de item ativo no
+menu não duplica entre itens com o mesmo prefixo de URL (ex.: "Estoque" e
+"Lançar Compra"). `npm run lint`/`npm run build` limpos.
+
 ### 15.6 Testado
 
 Simulação direta no banco local, sob as regras de segurança reais (RLS) de

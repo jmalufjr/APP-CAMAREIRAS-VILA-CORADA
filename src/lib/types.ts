@@ -368,6 +368,33 @@ export interface PurchaseRequest {
   updated_at: string;
 }
 
+// ---------- Ativo permanente (PRD_compras.md seção 8) ----------
+
+export interface AssetCategory {
+  id: string;
+  name: string;
+  active: boolean;
+  position: number;
+  created_at: string;
+}
+
+export interface FixedAsset {
+  id: string;
+  category_id: string;
+  name: string;
+  brand: string | null;
+  model: string | null;
+  purchase_date: string | null;
+  purchase_value: number | null;
+  warranty_until: string | null;
+  supplier_name: string | null;
+  location: string | null;
+  notes: string | null;
+  active: boolean;
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface Expense {
   id: string;
   date: string;

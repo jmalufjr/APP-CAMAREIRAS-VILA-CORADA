@@ -2,24 +2,10 @@ import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { getPurchaseList } from "@/lib/actions/purchase-list";
 import { getCategoryCountStatus } from "@/lib/actions/inventory-counts";
-import {
-  Plus,
-  History,
-  Package,
-  Tags,
-  ClipboardList,
-  PackageMinus,
-  ChevronRight,
-  AlertTriangle,
-  ShoppingBasket,
-  CalendarClock,
-} from "lucide-react";
+import { Package, Tags, ClipboardList, PackageMinus, ChevronRight, AlertTriangle, CalendarClock } from "lucide-react";
 
 const menuItems = [
-  { href: "/compras/nova", label: "Lançar compra/despesa", icon: Plus },
   { href: "/compras/baixa", label: "Baixa de estoque", icon: PackageMinus },
-  { href: "/compras/lista", label: "Lista de compras", icon: ShoppingBasket },
-  { href: "/compras/historico", label: "Histórico de compras e despesas", icon: History },
   { href: "/compras/itens", label: "Itens de estoque", icon: Package },
   { href: "/compras/categorias", label: "Categorias de despesa", icon: Tags },
   { href: "/compras/grupos-giro", label: "Grupos de giro (dias de folga)", icon: CalendarClock },
@@ -32,7 +18,7 @@ export default async function ComprasPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Compras e Estoque" subtitle="Compras, despesas e controle de estoque da pousada." />
+      <PageHeader title="Estoque" subtitle="Controle de estoque da pousada — itens, categorias e contagem física." />
 
       <div className="flex flex-wrap gap-2">
         {purchaseList.length > 0 && (

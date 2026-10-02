@@ -9,6 +9,9 @@ import { getMinibarConsumptionForPeriod } from "@/lib/actions/minibar";
 import { getPoolbarConsumptionForPeriod } from "@/lib/actions/poolbar";
 import { getBarCommissionByCamareiraForPeriod } from "@/lib/actions/comandas";
 import { getSuitesCafeCommissionForPeriod } from "@/lib/actions/commission";
+import { getExpenses, getExpenseSummaryByCategory, getExpenseSummaryBySupplier } from "@/lib/actions/expenses";
+import { ComprasHistoryTable } from "@/components/shared/compras-history-table";
+import { ExpenseSummaryCards } from "@/components/shared/expense-summary-cards";
 import { toDateKey, nowInBrazil } from "@/lib/date";
 import type { ChecklistType } from "@/lib/types";
 
@@ -54,6 +57,9 @@ export default async function HistoricoPage({
     poolbarSummary,
     barCommission,
     suitesCafeCommission,
+    expenseRows,
+    expenseByCategory,
+    expenseBySupplier,
   ] = await Promise.all([
     // Comissão = quantidade de suítes elegíveis pro café da manhã por dia
     // (independente de terem sido de fato alocadas a uma mesa) × valor por
@@ -79,6 +85,9 @@ export default async function HistoricoPage({
     getPoolbarConsumptionForPeriod(from, to),
     getBarCommissionByCamareiraForPeriod(from, to),
     getSuitesCafeCommissionForPeriod(from, to),
+    getExpenses(from, to),
+    getExpenseSummaryByCategory(from, to),
+    getExpenseSummaryBySupplier(from, to),
   ]);
 
   const commissionRate = Number(commissionSettings?.value_per_table ?? 0);
@@ -143,6 +152,12 @@ export default async function HistoricoPage({
           <MinibarSummaryTable items={poolbarSummary.items} total={poolbarSummary.total} />
         </CardContent>
       </Card>
+
+      <div className="space-y-3 pt-2">
+        <p className="font-heading text-xl text-primary">Compras e despesas no período</p>
+        <ExpenseSummaryCards byCategory={expenseByCategory} bySupplier={expenseBySupplier} />
+        <ComprasHistoryTable rows={expenseRows} canManage editBasePath="/historico/compras" />
+      </div>
     </div>
   );
 }

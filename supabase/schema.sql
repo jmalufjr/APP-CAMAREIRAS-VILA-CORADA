@@ -1982,15 +1982,16 @@ alter table inventory_suggestion_dismissals enable row level security;
 create policy "inv_suggestion_dismissals_admin_all" on inventory_suggestion_dismissals
   for all using (is_admin()) with check (is_admin());
 
--- Bucket privado pras fotos de recibo/nota — mesmo padrão de
--- "occurrence-photos" acima.
+-- Bucket privado pras fotos/PDFs de recibo/nota — mesmo padrão de
+-- "occurrence-photos" acima; aceita PDF além de foto, pra leitura de
+-- notas fiscais formais emitidas nesse formato.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'expense-receipts',
   'expense-receipts',
   false,
-  5242880,
-  array['image/jpeg', 'image/png', 'image/webp']
+  10485760,
+  array['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
 )
 on conflict (id) do nothing;
 

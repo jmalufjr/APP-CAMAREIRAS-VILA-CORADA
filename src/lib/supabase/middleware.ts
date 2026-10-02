@@ -87,6 +87,7 @@ export async function updateSession(request: NextRequest) {
       "/manutencao-preventiva",
       "/questoes-respostas",
       "/compras",
+      "/ativo-permanente",
     ];
     const camareiraOnlyPrefixes = ["/tarefas", "/bar-piscina", "/comanda", "/estoque", "/pedidos-compra"];
     const manutencaoOnlyPrefixes = ["/manutencao"];

@@ -17,6 +17,43 @@ export interface ExpenseItemInput {
   unit_cost: number;
   subtotal: number;
   inventory_item_id: string | null;
+  // Presente só quando a pessoa escolheu "criar novo item de estoque" pra
+  // esta linha, em vez de vincular a um já existente ou deixar sem
+  // controle de estoque — ver resolveOrCreateInventoryItemId abaixo.
+  new_item?: { category_id: string; unit: string; turnover_group_id: string | null } | null;
+}
+
+// Resolve o item de estoque de uma linha: usa o vinculado (se houver),
+// cria um novo (se pedido), ou deixa null (sem controle de estoque). Pra
+// nunca duplicar um item já existente por causa de maiúscula/minúscula
+// ou de alguém esquecer de vincular numa segunda compra, confere por
+// nome exato (sem diferenciar caixa) antes de criar — ver PRD_compras.md
+// seção 16.6 pro caso real que motivou essa checagem.
+async function resolveOrCreateInventoryItemId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  item: ExpenseItemInput
+): Promise<{ id: string | null; error?: string }> {
+  if (item.inventory_item_id) return { id: item.inventory_item_id };
+  if (!item.new_item) return { id: null };
+
+  const name = item.description.trim();
+  if (!name) return { id: null };
+
+  const { data: existing } = await supabase.from("inventory_items").select("id").ilike("name", name).maybeSingle();
+  if (existing) return { id: existing.id as string };
+
+  const { data: created, error } = await supabase
+    .from("inventory_items")
+    .insert({
+      name,
+      category_id: item.new_item.category_id,
+      unit: item.new_item.unit || "un",
+      turnover_group_id: item.new_item.turnover_group_id || null,
+    })
+    .select("id")
+    .single();
+  if (error || !created) return { id: null, error: error?.message ?? "Erro ao criar item de estoque." };
+  return { id: created.id as string };
 }
 
 // Cria uma despesa (com ou sem linhas de item, com ou sem foto de
@@ -73,10 +110,20 @@ export async function createExpense(formData: FormData) {
   if (error || !expense) return { error: error?.message ?? "Erro ao criar despesa." };
 
   if (items.length > 0) {
+    const resolvedIds: (string | null)[] = [];
+    for (const i of items) {
+      const resolved = await resolveOrCreateInventoryItemId(supabase, i);
+      if (resolved.error) {
+        await supabase.from("expenses").delete().eq("id", expense.id);
+        return { error: resolved.error };
+      }
+      resolvedIds.push(resolved.id);
+    }
+
     const { error: itemsError } = await supabase.from("expense_items").insert(
-      items.map((i) => ({
+      items.map((i, idx) => ({
         expense_id: expense.id,
-        inventory_item_id: i.inventory_item_id || null,
+        inventory_item_id: resolvedIds[idx],
         description: i.description,
         quantity: i.quantity,
         unit_cost: i.unit_cost,
@@ -148,10 +195,17 @@ export async function updateExpense(id: string, formData: FormData) {
   if (deleteItemsError) return { error: deleteItemsError.message };
 
   if (items.length > 0) {
+    const resolvedIds: (string | null)[] = [];
+    for (const i of items) {
+      const resolved = await resolveOrCreateInventoryItemId(supabase, i);
+      if (resolved.error) return { error: resolved.error };
+      resolvedIds.push(resolved.id);
+    }
+
     const { error: itemsError } = await supabase.from("expense_items").insert(
-      items.map((i) => ({
+      items.map((i, idx) => ({
         expense_id: id,
-        inventory_item_id: i.inventory_item_id || null,
+        inventory_item_id: resolvedIds[idx],
         description: i.description,
         quantity: i.quantity,
         unit_cost: i.unit_cost,

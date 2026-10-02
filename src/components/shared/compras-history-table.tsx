@@ -22,7 +22,15 @@ function downloadCsv(filename: string, rows: (string | number)[][]) {
   URL.revokeObjectURL(url);
 }
 
-export function ComprasHistoryTable({ rows, canManage = true }: { rows: ExpenseListRow[]; canManage?: boolean }) {
+export function ComprasHistoryTable({
+  rows,
+  canManage = true,
+  editBasePath = "/historico/compras",
+}: {
+  rows: ExpenseListRow[];
+  canManage?: boolean;
+  editBasePath?: string;
+}) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const total = rows.reduce((sum, r) => sum + r.total_amount, 0);
@@ -85,7 +93,7 @@ export function ComprasHistoryTable({ rows, canManage = true }: { rows: ExpenseL
                     )}
                     {canManage && (
                       <>
-                        <Link href={`/compras/historico/${r.id}/editar`}>
+                        <Link href={`${editBasePath}/${r.id}/editar`}>
                           <Button variant="ghost" size="icon-sm" title="Editar despesa">
                             <Pencil size={14} />
                           </Button>

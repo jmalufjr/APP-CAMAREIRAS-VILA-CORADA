@@ -7,7 +7,7 @@ import { createExpense, updateExpense } from "@/lib/actions/expenses";
 import type { ExpenseWithItems } from "@/lib/actions/expenses";
 import { parseReceiptWithAI } from "@/lib/actions/receipt-ai";
 import { compressImageForUpload } from "@/lib/image-compression";
-import type { ExpenseCategory } from "@/lib/types";
+import type { ExpenseCategory, InventoryTurnoverGroup } from "@/lib/types";
 import type { InventoryItemWithBalance } from "@/lib/actions/inventory-items";
 import { PAYMENT_METHOD_OPTIONS } from "@/lib/payment-method";
 import { Button } from "@/components/ui/button";
@@ -17,34 +17,58 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarcodeScannerButton } from "@/components/shared/barcode-scanner";
-import { Camera, Sparkles, Trash2, Plus, X } from "lucide-react";
+import { CameraCaptureButton } from "@/components/shared/camera-capture-button";
+import { Sparkles, Trash2, Plus, X, FileText, FolderOpen } from "lucide-react";
 
 interface ItemRow {
   description: string;
   quantity: number;
   unit_cost: number;
   inventory_item_id: string | null;
+  // "Criar novo item de estoque" — a pessoa confirmou que esta linha deve
+  // virar um item novo no catálogo (ver PRD_compras.md seção 16.6, sobre
+  // evitar duplicidade com itens já cadastrados).
+  createNew: boolean;
+  newItemUnit: string;
+  newItemCategoryId: string;
+  newItemTurnoverGroupId: string; // "none" ou o id do grupo
 }
 
 function todayKey(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
 }
 
+function emptyItem(): ItemRow {
+  return {
+    description: "",
+    quantity: 1,
+    unit_cost: 0,
+    inventory_item_id: null,
+    createNew: false,
+    newItemUnit: "un",
+    newItemCategoryId: "",
+    newItemTurnoverGroupId: "none",
+  };
+}
+
 // Formulário de lançamento de compra/despesa — compartilhado entre admin
-// (`/compras/nova`) e funcionário de manutenção (`/manutencao/compras/nova`);
-// a camareira nunca usa este componente (só registra baixa de estoque, ver
-// PRD_compras.md seção 7.2). Foto da nota é opcional, assim como a leitura
-// automática por IA — tudo pode ser preenchido manualmente se a IA não
-// estiver configurada ou a leitura falhar.
+// ("Lançar Compra", menu principal) e funcionário de manutenção
+// ("Lançar Compra", menu principal dele); a camareira nunca usa este
+// componente (só registra baixa de estoque, ver PRD_compras.md seção
+// 7.2). Foto/PDF da nota é opcional, assim como a leitura automática por
+// IA — tudo pode ser preenchido manualmente se a IA não estiver
+// configurada ou a leitura falhar.
 export function ExpenseForm({
   categories,
   inventoryItems,
+  turnoverGroups,
   mode = "create",
   expenseId,
   initial,
 }: {
   categories: ExpenseCategory[];
   inventoryItems: InventoryItemWithBalance[];
+  turnoverGroups: InventoryTurnoverGroup[];
   mode?: "create" | "edit";
   expenseId?: string;
   initial?: ExpenseWithItems;
@@ -68,6 +92,10 @@ export function ExpenseForm({
       quantity: i.quantity,
       unit_cost: i.unit_cost,
       inventory_item_id: i.inventory_item_id,
+      createNew: false,
+      newItemUnit: "un",
+      newItemCategoryId: "",
+      newItemTurnoverGroupId: "none",
     })) ?? []
   );
 
@@ -76,6 +104,7 @@ export function ExpenseForm({
   const [existingReceiptUrl, setExistingReceiptUrl] = useState(initial?.receipt_url ?? null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const inventoryCategories = categories.filter((c) => c.is_inventory_category);
   const itemsTotal = items.reduce((sum, i) => sum + i.quantity * i.unit_cost, 0);
   const total = items.length > 0 ? itemsTotal : Number(manualTotal || 0);
 
@@ -86,9 +115,19 @@ export function ExpenseForm({
     if (file) setExistingReceiptUrl(null);
   }
 
+  // Compara por nome exato (sem diferenciar maiúscula/minúscula) contra o
+  // catálogo já cadastrado — se achar, pré-seleciona o vínculo em vez de
+  // deixar "não controla estoque" por padrão. Nunca cria nada sozinho:
+  // só sugere, a confirmação de criar um item novo continua sendo sempre
+  // manual (ver PRD_compras.md seção 16.6).
+  function matchExistingItem(description: string): InventoryItemWithBalance | undefined {
+    const normalized = description.trim().toLowerCase();
+    return inventoryItems.find((i) => i.name.trim().toLowerCase() === normalized);
+  }
+
   async function handleReadWithAI() {
     if (!receiptFile) {
-      toast.error("Escolha uma foto da nota/recibo primeiro.");
+      toast.error("Escolha ou tire uma foto (ou PDF) da nota/recibo primeiro.");
       return;
     }
     setIsReadingAI(true);
@@ -108,12 +147,19 @@ export function ExpenseForm({
     if (data.payment_method) setPaymentMethod(data.payment_method);
     if (data.items.length > 0) {
       setItems(
-        data.items.map((i) => ({
-          description: i.description,
-          quantity: i.quantity,
-          unit_cost: i.unit_cost,
-          inventory_item_id: null,
-        }))
+        data.items.map((i) => {
+          const match = matchExistingItem(i.description);
+          return {
+            description: i.description,
+            quantity: i.quantity,
+            unit_cost: i.unit_cost,
+            inventory_item_id: match?.id ?? null,
+            createNew: false,
+            newItemUnit: "un",
+            newItemCategoryId: "",
+            newItemTurnoverGroupId: "none",
+          };
+        })
       );
     } else if (data.total_amount) {
       setManualTotal(String(data.total_amount));
@@ -122,11 +168,21 @@ export function ExpenseForm({
   }
 
   function addItemRow() {
-    setItems((prev) => [...prev, { description: "", quantity: 1, unit_cost: 0, inventory_item_id: null }]);
+    setItems((prev) => [...prev, emptyItem()]);
   }
 
   function updateItem(index: number, patch: Partial<ItemRow>) {
     setItems((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  }
+
+  function handleInventoryLinkChange(index: number, value: string) {
+    if (value === "create_new") {
+      updateItem(index, { createNew: true, inventory_item_id: null });
+    } else if (value === "none") {
+      updateItem(index, { createNew: false, inventory_item_id: null });
+    } else {
+      updateItem(index, { createNew: false, inventory_item_id: value });
+    }
   }
 
   function removeItem(index: number) {
@@ -151,6 +207,10 @@ export function ExpenseForm({
       toast.error("Preencha a descrição de todos os itens, ou remova a linha vazia.");
       return;
     }
+    if (items.some((i) => i.createNew && !i.newItemCategoryId)) {
+      toast.error("Selecione a categoria do novo item de estoque, em cada linha que for criar um.");
+      return;
+    }
 
     startTransition(async () => {
       const formData = new FormData();
@@ -170,12 +230,20 @@ export function ExpenseForm({
             unit_cost: i.unit_cost,
             subtotal: i.quantity * i.unit_cost,
             inventory_item_id: i.inventory_item_id,
+            new_item: i.createNew
+              ? {
+                  category_id: i.newItemCategoryId,
+                  unit: i.newItemUnit,
+                  turnover_group_id: i.newItemTurnoverGroupId === "none" ? null : i.newItemTurnoverGroupId,
+                }
+              : null,
           }))
         )
       );
       if (receiptFile) {
-        const compressed = await compressImageForUpload(receiptFile);
-        formData.set("receipt", compressed, "recibo.jpg");
+        const isPdf = receiptFile.type === "application/pdf";
+        const toUpload = isPdf ? receiptFile : await compressImageForUpload(receiptFile);
+        formData.set("receipt", toUpload, isPdf ? "recibo.pdf" : "recibo.jpg");
       }
 
       const result = mode === "edit" && expenseId ? await updateExpense(expenseId, formData) : await createExpense(formData);
@@ -193,19 +261,21 @@ export function ExpenseForm({
     });
   }
 
+  const isPdfSelected = receiptFile?.type === "application/pdf";
+
   return (
     <div className="space-y-4">
       <Card>
         <CardContent className="space-y-3">
-          <h3 className="font-heading text-lg">Foto da nota/recibo (opcional)</h3>
+          <h3 className="font-heading text-lg">Foto ou PDF da nota/recibo (opcional)</h3>
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf"
             className="hidden"
             onChange={(e) => handlePickReceipt(e.target.files?.[0] ?? null)}
           />
-          {receiptPreview && (
+          {receiptPreview && !isPdfSelected && (
             <div className="relative inline-block">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={receiptPreview} alt="Nota selecionada" className="h-32 rounded-lg object-cover border border-border" />
@@ -218,17 +288,31 @@ export function ExpenseForm({
               </button>
             </div>
           )}
-          {!receiptPreview && existingReceiptUrl && (
+          {receiptFile && isPdfSelected && (
+            <div className="relative inline-flex items-center gap-2 rounded-lg border border-border p-3">
+              <FileText size={20} className="text-muted-foreground" />
+              <span className="text-sm">{receiptFile.name}</span>
+              <button
+                type="button"
+                className="rounded-full bg-background border border-border p-0.5 text-muted-foreground"
+                onClick={() => handlePickReceipt(null)}
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+          {!receiptFile && existingReceiptUrl && (
             <p className="text-sm">
               <a href={existingReceiptUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-                Ver foto já anexada
+                Ver arquivo já anexado
               </a>{" "}
-              <span className="text-muted-foreground">— escolha outra foto abaixo pra substituir.</span>
+              <span className="text-muted-foreground">— escolha outro abaixo pra substituir.</span>
             </p>
           )}
           <div className="flex flex-wrap gap-2">
+            <CameraCaptureButton onCapture={handlePickReceipt} label="Tirar foto" />
             <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
-              <Camera size={16} /> {receiptFile ? "Trocar foto" : "Tirar/escolher foto"}
+              <FolderOpen size={16} /> Escolher arquivo
             </Button>
             <Button type="button" variant="outline" onClick={handleReadWithAI} disabled={!receiptFile || isReadingAI}>
               <Sparkles size={16} /> {isReadingAI ? "Lendo..." : "Ler nota com IA"}
@@ -236,7 +320,7 @@ export function ExpenseForm({
           </div>
           <p className="text-xs text-muted-foreground">
             A leitura automática preenche fornecedor, data, forma de pagamento e itens — confira tudo antes de salvar.
-            Se não for possível ler, preencha os campos manualmente abaixo.
+            Se não for possível ler, preencha os campos manualmente abaixo. Aceita foto ou PDF da nota.
           </p>
         </CardContent>
       </Card>
@@ -365,16 +449,21 @@ export function ExpenseForm({
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Vincular a item de estoque (opcional)</Label>
                 <Select
-                  value={item.inventory_item_id ?? "none"}
-                  onValueChange={(v) => updateItem(index, { inventory_item_id: v === "none" ? null : (v ?? null) })}
+                  value={item.createNew ? "create_new" : item.inventory_item_id ?? "none"}
+                  onValueChange={(v) => v && handleInventoryLinkChange(index, v)}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Não controla estoque">
-                      {(v: string) => inventoryItems.find((i) => i.id === v)?.name ?? "Não controla estoque"}
+                      {(v: string) =>
+                        v === "create_new"
+                          ? "Criar novo item de estoque"
+                          : inventoryItems.find((i) => i.id === v)?.name ?? "Não controla estoque"
+                      }
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Não controla estoque</SelectItem>
+                    <SelectItem value="create_new">+ Criar novo item de estoque</SelectItem>
                     {inventoryItems.map((i) => (
                       <SelectItem key={i.id} value={i.id}>
                         {i.name} (saldo: {i.balance} {i.unit})
@@ -383,6 +472,60 @@ export function ExpenseForm({
                   </SelectContent>
                 </Select>
               </div>
+
+              {item.createNew && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 rounded-lg bg-muted/40 p-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Categoria do novo item</Label>
+                    <Select
+                      value={item.newItemCategoryId}
+                      onValueChange={(v) => updateItem(index, { newItemCategoryId: v ?? "" })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Selecione">
+                          {(v: string) => inventoryCategories.find((c) => c.id === v)?.name ?? v}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {inventoryCategories.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Unidade</Label>
+                    <Input
+                      value={item.newItemUnit}
+                      onChange={(e) => updateItem(index, { newItemUnit: e.target.value })}
+                      placeholder="un, kg, L..."
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Grupo de giro (opcional)</Label>
+                    <Select
+                      value={item.newItemTurnoverGroupId}
+                      onValueChange={(v) => updateItem(index, { newItemTurnoverGroupId: v ?? "none" })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Nenhum">
+                          {(v: string) => (v === "none" ? "Nenhum" : turnoverGroups.find((g) => g.id === v)?.name ?? v)}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Nenhum</SelectItem>
+                        {turnoverGroups.map((g) => (
+                          <SelectItem key={g.id} value={g.id}>
+                            {g.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
 

@@ -27,6 +27,8 @@ import {
   ShoppingCart,
   PackageMinus,
   ShoppingBasket,
+  Plus,
+  Archive,
 } from "lucide-react";
 
 interface NavItem {
@@ -40,11 +42,14 @@ interface NavItem {
 
 const adminNav: NavItem[] = [
   { href: "/dashboard", label: "Resumo executivo", icon: LayoutDashboard },
+  { href: "/compras/nova", label: "Lançar Compra", icon: Plus },
+  { href: "/compras/lista", label: "Lista de compras", icon: ShoppingBasket },
   { href: "/planejamento", label: "Planejamento diário", icon: ClipboardCheck, frequent: true },
   { href: "/chegadas-saidas/gerenciar", label: "Chegadas & saídas", icon: CalendarClock, frequent: true },
   { href: "/mesas/gerenciar", label: "Mesas do café", icon: Coffee, frequent: true },
   { href: "/frigobar", label: "Consumo de Bar e Frigobar", icon: Wine, frequent: true },
-  { href: "/compras", label: "Compras e Estoque", icon: ShoppingCart },
+  { href: "/compras", label: "Estoque", icon: ShoppingCart },
+  { href: "/ativo-permanente", label: "Ativo Permanente", icon: Archive },
   { href: "/checklists", label: "Listas", icon: ClipboardList },
   { href: "/manutencao-preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
   { href: "/usuarios", label: "Usuários", icon: Users },
@@ -67,7 +72,7 @@ const manutencaoNav: NavItem[] = [
   { href: "/manutencao/preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
   { href: "/manutencao/estoque", label: "Baixa de estoque", icon: PackageMinus },
   { href: "/manutencao/pedidos-compra", label: "Pedidos de compra", icon: ShoppingBasket },
-  { href: "/manutencao/compras", label: "Compras", icon: ShoppingCart },
+  { href: "/manutencao/compras", label: "Lançar Compra", icon: ShoppingCart },
 ];
 
 function SidebarContent({
@@ -94,7 +99,17 @@ function SidebarContent({
 
       <nav className="flex-1 min-h-0 overflow-y-auto px-3 space-y-1">
         {items.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          const matches = (href: string) => pathname === href || pathname.startsWith(href + "/");
+          // Se outro item do mesmo menu tem um caminho mais específico que
+          // também bate (ex.: "/compras/nova" dentro de "/compras"), esse
+          // outro item "ganha" o realce — sem isso, "Estoque" (/compras)
+          // ficaria marcado como ativo também ao visitar "Lançar Compra"
+          // (/compras/nova), que é uma rota promovida ao menu principal
+          // mas que continua vivendo sob o mesmo prefixo de URL.
+          const moreSpecificItemMatches = items.some(
+            (other) => other.href !== item.href && other.href.startsWith(item.href + "/") && matches(other.href)
+          );
+          const active = matches(item.href) && !moreSpecificItemMatches;
           return (
             <Link
               key={item.href}
