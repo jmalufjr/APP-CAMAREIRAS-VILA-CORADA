@@ -15,6 +15,7 @@ export type PaymentMethod =
   | "boleto";
 export type InventoryMovementType = "compra" | "baixa_manual" | "baixa_consumo_hospede" | "ajuste_contagem";
 export type InventoryCountStatus = "em_andamento" | "concluida";
+export type PurchaseRequestStatus = "pendente" | "atendido" | "cancelado";
 // 'unica' cobre o dia normal (1 conta por suíte, como sempre foi); os
 // outros dois só existem num dia de Saída com Chegada em que a conta do
 // hóspede que sai ainda não foi paga quando o hóspede novo chega.
@@ -313,6 +314,13 @@ export interface ExpenseCategory {
   created_at: string;
 }
 
+export interface InventoryTurnoverGroup {
+  id: string;
+  name: string;
+  coverage_days: number;
+  created_at: string;
+}
+
 export interface InventoryItem {
   id: string;
   name: string;
@@ -320,11 +328,34 @@ export interface InventoryItem {
   unit: string;
   barcode: string | null;
   reorder_point: number;
-  linked_minibar_item_id: string | null;
-  linked_poolbar_item_id: string | null;
+  turnover_group_id: string | null;
+  portion_weight_kg: number | null;
   active: boolean;
   position: number;
   created_at: string;
+}
+
+// Ficha técnica: qual(is) produto(s) do cardápio (frigobar OU bar da
+// piscina, nunca os dois) consomem este ingrediente, e quantas porções
+// por pedido.
+export interface InventoryItemRecipe {
+  id: string;
+  inventory_item_id: string;
+  minibar_item_id: string | null;
+  poolbar_item_id: string | null;
+  portions_per_order: number;
+  created_at: string;
+}
+
+export interface PurchaseRequest {
+  id: string;
+  inventory_item_id: string;
+  requested_qty: number;
+  notes: string | null;
+  status: PurchaseRequestStatus;
+  requested_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Expense {

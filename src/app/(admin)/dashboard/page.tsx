@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { getBarCommissionByCamareira } from "@/lib/actions/comandas";
 import { getBreakfastCommissionPotForRange } from "@/lib/actions/breakfast-commission";
-import { getLowStockItems } from "@/lib/actions/inventory-items";
+import { getItemsNeedingPurchaseCount } from "@/lib/actions/purchase-list";
 import { SyncStaysAllButton } from "./sync-stays-all-button";
 import {
   BedDouble,
@@ -58,7 +58,7 @@ export default async function DashboardPage() {
     { count: occurrencesToday },
     barCommission,
     totalCommissionMonth,
-    lowStockItems,
+    itemsNeedingPurchaseCount,
   ] = await Promise.all([
     supabase.from("daily_room_tasks").select("status").eq("date", today),
     // Suítes elegíveis pro café da manhã hoje (independente de terem sido
@@ -77,7 +77,7 @@ export default async function DashboardPage() {
       .eq("daily_room_tasks.date", today),
     getBarCommissionByCamareira(),
     getBreakfastCommissionPotForRange(start, end),
-    getLowStockItems(),
+    getItemsNeedingPurchaseCount(),
   ]);
 
   const doneToday = (todayTasks ?? []).filter((t) => t.status === "concluido").length;
@@ -123,13 +123,13 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {lowStockItems.length > 0 && (
+      {itemsNeedingPurchaseCount > 0 && (
         <Link
-          href="/compras"
+          href="/compras/lista"
           className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive hover:bg-destructive/15 transition-colors w-fit"
         >
           <AlertTriangle size={16} />
-          {lowStockItems.length} item(ns) de estoque abaixo do ponto de reposição
+          {itemsNeedingPurchaseCount} item(ns) precisam de compra
           <ChevronRight size={14} />
         </Link>
       )}

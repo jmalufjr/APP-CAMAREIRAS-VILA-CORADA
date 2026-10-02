@@ -3,75 +3,55 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type { InventoryItemWithBalance } from "@/lib/actions/inventory-items";
-import { deleteInventoryItem, linkInventoryItemToCatalog } from "@/lib/actions/inventory-items";
-import type { ExpenseCategory, MinibarItem, PoolbarItem } from "@/lib/types";
+import type { InventoryItemWithBalance, InventoryItemRecipeView } from "@/lib/actions/inventory-items";
+import { deleteInventoryItem } from "@/lib/actions/inventory-items";
+import type { ExpenseCategory, InventoryTurnoverGroup, MinibarItem, PoolbarItem } from "@/lib/types";
 import { InventoryItemFormDialog } from "./inventory-item-form-dialog";
+import { InventoryItemRecipesSection } from "./inventory-item-recipes-section";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2 } from "lucide-react";
-
-function linkKey(item: InventoryItemWithBalance): string {
-  if (item.linked_minibar_item_id) return `minibar:${item.linked_minibar_item_id}`;
-  if (item.linked_poolbar_item_id) return `poolbar:${item.linked_poolbar_item_id}`;
-  return "none";
-}
 
 export function InventoryItemsPanel({
   items,
   categories,
+  turnoverGroups,
+  recipesByItem,
   minibarItems,
   poolbarItems,
 }: {
   items: InventoryItemWithBalance[];
   categories: ExpenseCategory[];
+  turnoverGroups: InventoryTurnoverGroup[];
+  recipesByItem: Record<string, InventoryItemRecipeView[]>;
   minibarItems: MinibarItem[];
   poolbarItems: PoolbarItem[];
 }) {
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const router = useRouter();
-
-  function linkLabel(key: string): string {
-    if (key === "none") return "Baixa automática: nenhuma";
-    const [kind, id] = key.split(":");
-    if (kind === "minibar") return `Frigobar: ${minibarItems.find((i) => i.id === id)?.name ?? "—"}`;
-    return `Bar da piscina: ${poolbarItems.find((i) => i.id === id)?.name ?? "—"}`;
-  }
-
-  function handleLinkChange(itemId: string, value: string) {
-    startTransition(async () => {
-      let result;
-      if (value === "none") result = await linkInventoryItemToCatalog(itemId, "none", null);
-      else {
-        const [kind, id] = value.split(":");
-        result = await linkInventoryItemToCatalog(itemId, kind as "minibar" | "poolbar", id);
-      }
-      if (result?.error) toast.error(result.error);
-      else router.refresh();
-    });
-  }
 
   return (
     <div className="space-y-4">
-      <InventoryItemFormDialog categories={categories} />
+      <InventoryItemFormDialog categories={categories} turnoverGroups={turnoverGroups} />
 
       <div className="space-y-2">
         {items.map((item) => (
-          <div key={item.id} className="rounded-lg border border-border bg-card p-3 space-y-2">
+          <div key={item.id} className="rounded-lg border border-border bg-card p-3 space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-medium">{item.name}</p>
                 <p className="text-xs text-muted-foreground">
                   {item.category_name} · {item.unit}
                   {item.barcode ? ` · cód. ${item.barcode}` : ""}
+                  {item.turnover_group_name ? ` · giro: ${item.turnover_group_name}` : " · sem grupo de giro"}
+                  {item.portion_weight_kg ? ` · ${item.portion_weight_kg} kg/porção` : ""}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant={item.reorder_point > 0 && item.balance < item.reorder_point ? "destructive" : "secondary"}>
                   Saldo: {item.balance} {item.unit}
                 </Badge>
-                <InventoryItemFormDialog item={item} categories={categories} />
+                <InventoryItemFormDialog item={item} categories={categories} turnoverGroups={turnoverGroups} />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -89,33 +69,12 @@ export function InventoryItemsPanel({
               </div>
             </div>
 
-            <div className="max-w-sm space-y-1">
-              <p className="text-xs text-muted-foreground">
-                Baixa automática do estoque quando um hóspede paga a conta com este item consumido:
-              </p>
-              <Select
-                value={linkKey(item)}
-                onValueChange={(v) => v && handleLinkChange(item.id, v)}
-                disabled={isPending}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Nenhuma">{(v: string) => linkLabel(v)}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Nenhuma</SelectItem>
-                  {minibarItems.map((m) => (
-                    <SelectItem key={`minibar:${m.id}`} value={`minibar:${m.id}`}>
-                      Frigobar: {m.name}
-                    </SelectItem>
-                  ))}
-                  {poolbarItems.map((p) => (
-                    <SelectItem key={`poolbar:${p.id}`} value={`poolbar:${p.id}`}>
-                      Bar da piscina: {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <InventoryItemRecipesSection
+              inventoryItemId={item.id}
+              recipes={recipesByItem[item.id] ?? []}
+              minibarItems={minibarItems}
+              poolbarItems={poolbarItems}
+            />
           </div>
         ))}
         {items.length === 0 && <p className="text-sm text-muted-foreground py-4">Nenhum item de estoque cadastrado.</p>}

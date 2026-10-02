@@ -2,18 +2,21 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { InventoryItem } from "@/lib/types";
+import type { InventoryItem, InventoryItemRecipe } from "@/lib/types";
 
 function revalidateAll() {
   revalidatePath("/compras", "layout");
   revalidatePath("/estoque", "layout");
   revalidatePath("/manutencao/estoque", "layout");
   revalidatePath("/manutencao/compras", "layout");
+  revalidatePath("/pedidos-compra", "layout");
+  revalidatePath("/manutencao/pedidos-compra", "layout");
   revalidatePath("/dashboard");
 }
 
 export interface InventoryItemWithBalance extends InventoryItem {
   category_name: string;
+  turnover_group_name: string | null;
   balance: number;
 }
 
@@ -25,13 +28,17 @@ export async function getInventoryItems(onlyActive = true): Promise<InventoryIte
   const supabase = await createClient();
   let query = supabase
     .from("inventory_items")
-    .select("*, expense_categories(name)")
+    .select("*, expense_categories(name), inventory_turnover_groups(name)")
     .order("position")
     .order("name");
   if (onlyActive) query = query.eq("active", true);
   const { data } = await query;
 
-  const items = (data ?? []) as unknown as (InventoryItem & { expense_categories: { name: string } | null })[];
+  type Raw = InventoryItem & {
+    expense_categories: { name: string } | null;
+    inventory_turnover_groups: { name: string } | null;
+  };
+  const items = (data ?? []) as unknown as Raw[];
   if (items.length === 0) return [];
 
   const { data: balances } = await supabase
@@ -46,15 +53,9 @@ export async function getInventoryItems(onlyActive = true): Promise<InventoryIte
   return items.map((i) => ({
     ...i,
     category_name: i.expense_categories?.name ?? "—",
+    turnover_group_name: i.inventory_turnover_groups?.name ?? null,
     balance: balanceMap.get(i.id) ?? 0,
   }));
-}
-
-// Itens com saldo abaixo do ponto de reposição — card "Itens com estoque
-// baixo" do Resumo Executivo e lista de apoio na tela de compras.
-export async function getLowStockItems(): Promise<InventoryItemWithBalance[]> {
-  const items = await getInventoryItems(true);
-  return items.filter((i) => i.reorder_point > 0 && i.balance < i.reorder_point);
 }
 
 export async function findInventoryItemByBarcode(barcode: string): Promise<InventoryItemWithBalance | null> {
@@ -69,13 +70,16 @@ export async function createInventoryItem(formData: FormData) {
   const barcode = String(formData.get("barcode") ?? "").trim() || null;
   const reorderRaw = String(formData.get("reorder_point") ?? "").trim();
   const reorder_point = reorderRaw ? Number(reorderRaw) : 0;
+  const turnover_group_id = String(formData.get("turnover_group_id") ?? "").trim() || null;
+  const portionWeightRaw = String(formData.get("portion_weight_kg") ?? "").trim();
+  const portion_weight_kg = portionWeightRaw ? Number(portionWeightRaw) : null;
 
   if (!name || !category_id) return { error: "Informe o nome e a categoria do item." };
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("inventory_items")
-    .insert({ name, category_id, unit, barcode, reorder_point })
+    .insert({ name, category_id, unit, barcode, reorder_point, turnover_group_id, portion_weight_kg })
     .select("id")
     .single();
 
@@ -94,6 +98,9 @@ export async function updateInventoryItem(id: string, formData: FormData) {
   const barcode = String(formData.get("barcode") ?? "").trim() || null;
   const reorderRaw = String(formData.get("reorder_point") ?? "").trim();
   const reorder_point = reorderRaw ? Number(reorderRaw) : 0;
+  const turnover_group_id = String(formData.get("turnover_group_id") ?? "").trim() || null;
+  const portionWeightRaw = String(formData.get("portion_weight_kg") ?? "").trim();
+  const portion_weight_kg = portionWeightRaw ? Number(portionWeightRaw) : null;
   const active = formData.get("active") === "on";
 
   if (!name || !category_id) return { error: "Informe o nome e a categoria do item." };
@@ -101,7 +108,7 @@ export async function updateInventoryItem(id: string, formData: FormData) {
   const supabase = await createClient();
   const { error } = await supabase
     .from("inventory_items")
-    .update({ name, category_id, unit, barcode, reorder_point, active })
+    .update({ name, category_id, unit, barcode, reorder_point, turnover_group_id, portion_weight_kg, active })
     .eq("id", id);
 
   if (error) {
@@ -120,23 +127,83 @@ export async function deleteInventoryItem(id: string) {
   return { success: true };
 }
 
-// Liga/desliga um item de estoque a um item de frigobar/poolbar (baixa
-// automática ao pagar a conta — ver PRD_compras.md seção 5.4). Só um dos
-// dois por vez (igual à constraint do banco).
-export async function linkInventoryItemToCatalog(
-  id: string,
-  kind: "minibar" | "poolbar" | "none",
-  catalogItemId: string | null
-) {
-  const supabase = await createClient();
-  const payload =
-    kind === "minibar"
-      ? { linked_minibar_item_id: catalogItemId, linked_poolbar_item_id: null }
-      : kind === "poolbar"
-        ? { linked_minibar_item_id: null, linked_poolbar_item_id: catalogItemId }
-        : { linked_minibar_item_id: null, linked_poolbar_item_id: null };
+// ---------- Ficha técnica (receita): ingrediente(s) por produto do cardápio ----------
 
-  const { error } = await supabase.from("inventory_items").update(payload).eq("id", id);
+export interface InventoryItemRecipeView extends InventoryItemRecipe {
+  catalog_name: string;
+  catalog_kind: "minibar" | "poolbar";
+}
+
+type RecipeRaw = InventoryItemRecipe & {
+  minibar_items: { name: string } | null;
+  poolbar_items: { name: string } | null;
+};
+
+function mapRecipeRow(r: RecipeRaw): InventoryItemRecipeView {
+  return {
+    ...r,
+    catalog_kind: r.minibar_item_id ? "minibar" : "poolbar",
+    catalog_name: r.minibar_items?.name ?? r.poolbar_items?.name ?? "—",
+  };
+}
+
+export async function getInventoryItemRecipes(inventoryItemId: string): Promise<InventoryItemRecipeView[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("inventory_item_recipes")
+    .select("*, minibar_items(name), poolbar_items(name)")
+    .eq("inventory_item_id", inventoryItemId)
+    .order("created_at");
+
+  return ((data ?? []) as unknown as RecipeRaw[]).map(mapRecipeRow);
+}
+
+// Todas as fichas técnicas já cadastradas, agrupadas por item de estoque
+// — usado pela tela "Itens de estoque" pra não precisar de uma consulta
+// por item.
+export async function getAllInventoryItemRecipesGrouped(): Promise<Record<string, InventoryItemRecipeView[]>> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("inventory_item_recipes")
+    .select("*, minibar_items(name), poolbar_items(name)")
+    .order("created_at");
+
+  const grouped: Record<string, InventoryItemRecipeView[]> = {};
+  ((data ?? []) as unknown as RecipeRaw[]).forEach((r) => {
+    const view = mapRecipeRow(r);
+    (grouped[r.inventory_item_id] ??= []).push(view);
+  });
+  return grouped;
+}
+
+export async function addInventoryItemRecipe(
+  inventoryItemId: string,
+  kind: "minibar" | "poolbar",
+  catalogItemId: string,
+  portionsPerOrder: number
+) {
+  if (!catalogItemId) return { error: "Selecione o produto do cardápio." };
+  if (portionsPerOrder <= 0) return { error: "Informe uma quantidade de porções maior que zero." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("inventory_item_recipes").insert({
+    inventory_item_id: inventoryItemId,
+    minibar_item_id: kind === "minibar" ? catalogItemId : null,
+    poolbar_item_id: kind === "poolbar" ? catalogItemId : null,
+    portions_per_order: portionsPerOrder,
+  });
+
+  if (error) {
+    if (error.code === "23505") return { error: "Este produto já está ligado a este ingrediente." };
+    return { error: error.message };
+  }
+  revalidateAll();
+  return { success: true };
+}
+
+export async function removeInventoryItemRecipe(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("inventory_item_recipes").delete().eq("id", id);
   if (error) return { error: error.message };
   revalidateAll();
   return { success: true };

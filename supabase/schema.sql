@@ -39,6 +39,7 @@ create type inventory_movement_type as enum (
   'ajuste_contagem'
 );
 create type inventory_count_status as enum ('em_andamento', 'concluida');
+create type purchase_request_status as enum ('pendente', 'atendido', 'cancelado');
 
 -- ---------- PROFILES ----------
 -- Espelha auth.users com dados de perfil e papel (admin | camareira)
@@ -1614,7 +1615,22 @@ create table expense_categories (
   created_at timestamptz not null default now()
 );
 
+-- ---------- GRUPOS DE GIRO (ciclo de reposição por categoria de controle fino) ----------
+-- coverage_days: "dias de folga" daquele grupo — editável pelo admin.
+create table inventory_turnover_groups (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null unique,
+  coverage_days int not null check (coverage_days > 0),
+  created_at timestamptz not null default now()
+);
+
 -- ---------- INVENTORY ITEMS (catálogo de itens controláveis em estoque) ----------
+-- turnover_group_id: opcional — itens perecíveis (ex.: frutas do café da
+-- manhã) nunca recebem grupo, então nunca têm ponto de reposição
+-- calculado, só o controle visual via pedidos de compra.
+-- portion_weight_kg: só pros itens controlados por "porção" (ex.:
+-- macaxeira, camarão, filé mignon) — peso médio de 1 porção em kg, usado
+-- só pra converter "porções necessárias" em "kg a comprar".
 create table inventory_items (
   id uuid primary key default uuid_generate_v4(),
   name text not null,
@@ -1622,12 +1638,52 @@ create table inventory_items (
   unit text not null default 'un',
   barcode text unique,
   reorder_point numeric(12,3) not null default 0,
-  linked_minibar_item_id uuid references minibar_items(id) on delete set null,
-  linked_poolbar_item_id uuid references poolbar_items(id) on delete set null,
+  turnover_group_id uuid references inventory_turnover_groups(id) on delete set null,
+  portion_weight_kg numeric(10,4),
   active boolean not null default true,
   position int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- ---------- FICHA TÉCNICA (receita): ingrediente(s) por produto do cardápio ----------
+-- Um ingrediente pode alimentar vários produtos (frigobar OU bar da
+-- piscina, nunca os dois na mesma linha), e um produto pode consumir
+-- vários ingredientes. portions_per_order: quantas porções daquele
+-- ingrediente um pedido do produto consome. O estoque e a lista de
+-- compras sempre mostram só o ingrediente, nunca a origem (frigobar/bar,
+-- qual prato) — ver PRD_compras.md.
+create table inventory_item_recipes (
+  id uuid primary key default uuid_generate_v4(),
+  inventory_item_id uuid not null references inventory_items(id) on delete cascade,
+  minibar_item_id uuid references minibar_items(id) on delete cascade,
+  poolbar_item_id uuid references poolbar_items(id) on delete cascade,
+  portions_per_order numeric(10,3) not null default 1 check (portions_per_order > 0),
   created_at timestamptz not null default now(),
-  check (linked_minibar_item_id is null or linked_poolbar_item_id is null)
+  check (
+    (minibar_item_id is not null and poolbar_item_id is null) or
+    (minibar_item_id is null and poolbar_item_id is not null)
+  )
+);
+create unique index inv_item_recipes_minibar_uq on inventory_item_recipes (inventory_item_id, minibar_item_id)
+  where minibar_item_id is not null;
+create unique index inv_item_recipes_poolbar_uq on inventory_item_recipes (inventory_item_id, poolbar_item_id)
+  where poolbar_item_id is not null;
+
+-- ---------- PEDIDOS DE COMPRA (sinal visual da camareira/manutenção) ----------
+-- Cada pedido é uma linha própria, nunca mesclada com outra — pedidos
+-- pendentes do mesmo item se somam na visão do admin. Quem pediu pode
+-- editar/cancelar só o próprio pedido, enquanto 'pendente'; o admin só
+-- cancela "o total" de um item (todas as linhas pendentes de uma vez) via
+-- cancel_purchase_requests_for_item.
+create table purchase_requests (
+  id uuid primary key default uuid_generate_v4(),
+  inventory_item_id uuid not null references inventory_items(id) on delete cascade,
+  requested_qty numeric(12,3) not null check (requested_qty > 0),
+  notes text,
+  status purchase_request_status not null default 'pendente',
+  requested_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 -- ---------- EXPENSES (despesas/compras — cabeçalho) ----------
@@ -1699,7 +1755,10 @@ from inventory_movements
 group by inventory_item_id;
 
 alter table expense_categories enable row level security;
+alter table inventory_turnover_groups enable row level security;
 alter table inventory_items enable row level security;
+alter table inventory_item_recipes enable row level security;
+alter table purchase_requests enable row level security;
 alter table expenses enable row level security;
 alter table expense_items enable row level security;
 alter table inventory_count_sessions enable row level security;
@@ -1711,11 +1770,31 @@ create policy "exp_cat_admin_insert" on expense_categories for insert with check
 create policy "exp_cat_admin_update" on expense_categories for update using (is_admin());
 create policy "exp_cat_admin_delete" on expense_categories for delete using (is_admin());
 
+create policy "inv_turnover_groups_select_authenticated" on inventory_turnover_groups
+  for select using (auth.uid() is not null);
+create policy "inv_turnover_groups_admin_write" on inventory_turnover_groups
+  for all using (is_admin()) with check (is_admin());
+
 create policy "inv_items_select_authenticated" on inventory_items for select using (auth.uid() is not null);
 create policy "inv_items_insert_admin_manutencao" on inventory_items for insert
   with check (is_admin() or is_manutencao());
 create policy "inv_items_admin_update" on inventory_items for update using (is_admin());
 create policy "inv_items_admin_delete" on inventory_items for delete using (is_admin());
+
+create policy "inv_recipes_select_authenticated" on inventory_item_recipes
+  for select using (auth.uid() is not null);
+create policy "inv_recipes_admin_write" on inventory_item_recipes
+  for all using (is_admin()) with check (is_admin());
+
+create policy "purchase_req_select_own_or_admin" on purchase_requests
+  for select using (requested_by = auth.uid() or is_admin());
+create policy "purchase_req_insert_own" on purchase_requests
+  for insert with check (
+    requested_by = auth.uid() and (is_camareira() or is_manutencao() or is_admin())
+  );
+create policy "purchase_req_update_own_pending" on purchase_requests
+  for update using (requested_by = auth.uid() and status = 'pendente')
+  with check (requested_by = auth.uid());
 
 create policy "expenses_select_admin_manutencao" on expenses for select
   using (is_admin() or is_manutencao());
@@ -1745,7 +1824,13 @@ create policy "inv_mov_insert_baixa_manual" on inventory_movements for insert
 create policy "inv_mov_admin_all" on inventory_movements for all using (is_admin()) with check (is_admin());
 
 -- Entrada de estoque automática ao lançar um item de compra — mesmo
--- espírito do histórico de mudanças via trigger da Parte 44.
+-- espírito do histórico de mudanças via trigger da Parte 44. Qualquer
+-- compra do item também resolve TODOS os pedidos de compra pendentes
+-- dele (status 'atendido'), independentemente da quantidade comprada ter
+-- sido suficiente ou não — o pedido da equipe é só um sinal visual, não
+-- uma meta a bater. A sugestão CALCULADA pelo sistema continua refletindo
+-- sozinha uma compra insuficiente, por nunca ser persistida (ver view
+-- inventory_purchase_suggestions mais abaixo).
 create or replace function create_movement_from_expense_item() returns trigger as $$
 begin
   if new.inventory_item_id is not null then
@@ -1757,6 +1842,10 @@ begin
       new.id,
       (select created_by from expenses where id = new.expense_id)
     );
+
+    update purchase_requests
+    set status = 'atendido', updated_at = now()
+    where inventory_item_id = new.inventory_item_id and status = 'pendente';
   end if;
   return new;
 end;
@@ -1766,25 +1855,30 @@ create trigger expense_items_create_movement
 after insert on expense_items
 for each row execute function create_movement_from_expense_item();
 
--- Baixa automática de estoque ao pagar uma conta de frigobar/bar — só
--- pros itens que o admin tiver explicitamente ligado a um item de
--- estoque (ver PRD_compras.md seção 5.4).
+-- Baixa automática de estoque ao pagar uma conta de frigobar/bar — via
+-- ficha técnica (inventory_item_recipes), que substitui o vínculo
+-- 1-pra-1 original: soma por TODOS os produtos do cardápio ligados a cada
+-- ingrediente, multiplicando pela quantidade consumida e por
+-- portions_per_order — é o que permite um ingrediente (ex.: macaxeira)
+-- ser compartilhado entre vários pratos sem duplicar cadastro.
 create or replace function deduct_inventory_on_bill_payment() returns trigger as $$
 begin
   if new.status = 'paga' and (old.status is null or old.status is distinct from 'paga') then
     insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
-    select ii.id, 'baixa_consumo_hospede', -mbi.quantity, new.id, 'Baixa automática ao pagar a conta (frigobar)'
+    select r.inventory_item_id, 'baixa_consumo_hospede', -(mbi.quantity * r.portions_per_order), new.id,
+      'Baixa automática ao pagar a conta (frigobar)'
     from room_bill_minibar_items mbi
-    join inventory_items ii on ii.linked_minibar_item_id = mbi.minibar_item_id
+    join inventory_item_recipes r on r.minibar_item_id = mbi.minibar_item_id
     where mbi.bill_id = new.id and mbi.quantity > 0;
 
     insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
-    select ii.id, 'baixa_consumo_hospede', -sum(bci.quantity), new.id, 'Baixa automática ao pagar a conta (bar da piscina)'
+    select r.inventory_item_id, 'baixa_consumo_hospede', -sum(bci.quantity * r.portions_per_order), new.id,
+      'Baixa automática ao pagar a conta (bar da piscina)'
     from bar_comanda_items bci
     join bar_comandas bc on bc.id = bci.comanda_id
-    join inventory_items ii on ii.linked_poolbar_item_id = bci.poolbar_item_id
+    join inventory_item_recipes r on r.poolbar_item_id = bci.poolbar_item_id
     where bc.bill_id = new.id and bc.status <> 'cancelada' and bci.quantity > 0
-    group by ii.id;
+    group by r.inventory_item_id;
   end if;
   return new;
 end;
@@ -1821,6 +1915,53 @@ begin
 end;
 $$ language plpgsql security definer;
 
+-- Cancelamento em massa de pedidos de compra pelo admin (security definer
+-- porque mexe em linhas de outras pessoas, fora da policy "própria e
+-- pendente" de purchase_requests).
+create or replace function cancel_purchase_requests_for_item(p_inventory_item_id uuid) returns void as $$
+begin
+  if not is_admin() then
+    raise exception 'not authorized';
+  end if;
+  update purchase_requests
+  set status = 'cancelado', updated_at = now()
+  where inventory_item_id = p_inventory_item_id and status = 'pendente';
+end;
+$$ language plpgsql security definer;
+
+-- Giro semanal (consumo real dos últimos 60 dias, convertido pra "por
+-- semana" só pra legibilidade — o cálculo continua em dias por baixo).
+create view inventory_weekly_turnover
+with (security_invoker = true) as
+select inventory_item_id,
+  (coalesce(sum(-quantity), 0) / 60.0) * 7 as weekly_consumption
+from inventory_movements
+where movement_type in ('baixa_manual', 'baixa_consumo_hospede')
+  and created_at >= now() - interval '60 days'
+group by inventory_item_id;
+
+-- Ponto de reposição calculado = giro semanal ÷ 7 × dias de folga do
+-- grupo do item — só existe (não nulo) quando o item tem grupo de giro;
+-- "sem dado" (null) é sempre diferente de "zero" (ver PRD_compras.md).
+create view inventory_purchase_suggestions
+with (security_invoker = true) as
+select
+  ii.id as inventory_item_id,
+  coalesce(ib.balance, 0) as balance,
+  coalesce(wt.weekly_consumption, 0) as weekly_consumption,
+  tg.coverage_days,
+  case when tg.coverage_days is not null
+    then (coalesce(wt.weekly_consumption, 0) / 7.0) * tg.coverage_days
+    else null
+  end as calculated_reorder_point,
+  ii.reorder_point as manual_reorder_point,
+  ii.portion_weight_kg
+from inventory_items ii
+left join inventory_balances ib on ib.inventory_item_id = ii.id
+left join inventory_weekly_turnover wt on wt.inventory_item_id = ii.id
+left join inventory_turnover_groups tg on tg.id = ii.turnover_group_id
+where ii.active;
+
 -- Bucket privado pras fotos de recibo/nota — mesmo padrão de
 -- "occurrence-photos" acima.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -1848,4 +1989,17 @@ insert into expense_categories (name, is_inventory_category, position) values
   ('Serviços profissionais', false, 11),
   ('Impostos e taxas', false, 12),
   ('Outras', false, 13)
+on conflict (name) do nothing;
+
+-- Grupos de giro iniciais (ciclo de reposição por categoria de controle
+-- fino — ver PRD_compras.md). Itens perecíveis (ex.: frutas do café da
+-- manhã) propositalmente não entram em nenhum grupo.
+insert into inventory_turnover_groups (name, coverage_days) values
+  ('Limpeza', 7),
+  ('Bebidas não alcoólicas', 7),
+  ('Alimentos (petiscos do bar da piscina)', 7),
+  ('Alimentos (café da manhã)', 7),
+  ('Bebidas alcoólicas', 60),
+  ('Materiais de piscina', 60),
+  ('Materiais de manutenção', 30)
 on conflict (name) do nothing;

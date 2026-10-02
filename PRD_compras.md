@@ -1,10 +1,11 @@
 # PRD — Módulo de Compras, Despesas e Controle de Estoque
 
-> Documento de estudo e proposta, preparado antes de qualquer implementação
-> — nenhuma linha de código foi escrita ainda. Segue o mesmo formato dos
-> demais `PRD_*.md` deste projeto: um registro vivo que vai sendo
-> atualizado conforme decisões forem tomadas e a implementação avançar.
-> **Aguardando decisão do proprietário antes de prosseguir.**
+> Documento de estudo e proposta, preparado antes de qualquer implementação.
+> Segue o mesmo formato dos demais `PRD_*.md` deste projeto: um registro
+> vivo que vai sendo atualizado conforme decisões forem tomadas e a
+> implementação avançar. **Plano aprovado e implementado (seções 1-14, e a
+> segunda leva na seção 15) na branch `feature/compras` — testado
+> localmente, aguardando aprovação pra merge em `main`/produção.**
 
 ## 1. Contexto e objetivo
 
@@ -499,5 +500,130 @@ segurança, não como único mecanismo de controle; e (6) é construído numa
 branch separada, testado localmente, sem nenhum risco pro app que já está
 em produção.
 
-Aguardando sua decisão para prosseguir — seja aprovando este plano como
-está, pedindo ajustes, ou escolhendo alguma das alternativas da seção 12.
+## 15. Segunda leva — giro semanal por grupo, ficha técnica e pedidos de compra visuais
+
+> Implementada e testada localmente após a aprovação inicial (seção 1-14
+> acima). Resume as decisões tomadas numa rodada de perguntas/respostas com
+> o proprietário, já refletidas no código.
+
+### 15.1 Ponto de reposição deixou de ser só manual
+
+Além do campo manual que o admin já preenchia (`reorder_point`), o sistema
+agora também **calcula sozinho** um ponto de reposição sugerido, a partir
+do consumo real recente do item:
+
+```
+giro semanal = consumo real dos últimos 60 dias ÷ 60 × 7
+ponto calculado = giro semanal ÷ 7 × dias de folga do grupo do item
+```
+
+"Consumo real" conta só baixa manual + baixa automática por consumo de
+hóspede — nunca compra nem ajuste de contagem. O valor manual do admin,
+quando preenchido (`reorder_point > 0`), **sempre tem prioridade** sobre o
+calculado; na ausência dele, usa-se o calculado. Nenhum dos dois é
+obrigatório — um item sem grupo de giro e sem valor manual simplesmente
+não aparece na lista de compras por cálculo nenhum (só por pedido visual
+da equipe, se houver).
+
+### 15.2 Grupos de giro — dias de folga por categoria de controle fino
+
+Em vez de um único número de "dias de folga" para o app inteiro, o admin
+cadastra **grupos de giro**, cada um com seu próprio ciclo — porque o
+ciclo de compra de bebida alcoólica (a cada ~60 dias) não tem nada a ver
+com o de limpeza (semanal). Grupos iniciais, com os dias de folga já
+confirmados pelo proprietário (editável a qualquer momento, tela
+"Grupos de giro"):
+
+| Grupo | Dias de folga |
+|---|---|
+| Limpeza | 7 |
+| Bebidas não alcoólicas | 7 |
+| Alimentos (petiscos do bar da piscina) | 7 |
+| Alimentos (café da manhã) | 7 |
+| Bebidas alcoólicas | 60 |
+| Materiais de piscina | 60 |
+| Materiais de manutenção | 30 |
+
+Um item de estoque pode pertencer a **no máximo um** grupo, ou a nenhum —
+itens perecíveis de reposição quase diária (ex.: frutas do café da manhã,
+compradas sem câmara fria pra guardar) ficam **deliberadamente fora de
+qualquer grupo**: não faz sentido calcular giro pra algo que é reposto
+todo dia por inspeção visual, independente de qualquer fórmula. Pra esses
+itens, o controle é 100% pela tela de "Pedidos de compra" (seção 15.4).
+
+### 15.3 Ficha técnica — ingrediente compartilhado entre vários produtos do cardápio
+
+O vínculo original (1 item de estoque ↔ no máximo 1 produto do
+frigobar/bar) não sobrevivia a um ingrediente usado em vários pratos ao
+mesmo tempo — ex.: macaxeira é consumida tanto como "Macaxeira frita"
+(prato próprio) quanto como acompanhamento de "Filé Mignon trinchado
+c/Macaxeira" e "Filé Camarão c/Macaxeira". Foi substituído por uma
+**ficha técnica** (`inventory_item_recipes`): um ingrediente pode
+alimentar vários produtos (todos do frigobar OU todos do bar da piscina,
+nunca os dois ao mesmo tempo por linha), cada produto com sua própria
+quantidade de **porções por pedido** consumidas daquele ingrediente.
+
+Decisão importante: **o estoque e a lista de compras sempre mostram só o
+ingrediente**, nunca de qual prato ele veio nem se a origem foi frigobar
+ou bar — a mesma regra vale pra qualquer item (ex.: "Refrigerante lata" é
+só "Refrigerante lata" no estoque, não importa se foi vendido avulso no
+frigobar ou como parte de uma comanda do bar). A baixa automática ao pagar
+a conta soma, por ingrediente, tudo que veio de qualquer produto ligado a
+ele (ex.: 1 Macaxeira frita + 1 Filé Mignon c/Macaxeira baixa 2+1 = 3
+porções de macaxeira numa única linha de movimento).
+
+Itens controlados por **porção** (macaxeira, camarão, filé mignon etc.)
+usam `unit = "porção"` normalmente — nenhum campo novo precisou pra isso.
+O que é novo é `portion_weight_kg`: peso médio de 1 porção, em kg, editável
+pelo admin, usado **só** na hora de mostrar a sugestão de compra também em
+kg (já que o fornecedor vende por peso, não por porção) — nunca usado pra
+nada além disso.
+
+### 15.4 Pedidos de compra — sinal visual da camareira e do funcionário de manutenção
+
+Tela nova (`/pedidos-compra` pra camareira, `/manutencao/pedidos-compra`
+pro funcionário de manutenção — o admin administra o consumo de piscina e
+manutenção, por isso também tem essa tela), pra registrar "isto está
+acabando" visualmente — é o único sinal que existe pros itens perecíveis
+sem grupo de giro (seção 15.2), e um reforço complementar pros demais.
+
+Decisões confirmadas:
+- **Cada pedido é uma linha própria, nunca mesclada** — pedir o mesmo item
+  de novo nasce um pedido novo; os pendentes **se somam** só na tela do
+  admin ("Lista de compras"), que mostra apenas o total.
+- Quem pediu pode **editar ou cancelar cada pedido individualmente**,
+  enquanto estiver pendente. Ninguém mais pode mexer no pedido de outra
+  pessoa.
+- O admin só pode **cancelar o total** de um item de uma vez (todas as
+  linhas pendentes daquele item, de qualquer pessoa) — nunca edita nem
+  cancela um pedido individual específico.
+- **Qualquer compra do item resolve automaticamente todos os pedidos
+  pendentes dele**, não importa se a quantidade comprada foi suficiente
+  ou não — o pedido da equipe é tratado como uma sugestão, não uma meta a
+  bater. Quem continua refletindo uma compra insuficiente é a **sugestão
+  calculada pelo sistema** (seção 15.1), que nunca precisa de nenhum
+  ajuste manual porque é sempre recalculada a partir do saldo atual —
+  uma compra menor que o necessário já aparece sozinha, na próxima
+  consulta, como uma sugestão menor (nunca zero).
+
+### 15.5 Tela "Lista de compras" do admin
+
+Mescla as duas fontes, lado a lado, por item: a sugestão calculada
+(seção 15.1, com a conversão pra kg quando aplicável) e o total pedido
+visualmente pela equipe (seção 15.4). Um item aparece na lista se tiver
+qualquer uma das duas coisas — nunca as duas são obrigatórias.
+
+### 15.6 Testado
+
+Simulação direta no banco local, sob as regras de segurança reais (RLS) de
+cada papel: ficha técnica com ingrediente real do cardápio compartilhado
+entre 2 pratos diferentes (soma correta, 1 única linha de movimento);
+giro semanal e ponto calculado conferidos à mão contra a fórmula; compra
+insuficiente resolvendo pedidos pendentes mesmo assim, com a sugestão
+calculada continuando a refletir a diferença sozinha; pedidos
+individuais se somando sem mesclar; edição e cancelamento individual
+bloqueados entre pessoas diferentes (RLS); cancelamento em massa do admin
+afetando pedidos de mais de uma pessoa ao mesmo tempo. Sessão real
+(cookie de autenticação) dos três papéis confirmando acesso correto às
+telas novas e bloqueio cruzado entre papéis. `npm run lint`/`npm run
+build` limpos.

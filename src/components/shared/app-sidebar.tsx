@@ -26,6 +26,7 @@ import {
   HelpCircle,
   ShoppingCart,
   PackageMinus,
+  ShoppingBasket,
 } from "lucide-react";
 
 interface NavItem {
@@ -58,12 +59,14 @@ const camareiraNav: NavItem[] = [
   { href: "/comanda", label: "Comandas de Bar da Piscina", icon: Martini },
   { href: "/bar-piscina", label: "Consumo total por suíte", icon: Wine },
   { href: "/estoque", label: "Baixa de estoque", icon: PackageMinus },
+  { href: "/pedidos-compra", label: "Pedidos de compra", icon: ShoppingBasket },
 ];
 
 const manutencaoNav: NavItem[] = [
   { href: "/manutencao/ocorrencias", label: "Ocorrências de Manutenção", icon: Wrench },
   { href: "/manutencao/preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
   { href: "/manutencao/estoque", label: "Baixa de estoque", icon: PackageMinus },
+  { href: "/manutencao/pedidos-compra", label: "Pedidos de compra", icon: ShoppingBasket },
   { href: "/manutencao/compras", label: "Compras", icon: ShoppingCart },
 ];
 
