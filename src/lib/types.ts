@@ -6,7 +6,15 @@ export type OccurrenceStatus = "pendente" | "selecionada" | "resolvida";
 export type MaintenanceExecutionType = "nao_tecnico" | "tecnico";
 export type MaintenanceItemStatus = "pendente" | "selecionada";
 export type RoomBillStatus = "aberta" | "fechada" | "reaberta" | "paga";
-export type PaymentMethod = "pix" | "cartao_credito" | "cartao_debito" | "transferencia_bancaria" | "dinheiro";
+export type PaymentMethod =
+  | "pix"
+  | "cartao_credito"
+  | "cartao_debito"
+  | "transferencia_bancaria"
+  | "dinheiro"
+  | "boleto";
+export type InventoryMovementType = "compra" | "baixa_manual" | "baixa_consumo_hospede" | "ajuste_contagem";
+export type InventoryCountStatus = "em_andamento" | "concluida";
 // 'unica' cobre o dia normal (1 conta por suíte, como sempre foi); os
 // outros dois só existem num dia de Saída com Chegada em que a conta do
 // hóspede que sai ainda não foi paga quando o hóspede novo chega.
@@ -292,6 +300,87 @@ export interface BarComandaItem {
   poolbar_item_id: string;
   quantity: number;
   price_snapshot: number;
+}
+
+// ---------- Compras, despesas e estoque (PRD_compras.md) ----------
+
+export interface ExpenseCategory {
+  id: string;
+  name: string;
+  is_inventory_category: boolean;
+  active: boolean;
+  position: number;
+  created_at: string;
+}
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  category_id: string;
+  unit: string;
+  barcode: string | null;
+  reorder_point: number;
+  linked_minibar_item_id: string | null;
+  linked_poolbar_item_id: string | null;
+  active: boolean;
+  position: number;
+  created_at: string;
+}
+
+export interface Expense {
+  id: string;
+  date: string;
+  category_id: string;
+  supplier_name: string | null;
+  total_amount: number;
+  payment_method: PaymentMethod | null;
+  receipt_storage_path: string | null;
+  nfce_url: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface ExpenseItem {
+  id: string;
+  expense_id: string;
+  inventory_item_id: string | null;
+  description: string;
+  quantity: number;
+  unit_cost: number;
+  subtotal: number;
+  created_at: string;
+}
+
+export interface InventoryMovement {
+  id: string;
+  inventory_item_id: string;
+  movement_type: InventoryMovementType;
+  quantity: number;
+  reference_expense_item_id: string | null;
+  reference_room_bill_id: string | null;
+  reference_count_line_id: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface InventoryCountSession {
+  id: string;
+  category_id: string | null;
+  status: InventoryCountStatus;
+  created_by: string | null;
+  created_at: string;
+  closed_at: string | null;
+}
+
+export interface InventoryCountLine {
+  id: string;
+  session_id: string;
+  inventory_item_id: string;
+  theoretical_qty: number;
+  counted_qty: number | null;
+  created_at: string;
 }
 
 // Minimal Database type placeholder so @supabase/ssr generics compile.

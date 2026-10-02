@@ -22,13 +22,23 @@ create type payment_method as enum (
   'cartao_credito',
   'cartao_debito',
   'transferencia_bancaria',
-  'dinheiro'
+  'dinheiro',
+  'boleto'
 );
 -- 'unica' cobre o dia normal (1 conta por quarto, como sempre foi); os
 -- outros dois só existem num dia de Saída com Chegada em que a conta do
 -- hóspede que sai ainda não foi paga quando o hóspede novo chega.
 create type room_bill_guest_slot as enum ('unica', 'saida_hoje', 'chegada_hoje');
 create type comanda_status as enum ('original', 'cancelada', 'editada');
+-- Módulo de compras/despesas/estoque (PRD_compras.md) — ver schema.sql
+-- mais abaixo, seção "COMPRAS, DESPESAS E ESTOQUE".
+create type inventory_movement_type as enum (
+  'compra',
+  'baixa_manual',
+  'baixa_consumo_hospede',
+  'ajuste_contagem'
+);
+create type inventory_count_status as enum ('em_andamento', 'concluida');
 
 -- ---------- PROFILES ----------
 -- Espelha auth.users com dados de perfil e papel (admin | camareira)
@@ -1578,3 +1588,264 @@ values (
   array['image/jpeg', 'image/png', 'image/webp']
 )
 on conflict (id) do nothing;
+
+-- ============================================================================
+-- COMPRAS, DESPESAS E ESTOQUE (PRD_compras.md)
+-- ============================================================================
+-- Resumo do modelo (ver PRD_compras.md pro raciocínio completo):
+-- - "Despesa" (expenses/expense_items) é o registro de TUDO que a pousada
+--   gasta, com ou sem relação a estoque.
+-- - "Estoque" (inventory_items/inventory_movements) é só a fatia das
+--   despesas que corresponde a itens consumíveis — e o saldo de cada item
+--   nunca é um número guardado à parte: é sempre a soma de todos os
+--   movimentos dele (mesmo princípio de "nunca sincronizar o que pode ser
+--   calculado na hora" já estabelecido neste projeto nas Partes 16/17).
+-- - Papéis: camareira só dá baixa de estoque; funcionário de manutenção dá
+--   baixa e também registra compras; admin faz tudo, incluindo cadastro de
+--   categorias/itens e contagem física periódica.
+
+-- ---------- EXPENSE CATEGORIES (categorias de despesa) ----------
+create table expense_categories (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null unique,
+  is_inventory_category boolean not null default false,
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- ---------- INVENTORY ITEMS (catálogo de itens controláveis em estoque) ----------
+create table inventory_items (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  category_id uuid not null references expense_categories(id),
+  unit text not null default 'un',
+  barcode text unique,
+  reorder_point numeric(12,3) not null default 0,
+  linked_minibar_item_id uuid references minibar_items(id) on delete set null,
+  linked_poolbar_item_id uuid references poolbar_items(id) on delete set null,
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now(),
+  check (linked_minibar_item_id is null or linked_poolbar_item_id is null)
+);
+
+-- ---------- EXPENSES (despesas/compras — cabeçalho) ----------
+create table expenses (
+  id uuid primary key default uuid_generate_v4(),
+  date date not null default current_date,
+  category_id uuid not null references expense_categories(id),
+  supplier_name text,
+  total_amount numeric(12,2) not null default 0 check (total_amount >= 0),
+  payment_method payment_method,
+  receipt_storage_path text,
+  nfce_url text,
+  notes text,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+-- ---------- EXPENSE ITEMS (linhas de uma despesa) ----------
+create table expense_items (
+  id uuid primary key default uuid_generate_v4(),
+  expense_id uuid not null references expenses(id) on delete cascade,
+  inventory_item_id uuid references inventory_items(id) on delete set null,
+  description text not null,
+  quantity numeric(12,3) not null default 1 check (quantity > 0),
+  unit_cost numeric(12,2) not null default 0 check (unit_cost >= 0),
+  subtotal numeric(12,2) not null default 0 check (subtotal >= 0),
+  created_at timestamptz not null default now()
+);
+
+-- ---------- INVENTORY COUNT SESSIONS (contagem física periódica) ----------
+create table inventory_count_sessions (
+  id uuid primary key default uuid_generate_v4(),
+  category_id uuid references expense_categories(id) on delete set null,
+  status inventory_count_status not null default 'em_andamento',
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  closed_at timestamptz
+);
+
+-- ---------- INVENTORY COUNT LINES (uma linha por item contado) ----------
+create table inventory_count_lines (
+  id uuid primary key default uuid_generate_v4(),
+  session_id uuid not null references inventory_count_sessions(id) on delete cascade,
+  inventory_item_id uuid not null references inventory_items(id) on delete cascade,
+  theoretical_qty numeric(12,3) not null,
+  counted_qty numeric(12,3),
+  created_at timestamptz not null default now(),
+  unique (session_id, inventory_item_id)
+);
+
+-- ---------- INVENTORY MOVEMENTS (todo evento que muda o saldo — nunca apagado) ----------
+create table inventory_movements (
+  id uuid primary key default uuid_generate_v4(),
+  inventory_item_id uuid not null references inventory_items(id) on delete cascade,
+  movement_type inventory_movement_type not null,
+  quantity numeric(12,3) not null,
+  reference_expense_item_id uuid references expense_items(id) on delete cascade,
+  reference_room_bill_id uuid references room_bills(id) on delete set null,
+  reference_count_line_id uuid references inventory_count_lines(id) on delete set null,
+  notes text,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create view inventory_balances
+with (security_invoker = true) as
+select inventory_item_id, coalesce(sum(quantity), 0) as balance
+from inventory_movements
+group by inventory_item_id;
+
+alter table expense_categories enable row level security;
+alter table inventory_items enable row level security;
+alter table expenses enable row level security;
+alter table expense_items enable row level security;
+alter table inventory_count_sessions enable row level security;
+alter table inventory_count_lines enable row level security;
+alter table inventory_movements enable row level security;
+
+create policy "exp_cat_select_authenticated" on expense_categories for select using (auth.uid() is not null);
+create policy "exp_cat_admin_insert" on expense_categories for insert with check (is_admin());
+create policy "exp_cat_admin_update" on expense_categories for update using (is_admin());
+create policy "exp_cat_admin_delete" on expense_categories for delete using (is_admin());
+
+create policy "inv_items_select_authenticated" on inventory_items for select using (auth.uid() is not null);
+create policy "inv_items_insert_admin_manutencao" on inventory_items for insert
+  with check (is_admin() or is_manutencao());
+create policy "inv_items_admin_update" on inventory_items for update using (is_admin());
+create policy "inv_items_admin_delete" on inventory_items for delete using (is_admin());
+
+create policy "expenses_select_admin_manutencao" on expenses for select
+  using (is_admin() or is_manutencao());
+create policy "expenses_insert_admin_manutencao" on expenses for insert
+  with check (is_admin() or is_manutencao());
+create policy "expenses_admin_update" on expenses for update using (is_admin());
+create policy "expenses_admin_delete" on expenses for delete using (is_admin());
+
+create policy "exp_items_select_admin_manutencao" on expense_items for select
+  using (is_admin() or is_manutencao());
+create policy "exp_items_insert_admin_manutencao" on expense_items for insert
+  with check (is_admin() or is_manutencao());
+create policy "exp_items_admin_delete" on expense_items for delete using (is_admin());
+
+create policy "count_sessions_admin_all" on inventory_count_sessions for all
+  using (is_admin()) with check (is_admin());
+create policy "count_lines_admin_all" on inventory_count_lines for all
+  using (is_admin()) with check (is_admin());
+
+create policy "inv_mov_select_authenticated" on inventory_movements for select using (auth.uid() is not null);
+create policy "inv_mov_insert_baixa_manual" on inventory_movements for insert
+  with check (
+    movement_type = 'baixa_manual'
+    and created_by = auth.uid()
+    and (is_camareira() or is_manutencao() or is_admin())
+  );
+create policy "inv_mov_admin_all" on inventory_movements for all using (is_admin()) with check (is_admin());
+
+-- Entrada de estoque automática ao lançar um item de compra — mesmo
+-- espírito do histórico de mudanças via trigger da Parte 44.
+create or replace function create_movement_from_expense_item() returns trigger as $$
+begin
+  if new.inventory_item_id is not null then
+    insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_expense_item_id, created_by)
+    values (
+      new.inventory_item_id,
+      'compra',
+      new.quantity,
+      new.id,
+      (select created_by from expenses where id = new.expense_id)
+    );
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create trigger expense_items_create_movement
+after insert on expense_items
+for each row execute function create_movement_from_expense_item();
+
+-- Baixa automática de estoque ao pagar uma conta de frigobar/bar — só
+-- pros itens que o admin tiver explicitamente ligado a um item de
+-- estoque (ver PRD_compras.md seção 5.4).
+create or replace function deduct_inventory_on_bill_payment() returns trigger as $$
+begin
+  if new.status = 'paga' and (old.status is null or old.status is distinct from 'paga') then
+    insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
+    select ii.id, 'baixa_consumo_hospede', -mbi.quantity, new.id, 'Baixa automática ao pagar a conta (frigobar)'
+    from room_bill_minibar_items mbi
+    join inventory_items ii on ii.linked_minibar_item_id = mbi.minibar_item_id
+    where mbi.bill_id = new.id and mbi.quantity > 0;
+
+    insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
+    select ii.id, 'baixa_consumo_hospede', -sum(bci.quantity), new.id, 'Baixa automática ao pagar a conta (bar da piscina)'
+    from bar_comanda_items bci
+    join bar_comandas bc on bc.id = bci.comanda_id
+    join inventory_items ii on ii.linked_poolbar_item_id = bci.poolbar_item_id
+    where bc.bill_id = new.id and bc.status <> 'cancelada' and bci.quantity > 0
+    group by ii.id;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create trigger room_bills_deduct_inventory
+after update on room_bills
+for each row execute function deduct_inventory_on_bill_payment();
+
+-- Fechar uma contagem física: grava ajustes só onde há diferença de
+-- verdade, marca a sessão como concluída.
+create or replace function close_inventory_count_session(p_session_id uuid) returns void as $$
+begin
+  if not is_admin() then
+    raise exception 'not authorized';
+  end if;
+
+  insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_count_line_id, created_by, notes)
+  select
+    l.inventory_item_id,
+    'ajuste_contagem',
+    l.counted_qty - l.theoretical_qty,
+    l.id,
+    auth.uid(),
+    'Ajuste de contagem física'
+  from inventory_count_lines l
+  where l.session_id = p_session_id
+    and l.counted_qty is not null
+    and l.counted_qty <> l.theoretical_qty;
+
+  update inventory_count_sessions
+  set status = 'concluida', closed_at = now()
+  where id = p_session_id and status = 'em_andamento';
+end;
+$$ language plpgsql security definer;
+
+-- Bucket privado pras fotos de recibo/nota — mesmo padrão de
+-- "occurrence-photos" acima.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'expense-receipts',
+  'expense-receipts',
+  false,
+  5242880,
+  array['image/jpeg', 'image/png', 'image/webp']
+)
+on conflict (id) do nothing;
+
+-- Categorias de despesa iniciais (ver PRD_compras.md seção 4).
+insert into expense_categories (name, is_inventory_category, position) values
+  ('Limpeza', true, 1),
+  ('Café da manhã', true, 2),
+  ('Bar da piscina', true, 3),
+  ('Enxoval (cama/banho/mesa)', true, 4),
+  ('Piscina', true, 5),
+  ('Jardim', true, 6),
+  ('Manutenção (elétrica/hidráulica/outros)', true, 7),
+  ('Ativos permanentes', false, 8),
+  ('Consumo (luz/água/internet)', false, 9),
+  ('Pessoal (salários/encargos)', false, 10),
+  ('Serviços profissionais', false, 11),
+  ('Impostos e taxas', false, 12),
+  ('Outras', false, 13)
+on conflict (name) do nothing;

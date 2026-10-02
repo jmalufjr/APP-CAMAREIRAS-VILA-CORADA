@@ -24,6 +24,8 @@ import {
   Wine,
   Martini,
   HelpCircle,
+  ShoppingCart,
+  PackageMinus,
 } from "lucide-react";
 
 interface NavItem {
@@ -41,6 +43,7 @@ const adminNav: NavItem[] = [
   { href: "/chegadas-saidas/gerenciar", label: "Chegadas & saídas", icon: CalendarClock, frequent: true },
   { href: "/mesas/gerenciar", label: "Mesas do café", icon: Coffee, frequent: true },
   { href: "/frigobar", label: "Consumo de Bar e Frigobar", icon: Wine, frequent: true },
+  { href: "/compras", label: "Compras e Estoque", icon: ShoppingCart },
   { href: "/checklists", label: "Listas", icon: ClipboardList },
   { href: "/manutencao-preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
   { href: "/usuarios", label: "Usuários", icon: Users },
@@ -54,11 +57,14 @@ const camareiraNav: NavItem[] = [
   { href: "/chegadas-saidas", label: "Chegadas & saídas", icon: CalendarClock },
   { href: "/comanda", label: "Comandas de Bar da Piscina", icon: Martini },
   { href: "/bar-piscina", label: "Consumo total por suíte", icon: Wine },
+  { href: "/estoque", label: "Baixa de estoque", icon: PackageMinus },
 ];
 
 const manutencaoNav: NavItem[] = [
   { href: "/manutencao/ocorrencias", label: "Ocorrências de Manutenção", icon: Wrench },
   { href: "/manutencao/preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
+  { href: "/manutencao/estoque", label: "Baixa de estoque", icon: PackageMinus },
+  { href: "/manutencao/compras", label: "Compras", icon: ShoppingCart },
 ];
 
 function SidebarContent({

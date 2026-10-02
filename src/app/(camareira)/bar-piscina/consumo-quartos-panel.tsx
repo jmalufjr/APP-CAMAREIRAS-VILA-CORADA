@@ -23,7 +23,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_OPTIONS } from "@/lib/payment-method";
+import { PAYMENT_METHOD_LABELS, GUEST_PAYMENT_METHOD_OPTIONS } from "@/lib/payment-method";
 import type { PaymentMethod } from "@/lib/types";
 import { roomSlotLabel } from "@/lib/room-bill-label";
 
@@ -410,7 +410,7 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {PAYMENT_METHOD_OPTIONS.map((option) => (
+                {GUEST_PAYMENT_METHOD_OPTIONS.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>

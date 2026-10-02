@@ -86,8 +86,9 @@ export async function updateSession(request: NextRequest) {
       "/ocorrencias",
       "/manutencao-preventiva",
       "/questoes-respostas",
+      "/compras",
     ];
-    const camareiraOnlyPrefixes = ["/tarefas", "/bar-piscina", "/comanda"];
+    const camareiraOnlyPrefixes = ["/tarefas", "/bar-piscina", "/comanda", "/estoque"];
     const manutencaoOnlyPrefixes = ["/manutencao"];
 
     if (profile.role !== "admin" && adminOnlyPrefixes.some(matchesPrefix)) {
