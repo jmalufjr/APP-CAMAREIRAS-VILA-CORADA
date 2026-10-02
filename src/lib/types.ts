@@ -309,6 +309,7 @@ export interface ExpenseCategory {
   id: string;
   name: string;
   is_inventory_category: boolean;
+  count_frequency_days: number | null;
   active: boolean;
   position: number;
   created_at: string;

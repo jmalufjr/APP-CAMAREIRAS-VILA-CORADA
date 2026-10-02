@@ -1,15 +1,19 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { BackLink } from "@/components/shared/back-link";
-import { getOpenCountSessions } from "@/lib/actions/inventory-counts";
+import { getOpenCountSessions, getCategoryCountStatus } from "@/lib/actions/inventory-counts";
 import { getExpenseCategories } from "@/lib/actions/expense-categories";
 import { StartCountButton } from "./start-count-button";
+import { CategoryCountReminders } from "./category-count-reminders";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateTimePt } from "@/lib/date";
 
 export default async function ContagemEstoquePage() {
-  const [openSessions, categories] = await Promise.all([getOpenCountSessions(), getExpenseCategories()]);
-  const inventoryCategories = categories.filter((c) => c.active && c.is_inventory_category);
+  const [openSessions, categories, countStatuses] = await Promise.all([
+    getOpenCountSessions(),
+    getExpenseCategories(),
+    getCategoryCountStatus(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -18,13 +22,24 @@ export default async function ContagemEstoquePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-heading text-lg">Iniciar nova contagem</CardTitle>
+          <CardTitle className="font-heading text-lg">Contar tudo de uma vez</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          <StartCountButton label="Todos os itens" />
-          {inventoryCategories.map((c) => (
-            <StartCountButton key={c.id} categoryId={c.id} label={c.name} />
-          ))}
+        <CardContent>
+          <StartCountButton label="Iniciar contagem de todos os itens" />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-lg">Contar por categoria</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-3">
+            A frequência (em dias) é opcional — deixe em branco pra não receber nenhum aviso. Quando preenchida, um
+            aviso aparece aqui assim que passar desse número de dias desde a última contagem fechada daquela
+            categoria.
+          </p>
+          <CategoryCountReminders statuses={countStatuses} />
         </CardContent>
       </Card>
 

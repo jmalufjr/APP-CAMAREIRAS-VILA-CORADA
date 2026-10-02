@@ -2,13 +2,14 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import type { ExpenseListRow } from "@/lib/actions/expenses";
 import { deleteExpense } from "@/lib/actions/expenses";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment-method";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import { Download, FileText, Trash2 } from "lucide-react";
+import { Download, FileText, Trash2, Pencil } from "lucide-react";
 
 function downloadCsv(filename: string, rows: (string | number)[][]) {
   const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -21,7 +22,7 @@ function downloadCsv(filename: string, rows: (string | number)[][]) {
   URL.revokeObjectURL(url);
 }
 
-export function ComprasHistoryTable({ rows, canDelete = true }: { rows: ExpenseListRow[]; canDelete?: boolean }) {
+export function ComprasHistoryTable({ rows, canManage = true }: { rows: ExpenseListRow[]; canManage?: boolean }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const total = rows.reduce((sum, r) => sum + r.total_amount, 0);
@@ -82,22 +83,29 @@ export function ComprasHistoryTable({ rows, canDelete = true }: { rows: ExpenseL
                         </Button>
                       </a>
                     )}
-                    {canDelete && (
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        disabled={isPending}
-                        onClick={() => {
-                          if (!confirm("Excluir esta despesa?")) return;
-                          startTransition(async () => {
-                            const result = await deleteExpense(r.id);
-                            if (result?.error) toast.error(result.error);
-                            else router.refresh();
-                          });
-                        }}
-                      >
-                        <Trash2 size={14} />
-                      </Button>
+                    {canManage && (
+                      <>
+                        <Link href={`/compras/historico/${r.id}/editar`}>
+                          <Button variant="ghost" size="icon-sm" title="Editar despesa">
+                            <Pencil size={14} />
+                          </Button>
+                        </Link>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          disabled={isPending}
+                          onClick={() => {
+                            if (!confirm("Excluir esta despesa?")) return;
+                            startTransition(async () => {
+                              const result = await deleteExpense(r.id);
+                              if (result?.error) toast.error(result.error);
+                              else router.refresh();
+                            });
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </>
                     )}
                   </div>
                 </TableCell>

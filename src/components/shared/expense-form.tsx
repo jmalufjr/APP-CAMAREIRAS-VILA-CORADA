@@ -3,7 +3,8 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { createExpense } from "@/lib/actions/expenses";
+import { createExpense, updateExpense } from "@/lib/actions/expenses";
+import type { ExpenseWithItems } from "@/lib/actions/expenses";
 import { parseReceiptWithAI } from "@/lib/actions/receipt-ai";
 import { compressImageForUpload } from "@/lib/image-compression";
 import type { ExpenseCategory } from "@/lib/types";
@@ -38,25 +39,41 @@ function todayKey(): string {
 export function ExpenseForm({
   categories,
   inventoryItems,
+  mode = "create",
+  expenseId,
+  initial,
 }: {
   categories: ExpenseCategory[];
   inventoryItems: InventoryItemWithBalance[];
+  mode?: "create" | "edit";
+  expenseId?: string;
+  initial?: ExpenseWithItems;
 }) {
   const [isPending, startTransition] = useTransition();
   const [isReadingAI, setIsReadingAI] = useState(false);
   const router = useRouter();
 
-  const [date, setDate] = useState(todayKey());
-  const [categoryId, setCategoryId] = useState("");
-  const [supplierName, setSupplierName] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<string>("");
-  const [nfceUrl, setNfceUrl] = useState("");
-  const [notes, setNotes] = useState("");
-  const [manualTotal, setManualTotal] = useState("");
-  const [items, setItems] = useState<ItemRow[]>([]);
+  const [date, setDate] = useState(initial?.date ?? todayKey());
+  const [categoryId, setCategoryId] = useState(initial?.category_id ?? "");
+  const [supplierName, setSupplierName] = useState(initial?.supplier_name ?? "");
+  const [paymentMethod, setPaymentMethod] = useState<string>(initial?.payment_method ?? "");
+  const [nfceUrl, setNfceUrl] = useState(initial?.nfce_url ?? "");
+  const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [manualTotal, setManualTotal] = useState(
+    initial && initial.items.length === 0 ? String(initial.total_amount) : ""
+  );
+  const [items, setItems] = useState<ItemRow[]>(
+    initial?.items.map((i) => ({
+      description: i.description,
+      quantity: i.quantity,
+      unit_cost: i.unit_cost,
+      inventory_item_id: i.inventory_item_id,
+    })) ?? []
+  );
 
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const [existingReceiptUrl, setExistingReceiptUrl] = useState(initial?.receipt_url ?? null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const itemsTotal = items.reduce((sum, i) => sum + i.quantity * i.unit_cost, 0);
@@ -66,6 +83,7 @@ export function ExpenseForm({
     if (receiptPreview) URL.revokeObjectURL(receiptPreview);
     setReceiptFile(file);
     setReceiptPreview(file ? URL.createObjectURL(file) : null);
+    if (file) setExistingReceiptUrl(null);
   }
 
   async function handleReadWithAI() {
@@ -160,7 +178,7 @@ export function ExpenseForm({
         formData.set("receipt", compressed, "recibo.jpg");
       }
 
-      const result = await createExpense(formData);
+      const result = mode === "edit" && expenseId ? await updateExpense(expenseId, formData) : await createExpense(formData);
       if (result?.error) {
         toast.error(result.error);
         return;
@@ -168,7 +186,7 @@ export function ExpenseForm({
       if (result && "photoError" in result && result.photoError) {
         toast.error(`Despesa salva, mas houve erro ao enviar a foto: ${result.photoError}`);
       } else {
-        toast.success("Despesa registrada.");
+        toast.success(mode === "edit" ? "Despesa atualizada." : "Despesa registrada.");
       }
       router.back();
       router.refresh();
@@ -199,6 +217,14 @@ export function ExpenseForm({
                 <X size={12} />
               </button>
             </div>
+          )}
+          {!receiptPreview && existingReceiptUrl && (
+            <p className="text-sm">
+              <a href={existingReceiptUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                Ver foto já anexada
+              </a>{" "}
+              <span className="text-muted-foreground">— escolha outra foto abaixo pra substituir.</span>
+            </p>
           )}
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
@@ -374,7 +400,7 @@ export function ExpenseForm({
       </Card>
 
       <Button onClick={handleSubmit} disabled={isPending} size="lg" className="w-full sm:w-auto">
-        {isPending ? "Salvando..." : "Salvar despesa"}
+        {isPending ? "Salvando..." : mode === "edit" ? "Salvar alterações" : "Salvar despesa"}
       </Button>
     </div>
   );

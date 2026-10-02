@@ -123,3 +123,63 @@ export async function closeCountSession(sessionId: string) {
   revalidateAll();
   return { success: true };
 }
+
+export interface CategoryCountStatus {
+  category_id: string;
+  category_name: string;
+  count_frequency_days: number | null;
+  last_closed_at: string | null;
+  days_since_last_count: number | null;
+  is_due: boolean;
+}
+
+// Pra cada categoria de estoque, quando foi a última contagem FECHADA
+// (de qualquer sessão, mesmo uma sem categoria — "todos os itens" conta
+// pra todas) e se já passou da frequência configurada — base do aviso
+// "está na hora de contar de novo" (ver PRD_compras.md). Categoria sem
+// `count_frequency_days` nunca aparece como "devida" (sem lembrete
+// configurado = sem cobrança nenhuma).
+export async function getCategoryCountStatus(): Promise<CategoryCountStatus[]> {
+  const supabase = await createClient();
+  const [{ data: categories }, { data: sessions }] = await Promise.all([
+    supabase
+      .from("expense_categories")
+      .select("id, name, count_frequency_days")
+      .eq("is_inventory_category", true)
+      .eq("active", true),
+    supabase
+      .from("inventory_count_sessions")
+      .select("category_id, closed_at")
+      .eq("status", "concluida")
+      .not("closed_at", "is", null)
+      .order("closed_at", { ascending: false }),
+  ]);
+
+  // "Todos os itens" (category_id null) conta como contagem recente pra
+  // qualquer categoria — se o admin contou tudo de uma vez, nenhuma
+  // categoria fica "devida" por causa disso.
+  const sessionRows = (sessions ?? []) as { category_id: string | null; closed_at: string }[];
+  const globalLastClosedAt = sessionRows.find((s) => s.category_id === null)?.closed_at ?? null;
+  const lastClosedByCategory = new Map<string, string>();
+  sessionRows.forEach((s) => {
+    if (s.category_id && !lastClosedByCategory.has(s.category_id)) lastClosedByCategory.set(s.category_id, s.closed_at);
+  });
+
+  const now = Date.now();
+  return ((categories ?? []) as { id: string; name: string; count_frequency_days: number | null }[])
+    .map((c) => {
+      const candidates = [lastClosedByCategory.get(c.id), globalLastClosedAt].filter((v): v is string => !!v);
+      const lastClosedAt = candidates.length > 0 ? candidates.sort().reverse()[0] : null;
+      const daysSince = lastClosedAt ? Math.floor((now - new Date(lastClosedAt).getTime()) / 86400000) : null;
+      const isDue = c.count_frequency_days !== null && (daysSince === null || daysSince >= c.count_frequency_days);
+      return {
+        category_id: c.id,
+        category_name: c.name,
+        count_frequency_days: c.count_frequency_days,
+        last_closed_at: lastClosedAt,
+        days_since_last_count: daysSince,
+        is_due: isDue,
+      };
+    })
+    .sort((a, b) => a.category_name.localeCompare(b.category_name));
+}

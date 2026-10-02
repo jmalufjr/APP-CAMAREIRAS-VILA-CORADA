@@ -633,6 +633,79 @@ hora) e aparece numa seção à parte, "Sugestões calculadas dispensadas",
 com o mesmo botão de reativar — útil pra itens cuja dispensa já não tem
 mais nenhum motivo visível na lista principal.
 
+## 16. Terceira leva — itens pendentes da auditoria inicial (ver seção 17 do changelog em CLAUDE.md)
+
+> Depois da implementação inicial (seções 1-15), uma auditoria comparando
+> o que tinha sido combinado neste PRD contra o que de fato foi construído
+> encontrou 6 pontos que tinham ficado de fora ou diferentes do esperado.
+> O proprietário decidiu avançar em 4 deles (os outros 2 — inventário
+> inicial e QR code da NFC-e — já estavam cobertos ou já eram escopo
+> aceito, e a classificação ABC de importância do item foi adiada por
+> enquanto). Resume as decisões desta leva.
+
+### 16.1 Leitura de código de barras — biblioteca de reserva (ZXing)
+
+A leitura por câmera agora tem dois caminhos: a API nativa do navegador
+(`BarcodeDetector`, caminho principal, sem nenhuma biblioteca — cobre o
+Android das camareiras) e, só quando ela não existe (ex.: Safari do
+iPhone, usado pelo admin), a biblioteca `@zxing/browser` carregada **sob
+demanda** (só baixada pelo navegador que realmente precisa dela, nunca
+pesando no fluxo comum via Android). O mesmo componente
+(`BarcodeScannerButton`) e a mesma prop `formats` continuam servindo os
+dois casos (código de barras de produto e QR code da nota fiscal) — quem
+usa o botão não percebe qual dos dois caminhos está rodando por trás.
+
+### 16.2 Editar uma despesa já lançada
+
+Antes só existia "apagar" (admin only). Agora existe também "editar"
+(mesmo formulário de lançar, reaproveitado em modo edição, acessível pelo
+lápis na linha do histórico — só aparece pro admin). A correção de
+quantidade de um item **ajusta sozinha** a entrada de estoque: como
+`inventory_movements.reference_expense_item_id` já tinha `on delete
+cascade`, editar uma despesa apaga as linhas antigas (o que desfaz a
+entrada de estoque original, em cascata, sem precisar de nenhum código
+especial) e recria as linhas novas (o que gera uma entrada nova, já com a
+quantidade corrigida, pelo mesmo trigger de sempre). Mais simples e mais
+seguro que tentar "diffar" quantidades em cima do que já existia.
+
+### 16.3 Relatório "por fornecedor", ao lado de "por categoria"
+
+A tela de Histórico de compras agora mostra os dois totais lado a lado
+(`getExpenseSummaryBySupplier`, mesmo padrão já existente de
+`getExpenseSummaryByCategory`) — despesas sem fornecedor preenchido
+entram agrupadas como "Sem fornecedor". Vale tanto pro admin quanto pra
+manutenção.
+
+### 16.4 Frequência de contagem física configurável, com aviso
+
+Cada categoria de estoque ganhou um campo opcional, `count_frequency_days`
+(dias de folga **da conferência física**, não confundir com os "dias de
+folga" dos grupos de giro, que são sobre reposição de compra) — editável
+direto na tela "Contagem de estoque", ao lado do botão de iniciar
+contagem daquela categoria. Quando preenchido, um aviso ("Está na hora de
+contar") aparece assim que o número de dias desde a última contagem
+**fechada** daquela categoria (ou de uma contagem de "todos os itens",
+que conta pra todas) ultrapassar esse valor. Categoria sem frequência
+configurada nunca gera aviso. O mesmo contador resumido aparece como
+atalho no hub "Compras e Estoque", ao lado do já existente "itens
+precisam de compra".
+
+### 16.5 Testado
+
+Simulação direta no banco (edição de despesa corrigindo a quantidade de
+10 para 6 unidades — confirmado o movimento antigo desaparecendo em
+cascata e o novo refletindo exatamente 6, sem sobra nem duplicação) e
+sessão real do admin e da manutenção (tela de edição carregando
+pré-preenchida; botão de editar visível só pro admin; manutenção bloqueada
+pelo proxy mesmo tentando acessar a URL de edição diretamente; relatório
+por fornecedor aparecendo corretamente nas duas telas de histórico; tela
+de contagem mostrando as 7 categorias com o campo de frequência editável).
+`npm run lint`/`npm run build` limpos. O caminho de reserva do scanner
+(ZXing) foi verificado por leitura cuidadosa da API real da biblioteca
+instalada (não por teste funcional num Safari de verdade, que este
+ambiente não tem como simular) — vale confirmar na prática assim que o
+admin testar pelo iPhone dele.
+
 ### 15.6 Testado
 
 Simulação direta no banco local, sob as regras de segurança reais (RLS) de

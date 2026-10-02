@@ -49,6 +49,17 @@ export async function updateExpenseCategory(id: string, formData: FormData) {
   return { success: true };
 }
 
+// Frequência de contagem física (dias) — campo independente, editado
+// direto na tela "Contagem de estoque", não no formulário de categoria.
+export async function updateExpenseCategoryCountFrequency(id: string, days: number | null) {
+  if (days !== null && days <= 0) return { error: "Informe uma frequência maior que zero, ou deixe em branco." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("expense_categories").update({ count_frequency_days: days }).eq("id", id);
+  if (error) return { error: error.message };
+  revalidateAll();
+  return { success: true };
+}
+
 export async function deleteExpenseCategory(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("expense_categories").delete().eq("id", id);

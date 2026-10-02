@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { getPurchaseList } from "@/lib/actions/purchase-list";
+import { getCategoryCountStatus } from "@/lib/actions/inventory-counts";
 import {
   Plus,
   History,
@@ -26,22 +27,35 @@ const menuItems = [
 ];
 
 export default async function ComprasPage() {
-  const purchaseList = await getPurchaseList();
+  const [purchaseList, countStatuses] = await Promise.all([getPurchaseList(), getCategoryCountStatus()]);
+  const dueCategories = countStatuses.filter((s) => s.is_due);
 
   return (
     <div className="space-y-6">
       <PageHeader title="Compras e Estoque" subtitle="Compras, despesas e controle de estoque da pousada." />
 
-      {purchaseList.length > 0 && (
-        <Link
-          href="/compras/lista"
-          className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive hover:bg-destructive/15 transition-colors w-fit"
-        >
-          <AlertTriangle size={16} />
-          {purchaseList.length} item(ns) precisam de compra
-          <ChevronRight size={14} />
-        </Link>
-      )}
+      <div className="flex flex-wrap gap-2">
+        {purchaseList.length > 0 && (
+          <Link
+            href="/compras/lista"
+            className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive hover:bg-destructive/15 transition-colors w-fit"
+          >
+            <AlertTriangle size={16} />
+            {purchaseList.length} item(ns) precisam de compra
+            <ChevronRight size={14} />
+          </Link>
+        )}
+        {dueCategories.length > 0 && (
+          <Link
+            href="/compras/contagem"
+            className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive hover:bg-destructive/15 transition-colors w-fit"
+          >
+            <AlertTriangle size={16} />
+            {dueCategories.length} categoria(s) precisam de contagem física
+            <ChevronRight size={14} />
+          </Link>
+        )}
+      </div>
 
       <nav className="max-w-md space-y-1.5">
         {menuItems.map((item) => (

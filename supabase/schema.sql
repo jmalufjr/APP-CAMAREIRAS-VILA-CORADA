@@ -1606,10 +1606,14 @@ on conflict (id) do nothing;
 --   categorias/itens e contagem física periódica.
 
 -- ---------- EXPENSE CATEGORIES (categorias de despesa) ----------
+-- count_frequency_days: frequência de contagem física configurável por
+-- categoria (ex.: mensal pra limpeza) — só usada pro aviso "está na hora
+-- de contar de novo" na tela de Contagem de estoque. Null = sem lembrete.
 create table expense_categories (
   id uuid primary key default uuid_generate_v4(),
   name text not null unique,
   is_inventory_category boolean not null default false,
+  count_frequency_days int check (count_frequency_days is null or count_frequency_days > 0),
   active boolean not null default true,
   position int not null default 0,
   created_at timestamptz not null default now()
