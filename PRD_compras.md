@@ -613,6 +613,26 @@ Mescla as duas fontes, lado a lado, por item: a sugestão calculada
 visualmente pela equipe (seção 15.4). Um item aparece na lista se tiver
 qualquer uma das duas coisas — nunca as duas são obrigatórias.
 
+O admin também pode **dispensar a sugestão calculada** de um item
+individualmente (botão "X" ao lado da sugestão) — ponto que tinha ficado
+de fora da primeira versão desta leva e foi adicionado depois, a pedido
+do proprietário. Diferente do pedido da equipe (que é um registro que
+pode ser cancelado de verdade), a sugestão calculada nunca é persistida —
+é sempre recalculada a partir do saldo atual. Por isso "dispensar" aqui
+significa algo mais específico: o sistema guarda o saldo do item no
+momento da dispensa (`inventory_suggestion_dismissals`), e ela só vale
+**enquanto esse saldo não mudar de novo**. Assim que qualquer movimento
+altera o saldo (nova compra, novo consumo), a dispensa fica
+automaticamente obsoleta e a sugestão recalculada volta a aparecer
+sozinha, sem precisar de nenhuma ação manual — mesmo espírito de "nunca
+persistir o que pode ficar desatualizado" já usado no resto do módulo.
+Enquanto a dispensa está ativa, o item some da lista principal (a menos
+que ainda tenha um pedido pendente da equipe, caso em que a coluna da
+sugestão mostra "Dispensada pelo admin" com um botão pra reativar na
+hora) e aparece numa seção à parte, "Sugestões calculadas dispensadas",
+com o mesmo botão de reativar — útil pra itens cuja dispensa já não tem
+mais nenhum motivo visível na lista principal.
+
 ### 15.6 Testado
 
 Simulação direta no banco local, sob as regras de segurança reais (RLS) de

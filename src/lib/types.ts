@@ -347,6 +347,15 @@ export interface InventoryItemRecipe {
   created_at: string;
 }
 
+// Dispensa, pelo admin, da sugestão calculada de um item — só vale
+// enquanto o saldo do item não mudar de novo (ver PurchaseListRow).
+export interface InventorySuggestionDismissal {
+  inventory_item_id: string;
+  dismissed_balance: number;
+  dismissed_by: string | null;
+  dismissed_at: string;
+}
+
 export interface PurchaseRequest {
   id: string;
   inventory_item_id: string;

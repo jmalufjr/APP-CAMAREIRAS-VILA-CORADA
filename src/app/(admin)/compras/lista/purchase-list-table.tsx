@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { PurchaseListRow } from "@/lib/actions/purchase-list";
 import { cancelPurchaseRequestsForItem } from "@/lib/actions/purchase-requests";
+import { dismissCalculatedSuggestion, reactivateCalculatedSuggestion } from "@/lib/actions/purchase-list";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { X } from "lucide-react";
+import { X, RotateCcw } from "lucide-react";
 
 export function PurchaseListTable({ rows }: { rows: PurchaseListRow[] }) {
   const [isPending, startTransition] = useTransition();
@@ -44,16 +45,53 @@ export function PurchaseListTable({ rows }: { rows: PurchaseListRow[] }) {
               </TableCell>
               <TableCell>
                 {r.suggested_qty_calculated > 0 ? (
-                  <div>
-                    <Badge variant="destructive">
-                      {r.suggested_qty_calculated.toFixed(2)} {r.unit}
-                    </Badge>
-                    {r.suggested_qty_calculated_purchase_unit !== null && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        ≈ {r.suggested_qty_calculated_purchase_unit.toFixed(2)} kg a comprar
-                      </p>
-                    )}
-                  </div>
+                  r.calculated_dismissed ? (
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground italic">Dispensada pelo admin</p>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        disabled={isPending}
+                        title="Reativar sugestão calculada"
+                        onClick={() => {
+                          startTransition(async () => {
+                            const result = await reactivateCalculatedSuggestion(r.inventory_item_id);
+                            if (result?.error) toast.error(result.error);
+                            else router.refresh();
+                          });
+                        }}
+                      >
+                        <RotateCcw size={14} />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <Badge variant="destructive">
+                        {r.suggested_qty_calculated.toFixed(2)} {r.unit}
+                      </Badge>
+                      {r.suggested_qty_calculated_purchase_unit !== null && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          ≈ {r.suggested_qty_calculated_purchase_unit.toFixed(2)} kg a comprar
+                        </p>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        disabled={isPending}
+                        title="Dispensar sugestão calculada"
+                        onClick={() => {
+                          if (!confirm(`Dispensar a sugestão calculada de "${r.item_name}"?`)) return;
+                          startTransition(async () => {
+                            const result = await dismissCalculatedSuggestion(r.inventory_item_id);
+                            if (result?.error) toast.error(result.error);
+                            else router.refresh();
+                          });
+                        }}
+                      >
+                        <X size={14} />
+                      </Button>
+                    </div>
+                  )
                 ) : (
                   <span className="text-muted-foreground text-sm">—</span>
                 )}

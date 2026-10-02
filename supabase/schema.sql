@@ -1962,6 +1962,22 @@ left join inventory_weekly_turnover wt on wt.inventory_item_id = ii.id
 left join inventory_turnover_groups tg on tg.id = ii.turnover_group_id
 where ii.active;
 
+-- Dispensa da sugestão CALCULADA pelo admin (não a confunda com os
+-- pedidos visuais da equipe, que já tinham cancelamento desde o início).
+-- Como a sugestão nunca é persistida, dispensar guarda o saldo no momento
+-- da dispensa — ela só vale enquanto esse saldo não mudar de novo (ver
+-- getPurchaseList, que compara os dois na hora de ler).
+create table inventory_suggestion_dismissals (
+  inventory_item_id uuid primary key references inventory_items(id) on delete cascade,
+  dismissed_balance numeric(12,3) not null,
+  dismissed_by uuid references profiles(id) on delete set null,
+  dismissed_at timestamptz not null default now()
+);
+
+alter table inventory_suggestion_dismissals enable row level security;
+create policy "inv_suggestion_dismissals_admin_all" on inventory_suggestion_dismissals
+  for all using (is_admin()) with check (is_admin());
+
 -- Bucket privado pras fotos de recibo/nota — mesmo padrão de
 -- "occurrence-photos" acima.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
