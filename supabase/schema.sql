@@ -1646,7 +1646,11 @@ create table inventory_items (
   portion_weight_kg numeric(10,4),
   active boolean not null default true,
   position int not null default 0,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Quebra de estoque (ver seção "INVENTORY COUNT LINES" abaixo): limites
+  -- editáveis pelo admin, sempre positivos, com incrementos de 1%.
+  quebra_maxima_admitida_pct numeric(6,2) not null default 20 check (quebra_maxima_admitida_pct > 0),
+  indice_relativo_maximo_pct numeric(6,2) not null default 200 check (indice_relativo_maximo_pct > 0)
 );
 
 -- ---------- FICHA TÉCNICA (receita): ingrediente(s) por produto do cardápio ----------
@@ -1735,12 +1739,20 @@ create unique index inventory_count_sessions_one_open_per_category
   where status = 'em_andamento';
 
 -- ---------- INVENTORY COUNT LINES (uma linha por item contado) ----------
+-- quebra_pct/quebra_12m_pct/indice_relativo_pct: calculados e gravados uma
+-- única vez, no momento em que a sessão é FECHADA — são fatos congelados
+-- sobre o que aconteceu naquela contagem (nunca recalculados depois, nem
+-- quando os limites do item mudam) — ver PRD_compras.md seção 18 e a
+-- migration 060 pro raciocínio completo.
 create table inventory_count_lines (
   id uuid primary key default uuid_generate_v4(),
   session_id uuid not null references inventory_count_sessions(id) on delete cascade,
   inventory_item_id uuid not null references inventory_items(id) on delete cascade,
   theoretical_qty numeric(12,3) not null,
   counted_qty numeric(12,3),
+  quebra_pct numeric(8,2),
+  quebra_12m_pct numeric(8,2),
+  indice_relativo_pct numeric(8,2),
   created_at timestamptz not null default now(),
   unique (session_id, inventory_item_id)
 );
@@ -1764,6 +1776,37 @@ with (security_invoker = true) as
 select inventory_item_id, coalesce(sum(quantity), 0) as balance
 from inventory_movements
 group by inventory_item_id;
+
+-- Uma linha por contagem FECHADA, com nome/categoria do item, os limites
+-- ATUAIS do item (de propósito, não congelados — mudar o limite só afeta
+-- futuras decisões de outlier, nunca o que já foi calculado) e a data da
+-- contagem anterior do mesmo item via LAG() — evita recalcular isso em
+-- JavaScript em três lugares diferentes (tela de contagem, Histórico,
+-- Resumo Executivo).
+create view inventory_count_line_history
+with (security_invoker = true) as
+select
+  cl.id,
+  cl.session_id,
+  cl.inventory_item_id,
+  ii.name as item_name,
+  ii.unit,
+  ec.name as category_name,
+  cl.theoretical_qty,
+  cl.counted_qty,
+  (cl.counted_qty - cl.theoretical_qty) as diferenca,
+  cl.quebra_pct,
+  cl.quebra_12m_pct,
+  cl.indice_relativo_pct,
+  ii.quebra_maxima_admitida_pct,
+  ii.indice_relativo_maximo_pct,
+  cs.closed_at,
+  lag(cs.closed_at) over (partition by cl.inventory_item_id order by cs.closed_at) as previous_count_date
+from inventory_count_lines cl
+join inventory_count_sessions cs on cs.id = cl.session_id
+join inventory_items ii on ii.id = cl.inventory_item_id
+join expense_categories ec on ec.id = ii.category_id
+where cs.status = 'concluida' and cl.counted_qty is not null;
 
 alter table expense_categories enable row level security;
 alter table inventory_turnover_groups enable row level security;

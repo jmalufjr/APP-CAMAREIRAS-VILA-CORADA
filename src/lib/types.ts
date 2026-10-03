@@ -334,6 +334,8 @@ export interface InventoryItem {
   active: boolean;
   position: number;
   created_at: string;
+  quebra_maxima_admitida_pct: number;
+  indice_relativo_maximo_pct: number;
 }
 
 // Ficha técnica: qual(is) produto(s) do cardápio (frigobar OU bar da
@@ -448,7 +450,31 @@ export interface InventoryCountLine {
   inventory_item_id: string;
   theoretical_qty: number;
   counted_qty: number | null;
+  quebra_pct: number | null;
+  quebra_12m_pct: number | null;
+  indice_relativo_pct: number | null;
   created_at: string;
+}
+
+// Uma linha da view inventory_count_line_history — uma contagem FECHADA,
+// já com nome do item/categoria e a data da contagem anterior via LAG().
+export interface InventoryCountLineHistory {
+  id: string;
+  session_id: string;
+  inventory_item_id: string;
+  item_name: string;
+  unit: string;
+  category_name: string;
+  theoretical_qty: number;
+  counted_qty: number;
+  diferenca: number;
+  quebra_pct: number | null;
+  quebra_12m_pct: number | null;
+  indice_relativo_pct: number | null;
+  quebra_maxima_admitida_pct: number;
+  indice_relativo_maximo_pct: number;
+  closed_at: string;
+  previous_count_date: string | null;
 }
 
 // Minimal Database type placeholder so @supabase/ssr generics compile.

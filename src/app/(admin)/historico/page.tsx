@@ -12,6 +12,8 @@ import { getSuitesCafeCommissionForPeriod } from "@/lib/actions/commission";
 import { getExpenses, getExpenseSummaryByCategory, getExpenseSummaryBySupplier } from "@/lib/actions/expenses";
 import { ComprasHistoryTable } from "@/components/shared/compras-history-table";
 import { ExpenseSummaryCards } from "@/components/shared/expense-summary-cards";
+import { InventoryShrinkageTable } from "@/components/shared/inventory-shrinkage-table";
+import { getInventoryCountHistoryForPeriod } from "@/lib/actions/inventory-counts";
 import { toDateKey, nowInBrazil } from "@/lib/date";
 import type { ChecklistType } from "@/lib/types";
 
@@ -60,6 +62,7 @@ export default async function HistoricoPage({
     expenseRows,
     expenseByCategory,
     expenseBySupplier,
+    inventoryShrinkageHistory,
   ] = await Promise.all([
     // Comissão = quantidade de suítes elegíveis pro café da manhã por dia
     // (independente de terem sido de fato alocadas a uma mesa) × valor por
@@ -88,6 +91,7 @@ export default async function HistoricoPage({
     getExpenses(from, to),
     getExpenseSummaryByCategory(from, to),
     getExpenseSummaryBySupplier(from, to),
+    getInventoryCountHistoryForPeriod(from, to),
   ]);
 
   const commissionRate = Number(commissionSettings?.value_per_table ?? 0);
@@ -158,6 +162,15 @@ export default async function HistoricoPage({
         <ExpenseSummaryCards byCategory={expenseByCategory} bySupplier={expenseBySupplier} />
         <ComprasHistoryTable rows={expenseRows} canManage editBasePath="/historico/compras" />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-lg">Histórico de contagem de estoque</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <InventoryShrinkageTable rows={inventoryShrinkageHistory} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

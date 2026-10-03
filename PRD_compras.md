@@ -876,6 +876,174 @@ devolvendo sempre o mesmo `sessionId` (sem criar duplicata, confirmado
 também direto no banco); categoria diferente continua funcionando
 normalmente. `npm run lint`/`npm run build` limpos.
 
+## 18. Quinta leva — quebra de estoque, média de 12 meses e exclusão de outlier
+
+> Pedido do proprietário, direto, sem rodada de análise prévia: registrar,
+> a cada contagem física fechada, o quanto o saldo do sistema desviou da
+> contagem real ("quebra de estoque"), comparar isso com a média do item
+> nos últimos 12 meses, e marcar como outlier (fora da conta da média)
+> qualquer contagem velha cujo desvio em relação à média, na época, tenha
+> sido anormalmente grande — tudo configurável por item, sem digitação
+> (só os steppers +/-1% já usados em outras partes do projeto).
+
+### 18.1 Modelo de dados
+
+Migration `060_inventory_shrinkage_tracking.sql` (schema espelhado):
+
+- `inventory_items` ganhou dois limites, sempre positivos, com padrão
+  igual pra todos os itens e editáveis por item:
+  - `quebra_maxima_admitida_pct` (padrão 20%) — acima disso (em módulo),
+    a contagem é tratada como "fora do padrão" nas telas de alerta.
+  - `indice_relativo_maximo_pct` (padrão 200%) — acima disso, a contagem
+    é tratada como outlier e excluída da média de 12 meses de contagens
+    *futuras*.
+- `inventory_count_lines` ganhou três números, calculados e gravados
+  **uma única vez**, no momento em que a sessão é fechada — fatos
+  congelados sobre aquela contagem específica, nunca recalculados depois
+  (mesmo que os limites do item mudem mais tarde):
+  - `quebra_pct`: percentual de diferença (saldo sistema → contagem
+    física), com o mesmo sinal da diferença (pode ser negativo — falta —
+    ou positivo — sobra).
+  - `quebra_12m_pct`: média de `quebra_pct` das contagens fechadas do
+    mesmo item nos últimos 12 meses ANTES desta, excluindo qualquer uma
+    cujo `indice_relativo_pct` (o dela, congelado na época) seja maior
+    que o `indice_relativo_maximo_pct` **atual** do item — mudar o limite
+    hoje só afeta decisões de inclusão/exclusão em médias futuras, nunca
+    reescreve o que já foi calculado (mesma regra já registrada em
+    CLAUDE.md: "mudança de regra de cálculo nunca deve zerar
+    retroativamente um valor já calculado").
+  - `indice_relativo_pct`: sempre positivo (valor absoluto),
+    `|quebra_pct ÷ quebra_12m_pct| × 100` — o quão fora do padrão aquela
+    contagem ficou em relação à própria média histórica do item.
+- View `inventory_count_line_history` (nova): uma linha por contagem
+  **fechada**, já com nome do item, categoria, os limites **atuais** do
+  item (de propósito não congelados, só os três números acima o são) e a
+  data da contagem anterior do mesmo item via `lag() over (partition by
+  inventory_item_id order by closed_at)` — evita recalcular "qual foi a
+  contagem anterior" em JavaScript em três lugares diferentes (tela de
+  contagem, Histórico, Resumo Executivo).
+
+### 18.2 Por que os três números são calculados uma vez só, e não sempre ao vivo
+
+Contraria, à primeira vista, a convenção já estabelecida no projeto de
+"nunca persistir o que pode ficar desatualizado, sempre calcular na hora"
+(Partes 16/17 do app principal). A diferença aqui é que `quebra_12m_pct`
+de uma contagem depende de quais contagens anteriores foram excluídas como
+outlier, o que depende do `indice_relativo_pct` **delas**, que por sua vez
+dependia da média que existia **na época de cada uma** — uma cadeia
+sequencial, não um valor independente recalculável a qualquer momento sem
+andar a história inteira do item contagem por contagem. A solução: cada
+contagem, ao fechar, grava o que calculou lendo só o histórico já
+congelado até aquele ponto; consultas futuras (a tela de contagem viva, o
+Histórico, o alerta do Resumo Executivo) só leem esses números já prontos
+e decidem inclusão/exclusão usando o limite **atual** do item — a única
+parte que seria sensata recalcular ao vivo, e é exatamente a única parte
+que realmente é.
+
+### 18.3 Tela "Contagem de Estoque" — card por item em vez de linha de tabela
+
+A lista de linhas de contagem (`count-session-panel.tsx`) deixou de ser
+uma tabela (ficaria ilegível com 11 colunas) e virou um card por item,
+igual ao padrão já usado em "Itens de estoque". Cada card mostra:
+
+- 1ª linha: contagem física (editável), diferença, quebra de estoque
+  (calculada ao vivo conforme a camareira/admin digita, ainda sem
+  persistir nada), quebra 12 meses (do histórico já fechado — nunca da
+  própria sessão, que ainda não fechou) e data da contagem anterior.
+- 2ª linha: quebra máxima admitida (stepper ±1%, sempre positivo), índice
+  de quebra relativo (calculado ao vivo a partir da quebra de estoque
+  atual ÷ quebra 12 meses) e índice de quebra relativo máximo (stepper
+  ±1%). Os dois steppers reaproveitam `QuantityStepper`
+  (`src/components/shared/quantity-stepper.tsx`) sem nenhuma mudança no
+  componente — ele já aceita qualquer inteiro via `min`/`onChange`, então
+  "1%, 2%, 3%..." é só mais um uso do mesmo padrão já usado em
+  frigobar/comanda.
+- Texto em vermelho quando a quebra de estoque (em módulo) excede a
+  quebra máxima admitida, ou quando o índice relativo excede o índice
+  relativo máximo — sinal visual de que aquela contagem, se fechada assim,
+  provavelmente vai virar outlier ou disparar o alerta do Resumo
+  Executivo.
+
+### 18.4 Novo card no Histórico e nova tela "Quebra de Estoque" no Resumo Executivo
+
+- Componente compartilhado `src/components/shared/inventory-shrinkage-table.tsx`
+  (mesmas 12 colunas nos dois lugares, pedido explícito do proprietário)
+  reaproveitado por:
+  - Um card novo, "Histórico de contagem de estoque", ao final da tela
+    **Histórico** do admin — usa o mesmo filtro `from`/`to` já existente
+    na página, sem filtro próprio.
+  - Nova tela **"Quebra de Estoque"**, item de menu novo no Resumo
+    Executivo entre "Compras e Estoque" e "Comissões das camareiras" —
+    lista os itens cuja **última** contagem fechada tem quebra de estoque
+    (em módulo) maior que a quebra máxima admitida daquele item, ordenado
+    do desvio mais grave pro menos grave.
+- `getInventoryCountHistoryForPeriod(from, to)` e
+  `getItemsAboveShrinkageThreshold()`, as duas novas em
+  `src/lib/actions/inventory-counts.ts`, lêem direto da view
+  `inventory_count_line_history` — a segunda agrupa por item e pega só a
+  linha mais recente de cada um antes de filtrar/ordenar.
+- **Decisão de interpretação, não explicitada no pedido original**: tanto
+  o card do Histórico quanto a tela de alerta comparam a quebra de
+  estoque **em módulo** (valor absoluto) contra a quebra máxima admitida
+  — não só o lado negativo (falta). Coerente com o resto da especificação
+  (o índice de quebra relativo também é sempre em módulo) e com o próprio
+  nome "quebra máxima admitida" soar como um teto de desvio aceitável,
+  tanto pra falta quanto pra sobra — uma sobra grande também costuma
+  indicar erro de contagem/lançamento, não só uma falta. Se o proprietário
+  quiser restringir o alerta só ao lado negativo, é uma mudança pequena e
+  localizada nesses dois pontos.
+
+### 18.5 `computeTrailingShrinkageAverage`/`twelveMonthsAgoIso` separadas em módulo próprio
+
+`src/lib/inventory-shrinkage.ts` — mesmo motivo já documentado no projeto
+pra `commission-math.ts`: um arquivo `"use server"` só pode exportar
+Server Actions assíncronas, então a função pura de cálculo da média
+(testável isolada, sem I/O) não podia morar dentro de
+`inventory-counts.ts`.
+
+### 18.6 Testado
+
+Simulado diretamente no banco local (Docker), sem depender de dados de
+produção: fabricadas 3 contagens fechadas históricas pro mesmo item (há
+~10, ~7 e ~3 meses) com valores escolhidos pra forçar exatamente o cenário
+do outlier — a contagem de ~7 meses atrás com um índice relativo de 500%
+(bem acima do limite padrão de 200%) — e uma quarta contagem aberta hoje.
+Confirmado, lendo a tela de contagem real (sessão autenticada,
+`next dev` local):
+
+- "Quebra 12 meses" mostrado na tela ANTES de fechar a contagem de hoje:
+  -11% (média de -10% e -12%, **excluindo** corretamente o -50% da
+  contagem de ~7 meses atrás, cujo índice relativo congelado de 500%
+  excede o limite de 200%) — confirma a exclusão de outlier funcionando
+  olhando só pra tela, sem precisar olhar o banco.
+- "Data da contagem anterior": a contagem de ~3 meses atrás (a mais
+  recente antes de hoje), não a mais antiga nem a excluída — confirma o
+  `lag()` por data, não por qualquer critério de inclusão na média.
+- Fechando a contagem de hoje (contagem física 9, saldo sistema 10): os
+  três números gravados bateram exatamente com o esperado por conta
+  manual — `quebra_pct = -10.00`, `quebra_12m_pct = -11.00`,
+  `indice_relativo_pct = 90.91`.
+- Abrindo uma QUINTA contagem depois de fechar a quarta: "Quebra 12
+  meses" recalculado pra -10.7% (média de -10, -12 e -10, ainda excluindo
+  o outlier de -50%) — confirma que a contagem recém-fechada já entra
+  como histórico pra próxima, sem precisar de nenhum passo manual.
+- Baixando a quebra máxima admitida do item pra 5% (via a Server Action
+  dos steppers) e recarregando a tela "Quebra de Estoque": o item passou
+  a aparecer corretamente (quebra de -10% excede 5%), com todas as 12
+  colunas certas (datas, saldo, contagem, diferença, quebra, quebra 12
+  meses, os dois limites, índice relativo e índice relativo máximo).
+  Restaurado o limite padrão (20%) depois, confirmando que o item some do
+  alerta de novo (-10% não excede 20%).
+- Card "Histórico de contagem de estoque" (com um período de 1 ano no
+  filtro) mostrando as 4 contagens do item com as datas certas.
+
+Toda a simulação (sessões, linhas de contagem, e o ajuste real de estoque
+de -1 que o fechamento da contagem de teste gerou de verdade via a RPC
+existente) foi apagada do banco local depois, com o saldo real do item
+confirmado restaurado ao valor de antes do teste. `npm run lint`/
+`npm run build` limpos, com a rota `/dashboard/quebra-estoque` aparecendo
+na árvore de build.
+
 ### 15.6 Testado
 
 Simulação direta no banco local, sob as regras de segurança reais (RLS) de
