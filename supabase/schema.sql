@@ -1727,6 +1727,13 @@ create table inventory_count_sessions (
   closed_at timestamptz
 );
 
+-- No máximo 1 sessão "em_andamento" por categoria (e 1 só pra "todos os
+-- itens", category_id null) — evita sessões duplicadas vazias por clique
+-- duplo/corrida (ver PRD_compras.md seção 17.8).
+create unique index inventory_count_sessions_one_open_per_category
+  on inventory_count_sessions (coalesce(category_id, '00000000-0000-0000-0000-000000000000'::uuid))
+  where status = 'em_andamento';
+
 -- ---------- INVENTORY COUNT LINES (uma linha por item contado) ----------
 create table inventory_count_lines (
   id uuid primary key default uuid_generate_v4(),

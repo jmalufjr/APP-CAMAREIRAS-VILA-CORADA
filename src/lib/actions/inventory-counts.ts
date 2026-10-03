@@ -22,12 +22,28 @@ export interface CountLineView {
 // cada item ativo (de uma categoria, ou de todos) no momento da abertura
 // — a variância faz sentido mesmo que outros movimentos aconteçam
 // durante a contagem (ver PRD_compras.md seção 5.5).
+//
+// Antes de criar, confere se já não existe uma sessão "em_andamento" pra
+// essa mesma categoria (ou pra "todos os itens", quando categoryId vem
+// vazio) — se existir, reaproveita ela em vez de abrir outra. Sem essa
+// checagem, clicar duas vezes em "Iniciar contagem" (ex.: duplo clique,
+// conexão lenta, um erro de navegação no meio do caminho) cria sessões
+// duplicadas vazias — foi exatamente o que aconteceu na prática (ver
+// PRD_compras.md seção 17.8) antes dessa correção.
 export async function startCountSession(categoryId?: string) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Não autenticado." };
+
+  let existingQuery = supabase
+    .from("inventory_count_sessions")
+    .select("id")
+    .eq("status", "em_andamento");
+  existingQuery = categoryId ? existingQuery.eq("category_id", categoryId) : existingQuery.is("category_id", null);
+  const { data: existing } = await existingQuery.maybeSingle();
+  if (existing) return { success: true, sessionId: existing.id as string };
 
   let itemsQuery = supabase.from("inventory_items").select("id").eq("active", true);
   if (categoryId) itemsQuery = itemsQuery.eq("category_id", categoryId);
@@ -48,7 +64,16 @@ export async function startCountSession(categoryId?: string) {
     .insert({ category_id: categoryId || null, created_by: user.id })
     .select("id")
     .single();
-  if (error || !session) return { error: error?.message ?? "Erro ao abrir a contagem." };
+  if (error || !session) {
+    // "23505" = a trava do banco (índice único) pegou uma corrida que a
+    // checagem acima não viu a tempo — nesse caso a sessão concorrente já
+    // existe, só precisa buscar e devolver o id dela em vez de dar erro.
+    if (error?.code === "23505") {
+      const { data: race } = await existingQuery.maybeSingle();
+      if (race) return { success: true, sessionId: race.id as string };
+    }
+    return { error: error?.message ?? "Erro ao abrir a contagem." };
+  }
 
   const { error: linesError } = await supabase.from("inventory_count_lines").insert(
     items.map((i) => ({

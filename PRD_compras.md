@@ -838,6 +838,44 @@ rotas novas carregando os dados certos) e que o realce de item ativo no
 menu não duplica entre itens com o mesmo prefixo de URL (ex.: "Estoque" e
 "Lançar Compra"). `npm run lint`/`npm run build` limpos.
 
+### 17.8 Bug real encontrado pelo proprietário testando: contagem física duplicada
+
+Ao clicar em "Iniciar contagem" pra "Bar da piscina", a tela seguinte
+(`/compras/contagem/[sessionId]`) apareceu em branco (404) — causa foi o
+cache de rotas do **modo de desenvolvimento** (Turbopack) ficar
+desatualizado depois de uma leva grande de arquivos apagados/renomeados
+de uma vez (seção 17, inteira) — resolvido reiniciando o servidor local;
+a mesma URL passou a carregar normalmente depois disso. Não afeta o
+build de produção (`npm run build` já vinha limpo o tempo todo).
+
+**Efeito colateral real, esse sim corrigido no código**: cada tentativa
+falha de abrir a tela (o clique no botão "Iniciar contagem" funcionava,
+só a navegação seguinte que falhava) criava uma **sessão de contagem
+nova**, já que `startCountSession` não conferia se já existia uma sessão
+"em_andamento" pra aquela categoria antes de criar outra — chegaram a
+existir 4 sessões vazias duplicadas pra "Bar da piscina" ao mesmo tempo.
+Corrigido em duas camadas, mesmo padrão já usado no projeto pra "1 conta
+aberta por quarto" (`room_bills`):
+
+- Na Server Action: antes de criar, busca se já existe uma sessão aberta
+  pra essa categoria (ou pra "todos os itens") e, se existir, devolve o
+  id dela em vez de criar outra.
+- No banco: índice único parcial (`inventory_count_sessions_one_open_per_category`,
+  migration 059) garantindo, mesmo numa corrida entre duas requisições
+  simultâneas, que nunca existam duas sessões "em_andamento" pra mesma
+  categoria — se a trava do banco pegar a corrida antes da checagem da
+  Server Action, o código busca a sessão que "venceu" e devolve ela
+  normalmente, sem mostrar erro pra quem clicou.
+
+As 3 sessões vazias duplicadas (nenhuma tinha nenhuma contagem
+preenchida) foram apagadas; a sessão original do proprietário foi
+preservada intacta, pronta pra ele continuar de onde parou.
+
+**Testado**: chamada repetida da Server Action pra mesma categoria
+devolvendo sempre o mesmo `sessionId` (sem criar duplicata, confirmado
+também direto no banco); categoria diferente continua funcionando
+normalmente. `npm run lint`/`npm run build` limpos.
+
 ### 15.6 Testado
 
 Simulação direta no banco local, sob as regras de segurança reais (RLS) de
