@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Pencil } from "lucide-react";
@@ -25,7 +26,6 @@ export function InventoryItemFormDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [categoryId, setCategoryId] = useState(item?.category_id ?? "");
   const [turnoverGroupId, setTurnoverGroupId] = useState(item?.turnover_group_id ?? "none");
   const router = useRouter();
   const isEdit = !!item;
@@ -51,7 +51,6 @@ export function InventoryItemFormDialog({
         </DialogHeader>
         <form
           action={(formData) => {
-            formData.set("category_id", categoryId);
             formData.set("turnover_group_id", turnoverGroupId === "none" ? "" : turnoverGroupId);
             startTransition(async () => {
               const result = isEdit ? await updateInventoryItem(item.id, formData) : await createInventoryItem(formData);
@@ -71,21 +70,15 @@ export function InventoryItemFormDialog({
             <Input id="name" name="name" defaultValue={item?.name} required />
           </div>
           <div className="space-y-2">
-            <Label>Categoria</Label>
-            <Select value={categoryId} onValueChange={(v) => setCategoryId(v ?? "")}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Selecione a categoria">
-                  {(v: string) => categories.find((c) => c.id === v)?.name ?? v}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Categorias de gasto (uma ou mais)</Label>
+            <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto border border-border rounded-lg p-3">
+              {categories.map((c) => (
+                <label key={c.id} className="flex items-center gap-1.5 text-sm">
+                  <Checkbox name="category_ids" value={c.id} defaultChecked={item?.category_ids?.includes(c.id) ?? false} />
+                  {c.name}
+                </label>
+              ))}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
@@ -142,7 +135,7 @@ export function InventoryItemFormDialog({
             </div>
           )}
           <DialogFooter>
-            <Button type="submit" disabled={isPending || !categoryId}>
+            <Button type="submit" disabled={isPending}>
               {isPending ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>

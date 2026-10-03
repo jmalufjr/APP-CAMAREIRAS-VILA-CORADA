@@ -38,7 +38,7 @@ export function ExpenseCategoriesPanel({ categories }: { categories: ExpenseCate
           });
         }}
       >
-        <Input placeholder="Nova categoria de despesa" value={newName} onChange={(e) => setNewName(e.target.value)} />
+        <Input placeholder="Nova categoria de gasto" value={newName} onChange={(e) => setNewName(e.target.value)} />
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <Checkbox checked={newIsInventory} onCheckedChange={(c) => setNewIsInventory(c === true)} />
           Controla itens de estoque (ex.: produtos de limpeza, piscina)

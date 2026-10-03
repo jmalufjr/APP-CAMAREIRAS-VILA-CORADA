@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { BarcodeScannerButton } from "@/components/shared/barcode-scanner";
 import { CameraCaptureButton } from "@/components/shared/camera-capture-button";
 import { Sparkles, Trash2, Plus, X, FileText, FolderOpen } from "lucide-react";
@@ -30,7 +31,10 @@ interface ItemRow {
   // evitar duplicidade com itens já cadastrados).
   createNew: boolean;
   newItemUnit: string;
-  newItemCategoryId: string;
+  // Categoria de gasto deixou de ser um campo da compra inteira e passou
+  // a existir só por item (Parte 19) — um item novo pode pertencer a mais
+  // de uma categoria ao mesmo tempo.
+  newItemCategoryIds: string[];
   newItemTurnoverGroupId: string; // "none" ou o id do grupo
 }
 
@@ -46,7 +50,7 @@ function emptyItem(): ItemRow {
     inventory_item_id: null,
     createNew: false,
     newItemUnit: "un",
-    newItemCategoryId: "",
+    newItemCategoryIds: [],
     newItemTurnoverGroupId: "none",
   };
 }
@@ -78,7 +82,6 @@ export function ExpenseForm({
   const router = useRouter();
 
   const [date, setDate] = useState(initial?.date ?? todayKey());
-  const [categoryId, setCategoryId] = useState(initial?.category_id ?? "");
   const [supplierName, setSupplierName] = useState(initial?.supplier_name ?? "");
   const [paymentMethod, setPaymentMethod] = useState<string>(initial?.payment_method ?? "");
   const [nfceUrl, setNfceUrl] = useState(initial?.nfce_url ?? "");
@@ -94,7 +97,7 @@ export function ExpenseForm({
       inventory_item_id: i.inventory_item_id,
       createNew: false,
       newItemUnit: "un",
-      newItemCategoryId: "",
+      newItemCategoryIds: [],
       newItemTurnoverGroupId: "none",
     })) ?? []
   );
@@ -145,18 +148,22 @@ export function ExpenseForm({
     if (data.supplier_name) setSupplierName(data.supplier_name);
     if (data.date) setDate(data.date);
     if (data.payment_method) setPaymentMethod(data.payment_method);
+    if (data.nfce_url) setNfceUrl(data.nfce_url);
     if (data.items.length > 0) {
       setItems(
         data.items.map((i) => {
-          const match = matchExistingItem(i.description);
+          // A IA já tenta identificar o item contra o catálogo (até por
+          // descrição diferente, ex.: marca) — o casamento por nome
+          // exato é só um reforço pros casos em que ela não achou nada.
+          const matchedId = i.matched_inventory_item_id ?? matchExistingItem(i.description)?.id ?? null;
           return {
             description: i.description,
             quantity: i.quantity,
             unit_cost: i.unit_cost,
-            inventory_item_id: match?.id ?? null,
+            inventory_item_id: matchedId,
             createNew: false,
             newItemUnit: "un",
-            newItemCategoryId: "",
+            newItemCategoryIds: [],
             newItemTurnoverGroupId: "none",
           };
         })
@@ -195,10 +202,6 @@ export function ExpenseForm({
   }
 
   function handleSubmit() {
-    if (!categoryId) {
-      toast.error("Selecione a categoria.");
-      return;
-    }
     if (total <= 0) {
       toast.error("Informe o valor total (ou os itens) da despesa.");
       return;
@@ -207,15 +210,14 @@ export function ExpenseForm({
       toast.error("Preencha a descrição de todos os itens, ou remova a linha vazia.");
       return;
     }
-    if (items.some((i) => i.createNew && !i.newItemCategoryId)) {
-      toast.error("Selecione a categoria do novo item de estoque, em cada linha que for criar um.");
+    if (items.some((i) => i.createNew && i.newItemCategoryIds.length === 0)) {
+      toast.error("Selecione ao menos uma categoria de gasto do novo item de estoque, em cada linha que for criar um.");
       return;
     }
 
     startTransition(async () => {
       const formData = new FormData();
       formData.set("date", date);
-      formData.set("category_id", categoryId);
       formData.set("supplier_name", supplierName);
       formData.set("payment_method", paymentMethod);
       formData.set("nfce_url", nfceUrl);
@@ -232,7 +234,7 @@ export function ExpenseForm({
             inventory_item_id: i.inventory_item_id,
             new_item: i.createNew
               ? {
-                  category_id: i.newItemCategoryId,
+                  category_ids: i.newItemCategoryIds,
                   unit: i.newItemUnit,
                   turnover_group_id: i.newItemTurnoverGroupId === "none" ? null : i.newItemTurnoverGroupId,
                 }
@@ -331,23 +333,6 @@ export function ExpenseForm({
             <div className="space-y-1.5">
               <Label>Data</Label>
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Categoria</Label>
-              <Select value={categoryId} onValueChange={(v) => setCategoryId(v ?? "")}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecione a categoria">
-                    {(v: string) => categories.find((c) => c.id === v)?.name ?? v}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
             <div className="space-y-1.5">
               <Label>Fornecedor (opcional)</Label>
@@ -475,25 +460,26 @@ export function ExpenseForm({
 
               {item.createNew && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 rounded-lg bg-muted/40 p-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Categoria do novo item</Label>
-                    <Select
-                      value={item.newItemCategoryId}
-                      onValueChange={(v) => updateItem(index, { newItemCategoryId: v ?? "" })}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Selecione">
-                          {(v: string) => inventoryCategories.find((c) => c.id === v)?.name ?? v}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {inventoryCategories.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="space-y-1 sm:col-span-3">
+                    <Label className="text-xs text-muted-foreground">Categoria(s) de gasto do novo item</Label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {inventoryCategories.map((c) => (
+                        <label key={c.id} className="flex items-center gap-1.5 text-sm">
+                          <Checkbox
+                            checked={item.newItemCategoryIds.includes(c.id)}
+                            onCheckedChange={(checked) =>
+                              updateItem(index, {
+                                newItemCategoryIds:
+                                  checked === true
+                                    ? [...item.newItemCategoryIds, c.id]
+                                    : item.newItemCategoryIds.filter((id) => id !== c.id),
+                              })
+                            }
+                          />
+                          {c.name}
+                        </label>
+                      ))}
+                    </div>
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Unidade</Label>

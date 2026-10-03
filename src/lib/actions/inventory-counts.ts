@@ -56,7 +56,18 @@ export async function startCountSession(categoryId?: string) {
   if (existing) return { success: true, sessionId: existing.id as string };
 
   let itemsQuery = supabase.from("inventory_items").select("id").eq("active", true);
-  if (categoryId) itemsQuery = itemsQuery.eq("category_id", categoryId);
+  // Categoria deixou de ser 1-pra-1 (Parte 19) — um item entra na
+  // contagem dessa categoria se ela estiver entre as suas, não mais por
+  // igualdade direta.
+  if (categoryId) {
+    const { data: links } = await supabase
+      .from("inventory_item_categories")
+      .select("inventory_item_id")
+      .eq("category_id", categoryId);
+    const itemIdsInCategory = (links ?? []).map((l) => l.inventory_item_id as string);
+    if (itemIdsInCategory.length === 0) return { error: "Nenhum item de estoque encontrado pra essa categoria." };
+    itemsQuery = itemsQuery.in("id", itemIdsInCategory);
+  }
   const { data: items } = await itemsQuery;
   if (!items || items.length === 0) return { error: "Nenhum item de estoque encontrado pra essa categoria." };
 

@@ -2,12 +2,19 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { getInventoryItems } from "@/lib/actions/inventory-items";
 
 export interface ParsedReceiptItem {
   description: string;
   quantity: number;
   unit_cost: number;
   subtotal: number;
+  // Item já cadastrado que a IA julgou corresponder a esta linha (ex.:
+  // "água mineral da marca Indaiá" → "Água mineral sem gás" já existente)
+  // — null quando não achou nenhuma correspondência confiável. Nunca
+  // decide por conta própria: só sugere, a tela sempre mostra como uma
+  // caixa selecionável que o admin pode aceitar ou trocar.
+  matched_inventory_item_id: string | null;
 }
 
 export interface ParsedReceipt {
@@ -15,10 +22,11 @@ export interface ParsedReceipt {
   payment_method: string | null; // um de PAYMENT_METHOD_OPTIONS, ou null se não identificado
   date: string | null; // "YYYY-MM-DD", se legível na nota
   total_amount: number | null;
+  nfce_url: string | null; // link/código da nota fiscal, se impresso no documento
   items: ParsedReceiptItem[];
 }
 
-const SYSTEM_PROMPT = `Você lê fotos ou PDFs de notas fiscais, cupons fiscais e comprovantes de
+const BASE_SYSTEM_PROMPT = `Você lê fotos ou PDFs de notas fiscais, cupons fiscais e comprovantes de
 pagamento de uma pousada brasileira e devolve SOMENTE um JSON (sem texto antes ou
 depois, sem bloco de código markdown) no formato:
 
@@ -27,8 +35,9 @@ depois, sem bloco de código markdown) no formato:
   "payment_method": um destes valores ou null: "pix", "cartao_credito", "cartao_debito", "transferencia_bancaria", "dinheiro", "boleto",
   "date": "YYYY-MM-DD" ou null,
   "total_amount": número ou null,
+  "nfce_url": string ou null,
   "items": [
-    { "description": string, "quantity": número, "unit_cost": número, "subtotal": número }
+    { "description": string, "quantity": número, "unit_cost": número, "subtotal": número, "matched_catalog_index": número ou null }
   ]
 }
 
@@ -41,6 +50,18 @@ Regras:
 - "payment_method": procure por palavras como PIX, DÉBITO, CRÉDITO,
   DINHEIRO, BOLETO no documento. Se não houver nenhuma indicação clara,
   devolva null — nunca invente.
+- "nfce_url": o link (geralmente abaixo de um QR code) ou o código de
+  acesso da NFC-e/nota fiscal, se estiver impresso no documento. null se
+  não houver.
+- "matched_catalog_index": veja a lista numerada de itens já cadastrados
+  no fim desta instrução. Pra cada item comprado, se a descrição
+  corresponder ao MESMO produto de algum item dessa lista — mesmo que a
+  descrição na nota seja diferente (marca, abreviação, variação de
+  escrita; ex.: "água mineral s/gás Indaiá 500ml" é o mesmo produto que
+  "Água mineral sem gás" já cadastrado) — devolva o número daquele item.
+  Só devolva um número quando tiver confiança real de que é o MESMO
+  produto; na dúvida, devolva null (prefira deixar sem correspondência a
+  arriscar juntar dois produtos diferentes).
 - Nunca invente valores que não conseguir ler com confiança — prefira
   null a um palpite errado.`;
 
@@ -73,12 +94,19 @@ export async function parseReceiptWithAI(formData: FormData): Promise<{ error: s
   const mediaType = file.type || "image/jpeg";
   const isPdf = mediaType === "application/pdf";
 
+  // Catálogo numerado pro modelo devolver só um índice (token curto,
+  // menos sujeito a erro de transcrição do que pedir pra ele ecoar um
+  // UUID de volta) — convertido pro id real depois da resposta.
+  const catalog = await getInventoryItems(true);
+  const catalogList = catalog.map((item, idx) => `${idx + 1}. ${item.name}`).join("\n");
+  const systemPrompt = `${BASE_SYSTEM_PROMPT}\n\nItens já cadastrados no estoque (pra "matched_catalog_index" — o número da linha, ou null):\n${catalogList || "(nenhum item cadastrado ainda)"}`;
+
   try {
     const client = new Anthropic({ apiKey });
     const message = await client.messages.create({
       model: "claude-sonnet-5",
       max_tokens: 2048,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: [
         {
           role: "user",
@@ -101,7 +129,29 @@ export async function parseReceiptWithAI(formData: FormData): Promise<{ error: s
     // Remove um eventual bloco de código markdown, caso o modelo insista
     // em envolver o JSON com ```json apesar da instrução de não fazer isso.
     const cleaned = textBlock.text.trim().replace(/^```(json)?/i, "").replace(/```$/, "").trim();
-    const parsed = JSON.parse(cleaned) as ParsedReceipt;
+    type RawItem = {
+      description: string;
+      quantity: number;
+      unit_cost: number;
+      subtotal: number;
+      matched_catalog_index: number | null;
+    };
+    const parsed = JSON.parse(cleaned) as Omit<ParsedReceipt, "items" | "nfce_url"> & {
+      nfce_url?: string | null;
+      items: RawItem[];
+    };
+
+    const items: ParsedReceiptItem[] = (Array.isArray(parsed.items) ? parsed.items : []).map((i) => {
+      const idx = i.matched_catalog_index;
+      const matched = idx !== null && idx !== undefined ? catalog[idx - 1] : undefined;
+      return {
+        description: i.description,
+        quantity: i.quantity,
+        unit_cost: i.unit_cost,
+        subtotal: i.subtotal,
+        matched_inventory_item_id: matched?.id ?? null,
+      };
+    });
 
     return {
       success: true,
@@ -110,7 +160,8 @@ export async function parseReceiptWithAI(formData: FormData): Promise<{ error: s
         payment_method: parsed.payment_method ?? null,
         date: parsed.date ?? null,
         total_amount: parsed.total_amount ?? null,
-        items: Array.isArray(parsed.items) ? parsed.items : [],
+        nfce_url: parsed.nfce_url ?? null,
+        items,
       },
     };
   } catch (e) {

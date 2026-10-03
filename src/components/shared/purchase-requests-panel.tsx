@@ -142,7 +142,7 @@ export function PurchaseRequestsPanel({
                   >
                     <div>
                       <p className="font-medium">{item.name}</p>
-                      <p className="text-xs text-muted-foreground">{item.category_name}</p>
+                      <p className="text-xs text-muted-foreground">{item.category_names.join(" / ") || "—"}</p>
                     </div>
                   </button>
                 ))}

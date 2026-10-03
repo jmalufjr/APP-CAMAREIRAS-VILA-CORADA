@@ -19,7 +19,7 @@ export function ExpenseSummaryCards({
         </CardHeader>
         <CardContent className="space-y-1">
           {byCategory.map((s) => (
-            <div key={s.category_id} className="flex justify-between text-sm">
+            <div key={s.category_name} className="flex justify-between text-sm">
               <span>{s.category_name}</span>
               <span className="font-medium">R$ {s.total.toFixed(2)}</span>
             </div>

@@ -20,7 +20,10 @@ export interface ExpenseItemInput {
   // Presente só quando a pessoa escolheu "criar novo item de estoque" pra
   // esta linha, em vez de vincular a um já existente ou deixar sem
   // controle de estoque — ver resolveOrCreateInventoryItemId abaixo.
-  new_item?: { category_id: string; unit: string; turnover_group_id: string | null } | null;
+  // category_ids: um item pode pertencer a mais de uma categoria de gasto
+  // ao mesmo tempo (Parte 19) — essa informação vive só no item, não na
+  // despesa inteira (uma despesa pode ter itens de categorias diferentes).
+  new_item?: { category_ids: string[]; unit: string; turnover_group_id: string | null } | null;
 }
 
 // Resolve o item de estoque de uma linha: usa o vinculado (se houver),
@@ -46,13 +49,21 @@ async function resolveOrCreateInventoryItemId(
     .from("inventory_items")
     .insert({
       name,
-      category_id: item.new_item.category_id,
       unit: item.new_item.unit || "un",
       turnover_group_id: item.new_item.turnover_group_id || null,
     })
     .select("id")
     .single();
   if (error || !created) return { id: null, error: error?.message ?? "Erro ao criar item de estoque." };
+
+  const categoryIds = item.new_item.category_ids.filter(Boolean);
+  if (categoryIds.length > 0) {
+    const { error: catError } = await supabase
+      .from("inventory_item_categories")
+      .insert(categoryIds.map((category_id) => ({ inventory_item_id: created.id as string, category_id })));
+    if (catError) return { id: null, error: catError.message };
+  }
+
   return { id: created.id as string };
 }
 
@@ -70,15 +81,12 @@ export async function createExpense(formData: FormData) {
   if (!user) return { error: "Não autenticado." };
 
   const date = String(formData.get("date") ?? "").trim() || new Date().toISOString().slice(0, 10);
-  const category_id = String(formData.get("category_id") ?? "");
   const supplier_name = String(formData.get("supplier_name") ?? "").trim() || null;
   const payment_method = (String(formData.get("payment_method") ?? "").trim() || null) as PaymentMethod | null;
   const nfce_url = String(formData.get("nfce_url") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
   const itemsRaw = String(formData.get("items") ?? "[]");
   const receipt = formData.get("receipt");
-
-  if (!category_id) return { error: "Selecione a categoria." };
 
   let items: ExpenseItemInput[];
   try {
@@ -96,7 +104,6 @@ export async function createExpense(formData: FormData) {
     .from("expenses")
     .insert({
       date,
-      category_id,
       supplier_name,
       total_amount,
       payment_method,
@@ -163,15 +170,12 @@ export async function updateExpense(id: string, formData: FormData) {
   const supabase = await createClient();
 
   const date = String(formData.get("date") ?? "").trim() || new Date().toISOString().slice(0, 10);
-  const category_id = String(formData.get("category_id") ?? "");
   const supplier_name = String(formData.get("supplier_name") ?? "").trim() || null;
   const payment_method = (String(formData.get("payment_method") ?? "").trim() || null) as PaymentMethod | null;
   const nfce_url = String(formData.get("nfce_url") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
   const itemsRaw = String(formData.get("items") ?? "[]");
   const receipt = formData.get("receipt");
-
-  if (!category_id) return { error: "Selecione a categoria." };
 
   let items: ExpenseItemInput[];
   try {
@@ -187,7 +191,7 @@ export async function updateExpense(id: string, formData: FormData) {
 
   const { error: updateError } = await supabase
     .from("expenses")
-    .update({ date, category_id, supplier_name, total_amount, payment_method, nfce_url, notes })
+    .update({ date, supplier_name, total_amount, payment_method, nfce_url, notes })
     .eq("id", id);
   if (updateError) return { error: updateError.message };
 
@@ -239,7 +243,6 @@ export async function deleteExpense(id: string) {
 export interface ExpenseWithItems {
   id: string;
   date: string;
-  category_id: string;
   supplier_name: string | null;
   payment_method: PaymentMethod | null;
   nfce_url: string | null;
@@ -263,7 +266,6 @@ export async function getExpenseWithItems(id: string): Promise<ExpenseWithItems 
   return {
     id: expense.id,
     date: expense.date,
-    category_id: expense.category_id,
     supplier_name: expense.supplier_name,
     payment_method: expense.payment_method,
     nfce_url: expense.nfce_url,
@@ -274,10 +276,54 @@ export async function getExpenseWithItems(id: string): Promise<ExpenseWithItems 
   };
 }
 
+// Categoria(s) de gasto de uma despesa, pra exibição — derivadas dos
+// itens ligados a item de estoque (Parte 19: a despesa em si não tem mais
+// categoria própria, já que pode ter itens de categorias diferentes).
+// "Sem categoria" cobre despesa sem item nenhum, item sem vínculo de
+// estoque, ou item vinculado mas ainda sem nenhuma categoria escolhida.
+async function getCategoryNamesByExpense(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  expenseIds: string[]
+): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>();
+  if (expenseIds.length === 0) return result;
+
+  const { data } = await supabase
+    .from("expense_items")
+    .select("expense_id, inventory_item_id")
+    .in("expense_id", expenseIds)
+    .not("inventory_item_id", "is", null);
+  type Raw = { expense_id: string; inventory_item_id: string };
+  const rows = (data ?? []) as unknown as Raw[];
+  const itemIds = [...new Set(rows.map((r) => r.inventory_item_id))];
+  if (itemIds.length === 0) return result;
+
+  const { data: links } = await supabase
+    .from("inventory_item_categories")
+    .select("inventory_item_id, expense_categories(name)")
+    .in("inventory_item_id", itemIds);
+  type LinkRaw = { inventory_item_id: string; expense_categories: { name: string } | null };
+  const namesByItem = new Map<string, Set<string>>();
+  ((links ?? []) as unknown as LinkRaw[]).forEach((l) => {
+    if (!l.expense_categories?.name) return;
+    const set = namesByItem.get(l.inventory_item_id) ?? new Set<string>();
+    set.add(l.expense_categories.name);
+    namesByItem.set(l.inventory_item_id, set);
+  });
+
+  const setsByExpense = new Map<string, Set<string>>();
+  rows.forEach((r) => {
+    const set = setsByExpense.get(r.expense_id) ?? new Set<string>();
+    (namesByItem.get(r.inventory_item_id) ?? new Set<string>()).forEach((n) => set.add(n));
+    setsByExpense.set(r.expense_id, set);
+  });
+  setsByExpense.forEach((set, expenseId) => result.set(expenseId, Array.from(set)));
+  return result;
+}
+
 export interface ExpenseListRow {
   id: string;
   date: string;
-  category_id: string;
   category_name: string;
   supplier_name: string | null;
   total_amount: number;
@@ -289,24 +335,21 @@ export interface ExpenseListRow {
   created_at: string;
 }
 
-export async function getExpenses(from: string, to: string, categoryId?: string): Promise<ExpenseListRow[]> {
+export async function getExpenses(from: string, to: string): Promise<ExpenseListRow[]> {
   const supabase = await createClient();
-  let query = supabase
+  const { data } = await supabase
     .from("expenses")
     .select(
-      "id, date, category_id, supplier_name, total_amount, payment_method, receipt_storage_path, nfce_url, notes, created_at, expense_categories(name), created_by_profile:profiles(name)"
+      "id, date, supplier_name, total_amount, payment_method, receipt_storage_path, nfce_url, notes, created_at, created_by_profile:profiles(name)"
     )
     .gte("date", from)
     .lte("date", to)
     .order("date", { ascending: false })
     .order("created_at", { ascending: false });
-  if (categoryId) query = query.eq("category_id", categoryId);
 
-  const { data } = await query;
   type Raw = {
     id: string;
     date: string;
-    category_id: string;
     supplier_name: string | null;
     total_amount: number;
     payment_method: PaymentMethod | null;
@@ -314,17 +357,16 @@ export async function getExpenses(from: string, to: string, categoryId?: string)
     nfce_url: string | null;
     notes: string | null;
     created_at: string;
-    expense_categories: { name: string } | null;
     created_by_profile: { name: string } | null;
   };
   const rows = (data ?? []) as unknown as Raw[];
+  const categoryNamesByExpense = await getCategoryNamesByExpense(supabase, rows.map((r) => r.id));
 
   return Promise.all(
     rows.map(async (r) => ({
       id: r.id,
       date: r.date,
-      category_id: r.category_id,
-      category_name: r.expense_categories?.name ?? "—",
+      category_name: (categoryNamesByExpense.get(r.id) ?? []).join(" / ") || "Sem categoria",
       supplier_name: r.supplier_name,
       total_amount: Number(r.total_amount),
       payment_method: r.payment_method,
@@ -338,34 +380,49 @@ export async function getExpenses(from: string, to: string, categoryId?: string)
 }
 
 export interface ExpenseCategorySummaryRow {
-  category_id: string;
   category_name: string;
   total: number;
 }
 
+// Soma por categoria de gasto, derivada dos ITENS de cada despesa (Parte
+// 19) — um item em 2 categorias soma o próprio subtotal (não o total da
+// despesa inteira) nas duas. Itens sem vínculo de estoque, ou despesas
+// sem item nenhum, caem em "Sem categoria".
 export async function getExpenseSummaryByCategory(from: string, to: string): Promise<ExpenseCategorySummaryRow[]> {
   const supabase = await createClient();
   const { data } = await supabase
-    .from("expenses")
-    .select("category_id, total_amount, expense_categories(name)")
-    .gte("date", from)
-    .lte("date", to);
+    .from("expense_items")
+    .select("subtotal, inventory_item_id, expenses!inner(date)")
+    .gte("expenses.date", from)
+    .lte("expenses.date", to);
 
-  type Raw = { category_id: string; total_amount: number; expense_categories: { name: string } | null };
+  type Raw = { subtotal: number; inventory_item_id: string | null };
   const rows = (data ?? []) as unknown as Raw[];
+  const itemIds = [...new Set(rows.filter((r) => r.inventory_item_id).map((r) => r.inventory_item_id as string))];
 
-  const byCategory = new Map<string, ExpenseCategorySummaryRow>();
-  rows.forEach((r) => {
-    const entry = byCategory.get(r.category_id) ?? {
-      category_id: r.category_id,
-      category_name: r.expense_categories?.name ?? "—",
-      total: 0,
-    };
-    entry.total += Number(r.total_amount);
-    byCategory.set(r.category_id, entry);
+  const { data: links } = await supabase
+    .from("inventory_item_categories")
+    .select("inventory_item_id, expense_categories(name)")
+    .in("inventory_item_id", itemIds.length > 0 ? itemIds : ["00000000-0000-0000-0000-000000000000"]);
+  type LinkRaw = { inventory_item_id: string; expense_categories: { name: string } | null };
+  const categoriesByItem = new Map<string, string[]>();
+  ((links ?? []) as unknown as LinkRaw[]).forEach((l) => {
+    if (!l.expense_categories?.name) return;
+    const names = categoriesByItem.get(l.inventory_item_id) ?? [];
+    names.push(l.expense_categories.name);
+    categoriesByItem.set(l.inventory_item_id, names);
   });
 
-  return Array.from(byCategory.values()).sort((a, b) => b.total - a.total);
+  const byCategory = new Map<string, number>();
+  rows.forEach((r) => {
+    const names = r.inventory_item_id ? categoriesByItem.get(r.inventory_item_id) ?? [] : [];
+    const targets = names.length > 0 ? names : ["Sem categoria"];
+    targets.forEach((name) => byCategory.set(name, (byCategory.get(name) ?? 0) + Number(r.subtotal)));
+  });
+
+  return Array.from(byCategory.entries())
+    .map(([category_name, total]) => ({ category_name, total }))
+    .sort((a, b) => b.total - a.total);
 }
 
 export interface ExpenseSupplierSummaryRow {

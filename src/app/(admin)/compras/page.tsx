@@ -2,12 +2,13 @@ import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { getPurchaseList } from "@/lib/actions/purchase-list";
 import { getCategoryCountStatus } from "@/lib/actions/inventory-counts";
-import { Package, Tags, ClipboardList, PackageMinus, ChevronRight, AlertTriangle, CalendarClock } from "lucide-react";
+import { Package, Tags, ClipboardList, PackageMinus, ChevronRight, AlertTriangle, CalendarClock, UtensilsCrossed } from "lucide-react";
 
 const menuItems = [
   { href: "/compras/baixa", label: "Baixa de estoque", icon: PackageMinus },
   { href: "/compras/itens", label: "Itens de estoque", icon: Package },
-  { href: "/compras/categorias", label: "Categorias de despesa", icon: Tags },
+  { href: "/compras/categorias", label: "Categorias de gasto", icon: Tags },
+  { href: "/compras/pratos", label: "Lista de pratos: natureza do consumo", icon: UtensilsCrossed },
   { href: "/compras/grupos-giro", label: "Grupos de giro (dias de folga)", icon: CalendarClock },
   { href: "/compras/contagem", label: "Contagem de estoque", icon: ClipboardList },
 ];

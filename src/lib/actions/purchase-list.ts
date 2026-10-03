@@ -63,11 +63,12 @@ async function getActiveDismissalsMap(): Promise<Map<string, DismissalRow>> {
 export async function getPurchaseList(): Promise<PurchaseListRow[]> {
   const supabase = await createClient();
 
-  const [{ data: items }, { data: suggestions }, teamRequests, dismissals] = await Promise.all([
+  const [{ data: items }, { data: categoryLinks }, { data: suggestions }, teamRequests, dismissals] = await Promise.all([
     supabase
       .from("inventory_items")
-      .select("id, name, unit, active, expense_categories(name), inventory_turnover_groups(name)")
+      .select("id, name, unit, active, inventory_turnover_groups(name)")
       .eq("active", true),
+    supabase.from("inventory_item_categories").select("inventory_item_id, expense_categories(name)"),
     supabase.from("inventory_purchase_suggestions").select("*"),
     getAggregatedPurchaseRequests(),
     getActiveDismissalsMap(),
@@ -77,10 +78,17 @@ export async function getPurchaseList(): Promise<PurchaseListRow[]> {
     id: string;
     name: string;
     unit: string;
-    expense_categories: { name: string } | null;
     inventory_turnover_groups: { name: string } | null;
   };
   const itemRows = (items ?? []) as unknown as ItemRaw[];
+  const categoryNamesByItem = new Map<string, string[]>();
+  ((categoryLinks ?? []) as unknown as { inventory_item_id: string; expense_categories: { name: string } | null }[]).forEach(
+    (r) => {
+      const names = categoryNamesByItem.get(r.inventory_item_id) ?? [];
+      if (r.expense_categories?.name) names.push(r.expense_categories.name);
+      categoryNamesByItem.set(r.inventory_item_id, names);
+    }
+  );
   const suggestionMap = new Map(
     ((suggestions ?? []) as unknown as SuggestionRow[]).map((s) => [s.inventory_item_id, s])
   );
@@ -103,7 +111,7 @@ export async function getPurchaseList(): Promise<PurchaseListRow[]> {
       inventory_item_id: item.id,
       item_name: item.name,
       unit: item.unit,
-      category_name: item.expense_categories?.name ?? "—",
+      category_name: (categoryNamesByItem.get(item.id) ?? []).join(" / ") || "—",
       turnover_group_name: item.inventory_turnover_groups?.name ?? null,
       coverage_days: s?.coverage_days ?? null,
       balance,

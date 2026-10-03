@@ -1638,7 +1638,6 @@ create table inventory_turnover_groups (
 create table inventory_items (
   id uuid primary key default uuid_generate_v4(),
   name text not null,
-  category_id uuid not null references expense_categories(id),
   unit text not null default 'un',
   barcode text unique,
   reorder_point numeric(12,3) not null default 0,
@@ -1653,19 +1652,31 @@ create table inventory_items (
   indice_relativo_maximo_pct numeric(6,2) not null default 200 check (indice_relativo_maximo_pct > 0)
 );
 
+-- ---------- CATEGORIA DE GASTO POR ITEM (N-pra-N) ----------
+-- Um item pode pertencer a mais de uma categoria de gasto ao mesmo tempo
+-- (ex.: "Coca-Cola Zero lata" é Bar da piscina E Frigobar) — ver
+-- PRD_compras.md seção 19.
+create table inventory_item_categories (
+  inventory_item_id uuid not null references inventory_items(id) on delete cascade,
+  category_id uuid not null references expense_categories(id) on delete cascade,
+  primary key (inventory_item_id, category_id)
+);
+
 -- ---------- FICHA TÉCNICA (receita): ingrediente(s) por produto do cardápio ----------
 -- Um ingrediente pode alimentar vários produtos (frigobar OU bar da
 -- piscina, nunca os dois na mesma linha), e um produto pode consumir
--- vários ingredientes. portions_per_order: quantas porções daquele
--- ingrediente um pedido do produto consome. O estoque e a lista de
--- compras sempre mostram só o ingrediente, nunca a origem (frigobar/bar,
--- qual prato) — ver PRD_compras.md.
+-- vários ingredientes. portions_count (quantas porções do ingrediente vão
+-- no prato) × amount_per_portion (quanto, na unidade própria do
+-- ingrediente — kg/L/un — tem 1 porção) = total consumido por pedido. O
+-- estoque e a lista de compras sempre mostram só o ingrediente, nunca a
+-- origem (frigobar/bar, qual prato) — ver PRD_compras.md.
 create table inventory_item_recipes (
   id uuid primary key default uuid_generate_v4(),
   inventory_item_id uuid not null references inventory_items(id) on delete cascade,
   minibar_item_id uuid references minibar_items(id) on delete cascade,
   poolbar_item_id uuid references poolbar_items(id) on delete cascade,
-  portions_per_order numeric(10,3) not null default 1 check (portions_per_order > 0),
+  portions_count numeric(10,3) not null default 1 check (portions_count > 0),
+  amount_per_portion numeric(12,4) not null default 0 check (amount_per_portion >= 0),
   created_at timestamptz not null default now(),
   check (
     (minibar_item_id is not null and poolbar_item_id is null) or
@@ -1698,7 +1709,6 @@ create table purchase_requests (
 create table expenses (
   id uuid primary key default uuid_generate_v4(),
   date date not null default current_date,
-  category_id uuid not null references expense_categories(id),
   supplier_name text,
   total_amount numeric(12,2) not null default 0 check (total_amount >= 0),
   payment_method payment_method,
@@ -1791,7 +1801,13 @@ select
   cl.inventory_item_id,
   ii.name as item_name,
   ii.unit,
-  ec.name as category_name,
+  coalesce(
+    (select string_agg(ec.name, ' / ' order by ec.name)
+     from inventory_item_categories iic
+     join expense_categories ec on ec.id = iic.category_id
+     where iic.inventory_item_id = ii.id),
+    '—'
+  ) as category_name,
   cl.theoretical_qty,
   cl.counted_qty,
   (cl.counted_qty - cl.theoretical_qty) as diferenca,
@@ -1805,12 +1821,12 @@ select
 from inventory_count_lines cl
 join inventory_count_sessions cs on cs.id = cl.session_id
 join inventory_items ii on ii.id = cl.inventory_item_id
-join expense_categories ec on ec.id = ii.category_id
 where cs.status = 'concluida' and cl.counted_qty is not null;
 
 alter table expense_categories enable row level security;
 alter table inventory_turnover_groups enable row level security;
 alter table inventory_items enable row level security;
+alter table inventory_item_categories enable row level security;
 alter table inventory_item_recipes enable row level security;
 alter table purchase_requests enable row level security;
 alter table expenses enable row level security;
@@ -1834,6 +1850,13 @@ create policy "inv_items_insert_admin_manutencao" on inventory_items for insert
   with check (is_admin() or is_manutencao());
 create policy "inv_items_admin_update" on inventory_items for update using (is_admin());
 create policy "inv_items_admin_delete" on inventory_items for delete using (is_admin());
+
+create policy "inv_item_categories_select_authenticated" on inventory_item_categories
+  for select using (auth.uid() is not null);
+create policy "inv_item_categories_insert_admin_manutencao" on inventory_item_categories
+  for insert with check (is_admin() or is_manutencao());
+create policy "inv_item_categories_delete_admin_manutencao" on inventory_item_categories
+  for delete using (is_admin() or is_manutencao());
 
 create policy "inv_recipes_select_authenticated" on inventory_item_recipes
   for select using (auth.uid() is not null);
@@ -1919,14 +1942,14 @@ create or replace function deduct_inventory_on_bill_payment() returns trigger as
 begin
   if new.status = 'paga' and (old.status is null or old.status is distinct from 'paga') then
     insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
-    select r.inventory_item_id, 'baixa_consumo_hospede', -(mbi.quantity * r.portions_per_order), new.id,
+    select r.inventory_item_id, 'baixa_consumo_hospede', -(mbi.quantity * r.portions_count * r.amount_per_portion), new.id,
       'Baixa automática ao pagar a conta (frigobar)'
     from room_bill_minibar_items mbi
     join inventory_item_recipes r on r.minibar_item_id = mbi.minibar_item_id
     where mbi.bill_id = new.id and mbi.quantity > 0;
 
     insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
-    select r.inventory_item_id, 'baixa_consumo_hospede', -sum(bci.quantity * r.portions_per_order), new.id,
+    select r.inventory_item_id, 'baixa_consumo_hospede', -sum(bci.quantity * r.portions_count * r.amount_per_portion), new.id,
       'Baixa automática ao pagar a conta (bar da piscina)'
     from bar_comanda_items bci
     join bar_comandas bc on bc.id = bci.comanda_id

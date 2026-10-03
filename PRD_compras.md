@@ -1058,3 +1058,210 @@ afetando pedidos de mais de uma pessoa ao mesmo tempo. Sessão real
 (cookie de autenticação) dos três papéis confirmando acesso correto às
 telas novas e bloqueio cruzado entre papéis. `npm run lint`/`npm run
 build` limpos.
+
+## 19. Sexta leva — dupla natureza de consumo (prato/ingrediente), categoria de gasto N-pra-N e identificação de item por IA
+
+> Pedido grande, em texto corrido, do proprietário — mudança de concepção
+> do módulo de estoque, não um ajuste pontual. Antes de implementar,
+> investiguei a fundo o que já existia (ficha técnica, categoria única
+> por item, mecanismo de leitura de nota por IA) e levei 4 pontos
+> críticos pro proprietário decidir antes de tocar em código — todos
+> aceitos na opção recomendada. Raciocínio completo na conversa; resumo
+> de cada decisão abaixo.
+
+### 19.1 As 4 decisões confirmadas antes de implementar
+
+1. **"Lista de pratos" reaproveita o cardápio já existente** (poolbar
+   da piscina/frigobar), em vez de ser um catálogo novo e desconectado.
+   Motivo decisivo: o app já tinha um gatilho real
+   (`deduct_inventory_on_bill_payment`) que desconta estoque sozinho
+   quando a conta é paga, **só olhando pra `poolbar_items`/`minibar_items`**
+   — um catálogo de "pratos" separado não dispararia esse desconto quando
+   o hóspede pedisse de verdade, a menos que fosse ligado de volta ao
+   cardápio (uma 3ª camada redundante). A tela "Lista de pratos: natureza
+   do consumo" é uma gestão nova da ficha técnica (`inventory_item_recipes`)
+   a partir do PRATO, não um cadastro novo.
+2. **Pratos/drinks sem receita real conhecida ficam sem ficha técnica**,
+   pro proprietário preencher depois — só existia 1 ficha técnica real no
+   banco inteiro (ovo → Americano). Inventar proporção de receita (quanto
+   camarão, quanta farinha) arriscaria descontar estoque errado sem
+   ninguém notar.
+3. **Categoria de gasto deixa de ser um campo da compra inteira** e passa
+   a existir só por item — o relatório financeiro "por categoria" muda de
+   forma (soma pelos itens, não mais pela despesa inteira).
+4. **Identificação do item comprado por IA**: confirmado viável
+   reaproveitar a mesma chamada que já lê a nota fiscal (`receipt-ai.ts`),
+   sem infraestrutura nova.
+
+### 19.2 Modelo de dados
+
+Migration `061_pratos_categorias_multiplas.sql`:
+
+- **Categoria de gasto virou N-pra-N**: nova tabela
+  `inventory_item_categories` (inventory_item_id, category_id) substitui
+  o antigo `inventory_items.category_id` (coluna única, removida depois
+  do backfill) — um item como "Coca-Cola Zero lata" pode estar em "Bar da
+  piscina" **e** "Frigobar" ao mesmo tempo. RLS mesmo padrão de
+  `inventory_items` (select autenticado, insert/delete admin+manutenção —
+  sem update, não há campo pra mudar numa linha de ligação). A view
+  `inventory_count_line_history` (Parte 18) foi reescrita pra ler a nova
+  tabela (um item com 2+ categorias mostra as duas juntas, separadas por
+  "/") — precisou ser trocada **antes** de a coluna antiga ser apagada,
+  já que uma view não deixa derrubar uma coluna que ela ainda lê.
+- **Nova categoria "Frigobar"** (`is_inventory_category = true`) — não
+  existia nenhuma categoria própria pra frigobar até aqui, só "Bar da
+  piscina"; o próprio pedido do proprietário já citava "frigobar" como
+  categoria esperada de um item.
+- **Ficha técnica, dois campos explícitos em vez de um número só**:
+  `inventory_item_recipes.portions_per_order` (ambíguo) virou
+  `portions_count` (quantidade de porções do ingrediente que vão no
+  prato) × `amount_per_portion` (quanto, na unidade PRÓPRIA do
+  ingrediente — kg/L/un, já cadastrada no item — tem 1 porção). Total
+  consumido por pedido = `portions_count * amount_per_portion`. A ficha
+  técnica real já existente (ovo → Americano, 0.963) foi migrada
+  preservando o total (`portions_count = 1, amount_per_portion = 0.963`)
+  — nunca zera um dado já calculado, mesma regra geral do projeto. O
+  gatilho `deduct_inventory_on_bill_payment` foi atualizado pra multiplicar
+  pelos dois campos novos.
+- **`expenses.category_id` removido** — a despesa em si não tem mais
+  categoria própria (ver 19.1, item 3).
+- `portion_weight_kg` (em `inventory_items`, conversão "porção → kg" pra
+  lista de compras) **não foi tocado** — é um conceito diferente do novo
+  `amount_per_portion` (que é por RECEITA, não por item), apesar do nome
+  parecido; confirmado lendo o uso real em `purchase-list.ts` antes de
+  decidir não misturar os dois.
+
+Migration `062_itens_consumo_direto.sql` — dado real, não um palpite:
+6 itens de estoque "consumo autônomo" direto (Água com gás, Água sem
+gás, Água de Coco, Café expresso, Cerveja, Refrigerante — os produtos do
+cardápio vendidos prontos, sem composição, diferente dos pratos/drinks
+preparados) com ficha técnica 1-pra-1 (`portions_count=1,
+amount_per_portion=1`) pro(s) produto(s) vendável(is) correspondente(s)
+— **não é uma estimativa**: 1 unidade vendida = 1 unidade consumida do
+próprio item, por definição. 5 deles existem tanto no frigobar quanto no
+bar da piscina (ficha técnica dupla, uma pra cada canal, mesmo
+ingrediente); "Água de Coco" só existe no bar da piscina. Os demais
+pratos/drinks preparados (10 petiscos + 5 drinks misturados + Campari +
+Gim Tônica) ficaram **sem** ficha técnica — natureza de consumo = só
+"consumo autônomo" por ora, até o proprietário preencher a receita real.
+
+### 19.3 "Natureza de consumo" não é um campo — é derivada
+
+Não existe uma coluna "natureza_consumo" nem um enum: um item é sempre
+"consumo autônomo" (baixa manual, ou venda direta se ele próprio for
+vendido no bar/frigobar); se tiver 1+ fichas técnicas em
+`inventory_item_recipes`, é **também** consumido indiretamente por cada
+prato ligado. A UI mostra isso só pela presença/ausência dos vínculos —
+sem campo redundante pra manter sincronizado.
+
+### 19.4 Nova tela "Lista de pratos: natureza do consumo"
+
+`/compras/pratos`, novo item do menu de "Estoque" (ver `src/app/(admin)/compras/page.tsx`),
+logo abaixo de "Categorias de gasto" (renomeada de "Categorias de
+despesa" — ver 19.6) e acima de "Grupos de giro", exatamente como pedido.
+Lista TODOS os itens de `poolbar_items` (agrupados em "Petiscos"/"Bebidas")
+e `minibar_items` ("Frigobar") — não um catálogo novo — cada um mostrando
+sua ficha técnica atual (ingrediente, porções × quantidade/porção = total)
+com edição/remoção in-line, e um seletor pra adicionar um novo ingrediente
+(escolhido entre os itens de estoque já cadastrados). Pratos sem nenhuma
+ficha técnica mostram "ainda sem receita cadastrada" em vez de uma lista
+vazia sem explicação.
+`src/lib/actions/inventory-items.ts` ganhou `getDishesWithIngredients()`
+(pivota a MESMA tabela `inventory_item_recipes` a partir do prato, não do
+ingrediente) e `updateInventoryItemRecipeQuantities` (edição in-line das
+quantidades, sem precisar apagar e recriar o vínculo).
+
+### 19.5 "Itens de estoque" — categoria múltipla e ficha técnica com 2 campos
+
+- `inventory-item-form-dialog.tsx`: o seletor único de categoria virou
+  uma grade de checkboxes (mesmo padrão não-controlado já usado em
+  "Suítes que usam este item", `checklist-items-panel.tsx` — `name`/`value`/
+  `defaultChecked` num `<form>` nativo, lido no servidor via
+  `formData.getAll("category_ids")`) — exige pelo menos 1 marcada.
+- `inventory-items-panel.tsx`: mostra `category_names.join(" / ")` em vez
+  de uma categoria só.
+- `inventory-item-recipes-section.tsx` (ficha técnica vista do
+  ingrediente, dentro do card do item): dois campos numéricos (porções ×
+  quantidade/porção, na unidade do item) em vez de um só.
+
+### 19.6 "Lançar Compra" — categoria só por item, e identificação por IA
+
+- **Campo "Categoria" saiu do 2º card (cabeçalho da compra)** —
+  confirmado com o proprietário que o relatório financeiro "por
+  categoria" mudaria de forma (19.1, item 3). "Categoria do novo item"
+  (dentro do bloco "Criar novo item de estoque", já existia desde a Parte
+  16) virou uma grade de checkboxes (controlada via `onCheckedChange`,
+  diferente do form de "Itens de estoque" porque aqui cada linha de item
+  tem seu próprio estado React dinâmico, não um form nativo único).
+- `getExpenseSummaryByCategory` (Histórico) reescrita: antes somava
+  `expenses.total_amount` por `expenses.category_id`; agora soma
+  `expense_items.subtotal` por categoria do ITEM vinculado — um item em 2
+  categorias soma o próprio subtotal nas duas. Item sem vínculo de
+  estoque, ou despesa sem item nenhum (só valor total manual), cai em
+  "Sem categoria" (nunca desaparece da soma, só perde a categorização).
+  `getExpenses`/`ExpenseListRow.category_name` passou a mostrar as
+  categorias de TODOS os itens daquela despesa, juntas.
+- **Identificação do item por IA** (`receipt-ai.ts`): o mesmo prompt que
+  já lia a nota passou a receber, no fim da instrução, uma lista numerada
+  dos itens já cadastrados, e a devolver `matched_catalog_index` (o
+  número da linha, não um UUID — token curto, bem menos sujeito a erro de
+  transcrição do modelo do que pedir pra ele ecoar um id de volta) por
+  item comprado, convertido pro id real em JavaScript depois. Instrução
+  explícita no prompt pra reconhecer variação de descrição (marca,
+  abreviação) como o mesmo produto — ex.: "água mineral s/gás Indaiá" =
+  "Água mineral sem gás" já cadastrada — mas só quando tiver confiança
+  real, nunca arriscando juntar produtos diferentes. Em
+  `expense-form.tsx`, o resultado da IA tem prioridade sobre o casamento
+  por nome exato já existente (que continua como reforço pros casos sem
+  match da IA). `nfce_url` também passou a ser extraído pela IA (campo
+  novo no JSON do prompt) e pré-preenchido no formulário, igual aos
+  outros campos já lidos automaticamente.
+- Renomeação "categoria de despesa" → "categoria de gasto" em todo texto
+  visível (3 lugares: menu de "Estoque", título de "Categorias de gasto",
+  placeholder do campo de nova categoria) — identificadores internos
+  (`expense_categories`, `category_id` como nome de coluna onde ainda
+  existe) não mudaram, mesma convenção já usada pra "Quarto" → "Suíte"
+  (Parte 12 do app principal).
+
+### 19.7 Testado
+
+Simulado diretamente no banco local (Docker) e via sessão autenticada
+real (`next dev` local):
+
+- Migrations `061`/`062` aplicadas com sucesso; dados confirmados direto
+  no Postgres: os 6 itens "consumo autônomo" com as categorias certas
+  (5 em "Bar da piscina / Frigobar", "Água de Coco" só em "Bar da
+  piscina") e 11 fichas técnicas 1-pra-1 (5 × 2 canais + Água de Coco + a
+  ficha técnica real do ovo preservada com o mesmo total de antes).
+- **Gatilho de baixa automática testado com dado real, não só ficha
+  técnica sintética**: lançado 3 "Refrigerante" no frigobar de uma conta
+  de teste, marcada como paga — confirmado um `inventory_movements` de
+  -3 criado sozinho (igual já funcionava antes desta parte, agora
+  passando pelos dois campos novos) e o saldo do item caindo de acordo;
+  tudo desfeito depois (movimento apagado, linha de frigobar removida,
+  conta devolvida pro status original).
+- `createInventoryItem` com 2 categorias ao mesmo tempo: confirmado
+  `category_ids`/`category_names` corretos na leitura de volta.
+- `addInventoryItemRecipe`/`updateInventoryItemRecipeQuantities`/
+  `removeInventoryItemRecipe` chamados a partir da visão do PRATO (não do
+  ingrediente) — ligar, editar quantidade e remover um ingrediente de
+  "Bolinho de Bacalhau (10un)" com um item de teste, cada etapa conferida
+  lendo `getDishesWithIngredients()` de volta.
+- Telas via sessão real: `/compras/pratos` mostra as 3 seções
+  (Petiscos/Bebidas/Frigobar) com "Americano" mostrando sua receita real
+  e os demais "ainda sem receita cadastrada"; `/compras/nova` sem o campo
+  "Categoria" no cabeçalho (confirmado por ausência total da palavra
+  "Categoria" na página renderizada antes de qualquer item ser
+  adicionado); `/compras/categorias` com o título "Categorias de gasto".
+- **Não testado com uma chamada real de IA** (ANTHROPIC_API_KEY está
+  configurada no ambiente local, mas fabricar uma imagem/PDF de nota
+  fiscal de teste convincente ficou fora do orçamento desta leva) — a
+  lógica de conversão índice→id foi conferida por leitura cuidadosa do
+  código (índice 1-based na lista mostrada à IA, convertido de volta pra
+  posição 0-based do array antes de ler o id) em vez de teste funcional
+  ponta a ponta; o mecanismo de chamada à IA em si (imagem/PDF → JSON) já
+  era código existente, não alterado por esta parte — vale validar na
+  prática assim que o proprietário testar com uma nota real.
+- `npm run lint`/`npm run build` limpos, com `/compras/pratos` aparecendo
+  na árvore de build. Rotas de API temporárias usadas no teste
+  (`/api/test-pratos`) removidas depois.

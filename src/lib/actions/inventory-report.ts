@@ -28,23 +28,31 @@ export async function getInventoryStockReport(): Promise<InventoryStockReportRow
   const supabase = await createClient();
   const monthStart = monthStartKey();
 
-  const [{ data: items }, { data: suggestions }, { data: monthExpenseItems }, needingPurchase] = await Promise.all([
-    supabase
-      .from("inventory_items")
-      .select("id, name, unit, active, expense_categories(name)")
-      .eq("active", true),
-    supabase.from("inventory_purchase_suggestions").select("inventory_item_id, balance, weekly_consumption"),
-    supabase
-      .from("expense_items")
-      .select("inventory_item_id, quantity, expenses!inner(date)")
-      .not("inventory_item_id", "is", null)
-      .gte("expenses.date", monthStart),
-    getPurchaseList(),
-  ]);
+  const [{ data: items }, { data: categoryLinks }, { data: suggestions }, { data: monthExpenseItems }, needingPurchase] =
+    await Promise.all([
+      supabase.from("inventory_items").select("id, name, unit, active").eq("active", true),
+      supabase.from("inventory_item_categories").select("inventory_item_id, expense_categories(name)"),
+      supabase.from("inventory_purchase_suggestions").select("inventory_item_id, balance, weekly_consumption"),
+      supabase
+        .from("expense_items")
+        .select("inventory_item_id, quantity, expenses!inner(date)")
+        .not("inventory_item_id", "is", null)
+        .gte("expenses.date", monthStart),
+      getPurchaseList(),
+    ]);
 
-  type ItemRaw = { id: string; name: string; unit: string; expense_categories: { name: string } | null };
+  type ItemRaw = { id: string; name: string; unit: string };
   type SuggestionRaw = { inventory_item_id: string; balance: number; weekly_consumption: number };
   type ExpenseItemRaw = { inventory_item_id: string; quantity: number };
+
+  const categoryNamesByItem = new Map<string, string[]>();
+  ((categoryLinks ?? []) as unknown as { inventory_item_id: string; expense_categories: { name: string } | null }[]).forEach(
+    (r) => {
+      const names = categoryNamesByItem.get(r.inventory_item_id) ?? [];
+      if (r.expense_categories?.name) names.push(r.expense_categories.name);
+      categoryNamesByItem.set(r.inventory_item_id, names);
+    }
+  );
 
   const suggestionMap = new Map(((suggestions ?? []) as SuggestionRaw[]).map((s) => [s.inventory_item_id, s]));
   const needsPurchaseSet = new Set(needingPurchase.map((r) => r.inventory_item_id));
@@ -58,11 +66,12 @@ export async function getInventoryStockReport(): Promise<InventoryStockReportRow
     .map((item) => {
       const s = suggestionMap.get(item.id);
       const dailyConsumption = s ? s.weekly_consumption / 7 : 0;
+      const categoryNames = categoryNamesByItem.get(item.id) ?? [];
       return {
         inventory_item_id: item.id,
         item_name: item.name,
         unit: item.unit,
-        category_name: item.expense_categories?.name ?? "—",
+        category_name: categoryNames.length > 0 ? categoryNames.join(" / ") : "—",
         purchased_this_month: purchasedThisMonth.get(item.id) ?? 0,
         balance: s?.balance ?? 0,
         estimated_days_remaining: dailyConsumption > 0 ? Math.floor((s?.balance ?? 0) / dailyConsumption) : null,

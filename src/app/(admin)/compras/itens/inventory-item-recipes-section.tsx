@@ -17,11 +17,13 @@ import { Trash2 } from "lucide-react";
 // macaxeira) alimentar vários pratos ao mesmo tempo (ver PRD_compras.md).
 export function InventoryItemRecipesSection({
   inventoryItemId,
+  itemUnit,
   recipes,
   minibarItems,
   poolbarItems,
 }: {
   inventoryItemId: string;
+  itemUnit: string;
   recipes: InventoryItemRecipeView[];
   minibarItems: MinibarItem[];
   poolbarItems: PoolbarItem[];
@@ -30,7 +32,8 @@ export function InventoryItemRecipesSection({
   const router = useRouter();
   const [kind, setKind] = useState<"minibar" | "poolbar">("poolbar");
   const [catalogItemId, setCatalogItemId] = useState("");
-  const [portions, setPortions] = useState("1");
+  const [portionsCount, setPortionsCount] = useState("1");
+  const [amountPerPortion, setAmountPerPortion] = useState("1");
 
   const catalogOptions = kind === "minibar" ? minibarItems : poolbarItems;
   const alreadyLinkedIds = new Set(
@@ -39,13 +42,19 @@ export function InventoryItemRecipesSection({
   const availableOptions = catalogOptions.filter((o) => !alreadyLinkedIds.has(o.id));
 
   function handleAdd() {
-    const portionsNum = Number(portions);
     startTransition(async () => {
-      const result = await addInventoryItemRecipe(inventoryItemId, kind, catalogItemId, portionsNum);
+      const result = await addInventoryItemRecipe(
+        inventoryItemId,
+        kind,
+        catalogItemId,
+        Number(portionsCount),
+        Number(amountPerPortion)
+      );
       if (result?.error) toast.error(result.error);
       else {
         setCatalogItemId("");
-        setPortions("1");
+        setPortionsCount("1");
+        setAmountPerPortion("1");
         router.refresh();
       }
     });
@@ -62,7 +71,8 @@ export function InventoryItemRecipesSection({
             <div key={r.id} className="flex items-center justify-between gap-2 rounded-lg border border-border p-2 text-sm">
               <span>
                 {r.catalog_kind === "minibar" ? "Frigobar" : "Bar da piscina"}: {r.catalog_name} ·{" "}
-                {r.portions_per_order} porção(ões)/pedido
+                {r.portions_count} porção(ões) × {r.amount_per_portion} {itemUnit}/porção ={" "}
+                {(r.portions_count * r.amount_per_portion).toFixed(3)} {itemUnit}/pedido
               </span>
               <Button
                 variant="ghost"
@@ -112,9 +122,20 @@ export function InventoryItemRecipesSection({
           min={0.001}
           step="0.001"
           className="w-24"
-          value={portions}
-          onChange={(e) => setPortions(e.target.value)}
+          value={portionsCount}
+          onChange={(e) => setPortionsCount(e.target.value)}
           placeholder="Porções"
+          title="Quantidade de porções do ingrediente que vão no prato"
+        />
+        <Input
+          type="number"
+          min={0}
+          step="0.0001"
+          className="w-28"
+          value={amountPerPortion}
+          onChange={(e) => setAmountPerPortion(e.target.value)}
+          placeholder={`${itemUnit}/porção`}
+          title={`Quantidade do ingrediente (em ${itemUnit}) em 1 porção`}
         />
         <Button size="sm" disabled={isPending || !catalogItemId} onClick={handleAdd}>
           Ligar

@@ -41,7 +41,7 @@ export function InventoryItemsPanel({
               <div>
                 <p className="text-sm font-medium">{item.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {item.category_name} · {item.unit}
+                  {item.category_names.join(" / ") || "sem categoria"} · {item.unit}
                   {item.barcode ? ` · cód. ${item.barcode}` : ""}
                   {item.turnover_group_name ? ` · giro: ${item.turnover_group_name}` : " · sem grupo de giro"}
                   {item.portion_weight_kg ? ` · ${item.portion_weight_kg} kg/porção` : ""}
@@ -71,6 +71,7 @@ export function InventoryItemsPanel({
 
             <InventoryItemRecipesSection
               inventoryItemId={item.id}
+              itemUnit={item.unit}
               recipes={recipesByItem[item.id] ?? []}
               minibarItems={minibarItems}
               poolbarItems={poolbarItems}

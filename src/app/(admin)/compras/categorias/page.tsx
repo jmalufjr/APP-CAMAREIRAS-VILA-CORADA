@@ -9,7 +9,7 @@ export default async function CategoriasDespesaPage() {
   return (
     <div className="space-y-6">
       <BackLink href="/compras" />
-      <PageHeader title="Categorias de despesa" subtitle="Gerencie as categorias de compras e despesas da pousada." />
+      <PageHeader title="Categorias de gasto" subtitle="Gerencie as categorias de compras e despesas da pousada." />
       <ExpenseCategoriesPanel categories={categories} />
     </div>
   );

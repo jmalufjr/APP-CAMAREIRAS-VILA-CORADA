@@ -325,7 +325,6 @@ export interface InventoryTurnoverGroup {
 export interface InventoryItem {
   id: string;
   name: string;
-  category_id: string;
   unit: string;
   barcode: string | null;
   reorder_point: number;
@@ -339,14 +338,17 @@ export interface InventoryItem {
 }
 
 // Ficha técnica: qual(is) produto(s) do cardápio (frigobar OU bar da
-// piscina, nunca os dois) consomem este ingrediente, e quantas porções
-// por pedido.
+// piscina, nunca os dois) consomem este ingrediente. Total consumido por
+// pedido = portions_count (quantas porções do ingrediente vão no prato) ×
+// amount_per_portion (quanto, na unidade própria do ingrediente, tem 1
+// porção) — ver PRD_compras.md seção 19.
 export interface InventoryItemRecipe {
   id: string;
   inventory_item_id: string;
   minibar_item_id: string | null;
   poolbar_item_id: string | null;
-  portions_per_order: number;
+  portions_count: number;
+  amount_per_portion: number;
   created_at: string;
 }
 
@@ -400,7 +402,6 @@ export interface FixedAsset {
 export interface Expense {
   id: string;
   date: string;
-  category_id: string;
   supplier_name: string | null;
   total_amount: number;
   payment_method: PaymentMethod | null;

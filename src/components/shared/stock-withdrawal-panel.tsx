@@ -59,7 +59,7 @@ export function StockWithdrawalPanel({ items }: { items: InventoryItemWithBalanc
           <div>
             <p className="font-medium">{selected.name}</p>
             <p className="text-xs text-muted-foreground">
-              {selected.category_name} · Saldo atual: {selected.balance} {selected.unit}
+              {selected.category_names.join(" / ") || "—"} · Saldo atual: {selected.balance} {selected.unit}
             </p>
           </div>
           <div className="flex items-center justify-between gap-3">
@@ -104,7 +104,7 @@ export function StockWithdrawalPanel({ items }: { items: InventoryItemWithBalanc
           >
             <div>
               <p className="font-medium">{item.name}</p>
-              <p className="text-xs text-muted-foreground">{item.category_name}</p>
+              <p className="text-xs text-muted-foreground">{item.category_names.join(" / ") || "—"}</p>
             </div>
             <Badge variant={item.reorder_point > 0 && item.balance < item.reorder_point ? "destructive" : "secondary"}>
               {item.balance} {item.unit}
