@@ -8,6 +8,7 @@ import type { PaymentMethod } from "@/lib/types";
 function revalidateAll() {
   revalidatePath("/compras", "layout");
   revalidatePath("/manutencao/compras", "layout");
+  revalidatePath("/custos-despesas", "layout");
   revalidatePath("/dashboard");
 }
 
@@ -17,6 +18,11 @@ export interface ExpenseItemInput {
   unit_cost: number;
   subtotal: number;
   inventory_item_id: string | null;
+  // Categoria da própria linha — só usada (e só obrigatória) quando NÃO
+  // há item de estoque vinculado (nem existente, nem novo), ex.: salário,
+  // conta de luz avulsa, honorários (Parte 20 — fecha a lacuna da Parte
+  // 19, que só dava categoria a quem tinha item de estoque).
+  category_id: string | null;
   // Presente só quando a pessoa escolheu "criar novo item de estoque" pra
   // esta linha, em vez de vincular a um já existente ou deixar sem
   // controle de estoque — ver resolveOrCreateInventoryItemId abaixo.
@@ -131,6 +137,7 @@ export async function createExpense(formData: FormData) {
       items.map((i, idx) => ({
         expense_id: expense.id,
         inventory_item_id: resolvedIds[idx],
+        category_id: resolvedIds[idx] ? null : i.category_id,
         description: i.description,
         quantity: i.quantity,
         unit_cost: i.unit_cost,
@@ -210,6 +217,7 @@ export async function updateExpense(id: string, formData: FormData) {
       items.map((i, idx) => ({
         expense_id: id,
         inventory_item_id: resolvedIds[idx],
+        category_id: resolvedIds[idx] ? null : i.category_id,
         description: i.description,
         quantity: i.quantity,
         unit_cost: i.unit_cost,
@@ -259,7 +267,7 @@ export async function getExpenseWithItems(id: string): Promise<ExpenseWithItems 
 
   const { data: items } = await supabase
     .from("expense_items")
-    .select("description, quantity, unit_cost, subtotal, inventory_item_id")
+    .select("description, quantity, unit_cost, subtotal, inventory_item_id, category_id")
     .eq("expense_id", id)
     .order("created_at");
 

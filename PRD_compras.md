@@ -1265,3 +1265,192 @@ real (`next dev` local):
 - `npm run lint`/`npm run build` limpos, com `/compras/pratos` aparecendo
   na árvore de build. Rotas de API temporárias usadas no teste
   (`/api/test-pratos`) removidas depois.
+
+## 20. Sétima leva — módulo "Custos e Despesas"
+
+> Pedido em texto corrido, pedindo estudo do setor hoteleiro antes de
+> implementar ("aguarde a minha decisão"). Pesquisei o padrão mundial do
+> setor (USALI — Sistema Uniforme de Contas pra Indústria Hoteleira) e
+> trouxe uma proposta com pontos críticos pro proprietário decidir, em
+> duas rodadas (a segunda ajustando o rateio de custos fixos pra 3-4
+> centros de custo, com percentuais específicos dados pelo proprietário).
+> Só depois disso foi implementado.
+
+### 20.1 O que o estudo do setor trouxe
+
+USALI separa custos **diretos** (ligados a um serviço/produto específico,
+ex.: ficha técnica de um prato) de custos **indiretos/fixos** (água, luz,
+limpeza, pessoal — que não têm uma regra natural de alocação) — e a
+prática mundial recomendada é **não** forçar os indiretos pra dentro do
+custo de cada prato/diária sem uma regra explícita, justamente por ser
+sempre uma estimativa, nunca um valor exato. Confirmado com o
+proprietário: o modelo dele (3 tipos de gasto — itens de estoque
+variáveis, ativo permanente sem natureza de custo, despesas operacionais
+fixas) já era, na prática, uma versão simplificada e correta disso — a
+pesquisa só refinou 3 pontos (ver 20.2) e validou o resto.
+
+### 20.2 Decisões confirmadas com o proprietário antes de implementar
+
+1. **Custo médio do item no mês = média ponderada** (soma gasta ÷ soma
+   comprada), não a média simples do preço unitário por compra que o
+   proprietário tinha descrito originalmente — é o padrão contábil
+   ("custo médio ponderado"), mais fiel ao gasto real e mais simples de
+   calcular.
+2. **Lacuna real encontrada e corrigida**: despesas sem item de estoque
+   vinculado (salário, honorários, conta de serviço avulsa) ficariam sem
+   categoria no Demonstrativo, porque desde a Parte 19 a categoria só
+   existia no item de estoque. Corrigido com uma categoria também na
+   PRÓPRIA linha de despesa (usada só quando não há item vinculado).
+3. **Rateio dos custos fixos entre centros de custo**: numa primeira
+   proposta (2 centros, Hospedagem/Bar-Frigobar), o proprietário pediu
+   pra reformular com **3 centros de custo de verdade** (Hospedagem,
+   Café da Manhã, Serviço de Bar) e um **4º só pra "Luz"** (Frigobar,
+   pelas geladeiras em cada quarto) — com os percentuais exatos abaixo,
+   dados diretamente pelo proprietário, não pesquisados.
+4. **Natureza de custo por categoria, editável**: toda categoria de gasto
+   ganhou um campo "natureza" (custo direto / custo fixo / não é custo) e,
+   quando fixa, os 4 percentuais de rateio — tudo editável pelo
+   proprietário, pra que o Demonstrativo/Custos se atualizem sozinhos ao
+   editar uma categoria, sem precisar programar nada de novo.
+
+### 20.3 Tabela final de rateio implementada
+
+| Categoria (custo fixo) | Hospedagem | Café da manhã | Serviço de bar | Frigobar |
+|---|---|---|---|---|
+| Água | 40% | 30% | 30% | 0% |
+| Luz | 80% | 10% | 5% | 5% |
+| Gás | 0% | 50% | 50% | 0% |
+| Internet | 80% | 10% | 10% | 0% |
+| Limpeza, Enxoval, Manutenção predial, Serviços profissionais, Impostos e taxas, Outras | 70% | 15% | 15% | 0% |
+| Piscina, Jardim | 100% | 0% | 0% | 0% |
+| Pessoal (salários/encargos) | 50% | 30% | 20% | 0% |
+
+"Consumo (luz/água/internet)" (1 categoria só) virou 4 categorias
+separadas — reaproveitando a linha existente como "Água" (preserva
+qualquer item/despesa já vinculada) e criando "Luz"/"Gás"/"Internet"
+novas. Café da manhã/Bar da piscina/Frigobar continuam como categorias
+de **custo direto** (já calculadas por ficha técnica ou rateio por
+hóspede, não usam os 4 percentuais) e Ativos permanentes como **não é
+custo** (nunca entra em nenhum cálculo).
+
+### 20.4 Modelo de dados
+
+Migration `063_custos_e_despesas.sql`:
+
+- `expense_categories` ganhou `cost_nature` (enum `custo_direto` /
+  `custo_fixo` / `nao_custo`) e os 4 `alloc_*_pct` (hospedagem/café da
+  manhã/bar/frigobar) — constraint no banco garantindo que os 4 somem
+  exatamente 100 quando `cost_nature = 'custo_fixo'` (pra "custo_direto"/
+  "nao_custo" os percentuais existem na coluna mas não são usados por
+  nenhum cálculo).
+- `expense_items` ganhou `category_id` (nullable) — usado só quando a
+  linha NÃO tem `inventory_item_id` (ver 20.2, item 2). Quando tem item
+  vinculado, a categoria continua vindo das categorias do item
+  (`inventory_item_categories`, Parte 19), sem mudança.
+- `inventory_items` ganhou `cost_report_group` (texto nullable) — permite
+  marcar, por exemplo, "Frutas e ovos" em vários itens pra que apareçam
+  somados como 1 linha só no detalhamento do custo do café da manhã por
+  item (pedido explícito do proprietário, por não haver controle fino de
+  estoque sobre eles).
+
+### 20.5 Cálculos implementados (`src/lib/cost-accounting.ts` + `src/lib/actions/cost-accounting.ts`)
+
+- **Custo médio ponderado de um item no período**: `weightedAverageUnitCost`
+  — soma de `subtotal` ÷ soma de `quantity` de todas as compras do item no
+  período; `null` (nunca 0) quando não houve nenhuma compra.
+- **Custo de 1 porção de um prato**: soma, por ingrediente da ficha
+  técnica (Parte 19), de `portions_count × amount_per_portion × custo
+  médio do ingrediente no período`.
+- **Custo do café da manhã**: gasto total da categoria "Café da manhã" no
+  período ÷ hóspedes-noite (soma de `daily_breakfast_room_assignments.guest_count`
+  no período) = custo por hóspede; detalhamento por item (agrupando por
+  `cost_report_group` quando definido).
+- **Diárias ocupadas no período**: soma de
+  `daily_breakfast_settings.eligible_suites_count`, com o mesmo fallback
+  já usado pela comissão de café da manhã (Parte 27) pra datas sem esse
+  valor — reaproveitado, não reinventado.
+- **Centros de custo**: cada categoria de custo FIXO é rateada pelos seus
+  4 percentuais; Café da manhã/Bar da piscina/Frigobar (custo direto) vão
+  inteiros pro seu próprio centro. "Hospedagem" soma também o total de
+  "Café da manhã" por dentro — embutido na diária, nunca cobrado à parte
+  do hóspede — mas "Café da manhã" continua aparecendo como linha própria
+  no relatório (não é um erro de duplicação, são dois recortes do mesmo
+  gasto: quanto custa rodar o café, e quanto custa a diária incluindo o
+  café).
+- **Custo médio por diária ocupada**: custo total de "Hospedagem" ÷
+  diárias ocupadas no período.
+- **Demonstrativo de Despesas**: gasto por categoria, mês a mês — nunca
+  persiste nada, só lê a categorização atual de cada item/linha a cada
+  carregamento, por isso reagrupa sozinho quando uma categoria é editada
+  (exatamente como pedido).
+- **Convenção reaproveitada da Parte 19**: um item/linha em 2+ categorias
+  soma o próprio valor em cada uma (nunca divide) — mesma regra já usada
+  em `getExpenseSummaryByCategory`, mantida aqui por consistência entre
+  os relatórios.
+
+### 20.6 Telas
+
+Novo menu principal **"Custos e Despesas"** (entre "Ativo Permanente" e
+"Listas"), com 3 submenus:
+- **"Categorias de gasto"** — mudou de lugar (saiu de dentro de
+  "Estoque", que perdeu esse item de menu) — mesma tela de sempre, com um
+  card novo por categoria: seletor de natureza de custo e, quando "custo
+  fixo", os 4 steppers de rateio (±1%, mesmo padrão já usado em todo o
+  projeto) com soma ao vivo (vermelha se ≠100%, botão "Salvar" desabilitado
+  até fechar em 100%).
+- **"Custos"** (`/custos-despesas/custos`) — filtro de período (mesmo
+  padrão de/até do Histórico, extraído pra um componente compartilhado
+  novo, `src/components/shared/date-range-filter.tsx`), 4 cards dos
+  centros de custo, custo médio por diária ocupada, tabela de rateio por
+  categoria (transparência total — mostra o gasto bruto e os 4 valores
+  rateados de cada categoria), detalhamento do café da manhã por item, e
+  tabela de custo por prato/produto do cardápio (mostra "sem receita
+  cadastrada" pros pratos ainda sem ficha técnica, ver Parte 19).
+- **"Demonstrativo de Despesas"** (`/custos-despesas/demonstrativo`) —
+  tabela categoria × mês, com total por mês no rodapé.
+
+### 20.7 "Lançar Compra" — fechando as duas lacunas de categorização
+
+- Linha de item **sem** vínculo de estoque (nem existente, nem "criar
+  novo") ganhou um seletor de categoria próprio, obrigatório pra salvar —
+  cobre salário, conta de luz avulsa, honorários etc.
+- **Segunda lacuna encontrada só ao testar**: uma despesa lançada **sem
+  nenhum item** (só "Valor total") não gerava nenhuma linha em
+  `expense_items` — ficava completamente invisível pro Demonstrativo e
+  pros Custos, apesar de ser dinheiro real gasto. Corrigido: esse cenário
+  também ganhou um seletor de categoria (ao lado do campo "Valor total"),
+  e o envio do formulário sintetiza 1 linha representando o valor total
+  inteiro, carregando essa categoria — sem mudar o que a tela mostra (o
+  admin continua só vendo o campo "Valor total" simples).
+
+### 20.8 Testado
+
+Simulado diretamente no banco local (Docker) e via sessão autenticada
+real (`next dev` local), com um cenário fabricado isolado ao dia de hoje
+(pra não misturar com dado real de produção já presente no mês):
+diária ocupada = 4, hóspedes-noite de café = 5, compra de "Café da manhã"
+= R$20 (item vinculado), despesa de "Pessoal" = R$1.000 (linha sem item,
+categoria direto na linha), despesa de "Luz" = R$100 (idem). Conferido
+contra a conta manual, bateu exato em tudo:
+- Hospedagem R$910,00 (= 500 de Pessoal + 80 de Luz + 330 de Café da
+  manhã, este já incluindo o rateio de Pessoal/Luz pra café).
+- Café da manhã R$330,00; Serviço de bar R$205,00; Frigobar R$5,00.
+- Custo por diária ocupada R$227,50 (910 ÷ 4).
+- Custo do café da manhã por hóspede R$4,00 (20 ÷ 5), com "PAO FRANCES
+  TESTE" aparecendo certinho no detalhamento por item.
+- Rateio de Pessoal (500/300/200/0) e de Luz (80/10/5/5) corretos na
+  tabela de transparência.
+- Demonstrativo de Despesas mostrando as 3 categorias com os valores
+  certos e o total R$1.120,00 no rodapé.
+- `updateExpenseCategoryCostSettings`: soma ≠100% rejeitada com erro
+  claro; soma =100% salva corretamente; valor original da categoria
+  restaurado depois do teste.
+- `/compras/nova`: confirmado visualmente o seletor "Categoria de gasto"
+  aparecendo junto do campo "Valor total" quando não há nenhum item
+  lançado.
+Todos os dados fabricados (despesas, item de teste, alocações de mesa,
+configuração de café da manhã do dia) removidos do banco local depois.
+`npm run lint`/`npm run build` limpos, com as 4 rotas novas
+(`/custos-despesas`, `/categorias`, `/custos`, `/demonstrativo`)
+aparecendo na árvore de build e `/compras/categorias` removida dela.
+Rota de API temporária (`/api/test-custos`) removida depois do teste.

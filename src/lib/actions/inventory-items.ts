@@ -11,6 +11,7 @@ function revalidateAll() {
   revalidatePath("/manutencao/compras", "layout");
   revalidatePath("/pedidos-compra", "layout");
   revalidatePath("/manutencao/pedidos-compra", "layout");
+  revalidatePath("/custos-despesas", "layout");
   revalidatePath("/dashboard");
 }
 

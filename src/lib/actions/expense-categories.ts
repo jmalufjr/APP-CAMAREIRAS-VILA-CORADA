@@ -2,10 +2,12 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { ExpenseCategory } from "@/lib/types";
+import type { ExpenseCategory, CostNature } from "@/lib/types";
 
 function revalidateAll() {
   revalidatePath("/compras", "layout");
+  revalidatePath("/custos-despesas", "layout");
+  revalidatePath("/dashboard");
 }
 
 export async function getExpenseCategories(): Promise<ExpenseCategory[]> {
@@ -55,6 +57,34 @@ export async function updateExpenseCategoryCountFrequency(id: string, days: numb
   if (days !== null && days <= 0) return { error: "Informe uma frequência maior que zero, ou deixe em branco." };
   const supabase = await createClient();
   const { error } = await supabase.from("expense_categories").update({ count_frequency_days: days }).eq("id", id);
+  if (error) return { error: error.message };
+  revalidateAll();
+  return { success: true };
+}
+
+// Natureza de custo + os 4 percentuais de rateio (ver "Custos e
+// Despesas", PRD_compras.md seção 20) — editada numa ação própria,
+// separada do form simples de nome/ativo, pra não precisar reenviar
+// todos os campos juntos a cada edição.
+export async function updateExpenseCategoryCostSettings(
+  id: string,
+  costNature: CostNature,
+  pcts: { hospedagem: number; cafeManha: number; bar: number; frigobar: number }
+) {
+  if (costNature === "custo_fixo" && pcts.hospedagem + pcts.cafeManha + pcts.bar + pcts.frigobar !== 100) {
+    return { error: "Os 4 percentuais precisam somar exatamente 100%." };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("expense_categories")
+    .update({
+      cost_nature: costNature,
+      alloc_hospedagem_pct: pcts.hospedagem,
+      alloc_cafe_manha_pct: pcts.cafeManha,
+      alloc_bar_pct: pcts.bar,
+      alloc_frigobar_pct: pcts.frigobar,
+    })
+    .eq("id", id);
   if (error) return { error: error.message };
   revalidateAll();
   return { success: true };

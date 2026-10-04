@@ -36,6 +36,12 @@ interface ItemRow {
   // de uma categoria ao mesmo tempo.
   newItemCategoryIds: string[];
   newItemTurnoverGroupId: string; // "none" ou o id do grupo
+  // Categoria da PRÓPRIA linha — usada só quando ela não está vinculada a
+  // nenhum item de estoque (nem existente, nem novo), ex.: salário, conta
+  // de luz avulsa, honorários. Quando há item vinculado, a categoria
+  // sempre vem das categorias do item, nunca desta aqui (ver
+  // PRD_compras.md seção 20, "lacuna" encontrada na leva anterior).
+  lineCategoryId: string;
 }
 
 function todayKey(): string {
@@ -52,6 +58,7 @@ function emptyItem(): ItemRow {
     newItemUnit: "un",
     newItemCategoryIds: [],
     newItemTurnoverGroupId: "none",
+    lineCategoryId: "",
   };
 }
 
@@ -89,6 +96,7 @@ export function ExpenseForm({
   const [manualTotal, setManualTotal] = useState(
     initial && initial.items.length === 0 ? String(initial.total_amount) : ""
   );
+  const [manualTotalCategoryId, setManualTotalCategoryId] = useState("");
   const [items, setItems] = useState<ItemRow[]>(
     initial?.items.map((i) => ({
       description: i.description,
@@ -99,6 +107,7 @@ export function ExpenseForm({
       newItemUnit: "un",
       newItemCategoryIds: [],
       newItemTurnoverGroupId: "none",
+      lineCategoryId: i.category_id ?? "",
     })) ?? []
   );
 
@@ -165,6 +174,7 @@ export function ExpenseForm({
             newItemUnit: "un",
             newItemCategoryIds: [],
             newItemTurnoverGroupId: "none",
+            lineCategoryId: "",
           };
         })
       );
@@ -214,6 +224,14 @@ export function ExpenseForm({
       toast.error("Selecione ao menos uma categoria de gasto do novo item de estoque, em cada linha que for criar um.");
       return;
     }
+    if (items.some((i) => !i.createNew && !i.inventory_item_id && !i.lineCategoryId)) {
+      toast.error("Selecione a categoria de gasto nas linhas sem item de estoque vinculado (ex.: salário, conta de luz).");
+      return;
+    }
+    if (items.length === 0 && !manualTotalCategoryId) {
+      toast.error("Selecione a categoria de gasto do valor total.");
+      return;
+    }
 
     startTransition(async () => {
       const formData = new FormData();
@@ -223,25 +241,39 @@ export function ExpenseForm({
       formData.set("nfce_url", nfceUrl);
       formData.set("notes", notes);
       formData.set("total_amount", String(total));
-      formData.set(
-        "items",
-        JSON.stringify(
-          items.map((i) => ({
-            description: i.description,
-            quantity: i.quantity,
-            unit_cost: i.unit_cost,
-            subtotal: i.quantity * i.unit_cost,
-            inventory_item_id: i.inventory_item_id,
-            new_item: i.createNew
-              ? {
-                  category_ids: i.newItemCategoryIds,
-                  unit: i.newItemUnit,
-                  turnover_group_id: i.newItemTurnoverGroupId === "none" ? null : i.newItemTurnoverGroupId,
-                }
-              : null,
-          }))
-        )
-      );
+      // Sem nenhuma linha de item, a despesa inteira ficaria invisível pro
+      // Demonstrativo de Despesas (que só lê expense_items) — sintetiza 1
+      // linha representando o valor total, carregando a categoria
+      // escolhida, sem mudar o que a tela mostra (ainda só "Valor total").
+      const itemsPayload =
+        items.length === 0
+          ? [
+              {
+                description: supplierName.trim() || "Despesa sem item detalhado",
+                quantity: 1,
+                unit_cost: total,
+                subtotal: total,
+                inventory_item_id: null,
+                category_id: manualTotalCategoryId,
+                new_item: null,
+              },
+            ]
+          : items.map((i) => ({
+              description: i.description,
+              quantity: i.quantity,
+              unit_cost: i.unit_cost,
+              subtotal: i.quantity * i.unit_cost,
+              inventory_item_id: i.inventory_item_id,
+              category_id: !i.createNew && !i.inventory_item_id ? i.lineCategoryId || null : null,
+              new_item: i.createNew
+                ? {
+                    category_ids: i.newItemCategoryIds,
+                    unit: i.newItemUnit,
+                    turnover_group_id: i.newItemTurnoverGroupId === "none" ? null : i.newItemTurnoverGroupId,
+                  }
+                : null,
+            }));
+      formData.set("items", JSON.stringify(itemsPayload));
       if (receiptFile) {
         const isPdf = receiptFile.type === "application/pdf";
         const toUpload = isPdf ? receiptFile : await compressImageForUpload(receiptFile);
@@ -458,6 +490,31 @@ export function ExpenseForm({
                 </Select>
               </div>
 
+              {!item.createNew && !item.inventory_item_id && (
+                <div className="space-y-1 rounded-lg bg-muted/40 p-2">
+                  <Label className="text-xs text-muted-foreground">
+                    Categoria de gasto desta linha (ex.: salário, conta de luz, honorários)
+                  </Label>
+                  <Select
+                    value={item.lineCategoryId}
+                    onValueChange={(v) => updateItem(index, { lineCategoryId: v ?? "" })}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Selecione a categoria">
+                        {(v: string) => categories.find((c) => c.id === v)?.name ?? v}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               {item.createNew && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 rounded-lg bg-muted/40 p-2">
                   <div className="space-y-1 sm:col-span-3">
@@ -516,9 +573,28 @@ export function ExpenseForm({
           ))}
 
           {items.length === 0 && (
-            <div className="space-y-1.5 max-w-xs">
-              <Label>Valor total (R$)</Label>
-              <Input type="number" min={0} step="0.01" value={manualTotal} onChange={(e) => setManualTotal(e.target.value)} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md">
+              <div className="space-y-1.5">
+                <Label>Valor total (R$)</Label>
+                <Input type="number" min={0} step="0.01" value={manualTotal} onChange={(e) => setManualTotal(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Categoria de gasto</Label>
+                <Select value={manualTotalCategoryId} onValueChange={(v) => setManualTotalCategoryId(v ?? "")}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecione a categoria">
+                      {(v: string) => categories.find((c) => c.id === v)?.name ?? v}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
 

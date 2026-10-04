@@ -305,6 +305,8 @@ export interface BarComandaItem {
 
 // ---------- Compras, despesas e estoque (PRD_compras.md) ----------
 
+export type CostNature = "custo_direto" | "custo_fixo" | "nao_custo";
+
 export interface ExpenseCategory {
   id: string;
   name: string;
@@ -313,6 +315,11 @@ export interface ExpenseCategory {
   active: boolean;
   position: number;
   created_at: string;
+  cost_nature: CostNature;
+  alloc_hospedagem_pct: number;
+  alloc_cafe_manha_pct: number;
+  alloc_bar_pct: number;
+  alloc_frigobar_pct: number;
 }
 
 export interface InventoryTurnoverGroup {
@@ -335,6 +342,7 @@ export interface InventoryItem {
   created_at: string;
   quebra_maxima_admitida_pct: number;
   indice_relativo_maximo_pct: number;
+  cost_report_group: string | null;
 }
 
 // Ficha técnica: qual(is) produto(s) do cardápio (frigobar OU bar da

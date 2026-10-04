@@ -1609,6 +1609,15 @@ on conflict (id) do nothing;
 -- count_frequency_days: frequência de contagem física configurável por
 -- categoria (ex.: mensal pra limpeza) — só usada pro aviso "está na hora
 -- de contar de novo" na tela de Contagem de estoque. Null = sem lembrete.
+--
+-- cost_nature + os 4 alloc_*_pct (ver "Custos e Despesas", PRD_compras.md
+-- seção 20): toda categoria tem uma natureza de custo —
+-- 'custo_direto' (já calculado por outra regra: ficha técnica ou rateio
+-- por hóspede — os 4 percentuais abaixo não se aplicam), 'custo_fixo'
+-- (rateado entre os 4 centros de custo pelos percentuais, que precisam
+-- somar 100) ou 'nao_custo' (ativo permanente — nunca entra no cálculo).
+create type cost_nature as enum ('custo_direto', 'custo_fixo', 'nao_custo');
+
 create table expense_categories (
   id uuid primary key default uuid_generate_v4(),
   name text not null unique,
@@ -1616,7 +1625,15 @@ create table expense_categories (
   count_frequency_days int check (count_frequency_days is null or count_frequency_days > 0),
   active boolean not null default true,
   position int not null default 0,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  cost_nature cost_nature not null default 'custo_fixo',
+  alloc_hospedagem_pct int not null default 100 check (alloc_hospedagem_pct between 0 and 100),
+  alloc_cafe_manha_pct int not null default 0 check (alloc_cafe_manha_pct between 0 and 100),
+  alloc_bar_pct int not null default 0 check (alloc_bar_pct between 0 and 100),
+  alloc_frigobar_pct int not null default 0 check (alloc_frigobar_pct between 0 and 100),
+  constraint exp_cat_alloc_sums_100 check (
+    cost_nature <> 'custo_fixo' or (alloc_hospedagem_pct + alloc_cafe_manha_pct + alloc_bar_pct + alloc_frigobar_pct) = 100
+  )
 );
 
 -- ---------- GRUPOS DE GIRO (ciclo de reposição por categoria de controle fino) ----------
@@ -1649,7 +1666,11 @@ create table inventory_items (
   -- Quebra de estoque (ver seção "INVENTORY COUNT LINES" abaixo): limites
   -- editáveis pelo admin, sempre positivos, com incrementos de 1%.
   quebra_maxima_admitida_pct numeric(6,2) not null default 20 check (quebra_maxima_admitida_pct > 0),
-  indice_relativo_maximo_pct numeric(6,2) not null default 200 check (indice_relativo_maximo_pct > 0)
+  indice_relativo_maximo_pct numeric(6,2) not null default 200 check (indice_relativo_maximo_pct > 0),
+  -- Agrupamento pro relatório de custo do café da manhã (ex.: "Frutas e
+  -- ovos" somados como 1 item só, por não termos controle fino de
+  -- estoque sobre eles) — null = o item aparece com o próprio nome.
+  cost_report_group text
 );
 
 -- ---------- CATEGORIA DE GASTO POR ITEM (N-pra-N) ----------
@@ -1720,10 +1741,15 @@ create table expenses (
 );
 
 -- ---------- EXPENSE ITEMS (linhas de uma despesa) ----------
+-- category_id: usada só quando a linha NÃO tem item de estoque vinculado
+-- (salário, honorários, conta de serviço avulsa) — quando tem, a
+-- categoria vem das categorias do item (inventory_item_categories), sem
+-- mudança desde a Parte 19.
 create table expense_items (
   id uuid primary key default uuid_generate_v4(),
   expense_id uuid not null references expenses(id) on delete cascade,
   inventory_item_id uuid references inventory_items(id) on delete set null,
+  category_id uuid references expense_categories(id) on delete set null,
   description text not null,
   quantity numeric(12,3) not null default 1 check (quantity > 0),
   unit_cost numeric(12,2) not null default 0 check (unit_cost >= 0),
