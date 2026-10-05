@@ -13,6 +13,7 @@ import {
   Coffee,
   Wine,
   Martini,
+  FolderTree,
   ChevronRight,
 } from "lucide-react";
 
@@ -28,6 +29,7 @@ const menuItems = [
   { href: "/checklists/frigobar", label: "Consumo de Frigobar", icon: Wine },
   { href: "/checklists/poolbar", label: "Bar da Piscina", icon: Martini },
   { href: "/checklists/mesas", label: "Layout & mesas", icon: Coffee },
+  { href: "/checklists/plano-de-contas", label: "Plano de Contas", icon: FolderTree },
 ];
 
 export default function ChecklistsPage() {

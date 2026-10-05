@@ -1,23 +1,12 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import type { ExpenseCategory } from "@/lib/types";
-import {
-  type CostCenter,
-  allocateFixedCost,
-  emptyCostCenterTotals,
-  addCostCenterTotals,
-  weightedAverageUnitCost,
-  computeDishCost,
-} from "@/lib/cost-accounting";
+import { weightedAverageUnitCost, computeDishCost } from "@/lib/cost-accounting";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
 // Diárias ocupadas no período — mesma fonte/fallback já usado pela
-// comissão de café da manhã (Parte 27 do app principal): soma
-// `eligible_suites_count` quando a sincronização já gravou (cada suíte
-// elegível = 1 diária ocupada naquele dia), com fallback pra contar
-// linhas de `daily_breakfast_room_assignments` em datas sem esse valor.
+// comissão de café da manhã (Parte 27 do app principal).
 export async function getOccupiedRoomNightsForPeriod(from: string, to: string): Promise<number> {
   const supabase = await createClient();
   const [{ data: eligibility }, { data: roomAssignments }] = await Promise.all([
@@ -29,10 +18,7 @@ export async function getOccupiedRoomNightsForPeriod(from: string, to: string): 
   (roomAssignments ?? []).forEach((r) => {
     fallbackByDate.set(r.date, (fallbackByDate.get(r.date) ?? 0) + 1);
   });
-
-  const eligibilityByDate = new Map(
-    (eligibility ?? []).map((e) => [e.date, e.eligible_suites_count as number | null])
-  );
+  const eligibilityByDate = new Map((eligibility ?? []).map((e) => [e.date, e.eligible_suites_count as number | null]));
   const allDates = new Set<string>([...eligibilityByDate.keys(), ...fallbackByDate.keys()]);
 
   let total = 0;
@@ -43,80 +29,159 @@ export async function getOccupiedRoomNightsForPeriod(from: string, to: string): 
   return total;
 }
 
-// Hóspedes-noite de café da manhã no período — soma de guest_count das
-// alocações de mesa do café (cada suíte alocada numa noite = aqueles
-// hóspedes tomando café naquela noite).
 async function getBreakfastGuestNightsForPeriod(supabase: Supabase, from: string, to: string): Promise<number> {
   const { data } = await supabase.from("daily_breakfast_room_assignments").select("guest_count").gte("date", from).lte("date", to);
   return (data ?? []).reduce((sum, r) => sum + Number(r.guest_count), 0);
 }
 
-interface ExpenseItemRow {
-  inventory_item_id: string | null;
-  category_id: string | null;
+interface ExpenseItemCostRow {
+  cost_item_id: string;
   subtotal: number;
 }
 
-// Todas as linhas de despesa (expense_items) do período, com data já
-// filtrada via o join com expenses — base de tudo neste módulo.
-async function getExpenseItemRowsForPeriod(supabase: Supabase, from: string, to: string): Promise<ExpenseItemRow[]> {
+// Gasto total por item de custo no período (soma simples de subtotal —
+// bem mais direto que antes, já que a linha agora liga direto no item de
+// custo, sem precisar resolver categoria via item de estoque).
+async function getSpendByCostItem(supabase: Supabase, from: string, to: string): Promise<Map<string, number>> {
   const { data } = await supabase
     .from("expense_items")
-    .select("inventory_item_id, category_id, subtotal, expenses!inner(date)")
+    .select("cost_item_id, subtotal, expenses!inner(date)")
+    .not("cost_item_id", "is", null)
     .gte("expenses.date", from)
     .lte("expenses.date", to);
-  return (data ?? []) as unknown as ExpenseItemRow[];
+
+  const map = new Map<string, number>();
+  ((data ?? []) as unknown as ExpenseItemCostRow[]).forEach((r) => {
+    map.set(r.cost_item_id, (map.get(r.cost_item_id) ?? 0) + Number(r.subtotal));
+  });
+  return map;
 }
 
-// Gasto total por categoria no período — combina linhas ligadas a item de
-// estoque (categoria vem das categorias do item, Parte 19 — um item em 2
-// categorias soma o subtotal nas duas, mesma convenção já usada em
-// getExpenseSummaryByCategory) com linhas sem item (categoria vem direto
-// da própria linha — Parte 20, cobre salário/luz/honorários).
-async function getCategorySpendMap(supabase: Supabase, from: string, to: string): Promise<Map<string, number>> {
-  const rows = await getExpenseItemRowsForPeriod(supabase, from, to);
-
-  const itemIds = [...new Set(rows.filter((r) => r.inventory_item_id).map((r) => r.inventory_item_id as string))];
-  const { data: links } = itemIds.length
-    ? await supabase.from("inventory_item_categories").select("inventory_item_id, category_id").in("inventory_item_id", itemIds)
-    : { data: [] as { inventory_item_id: string; category_id: string }[] };
-  const categoriesByItem = new Map<string, string[]>();
-  (links ?? []).forEach((l) => {
-    const list = categoriesByItem.get(l.inventory_item_id) ?? [];
-    list.push(l.category_id);
-    categoriesByItem.set(l.inventory_item_id, list);
-  });
-
-  const spend = new Map<string, number>();
-  rows.forEach((r) => {
-    const categoryIds = r.inventory_item_id ? categoriesByItem.get(r.inventory_item_id) ?? [] : r.category_id ? [r.category_id] : [];
-    categoryIds.forEach((catId) => spend.set(catId, (spend.get(catId) ?? 0) + Number(r.subtotal)));
-  });
-  return spend;
+interface ItemSubcenterLink {
+  cost_item_id: string;
+  subcenter_id: string;
+  alloc_pct: number;
+}
+interface SubcenterCenterLink {
+  subcenter_id: string;
+  center_id: string;
+  alloc_pct: number;
 }
 
-// Custo médio ponderado de cada item de estoque no período (ver
-// weightedAverageUnitCost em cost-accounting.ts) — base pro custo de
-// prato e pro detalhamento do café da manhã por item.
+export interface CenterTotal {
+  center_id: string;
+  center_name: string;
+  total: number;
+}
+
+export interface CostItemBreakdownRow {
+  cost_item_id: string;
+  cost_item_name: string;
+  total_spend: number;
+  // Contribuição desse item em cada subcentro (já em R$, não %).
+  by_subcenter: { subcenter_id: string; subcenter_name: string; center_id: string; center_name: string; amount: number }[];
+}
+
+export interface CostCentersSummary {
+  centerTotals: CenterTotal[];
+  breakdown: CostItemBreakdownRow[];
+}
+
+// Núcleo do módulo de custos: rateia o gasto de cada item de custo pelos
+// subcentros a que pertence (% do item), depois rateia cada subcentro
+// pelos centros a que pertence (% do subcentro) — 2 cascatas, sempre
+// pelos percentuais cadastrados no Plano de Contas (nunca fixo no
+// código, pra se atualizar sozinho quando o admin editar um percentual).
+export async function getCostCentersSummaryForPeriod(from: string, to: string): Promise<CostCentersSummary> {
+  const supabase = await createClient();
+  const [spendByItem, { data: items }, { data: itemLinks }, { data: subcenterLinks }] = await Promise.all([
+    getSpendByCostItem(supabase, from, to),
+    supabase.from("cost_items").select("id, name"),
+    supabase.from("cost_item_subcenters").select("cost_item_id, subcenter_id, alloc_pct"),
+    supabase.from("cost_subcenter_centers").select("subcenter_id, center_id, alloc_pct, cost_subcenters(name), cost_centers(name)"),
+  ]);
+
+  const itemNameById = new Map(((items ?? []) as { id: string; name: string }[]).map((i) => [i.id, i.name]));
+
+  type SubcenterCenterRaw = SubcenterCenterLink & { cost_subcenters: { name: string } | null; cost_centers: { name: string } | null };
+  const subcenterCenterLinksBySubcenter = new Map<string, SubcenterCenterRaw[]>();
+  const subcenterNameById = new Map<string, string>();
+  const centerNameById = new Map<string, string>();
+  ((subcenterLinks ?? []) as unknown as SubcenterCenterRaw[]).forEach((l) => {
+    const list = subcenterCenterLinksBySubcenter.get(l.subcenter_id) ?? [];
+    list.push(l);
+    subcenterCenterLinksBySubcenter.set(l.subcenter_id, list);
+    if (l.cost_subcenters?.name) subcenterNameById.set(l.subcenter_id, l.cost_subcenters.name);
+    if (l.cost_centers?.name) centerNameById.set(l.center_id, l.cost_centers.name);
+  });
+
+  const itemLinksByItem = new Map<string, ItemSubcenterLink[]>();
+  ((itemLinks ?? []) as ItemSubcenterLink[]).forEach((l) => {
+    const list = itemLinksByItem.get(l.cost_item_id) ?? [];
+    list.push(l);
+    itemLinksByItem.set(l.cost_item_id, list);
+  });
+
+  const centerTotalsMap = new Map<string, number>();
+  const breakdown: CostItemBreakdownRow[] = [];
+
+  spendByItem.forEach((totalSpend, costItemId) => {
+    const links = itemLinksByItem.get(costItemId) ?? [];
+    const bySubcenter: CostItemBreakdownRow["by_subcenter"] = [];
+
+    links.forEach((il) => {
+      const amountAtSubcenter = totalSpend * (il.alloc_pct / 100);
+      const centerLinks = subcenterCenterLinksBySubcenter.get(il.subcenter_id) ?? [];
+      centerLinks.forEach((cl) => {
+        const amountAtCenter = amountAtSubcenter * (cl.alloc_pct / 100);
+        centerTotalsMap.set(cl.center_id, (centerTotalsMap.get(cl.center_id) ?? 0) + amountAtCenter);
+        bySubcenter.push({
+          subcenter_id: il.subcenter_id,
+          subcenter_name: subcenterNameById.get(il.subcenter_id) ?? "—",
+          center_id: cl.center_id,
+          center_name: centerNameById.get(cl.center_id) ?? "—",
+          amount: amountAtCenter,
+        });
+      });
+    });
+
+    breakdown.push({
+      cost_item_id: costItemId,
+      cost_item_name: itemNameById.get(costItemId) ?? "—",
+      total_spend: totalSpend,
+      by_subcenter: bySubcenter,
+    });
+  });
+
+  const centerTotals: CenterTotal[] = Array.from(centerTotalsMap.entries())
+    .map(([center_id, total]) => ({ center_id, center_name: centerNameById.get(center_id) ?? "—", total }))
+    .sort((a, b) => b.total - a.total);
+
+  return { centerTotals, breakdown: breakdown.sort((a, b) => b.total_spend - a.total_spend) };
+}
+
 async function getWeightedAverageCosts(supabase: Supabase, from: string, to: string): Promise<Map<string, number>> {
   const { data } = await supabase
     .from("expense_items")
-    .select("inventory_item_id, quantity, subtotal, expenses!inner(date)")
-    .not("inventory_item_id", "is", null)
+    .select("quantity, subtotal, cost_items(inventory_item_id), expenses!inner(date)")
+    .not("cost_item_id", "is", null)
     .gte("expenses.date", from)
     .lte("expenses.date", to);
 
-  const rowsByItem = new Map<string, { subtotal: number; quantity: number }[]>();
-  ((data ?? []) as unknown as { inventory_item_id: string; quantity: number; subtotal: number }[]).forEach((r) => {
-    const list = rowsByItem.get(r.inventory_item_id) ?? [];
+  type Raw = { quantity: number; subtotal: number; cost_items: { inventory_item_id: string | null } | null };
+  const rowsByInventoryItem = new Map<string, { subtotal: number; quantity: number }[]>();
+  ((data ?? []) as unknown as Raw[]).forEach((r) => {
+    const invId = r.cost_items?.inventory_item_id;
+    if (!invId) return;
+    const list = rowsByInventoryItem.get(invId) ?? [];
     list.push({ subtotal: Number(r.subtotal), quantity: Number(r.quantity) });
-    rowsByItem.set(r.inventory_item_id, list);
+    rowsByInventoryItem.set(invId, list);
   });
 
   const result = new Map<string, number>();
-  rowsByItem.forEach((rows, itemId) => {
+  rowsByInventoryItem.forEach((rows, invId) => {
     const avg = weightedAverageUnitCost(rows);
-    if (avg !== null) result.set(itemId, avg);
+    if (avg !== null) result.set(invId, avg);
   });
   return result;
 }
@@ -129,11 +194,8 @@ export interface DishCostRow {
   has_recipe: boolean;
 }
 
-// Custo de 1 porção de cada prato do cardápio (bar da piscina/frigobar)
-// no período, pela ficha técnica × custo médio dos ingredientes no
-// período — pratos sem nenhuma ficha técnica cadastrada aparecem com
-// has_recipe=false (não é custo zero de verdade, é "ainda não
-// configurado", ver tela "Lista de pratos").
+// Custo de 1 porção de cada prato do cardápio no período, pela ficha
+// técnica × custo médio dos ingredientes no período.
 export async function getDishCostsForPeriod(from: string, to: string): Promise<DishCostRow[]> {
   const supabase = await createClient();
   const [avgCosts, { data: poolbar }, { data: minibar }, { data: recipes }] = await Promise.all([
@@ -184,42 +246,31 @@ export interface BreakfastCostSummary {
   byItem: { label: string; total: number }[];
 }
 
-// Custo do café da manhã no período: gasto total da categoria "Café da
-// manhã" ÷ hóspedes-noite servidos, e o mesmo gasto detalhado por item
-// (agrupando itens com o mesmo cost_report_group — ex.: "Frutas e ovos"
-// — numa linha só, já que não há controle fino de estoque sobre eles).
-export async function getBreakfastCostForPeriod(from: string, to: string): Promise<BreakfastCostSummary> {
+// Custo do café da manhã no período: usa o mesmo total do centro "Café
+// da manhã" já calculado pela cascata (consistente com o card principal
+// de Custos), dividido pelos hóspedes-noite; detalhado por item de custo
+// (agrupando pelo cost_report_group do item de estoque por trás, quando
+// houver — ex.: "Frutas e ovos").
+export async function getBreakfastCostForPeriod(from: string, to: string, summary: CostCentersSummary): Promise<BreakfastCostSummary> {
   const supabase = await createClient();
-  const [{ data: category }, guestNights] = await Promise.all([
-    supabase.from("expense_categories").select("id").eq("name", "Café da manhã").maybeSingle(),
-    getBreakfastGuestNightsForPeriod(supabase, from, to),
-  ]);
-  if (!category) return { totalSpend: 0, guestNights, costPerGuest: null, byItem: [] };
+  const guestNights = await getBreakfastGuestNightsForPeriod(supabase, from, to);
+  const totalSpend = summary.centerTotals.find((c) => c.center_name === "Café da manhã")?.total ?? 0;
 
-  const { data: items } = await supabase
-    .from("expense_items")
-    .select("subtotal, inventory_item_id, inventory_items(name, cost_report_group), expenses!inner(date)")
-    .gte("expenses.date", from)
-    .lte("expenses.date", to);
-
-  type Raw = {
-    subtotal: number;
-    inventory_item_id: string | null;
-    inventory_items: { name: string; cost_report_group: string | null } | null;
-  };
-  const itemIds = ((items ?? []) as unknown as Raw[]).filter((r) => r.inventory_item_id).map((r) => r.inventory_item_id as string);
-  const { data: links } = itemIds.length
-    ? await supabase.from("inventory_item_categories").select("inventory_item_id").eq("category_id", category.id).in("inventory_item_id", itemIds)
-    : { data: [] as { inventory_item_id: string }[] };
-  const itemsInBreakfastCategory = new Set((links ?? []).map((l) => l.inventory_item_id));
+  const costItemIds = [...new Set(summary.breakdown.flatMap((b) => (b.by_subcenter.some((s) => s.center_name === "Café da manhã") ? [b.cost_item_id] : [])))];
+  const { data: items } = costItemIds.length
+    ? await supabase.from("cost_items").select("id, name, inventory_item_id, inventory_items(cost_report_group)").in("id", costItemIds)
+    : { data: [] };
+  type Raw = { id: string; name: string; inventory_items: { cost_report_group: string | null } | null };
+  const labelByItem = new Map(
+    ((items ?? []) as unknown as Raw[]).map((i) => [i.id, i.inventory_items?.cost_report_group || i.name])
+  );
 
   const byLabel = new Map<string, number>();
-  let totalSpend = 0;
-  ((items ?? []) as unknown as Raw[]).forEach((r) => {
-    if (!r.inventory_item_id || !itemsInBreakfastCategory.has(r.inventory_item_id)) return;
-    totalSpend += Number(r.subtotal);
-    const label = r.inventory_items?.cost_report_group || r.inventory_items?.name || "—";
-    byLabel.set(label, (byLabel.get(label) ?? 0) + Number(r.subtotal));
+  summary.breakdown.forEach((b) => {
+    const amount = b.by_subcenter.filter((s) => s.center_name === "Café da manhã").reduce((sum, s) => sum + s.amount, 0);
+    if (amount === 0) return;
+    const label = labelByItem.get(b.cost_item_id) ?? b.cost_item_name;
+    byLabel.set(label, (byLabel.get(label) ?? 0) + amount);
   });
 
   return {
@@ -232,124 +283,79 @@ export async function getBreakfastCostForPeriod(from: string, to: string): Promi
   };
 }
 
-export interface CategorySpendRow {
-  category_id: string;
-  category_name: string;
-  total_spend: number;
-  allocation: Record<CostCenter, number>;
-}
-
-export interface CostCentersSummary {
-  totals: Record<CostCenter, number>;
-  occupiedRoomNights: number;
-  costPerOccupiedNight: number | null;
-  breakdown: CategorySpendRow[];
-}
-
-// Visão consolidada dos 4 centros de custo no período: cada categoria de
-// custo FIXO é ratada pelos seus 4 percentuais; categorias de custo
-// DIRETO (Café da manhã/Bar da piscina/Frigobar) vão inteiras pro seu
-// próprio centro; "Hospedagem" soma também o total de Café da Manhã por
-// dentro (é embutido na diária, nunca cobrado à parte do hóspede).
-export async function getCostCentersSummaryForPeriod(from: string, to: string): Promise<CostCentersSummary> {
-  const supabase = await createClient();
-  const [{ data: categories }, spendMap, occupiedRoomNights] = await Promise.all([
-    supabase.from("expense_categories").select("*"),
-    getCategorySpendMap(supabase, from, to),
-    getOccupiedRoomNightsForPeriod(from, to),
-  ]);
-
-  let totals = emptyCostCenterTotals();
-  const breakdown: CategorySpendRow[] = [];
-  let cafeManhaDireto = 0;
-
-  ((categories ?? []) as ExpenseCategory[]).forEach((cat) => {
-    const totalSpend = spendMap.get(cat.id) ?? 0;
-    if (cat.cost_nature === "nao_custo") return;
-
-    let allocation = emptyCostCenterTotals();
-    if (cat.cost_nature === "custo_fixo") {
-      allocation = allocateFixedCost(totalSpend, cat);
-      totals = addCostCenterTotals(totals, allocation);
-    } else if (cat.cost_nature === "custo_direto") {
-      if (cat.name === "Café da manhã") {
-        allocation = { ...emptyCostCenterTotals(), cafe_manha: totalSpend };
-        cafeManhaDireto += totalSpend;
-      } else if (cat.name === "Bar da piscina") {
-        allocation = { ...emptyCostCenterTotals(), servico_bar: totalSpend };
-        totals = addCostCenterTotals(totals, allocation);
-      } else if (cat.name === "Frigobar") {
-        allocation = { ...emptyCostCenterTotals(), frigobar: totalSpend };
-        totals = addCostCenterTotals(totals, allocation);
-      }
-    }
-    breakdown.push({ category_id: cat.id, category_name: cat.name, total_spend: totalSpend, allocation });
-  });
-
-  // Café da manhã entra no centro "cafe_manha" (linha própria, visível no
-  // detalhamento) e TAMBÉM soma dentro de "hospedagem" — embutido na
-  // diária, nunca é um custo cobrado à parte.
-  totals.cafe_manha += cafeManhaDireto;
-  totals.hospedagem += totals.cafe_manha;
-
-  return {
-    totals,
-    occupiedRoomNights,
-    costPerOccupiedNight: occupiedRoomNights > 0 ? totals.hospedagem / occupiedRoomNights : null,
-    breakdown: breakdown.sort((a, b) => b.total_spend - a.total_spend),
-  };
-}
-
 export interface DemonstrativoMonthRow {
-  month: string; // "YYYY-MM"
-  category_name: string;
+  month: string;
+  center_name: string;
   total: number;
 }
 
-// Demonstrativo de Despesas: gasto por categoria, mês a mês, no
-// intervalo — reagrupa sozinho quando uma categoria é editada, já que
-// não persiste nada, só lê a categorização atual de cada item/linha.
+// Demonstrativo de Despesas: gasto por CENTRO de custo, mês a mês — nunca
+// persiste nada, só lê a categorização atual de cada item a cada
+// carregamento, por isso reagrupa sozinho quando o Plano de Contas é
+// editado.
 export async function getExpenseDemonstrativoForPeriod(from: string, to: string): Promise<DemonstrativoMonthRow[]> {
   const supabase = await createClient();
-  const [{ data: categories }, { data: rows }] = await Promise.all([
-    supabase.from("expense_categories").select("id, name"),
-    supabase
-      .from("expense_items")
-      .select("inventory_item_id, category_id, subtotal, expenses!inner(date)")
-      .gte("expenses.date", from)
-      .lte("expenses.date", to),
+  const { data: rows } = await supabase
+    .from("expense_items")
+    .select("cost_item_id, fixed_asset_id, subtotal, expenses!inner(date)")
+    .gte("expenses.date", from)
+    .lte("expenses.date", to);
+
+  type Raw = { cost_item_id: string | null; fixed_asset_id: string | null; subtotal: number; expenses: { date: string } };
+  const itemRows = (rows ?? []) as unknown as Raw[];
+  const costItemIds = [...new Set(itemRows.filter((r) => r.cost_item_id).map((r) => r.cost_item_id as string))];
+
+  const [{ data: itemLinks }, { data: subcenterLinks }] = await Promise.all([
+    costItemIds.length
+      ? supabase.from("cost_item_subcenters").select("cost_item_id, subcenter_id, alloc_pct").in("cost_item_id", costItemIds)
+      : Promise.resolve({ data: [] as { cost_item_id: string; subcenter_id: string; alloc_pct: number }[] }),
+    supabase.from("cost_subcenter_centers").select("subcenter_id, center_id, alloc_pct, cost_centers(name)"),
   ]);
 
-  const categoryNameById = new Map(((categories ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
-  type Raw = { inventory_item_id: string | null; category_id: string | null; subtotal: number; expenses: { date: string } };
-  const itemRows = (rows ?? []) as unknown as Raw[];
-
-  const itemIds = [...new Set(itemRows.filter((r) => r.inventory_item_id).map((r) => r.inventory_item_id as string))];
-  const { data: links } = itemIds.length
-    ? await supabase.from("inventory_item_categories").select("inventory_item_id, category_id").in("inventory_item_id", itemIds)
-    : { data: [] as { inventory_item_id: string; category_id: string }[] };
-  const categoriesByItem = new Map<string, string[]>();
-  (links ?? []).forEach((l) => {
-    const list = categoriesByItem.get(l.inventory_item_id) ?? [];
-    list.push(l.category_id);
-    categoriesByItem.set(l.inventory_item_id, list);
+  type SubRaw = { subcenter_id: string; center_id: string; alloc_pct: number; cost_centers: { name: string } | null };
+  const centerLinksBySubcenter = new Map<string, SubRaw[]>();
+  ((subcenterLinks ?? []) as unknown as SubRaw[]).forEach((l) => {
+    const list = centerLinksBySubcenter.get(l.subcenter_id) ?? [];
+    list.push(l);
+    centerLinksBySubcenter.set(l.subcenter_id, list);
+  });
+  const itemLinksByItem = new Map<string, { subcenter_id: string; alloc_pct: number }[]>();
+  (itemLinks ?? []).forEach((l) => {
+    const list = itemLinksByItem.get(l.cost_item_id) ?? [];
+    list.push({ subcenter_id: l.subcenter_id, alloc_pct: l.alloc_pct });
+    itemLinksByItem.set(l.cost_item_id, list);
   });
 
-  const totalsByMonthCategory = new Map<string, number>();
+  const totals = new Map<string, number>(); // key = `${month}__${center_name}`
   itemRows.forEach((r) => {
     const month = r.expenses.date.slice(0, 7);
-    const categoryIds = r.inventory_item_id ? categoriesByItem.get(r.inventory_item_id) ?? [] : r.category_id ? [r.category_id] : [];
-    const targetNames = categoryIds.length > 0 ? categoryIds.map((id) => categoryNameById.get(id) ?? "—") : ["Sem categoria"];
-    targetNames.forEach((name) => {
-      const key = `${month}__${name}`;
-      totalsByMonthCategory.set(key, (totalsByMonthCategory.get(key) ?? 0) + Number(r.subtotal));
+    if (r.fixed_asset_id) return; // ativo permanente nunca é custo do período
+    if (!r.cost_item_id) {
+      const key = `${month}__Sem categoria`;
+      totals.set(key, (totals.get(key) ?? 0) + Number(r.subtotal));
+      return;
+    }
+    const itemLinksForRow = itemLinksByItem.get(r.cost_item_id) ?? [];
+    if (itemLinksForRow.length === 0) {
+      const key = `${month}__Sem categoria`;
+      totals.set(key, (totals.get(key) ?? 0) + Number(r.subtotal));
+      return;
+    }
+    itemLinksForRow.forEach((il) => {
+      const amountAtSubcenter = Number(r.subtotal) * (il.alloc_pct / 100);
+      const centerLinks = centerLinksBySubcenter.get(il.subcenter_id) ?? [];
+      centerLinks.forEach((cl) => {
+        const amountAtCenter = amountAtSubcenter * (cl.alloc_pct / 100);
+        const key = `${month}__${cl.cost_centers?.name ?? "—"}`;
+        totals.set(key, (totals.get(key) ?? 0) + amountAtCenter);
+      });
     });
   });
 
-  return Array.from(totalsByMonthCategory.entries())
+  return Array.from(totals.entries())
     .map(([key, total]) => {
-      const [month, category_name] = key.split("__");
-      return { month, category_name, total };
+      const [month, center_name] = key.split("__");
+      return { month, center_name, total };
     })
-    .sort((a, b) => (a.month === b.month ? a.category_name.localeCompare(b.category_name) : b.month.localeCompare(a.month)));
+    .sort((a, b) => (a.month === b.month ? a.center_name.localeCompare(b.center_name) : b.month.localeCompare(a.month)));
 }

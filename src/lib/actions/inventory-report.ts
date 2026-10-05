@@ -28,38 +28,48 @@ export async function getInventoryStockReport(): Promise<InventoryStockReportRow
   const supabase = await createClient();
   const monthStart = monthStartKey();
 
-  const [{ data: items }, { data: categoryLinks }, { data: suggestions }, { data: monthExpenseItems }, needingPurchase] =
+  const [{ data: items }, { data: costItemLinks }, { data: suggestions }, { data: monthExpenseItems }, needingPurchase] =
     await Promise.all([
       supabase.from("inventory_items").select("id, name, unit, active").eq("active", true),
-      supabase.from("inventory_item_categories").select("inventory_item_id, expense_categories(name)"),
+      supabase
+        .from("cost_items")
+        .select("inventory_item_id, cost_item_subcenters(cost_subcenters(name))")
+        .eq("is_inventory", true)
+        .not("inventory_item_id", "is", null),
       supabase.from("inventory_purchase_suggestions").select("inventory_item_id, balance, weekly_consumption"),
       supabase
         .from("expense_items")
-        .select("inventory_item_id, quantity, expenses!inner(date)")
-        .not("inventory_item_id", "is", null)
+        .select("quantity, cost_items(inventory_item_id), expenses!inner(date)")
+        .not("cost_item_id", "is", null)
         .gte("expenses.date", monthStart),
       getPurchaseList(),
     ]);
 
   type ItemRaw = { id: string; name: string; unit: string };
   type SuggestionRaw = { inventory_item_id: string; balance: number; weekly_consumption: number };
-  type ExpenseItemRaw = { inventory_item_id: string; quantity: number };
+  type ExpenseItemRaw = { quantity: number; cost_items: { inventory_item_id: string | null } | null };
+  type CostItemLinkRaw = {
+    inventory_item_id: string;
+    cost_item_subcenters: { cost_subcenters: { name: string } | null }[];
+  };
 
   const categoryNamesByItem = new Map<string, string[]>();
-  ((categoryLinks ?? []) as unknown as { inventory_item_id: string; expense_categories: { name: string } | null }[]).forEach(
-    (r) => {
-      const names = categoryNamesByItem.get(r.inventory_item_id) ?? [];
-      if (r.expense_categories?.name) names.push(r.expense_categories.name);
-      categoryNamesByItem.set(r.inventory_item_id, names);
-    }
-  );
+  ((costItemLinks ?? []) as unknown as CostItemLinkRaw[]).forEach((r) => {
+    const names = categoryNamesByItem.get(r.inventory_item_id) ?? [];
+    r.cost_item_subcenters.forEach((l) => {
+      if (l.cost_subcenters?.name) names.push(l.cost_subcenters.name);
+    });
+    categoryNamesByItem.set(r.inventory_item_id, names);
+  });
 
   const suggestionMap = new Map(((suggestions ?? []) as SuggestionRaw[]).map((s) => [s.inventory_item_id, s]));
   const needsPurchaseSet = new Set(needingPurchase.map((r) => r.inventory_item_id));
 
   const purchasedThisMonth = new Map<string, number>();
   ((monthExpenseItems ?? []) as unknown as ExpenseItemRaw[]).forEach((r) => {
-    purchasedThisMonth.set(r.inventory_item_id, (purchasedThisMonth.get(r.inventory_item_id) ?? 0) + Number(r.quantity));
+    const invId = r.cost_items?.inventory_item_id;
+    if (!invId) return;
+    purchasedThisMonth.set(invId, (purchasedThisMonth.get(invId) ?? 0) + Number(r.quantity));
   });
 
   return ((items ?? []) as unknown as ItemRaw[])
@@ -93,16 +103,17 @@ export async function getTopPurchasedItems(period: "month" | "all", limit = 20):
 
   let query = supabase
     .from("expense_items")
-    .select("subtotal, inventory_items!inner(name), expenses!inner(date)")
-    .not("inventory_item_id", "is", null);
+    .select("subtotal, cost_items!inner(inventory_items!inner(name)), expenses!inner(date)")
+    .not("cost_item_id", "is", null);
   if (period === "month") query = query.gte("expenses.date", monthStartKey());
 
   const { data } = await query;
-  type Raw = { subtotal: number; inventory_items: { name: string } | null };
+  type Raw = { subtotal: number; cost_items: { inventory_items: { name: string } | null } | null };
 
   const byItem = new Map<string, number>();
   ((data ?? []) as unknown as Raw[]).forEach((r) => {
-    const name = r.inventory_items?.name ?? "—";
+    const name = r.cost_items?.inventory_items?.name;
+    if (!name) return;
     byItem.set(name, (byItem.get(name) ?? 0) + Number(r.subtotal));
   });
 

@@ -1,51 +1,23 @@
 // Módulo "Custos e Despesas" — funções puras de cálculo, sem I/O (ver
-// PRD_compras.md seção 20 pro raciocínio completo: pesquisa do setor
-// hoteleiro, decisões confirmadas com o proprietário). Separado de
+// PRD_compras.md seção 21 pro raciocínio completo: Plano de Contas,
+// centro → subcentro → item de custo). Separado de
 // `src/lib/actions/cost-accounting.ts` porque um arquivo "use server" só
 // pode exportar Server Actions assíncronas — mesmo padrão já usado por
 // `commission-math.ts`/`inventory-shrinkage.ts`.
 
-export const COST_CENTERS = ["hospedagem", "cafe_manha", "servico_bar", "frigobar"] as const;
-export type CostCenter = (typeof COST_CENTERS)[number];
-
-export const COST_CENTER_LABELS: Record<CostCenter, string> = {
-  hospedagem: "Hospedagem",
-  cafe_manha: "Café da manhã",
-  servico_bar: "Serviço de bar",
-  frigobar: "Frigobar",
-};
-
-export interface CategoryAllocationPcts {
-  alloc_hospedagem_pct: number;
-  alloc_cafe_manha_pct: number;
-  alloc_bar_pct: number;
-  alloc_frigobar_pct: number;
+export interface CenterTotalLike {
+  center_name: string;
+  total: number;
 }
 
-// Divide o gasto total de uma categoria de custo fixo entre os 4 centros
-// de custo, pelos percentuais cadastrados na categoria (sempre somando
-// 100 — garantido por constraint no banco e validado na Server Action
-// que grava os percentuais).
-export function allocateFixedCost(totalSpend: number, pcts: CategoryAllocationPcts): Record<CostCenter, number> {
-  return {
-    hospedagem: totalSpend * (pcts.alloc_hospedagem_pct / 100),
-    cafe_manha: totalSpend * (pcts.alloc_cafe_manha_pct / 100),
-    servico_bar: totalSpend * (pcts.alloc_bar_pct / 100),
-    frigobar: totalSpend * (pcts.alloc_frigobar_pct / 100),
-  };
-}
-
-export function emptyCostCenterTotals(): Record<CostCenter, number> {
-  return { hospedagem: 0, cafe_manha: 0, servico_bar: 0, frigobar: 0 };
-}
-
-export function addCostCenterTotals(a: Record<CostCenter, number>, b: Record<CostCenter, number>): Record<CostCenter, number> {
-  return {
-    hospedagem: a.hospedagem + b.hospedagem,
-    cafe_manha: a.cafe_manha + b.cafe_manha,
-    servico_bar: a.servico_bar + b.servico_bar,
-    frigobar: a.frigobar + b.frigobar,
-  };
+// Custo total da Hospedagem, pra fins de custo por diária — soma o
+// centro "Hospedagem" com o centro "Café da manhã" por dentro, já que o
+// café não é cobrado à parte do hóspede (seu custo está embutido na
+// diária, mesmo sendo um centro de custo próprio pra fins de relatório).
+export function hospedagemTotalIncludingBreakfast(centerTotals: CenterTotalLike[]): number {
+  const hospedagem = centerTotals.find((c) => c.center_name === "Hospedagem")?.total ?? 0;
+  const cafeDaManha = centerTotals.find((c) => c.center_name === "Café da manhã")?.total ?? 0;
+  return hospedagem + cafeDaManha;
 }
 
 // Custo médio ponderado: soma de tudo que foi gasto ÷ soma de tudo que

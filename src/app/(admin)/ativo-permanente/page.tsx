@@ -1,32 +1,86 @@
-import Link from "next/link";
+import { Fragment } from "react";
 import { PageHeader } from "@/components/shared/page-header";
-import { ClipboardList, Package, ChevronRight } from "lucide-react";
+import { getFixedAssets } from "@/lib/actions/fixed-assets";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { formatDatePt } from "@/lib/date";
 
-const menuItems = [
-  { href: "/ativo-permanente/relacao", label: "Relação de Ativo Permanente", icon: ClipboardList },
-  { href: "/ativo-permanente/itens", label: "Itens de ativo permanente", icon: Package },
-];
+// Cada bem é criado ao lançar uma compra de ativo permanente em "Lançar
+// compras e despesas" (ver src/lib/actions/expenses.ts) — esta tela é só
+// a relação, sem CRUD próprio; categorias e catálogo de itens vivem no
+// Plano de Contas (/checklists/plano-de-contas), não aqui.
+export default async function AtivoPermanentePage() {
+  const assets = await getFixedAssets();
+  const active = assets.filter((a) => a.active);
 
-export default function AtivoPermanentePage() {
+  const byCategory = new Map<string, typeof active>();
+  active.forEach((a) => {
+    const list = byCategory.get(a.category_name) ?? [];
+    list.push(a);
+    byCategory.set(a.category_name, list);
+  });
+
+  const totalValue = active.reduce((sum, a) => sum + (a.purchase_value ?? 0), 0);
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Ativo Permanente"
-        subtitle="Bens que não se consomem (TVs, móveis, equipamentos, veículos etc.) — separados do controle de estoque."
+        subtitle={`Bens que não se consomem (TVs, móveis, equipamentos etc.) — ${active.length} item(ns) registrado(s) · valor total R$ ${totalValue.toFixed(2)}`}
       />
-      <nav className="max-w-md space-y-1.5">
-        {menuItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            <item.icon size={18} strokeWidth={1.75} className="text-muted-foreground" />
-            <span className="flex-1">{item.label}</span>
-            <ChevronRight size={16} className="text-muted-foreground" />
-          </Link>
-        ))}
-      </nav>
+
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Item</TableHead>
+              <TableHead>Marca/Modelo</TableHead>
+              <TableHead>Local</TableHead>
+              <TableHead>Data da compra</TableHead>
+              <TableHead>Valor</TableHead>
+              <TableHead>Garantia até</TableHead>
+              <TableHead>Fornecedor</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Array.from(byCategory.entries()).map(([category, items]) => (
+              <Fragment key={category}>
+                <TableRow className="bg-muted/40">
+                  <TableCell colSpan={7} className="font-medium text-xs uppercase text-muted-foreground">
+                    {category}
+                  </TableCell>
+                </TableRow>
+                {items.map((a) => (
+                  <TableRow key={a.id}>
+                    <TableCell>{a.name}</TableCell>
+                    <TableCell>{[a.brand, a.model].filter(Boolean).join(" ") || "—"}</TableCell>
+                    <TableCell>{a.location ?? "—"}</TableCell>
+                    <TableCell>{a.purchase_date ? formatDatePt(a.purchase_date) : "—"}</TableCell>
+                    <TableCell>{a.purchase_value !== null ? `R$ ${a.purchase_value.toFixed(2)}` : "—"}</TableCell>
+                    <TableCell>{a.warranty_until ? formatDatePt(a.warranty_until) : "—"}</TableCell>
+                    <TableCell>{a.supplier_name ?? "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </Fragment>
+            ))}
+            {active.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                  Nenhum item registrado ainda — os bens são criados ao lançar uma compra de ativo permanente em
+                  &quot;Lançar compras e despesas&quot;.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {Array.from(new Set(active.map((a) => a.location).filter(Boolean))).length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Locais cadastrados: {Array.from(new Set(active.map((a) => a.location).filter(Boolean))).join(", ")}
+        </p>
+      )}
+      <Badge variant="secondary">Itens inativos não aparecem nesta relação</Badge>
     </div>
   );
 }

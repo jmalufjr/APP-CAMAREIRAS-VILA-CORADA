@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { startCountSession } from "@/lib/actions/inventory-counts";
 import { Button } from "@/components/ui/button";
 
-export function StartCountButton({ categoryId, label }: { categoryId?: string; label: string }) {
+export function StartCountButton({ groupName, label }: { groupName?: string; label: string }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -17,7 +17,7 @@ export function StartCountButton({ categoryId, label }: { categoryId?: string; l
       disabled={isPending}
       onClick={() => {
         startTransition(async () => {
-          const result = await startCountSession(categoryId);
+          const result = await startCountSession(groupName);
           if (result?.error) {
             toast.error(result.error);
             return;

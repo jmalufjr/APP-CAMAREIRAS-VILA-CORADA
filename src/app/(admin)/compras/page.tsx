@@ -1,19 +1,18 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { getPurchaseList } from "@/lib/actions/purchase-list";
-import { getCategoryCountStatus } from "@/lib/actions/inventory-counts";
-import { Package, ClipboardList, PackageMinus, ChevronRight, AlertTriangle, CalendarClock, UtensilsCrossed } from "lucide-react";
+import { getSubcenterGroupCountStatus } from "@/lib/actions/inventory-counts";
+import { Package, ClipboardList, PackageMinus, ChevronRight, AlertTriangle, UtensilsCrossed } from "lucide-react";
 
 const menuItems = [
   { href: "/compras/baixa", label: "Baixa de estoque", icon: PackageMinus },
-  { href: "/compras/itens", label: "Itens de estoque", icon: Package },
-  { href: "/compras/pratos", label: "Lista de pratos: natureza do consumo", icon: UtensilsCrossed },
-  { href: "/compras/grupos-giro", label: "Grupos de giro (dias de folga)", icon: CalendarClock },
+  { href: "/compras/itens", label: "Itens de estoque e ciclo de compras", icon: Package },
+  { href: "/compras/pratos", label: "Ficha técnica de petiscos e drinks", icon: UtensilsCrossed },
   { href: "/compras/contagem", label: "Contagem de estoque", icon: ClipboardList },
 ];
 
 export default async function ComprasPage() {
-  const [purchaseList, countStatuses] = await Promise.all([getPurchaseList(), getCategoryCountStatus()]);
+  const [purchaseList, countStatuses] = await Promise.all([getPurchaseList(), getSubcenterGroupCountStatus()]);
   const dueCategories = countStatuses.filter((s) => s.is_due);
 
   return (
@@ -37,7 +36,7 @@ export default async function ComprasPage() {
             className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive hover:bg-destructive/15 transition-colors w-fit"
           >
             <AlertTriangle size={16} />
-            {dueCategories.length} categoria(s) precisam de contagem física
+            {dueCategories.length} grupo(s) de itens precisam de contagem física
             <ChevronRight size={14} />
           </Link>
         )}

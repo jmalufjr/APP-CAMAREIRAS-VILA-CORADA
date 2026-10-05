@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { AssetCategory, FixedAsset } from "@/lib/types";
+import type { AssetCategory, FixedAsset, FixedAssetCatalogItem } from "@/lib/types";
 
 function revalidateAll() {
   revalidatePath("/ativo-permanente", "layout");
@@ -50,6 +50,51 @@ export async function deleteAssetCategory(id: string) {
   return { success: true };
 }
 
+// ---------- Catálogo de itens de ativo permanente (Plano de Contas) ----------
+
+export async function getFixedAssetCatalogItems(): Promise<FixedAssetCatalogItem[]> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("fixed_asset_catalog_items").select("*").order("position").order("name");
+  return (data ?? []) as FixedAssetCatalogItem[];
+}
+
+export async function createFixedAssetCatalogItem(name: string, categoryId: string) {
+  if (!name.trim()) return { error: "Informe o nome do item." };
+  if (!categoryId) return { error: "Selecione a categoria." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("fixed_asset_catalog_items").insert({ name: name.trim(), category_id: categoryId });
+  if (error) {
+    if (error.code === "23505") return { error: "Já existe um item com esse nome nessa categoria." };
+    return { error: error.message };
+  }
+  revalidateAll();
+  revalidatePath("/checklists", "layout");
+  return { success: true };
+}
+
+export async function updateFixedAssetCatalogItem(id: string, name: string, categoryId: string, active: boolean) {
+  if (!name.trim()) return { error: "Informe o nome do item." };
+  if (!categoryId) return { error: "Selecione a categoria." };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("fixed_asset_catalog_items")
+    .update({ name: name.trim(), category_id: categoryId, active })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidateAll();
+  revalidatePath("/checklists", "layout");
+  return { success: true };
+}
+
+export async function deleteFixedAssetCatalogItem(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("fixed_asset_catalog_items").delete().eq("id", id);
+  if (error) return { error: error.message };
+  revalidateAll();
+  revalidatePath("/checklists", "layout");
+  return { success: true };
+}
+
 // ---------- Itens de ativo permanente ----------
 
 export interface FixedAssetWithCategory extends FixedAsset {
@@ -67,52 +112,7 @@ export async function getFixedAssets(): Promise<FixedAssetWithCategory[]> {
   return ((data ?? []) as unknown as Raw[]).map((r) => ({ ...r, category_name: r.asset_categories?.name ?? "—" }));
 }
 
-function parseAssetFormData(formData: FormData) {
-  const name = String(formData.get("name") ?? "").trim();
-  const category_id = String(formData.get("category_id") ?? "");
-  const brand = String(formData.get("brand") ?? "").trim() || null;
-  const model = String(formData.get("model") ?? "").trim() || null;
-  const purchase_date = String(formData.get("purchase_date") ?? "").trim() || null;
-  const purchaseValueRaw = String(formData.get("purchase_value") ?? "").trim();
-  const purchase_value = purchaseValueRaw ? Number(purchaseValueRaw) : null;
-  const warranty_until = String(formData.get("warranty_until") ?? "").trim() || null;
-  const supplier_name = String(formData.get("supplier_name") ?? "").trim() || null;
-  const location = String(formData.get("location") ?? "").trim() || null;
-  const notes = String(formData.get("notes") ?? "").trim() || null;
-  return { name, category_id, brand, model, purchase_date, purchase_value, warranty_until, supplier_name, location, notes };
-}
-
-export async function createFixedAsset(formData: FormData) {
-  const parsed = parseAssetFormData(formData);
-  if (!parsed.name || !parsed.category_id) return { error: "Informe o nome e a categoria do item." };
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { error } = await supabase.from("fixed_assets").insert({ ...parsed, created_by: user?.id ?? null });
-  if (error) return { error: error.message };
-  revalidateAll();
-  return { success: true };
-}
-
-export async function updateFixedAsset(id: string, formData: FormData) {
-  const parsed = parseAssetFormData(formData);
-  const active = formData.get("active") === "on";
-  if (!parsed.name || !parsed.category_id) return { error: "Informe o nome e a categoria do item." };
-
-  const supabase = await createClient();
-  const { error } = await supabase.from("fixed_assets").update({ ...parsed, active }).eq("id", id);
-  if (error) return { error: error.message };
-  revalidateAll();
-  return { success: true };
-}
-
-export async function deleteFixedAsset(id: string) {
-  const supabase = await createClient();
-  const { error } = await supabase.from("fixed_assets").delete().eq("id", id);
-  if (error) return { error: error.message };
-  revalidateAll();
-  return { success: true };
-}
+// Um bem só é criado ao lançar uma compra de ativo permanente em
+// "Lançar compras e despesas" (ver resolveExpenseItemsForInsert em
+// src/lib/actions/expenses.ts) — não há CRUD manual direto aqui; "active"
+// é ajustável só por quem tem acesso direto ao banco, por ora.

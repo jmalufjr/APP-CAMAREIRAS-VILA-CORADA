@@ -9,7 +9,8 @@ import { getMinibarConsumptionForPeriod } from "@/lib/actions/minibar";
 import { getPoolbarConsumptionForPeriod } from "@/lib/actions/poolbar";
 import { getBarCommissionByCamareiraForPeriod } from "@/lib/actions/comandas";
 import { getSuitesCafeCommissionForPeriod } from "@/lib/actions/commission";
-import { getExpenses, getExpenseSummaryByCategory, getExpenseSummaryBySupplier } from "@/lib/actions/expenses";
+import { getExpenses, getExpenseSummaryBySupplier } from "@/lib/actions/expenses";
+import { getExpenseDemonstrativoForPeriod } from "@/lib/actions/cost-accounting";
 import { ComprasHistoryTable } from "@/components/shared/compras-history-table";
 import { ExpenseSummaryCards } from "@/components/shared/expense-summary-cards";
 import { InventoryShrinkageTable } from "@/components/shared/inventory-shrinkage-table";
@@ -60,7 +61,7 @@ export default async function HistoricoPage({
     barCommission,
     suitesCafeCommission,
     expenseRows,
-    expenseByCategory,
+    demonstrativoRows,
     expenseBySupplier,
     inventoryShrinkageHistory,
   ] = await Promise.all([
@@ -89,7 +90,7 @@ export default async function HistoricoPage({
     getBarCommissionByCamareiraForPeriod(from, to),
     getSuitesCafeCommissionForPeriod(from, to),
     getExpenses(from, to),
-    getExpenseSummaryByCategory(from, to),
+    getExpenseDemonstrativoForPeriod(from, to),
     getExpenseSummaryBySupplier(from, to),
     getInventoryCountHistoryForPeriod(from, to),
   ]);
@@ -97,6 +98,12 @@ export default async function HistoricoPage({
   const commissionRate = Number(commissionSettings?.value_per_table ?? 0);
 
   const taskRows = (tasks ?? []) as unknown as TaskWithOccurrences[];
+
+  const expenseByCenterMap = new Map<string, number>();
+  demonstrativoRows.forEach((r) => expenseByCenterMap.set(r.center_name, (expenseByCenterMap.get(r.center_name) ?? 0) + r.total));
+  const expenseByCenter = Array.from(expenseByCenterMap.entries())
+    .map(([center_name, total]) => ({ center_name, total }))
+    .sort((a, b) => b.total - a.total);
 
   const categoryTally = new Map<string, number>();
   taskRows.forEach((t) => {
@@ -159,7 +166,7 @@ export default async function HistoricoPage({
 
       <div className="space-y-3 pt-2">
         <p className="font-heading text-xl text-primary">Compras e despesas no período</p>
-        <ExpenseSummaryCards byCategory={expenseByCategory} bySupplier={expenseBySupplier} />
+        <ExpenseSummaryCards byCenter={expenseByCenter} bySupplier={expenseBySupplier} />
         <ComprasHistoryTable rows={expenseRows} canManage editBasePath="/historico/compras" />
       </div>
 

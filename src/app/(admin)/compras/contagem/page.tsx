@@ -1,19 +1,14 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { BackLink } from "@/components/shared/back-link";
-import { getOpenCountSessions, getCategoryCountStatus } from "@/lib/actions/inventory-counts";
-import { getExpenseCategories } from "@/lib/actions/expense-categories";
+import { getOpenCountSessions, getSubcenterGroupCountStatus } from "@/lib/actions/inventory-counts";
 import { StartCountButton } from "./start-count-button";
 import { CategoryCountReminders } from "./category-count-reminders";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateTimePt } from "@/lib/date";
 
 export default async function ContagemEstoquePage() {
-  const [openSessions, categories, countStatuses] = await Promise.all([
-    getOpenCountSessions(),
-    getExpenseCategories(),
-    getCategoryCountStatus(),
-  ]);
+  const [openSessions, countStatuses] = await Promise.all([getOpenCountSessions(), getSubcenterGroupCountStatus()]);
 
   return (
     <div className="space-y-6">
@@ -31,13 +26,13 @@ export default async function ContagemEstoquePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-heading text-lg">Contar por categoria</CardTitle>
+          <CardTitle className="font-heading text-lg">Contar por grupo</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-xs text-muted-foreground mb-3">
-            A frequência (em dias) é opcional — deixe em branco pra não receber nenhum aviso. Quando preenchida, um
-            aviso aparece aqui assim que passar desse número de dias desde a última contagem fechada daquela
-            categoria.
+            Cada grupo junta os subcentros do Plano de Contas com o mesmo nome (ex.: &quot;Alimentos&quot; do Café da
+            manhã e do Bar da piscina) numa contagem só. A frequência (em dias) é opcional — deixe em branco pra não
+            receber nenhum aviso.
           </p>
           <CategoryCountReminders statuses={countStatuses} />
         </CardContent>
@@ -54,7 +49,7 @@ export default async function ContagemEstoquePage() {
               href={`/compras/contagem/${s.id}`}
               className="flex items-center justify-between rounded-lg border border-border bg-card p-3 text-sm hover:bg-accent"
             >
-              <span>{categories.find((c) => c.id === s.category_id)?.name ?? "Todos os itens"}</span>
+              <span>{s.subcenter_group_name ?? "Todos os itens"}</span>
               <span className="text-xs text-muted-foreground">Aberta em {formatDateTimePt(s.created_at)}</span>
             </Link>
           ))}

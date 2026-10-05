@@ -34,7 +34,7 @@ export function PurchaseListTable({ rows }: { rows: PurchaseListRow[] }) {
                 <p className="font-medium">{r.item_name}</p>
                 <p className="text-xs text-muted-foreground">
                   {r.category_name}
-                  {r.turnover_group_name ? ` · ${r.turnover_group_name} (${r.coverage_days}d de folga)` : ""}
+                  {r.coverage_days !== null ? ` · ${r.coverage_days}d de folga` : ""}
                 </p>
               </TableCell>
               <TableCell>

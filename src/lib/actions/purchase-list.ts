@@ -14,7 +14,6 @@ export interface PurchaseListRow {
   item_name: string;
   unit: string;
   category_name: string;
-  turnover_group_name: string | null;
   coverage_days: number | null;
   balance: number;
   weekly_consumption: number;
@@ -63,32 +62,32 @@ async function getActiveDismissalsMap(): Promise<Map<string, DismissalRow>> {
 export async function getPurchaseList(): Promise<PurchaseListRow[]> {
   const supabase = await createClient();
 
-  const [{ data: items }, { data: categoryLinks }, { data: suggestions }, teamRequests, dismissals] = await Promise.all([
+  const [{ data: items }, { data: costItemLinks }, { data: suggestions }, teamRequests, dismissals] = await Promise.all([
+    supabase.from("inventory_items").select("id, name, unit, active").eq("active", true),
     supabase
-      .from("inventory_items")
-      .select("id, name, unit, active, inventory_turnover_groups(name)")
-      .eq("active", true),
-    supabase.from("inventory_item_categories").select("inventory_item_id, expense_categories(name)"),
+      .from("cost_items")
+      .select("inventory_item_id, cost_item_subcenters(cost_subcenters(name))")
+      .eq("is_inventory", true)
+      .not("inventory_item_id", "is", null),
     supabase.from("inventory_purchase_suggestions").select("*"),
     getAggregatedPurchaseRequests(),
     getActiveDismissalsMap(),
   ]);
 
-  type ItemRaw = {
-    id: string;
-    name: string;
-    unit: string;
-    inventory_turnover_groups: { name: string } | null;
-  };
+  type ItemRaw = { id: string; name: string; unit: string };
   const itemRows = (items ?? []) as unknown as ItemRaw[];
+  type CostItemLinkRaw = {
+    inventory_item_id: string;
+    cost_item_subcenters: { cost_subcenters: { name: string } | null }[];
+  };
   const categoryNamesByItem = new Map<string, string[]>();
-  ((categoryLinks ?? []) as unknown as { inventory_item_id: string; expense_categories: { name: string } | null }[]).forEach(
-    (r) => {
-      const names = categoryNamesByItem.get(r.inventory_item_id) ?? [];
-      if (r.expense_categories?.name) names.push(r.expense_categories.name);
-      categoryNamesByItem.set(r.inventory_item_id, names);
-    }
-  );
+  ((costItemLinks ?? []) as unknown as CostItemLinkRaw[]).forEach((r) => {
+    const names = categoryNamesByItem.get(r.inventory_item_id) ?? [];
+    r.cost_item_subcenters.forEach((l) => {
+      if (l.cost_subcenters?.name) names.push(l.cost_subcenters.name);
+    });
+    categoryNamesByItem.set(r.inventory_item_id, names);
+  });
   const suggestionMap = new Map(
     ((suggestions ?? []) as unknown as SuggestionRow[]).map((s) => [s.inventory_item_id, s])
   );
@@ -112,7 +111,6 @@ export async function getPurchaseList(): Promise<PurchaseListRow[]> {
       item_name: item.name,
       unit: item.unit,
       category_name: (categoryNamesByItem.get(item.id) ?? []).join(" / ") || "—",
-      turnover_group_name: item.inventory_turnover_groups?.name ?? null,
       coverage_days: s?.coverage_days ?? null,
       balance,
       weekly_consumption: s?.weekly_consumption ?? 0,

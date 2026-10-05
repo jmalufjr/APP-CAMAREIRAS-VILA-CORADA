@@ -25,8 +25,8 @@ export default async function DemonstrativoDespesasPage({
   const rows = await getExpenseDemonstrativoForPeriod(from, to);
 
   const months = [...new Set(rows.map((r) => r.month))].sort().reverse();
-  const categories = [...new Set(rows.map((r) => r.category_name))].sort();
-  const totalByMonthCategory = new Map(rows.map((r) => [`${r.month}__${r.category_name}`, r.total]));
+  const centers = [...new Set(rows.map((r) => r.center_name))].sort();
+  const totalByMonthCenter = new Map(rows.map((r) => [`${r.month}__${r.center_name}`, r.total]));
   const totalByMonth = new Map<string, number>();
   rows.forEach((r) => totalByMonth.set(r.month, (totalByMonth.get(r.month) ?? 0) + r.total));
 
@@ -35,7 +35,7 @@ export default async function DemonstrativoDespesasPage({
       <BackLink href="/custos-despesas" />
       <PageHeader
         title="Demonstrativo de Despesas"
-        subtitle="Todas as despesas do período, mês a mês, por categoria de gasto — reagrupa sozinho quando uma categoria é editada."
+        subtitle="Todas as despesas do período, mês a mês, por centro de custo — reagrupa sozinho quando o Plano de Contas é editado."
       />
       <DateRangeFilter basePath="/custos-despesas/demonstrativo" from={from} to={to} />
 
@@ -45,22 +45,22 @@ export default async function DemonstrativoDespesasPage({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Categoria</TableHead>
+                  <TableHead>Centro de custo</TableHead>
                   {months.map((m) => (
                     <TableHead key={m}>{monthYearLabelPt(m + "-01")}</TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {categories.map((cat) => (
-                  <TableRow key={cat}>
-                    <TableCell>{cat}</TableCell>
+                {centers.map((center) => (
+                  <TableRow key={center}>
+                    <TableCell>{center}</TableCell>
                     {months.map((m) => (
-                      <TableCell key={m}>R$ {(totalByMonthCategory.get(`${m}__${cat}`) ?? 0).toFixed(2)}</TableCell>
+                      <TableCell key={m}>R$ {(totalByMonthCenter.get(`${m}__${center}`) ?? 0).toFixed(2)}</TableCell>
                     ))}
                   </TableRow>
                 ))}
-                {categories.length === 0 && (
+                {centers.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={months.length + 1} className="text-center text-muted-foreground">
                       Nenhuma despesa no período.
@@ -68,7 +68,7 @@ export default async function DemonstrativoDespesasPage({
                   </TableRow>
                 )}
               </TableBody>
-              {categories.length > 0 && (
+              {centers.length > 0 && (
                 <TableFooter>
                   <TableRow className="font-medium">
                     <TableCell>Total</TableCell>

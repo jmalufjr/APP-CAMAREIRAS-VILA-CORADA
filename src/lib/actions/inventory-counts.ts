@@ -29,18 +29,21 @@ export interface CountLineView {
 }
 
 // Abre uma nova sessão de contagem física: congela o saldo teórico de
-// cada item ativo (de uma categoria, ou de todos) no momento da abertura
-// — a variância faz sentido mesmo que outros movimentos aconteçam
-// durante a contagem (ver PRD_compras.md seção 5.5).
+// cada item ativo (de um GRUPO de subcentros com o mesmo nome, ou de
+// todos) no momento da abertura — a variância faz sentido mesmo que
+// outros movimentos aconteçam durante a contagem (ver PRD_compras.md
+// seção 5.5). Desde a Parte 21, o agrupamento é por NOME do subcentro
+// (ex.: "Alimentos" junta o subcentro de Café da manhã e o de Bar da
+// piscina numa contagem só, mesmo sendo linhas diferentes no Plano de
+// Contas) — decisão explícita do proprietário, pra não precisar contar o
+// mesmo tipo de material em visitas separadas só porque ele é rateado
+// entre centros diferentes.
 //
-// Antes de criar, confere se já não existe uma sessão "em_andamento" pra
-// essa mesma categoria (ou pra "todos os itens", quando categoryId vem
-// vazio) — se existir, reaproveita ela em vez de abrir outra. Sem essa
-// checagem, clicar duas vezes em "Iniciar contagem" (ex.: duplo clique,
-// conexão lenta, um erro de navegação no meio do caminho) cria sessões
-// duplicadas vazias — foi exatamente o que aconteceu na prática (ver
-// PRD_compras.md seção 17.8) antes dessa correção.
-export async function startCountSession(categoryId?: string) {
+// Antes de criar, confere se já não existe uma sessão "em_andamento" pro
+// mesmo grupo (ou pra "todos os itens", quando subcenterGroupName vem
+// vazio) — se existir, reaproveita ela em vez de abrir outra (ver
+// PRD_compras.md seção 17.8).
+export async function startCountSession(subcenterGroupName?: string) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -51,25 +54,29 @@ export async function startCountSession(categoryId?: string) {
     .from("inventory_count_sessions")
     .select("id")
     .eq("status", "em_andamento");
-  existingQuery = categoryId ? existingQuery.eq("category_id", categoryId) : existingQuery.is("category_id", null);
+  existingQuery = subcenterGroupName
+    ? existingQuery.eq("subcenter_group_name", subcenterGroupName)
+    : existingQuery.is("subcenter_group_name", null);
   const { data: existing } = await existingQuery.maybeSingle();
   if (existing) return { success: true, sessionId: existing.id as string };
 
   let itemsQuery = supabase.from("inventory_items").select("id").eq("active", true);
-  // Categoria deixou de ser 1-pra-1 (Parte 19) — um item entra na
-  // contagem dessa categoria se ela estiver entre as suas, não mais por
-  // igualdade direta.
-  if (categoryId) {
-    const { data: links } = await supabase
-      .from("inventory_item_categories")
-      .select("inventory_item_id")
-      .eq("category_id", categoryId);
-    const itemIdsInCategory = (links ?? []).map((l) => l.inventory_item_id as string);
-    if (itemIdsInCategory.length === 0) return { error: "Nenhum item de estoque encontrado pra essa categoria." };
-    itemsQuery = itemsQuery.in("id", itemIdsInCategory);
+  if (subcenterGroupName) {
+    const { data: subcenters } = await supabase.from("cost_subcenters").select("id").eq("name", subcenterGroupName);
+    const subcenterIds = (subcenters ?? []).map((s) => s.id as string);
+    const { data: itemLinks } = subcenterIds.length
+      ? await supabase.from("cost_item_subcenters").select("cost_item_id").in("subcenter_id", subcenterIds)
+      : { data: [] };
+    const costItemIds = [...new Set((itemLinks ?? []).map((l) => l.cost_item_id as string))];
+    const { data: costItems } = costItemIds.length
+      ? await supabase.from("cost_items").select("inventory_item_id").in("id", costItemIds).eq("is_inventory", true)
+      : { data: [] };
+    const itemIdsInGroup = [...new Set((costItems ?? []).map((c) => c.inventory_item_id).filter(Boolean) as string[])];
+    if (itemIdsInGroup.length === 0) return { error: "Nenhum item de estoque encontrado nesse grupo." };
+    itemsQuery = itemsQuery.in("id", itemIdsInGroup);
   }
   const { data: items } = await itemsQuery;
-  if (!items || items.length === 0) return { error: "Nenhum item de estoque encontrado pra essa categoria." };
+  if (!items || items.length === 0) return { error: "Nenhum item de estoque encontrado nesse grupo." };
 
   const { data: balances } = await supabase
     .from("inventory_balances")
@@ -82,7 +89,7 @@ export async function startCountSession(categoryId?: string) {
 
   const { data: session, error } = await supabase
     .from("inventory_count_sessions")
-    .insert({ category_id: categoryId || null, created_by: user.id })
+    .insert({ subcenter_group_name: subcenterGroupName || null, created_by: user.id })
     .select("id")
     .single();
   if (error || !session) {
@@ -360,62 +367,81 @@ export async function getItemsAboveShrinkageThreshold(): Promise<InventoryCountL
     .sort((a, b) => Math.abs(Number(b.quebra_pct)) - Math.abs(Number(a.quebra_pct)));
 }
 
-export interface CategoryCountStatus {
-  category_id: string;
-  category_name: string;
+export interface SubcenterGroupCountStatus {
+  group_name: string;
   count_frequency_days: number | null;
   last_closed_at: string | null;
   days_since_last_count: number | null;
   is_due: boolean;
 }
 
-// Pra cada categoria de estoque, quando foi a última contagem FECHADA
-// (de qualquer sessão, mesmo uma sem categoria — "todos os itens" conta
-// pra todas) e se já passou da frequência configurada — base do aviso
-// "está na hora de contar de novo" (ver PRD_compras.md). Categoria sem
-// `count_frequency_days` nunca aparece como "devida" (sem lembrete
-// configurado = sem cobrança nenhuma).
-export async function getCategoryCountStatus(): Promise<CategoryCountStatus[]> {
+// Pra cada GRUPO de subcentros com o mesmo nome (ex.: "Alimentos" junta o
+// subcentro de Café da manhã e o de Bar da piscina — ver startCountSession
+// pro porquê), quando foi a última contagem FECHADA (de qualquer sessão,
+// mesmo uma sem grupo — "todos os itens" conta pra todos) e se já passou
+// da frequência configurada — base do aviso "está na hora de contar de
+// novo". Só aparecem grupos com pelo menos 1 item de estoque de verdade
+// ligado (sem isso, não haveria nada pra contar). Grupo sem
+// `count_frequency_days` em nenhum dos seus subcentros nunca aparece
+// como "devido" (sem lembrete configurado = sem cobrança nenhuma).
+export async function getSubcenterGroupCountStatus(): Promise<SubcenterGroupCountStatus[]> {
   const supabase = await createClient();
-  const [{ data: categories }, { data: sessions }] = await Promise.all([
-    supabase
-      .from("expense_categories")
-      .select("id, name, count_frequency_days")
-      .eq("is_inventory_category", true)
-      .eq("active", true),
+  const [{ data: subcenters }, { data: itemLinks }, { data: costItems }, { data: sessions }] = await Promise.all([
+    supabase.from("cost_subcenters").select("id, name, count_frequency_days").eq("active", true),
+    supabase.from("cost_item_subcenters").select("cost_item_id, subcenter_id"),
+    supabase.from("cost_items").select("id, is_inventory"),
     supabase
       .from("inventory_count_sessions")
-      .select("category_id, closed_at")
+      .select("subcenter_group_name, closed_at")
       .eq("status", "concluida")
       .not("closed_at", "is", null)
       .order("closed_at", { ascending: false }),
   ]);
 
-  // "Todos os itens" (category_id null) conta como contagem recente pra
-  // qualquer categoria — se o admin contou tudo de uma vez, nenhuma
-  // categoria fica "devida" por causa disso.
-  const sessionRows = (sessions ?? []) as { category_id: string | null; closed_at: string }[];
-  const globalLastClosedAt = sessionRows.find((s) => s.category_id === null)?.closed_at ?? null;
-  const lastClosedByCategory = new Map<string, string>();
+  const inventoryCostItemIds = new Set(
+    ((costItems ?? []) as { id: string; is_inventory: boolean }[]).filter((c) => c.is_inventory).map((c) => c.id)
+  );
+  const subcentersWithStock = new Set(
+    ((itemLinks ?? []) as { cost_item_id: string; subcenter_id: string }[])
+      .filter((l) => inventoryCostItemIds.has(l.cost_item_id))
+      .map((l) => l.subcenter_id)
+  );
+
+  // "Todos os itens" (subcenter_group_name null) conta como contagem
+  // recente pra qualquer grupo — se o admin contou tudo de uma vez,
+  // nenhum grupo fica "devido" por causa disso.
+  const sessionRows = (sessions ?? []) as { subcenter_group_name: string | null; closed_at: string }[];
+  const globalLastClosedAt = sessionRows.find((s) => s.subcenter_group_name === null)?.closed_at ?? null;
+  const lastClosedByGroup = new Map<string, string>();
   sessionRows.forEach((s) => {
-    if (s.category_id && !lastClosedByCategory.has(s.category_id)) lastClosedByCategory.set(s.category_id, s.closed_at);
+    if (s.subcenter_group_name && !lastClosedByGroup.has(s.subcenter_group_name)) lastClosedByGroup.set(s.subcenter_group_name, s.closed_at);
+  });
+
+  const byGroupName = new Map<string, { frequency: number | null; hasStock: boolean }>();
+  ((subcenters ?? []) as { id: string; name: string; count_frequency_days: number | null }[]).forEach((s) => {
+    const entry = byGroupName.get(s.name) ?? { frequency: null, hasStock: false };
+    if (subcentersWithStock.has(s.id)) entry.hasStock = true;
+    if (s.count_frequency_days !== null && (entry.frequency === null || s.count_frequency_days < entry.frequency)) {
+      entry.frequency = s.count_frequency_days;
+    }
+    byGroupName.set(s.name, entry);
   });
 
   const now = Date.now();
-  return ((categories ?? []) as { id: string; name: string; count_frequency_days: number | null }[])
-    .map((c) => {
-      const candidates = [lastClosedByCategory.get(c.id), globalLastClosedAt].filter((v): v is string => !!v);
+  return Array.from(byGroupName.entries())
+    .filter(([, v]) => v.hasStock)
+    .map(([name, v]) => {
+      const candidates = [lastClosedByGroup.get(name), globalLastClosedAt].filter((x): x is string => !!x);
       const lastClosedAt = candidates.length > 0 ? candidates.sort().reverse()[0] : null;
       const daysSince = lastClosedAt ? Math.floor((now - new Date(lastClosedAt).getTime()) / 86400000) : null;
-      const isDue = c.count_frequency_days !== null && (daysSince === null || daysSince >= c.count_frequency_days);
+      const isDue = v.frequency !== null && (daysSince === null || daysSince >= v.frequency);
       return {
-        category_id: c.id,
-        category_name: c.name,
-        count_frequency_days: c.count_frequency_days,
+        group_name: name,
+        count_frequency_days: v.frequency,
         last_closed_at: lastClosedAt,
         days_since_last_count: daysSince,
         is_due: isDue,
       };
     })
-    .sort((a, b) => a.category_name.localeCompare(b.category_name));
+    .sort((a, b) => a.group_name.localeCompare(b.group_name));
 }

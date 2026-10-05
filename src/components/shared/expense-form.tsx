@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createExpense, updateExpense } from "@/lib/actions/expenses";
 import type { ExpenseWithItems } from "@/lib/actions/expenses";
+import type { CostItemOption } from "@/lib/actions/cost-plan";
+import type { CostSubcenterWithLinks } from "@/lib/actions/cost-plan";
 import { parseReceiptWithAI } from "@/lib/actions/receipt-ai";
 import { compressImageForUpload } from "@/lib/image-compression";
-import type { ExpenseCategory, InventoryTurnoverGroup } from "@/lib/types";
-import type { InventoryItemWithBalance } from "@/lib/actions/inventory-items";
+import type { AssetCategory, FixedAssetCatalogItem } from "@/lib/types";
 import { PAYMENT_METHOD_OPTIONS } from "@/lib/payment-method";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,27 +22,35 @@ import { BarcodeScannerButton } from "@/components/shared/barcode-scanner";
 import { CameraCaptureButton } from "@/components/shared/camera-capture-button";
 import { Sparkles, Trash2, Plus, X, FileText, FolderOpen } from "lucide-react";
 
+type LineType = "cost_item" | "new_cost_item" | "fixed_asset";
+
+interface SubcenterLinkRow {
+  subcenter_id: string;
+  alloc_pct: number;
+}
+
 interface ItemRow {
   description: string;
   quantity: number;
   unit_cost: number;
-  inventory_item_id: string | null;
-  // "Criar novo item de estoque" — a pessoa confirmou que esta linha deve
-  // virar um item novo no catálogo (ver PRD_compras.md seção 16.6, sobre
-  // evitar duplicidade com itens já cadastrados).
-  createNew: boolean;
-  newItemUnit: string;
-  // Categoria de gasto deixou de ser um campo da compra inteira e passou
-  // a existir só por item (Parte 19) — um item novo pode pertencer a mais
-  // de uma categoria ao mesmo tempo.
-  newItemCategoryIds: string[];
-  newItemTurnoverGroupId: string; // "none" ou o id do grupo
-  // Categoria da PRÓPRIA linha — usada só quando ela não está vinculada a
-  // nenhum item de estoque (nem existente, nem novo), ex.: salário, conta
-  // de luz avulsa, honorários. Quando há item vinculado, a categoria
-  // sempre vem das categorias do item, nunca desta aqui (ver
-  // PRD_compras.md seção 20, "lacuna" encontrada na leva anterior).
-  lineCategoryId: string;
+  lineType: LineType;
+  // target = "cost_item"
+  costItemId: string;
+  // target = "new_cost_item"
+  newItemName: string;
+  newItemIsInventory: boolean;
+  newItemSubcenterLinks: SubcenterLinkRow[];
+  // target = "fixed_asset" (bem novo)
+  assetCategoryId: string;
+  assetCatalogItemId: string; // "none" ou id
+  assetBrand: string;
+  assetModel: string;
+  assetWarrantyUntil: string;
+  assetLocation: string;
+  assetNotes: string;
+  // linha já ligada a um bem existente (edição) — nunca cria um bem novo
+  existingFixedAssetId: string | null;
+  existingFixedAssetName: string | null;
 }
 
 function todayKey(): string {
@@ -53,33 +62,44 @@ function emptyItem(): ItemRow {
     description: "",
     quantity: 1,
     unit_cost: 0,
-    inventory_item_id: null,
-    createNew: false,
-    newItemUnit: "un",
-    newItemCategoryIds: [],
-    newItemTurnoverGroupId: "none",
-    lineCategoryId: "",
+    lineType: "cost_item",
+    costItemId: "",
+    newItemName: "",
+    newItemIsInventory: false,
+    newItemSubcenterLinks: [],
+    assetCategoryId: "",
+    assetCatalogItemId: "none",
+    assetBrand: "",
+    assetModel: "",
+    assetWarrantyUntil: "",
+    assetLocation: "",
+    assetNotes: "",
+    existingFixedAssetId: null,
+    existingFixedAssetName: null,
   };
 }
 
 // Formulário de lançamento de compra/despesa — compartilhado entre admin
-// ("Lançar Compra", menu principal) e funcionário de manutenção
-// ("Lançar Compra", menu principal dele); a camareira nunca usa este
-// componente (só registra baixa de estoque, ver PRD_compras.md seção
-// 7.2). Foto/PDF da nota é opcional, assim como a leitura automática por
-// IA — tudo pode ser preenchido manualmente se a IA não estiver
-// configurada ou a leitura falhar.
+// ("Lançar compras e despesas", menu principal) e funcionário de
+// manutenção ("Lançar Compra", menu principal dele); a camareira nunca
+// usa este componente (só registra baixa de estoque, ver
+// PRD_compras.md seção 7.2). Foto/PDF da nota é opcional, assim como a
+// leitura automática por IA. Cada linha é alocada a um item de custo do
+// Plano de Contas (existente ou novo) OU a um item de ativo permanente
+// (bem novo) — nunca os dois ao mesmo tempo (PRD_compras.md seção 21).
 export function ExpenseForm({
-  categories,
-  inventoryItems,
-  turnoverGroups,
+  costItemOptions,
+  costSubcenters,
+  assetCategories,
+  assetCatalogItems,
   mode = "create",
   expenseId,
   initial,
 }: {
-  categories: ExpenseCategory[];
-  inventoryItems: InventoryItemWithBalance[];
-  turnoverGroups: InventoryTurnoverGroup[];
+  costItemOptions: CostItemOption[];
+  costSubcenters: CostSubcenterWithLinks[];
+  assetCategories: AssetCategory[];
+  assetCatalogItems: FixedAssetCatalogItem[];
   mode?: "create" | "edit";
   expenseId?: string;
   initial?: ExpenseWithItems;
@@ -96,18 +116,26 @@ export function ExpenseForm({
   const [manualTotal, setManualTotal] = useState(
     initial && initial.items.length === 0 ? String(initial.total_amount) : ""
   );
-  const [manualTotalCategoryId, setManualTotalCategoryId] = useState("");
+  const [manualTotalCostItemId, setManualTotalCostItemId] = useState("");
   const [items, setItems] = useState<ItemRow[]>(
     initial?.items.map((i) => ({
       description: i.description,
       quantity: i.quantity,
       unit_cost: i.unit_cost,
-      inventory_item_id: i.inventory_item_id,
-      createNew: false,
-      newItemUnit: "un",
-      newItemCategoryIds: [],
-      newItemTurnoverGroupId: "none",
-      lineCategoryId: i.category_id ?? "",
+      lineType: i.fixed_asset_id ? "fixed_asset" : "cost_item",
+      costItemId: i.cost_item_id ?? "",
+      newItemName: "",
+      newItemIsInventory: false,
+      newItemSubcenterLinks: [],
+      assetCategoryId: "",
+      assetCatalogItemId: "none",
+      assetBrand: "",
+      assetModel: "",
+      assetWarrantyUntil: "",
+      assetLocation: "",
+      assetNotes: "",
+      existingFixedAssetId: i.fixed_asset_id,
+      existingFixedAssetName: i.fixed_asset_name,
     })) ?? []
   );
 
@@ -116,25 +144,21 @@ export function ExpenseForm({
   const [existingReceiptUrl, setExistingReceiptUrl] = useState(initial?.receipt_url ?? null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const inventoryCategories = categories.filter((c) => c.is_inventory_category);
   const itemsTotal = items.reduce((sum, i) => sum + i.quantity * i.unit_cost, 0);
   const total = items.length > 0 ? itemsTotal : Number(manualTotal || 0);
+
+  function subcenterLabel(id: string): string {
+    const s = costSubcenters.find((s) => s.id === id);
+    if (!s) return id;
+    const centers = s.centers.map((c) => c.center_name).join("/");
+    return centers ? `${s.name} (${centers})` : s.name;
+  }
 
   function handlePickReceipt(file: File | null) {
     if (receiptPreview) URL.revokeObjectURL(receiptPreview);
     setReceiptFile(file);
     setReceiptPreview(file ? URL.createObjectURL(file) : null);
     if (file) setExistingReceiptUrl(null);
-  }
-
-  // Compara por nome exato (sem diferenciar maiúscula/minúscula) contra o
-  // catálogo já cadastrado — se achar, pré-seleciona o vínculo em vez de
-  // deixar "não controla estoque" por padrão. Nunca cria nada sozinho:
-  // só sugere, a confirmação de criar um item novo continua sendo sempre
-  // manual (ver PRD_compras.md seção 16.6).
-  function matchExistingItem(description: string): InventoryItemWithBalance | undefined {
-    const normalized = description.trim().toLowerCase();
-    return inventoryItems.find((i) => i.name.trim().toLowerCase() === normalized);
   }
 
   async function handleReadWithAI() {
@@ -161,21 +185,15 @@ export function ExpenseForm({
     if (data.items.length > 0) {
       setItems(
         data.items.map((i) => {
-          // A IA já tenta identificar o item contra o catálogo (até por
-          // descrição diferente, ex.: marca) — o casamento por nome
-          // exato é só um reforço pros casos em que ela não achou nada.
-          const matchedId = i.matched_inventory_item_id ?? matchExistingItem(i.description)?.id ?? null;
-          return {
-            description: i.description,
-            quantity: i.quantity,
-            unit_cost: i.unit_cost,
-            inventory_item_id: matchedId,
-            createNew: false,
-            newItemUnit: "un",
-            newItemCategoryIds: [],
-            newItemTurnoverGroupId: "none",
-            lineCategoryId: "",
-          };
+          const row = emptyItem();
+          row.description = i.description;
+          row.quantity = i.quantity;
+          row.unit_cost = i.unit_cost;
+          if (i.matched_inventory_item_id) {
+            const matchedCostItem = costItemOptions.find((c) => c.inventory_item_id === i.matched_inventory_item_id);
+            if (matchedCostItem) row.costItemId = matchedCostItem.id;
+          }
+          return row;
         })
       );
     } else if (data.total_amount) {
@@ -192,18 +210,26 @@ export function ExpenseForm({
     setItems((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   }
 
-  function handleInventoryLinkChange(index: number, value: string) {
-    if (value === "create_new") {
-      updateItem(index, { createNew: true, inventory_item_id: null });
-    } else if (value === "none") {
-      updateItem(index, { createNew: false, inventory_item_id: null });
-    } else {
-      updateItem(index, { createNew: false, inventory_item_id: value });
-    }
-  }
-
   function removeItem(index: number) {
     setItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function addSubcenterLink(index: number) {
+    const current = items[index].newItemSubcenterLinks;
+    const firstOption = costSubcenters[0]?.id ?? "";
+    updateItem(index, { newItemSubcenterLinks: [...current, { subcenter_id: firstOption, alloc_pct: current.length === 0 ? 100 : 0 }] });
+  }
+
+  function updateSubcenterLink(index: number, linkIndex: number, patch: Partial<SubcenterLinkRow>) {
+    const current = items[index].newItemSubcenterLinks;
+    updateItem(index, {
+      newItemSubcenterLinks: current.map((l, i) => (i === linkIndex ? { ...l, ...patch } : l)),
+    });
+  }
+
+  function removeSubcenterLink(index: number, linkIndex: number) {
+    const current = items[index].newItemSubcenterLinks;
+    updateItem(index, { newItemSubcenterLinks: current.filter((_, i) => i !== linkIndex) });
   }
 
   function handleScanNfceQr(value: string) {
@@ -220,16 +246,34 @@ export function ExpenseForm({
       toast.error("Preencha a descrição de todos os itens, ou remova a linha vazia.");
       return;
     }
-    if (items.some((i) => i.createNew && i.newItemCategoryIds.length === 0)) {
-      toast.error("Selecione ao menos uma categoria de gasto do novo item de estoque, em cada linha que for criar um.");
-      return;
+    for (const i of items) {
+      if (i.existingFixedAssetId) continue;
+      if (i.lineType === "cost_item" && !i.costItemId) {
+        toast.error("Selecione o item de custo de cada linha (ou escolha 'Criar novo item de custo'/'Ativo permanente').");
+        return;
+      }
+      if (i.lineType === "new_cost_item") {
+        if (!i.newItemName.trim()) {
+          toast.error("Informe o nome do novo item de custo.");
+          return;
+        }
+        if (i.newItemSubcenterLinks.length === 0) {
+          toast.error("Ligue o novo item de custo a pelo menos 1 subcentro.");
+          return;
+        }
+        const sum = i.newItemSubcenterLinks.reduce((s, l) => s + l.alloc_pct, 0);
+        if (sum !== 100) {
+          toast.error(`Os percentuais dos subcentros do novo item de custo precisam somar 100% (soma atual: ${sum}%).`);
+          return;
+        }
+      }
+      if (i.lineType === "fixed_asset" && !i.assetCategoryId) {
+        toast.error("Selecione a categoria do ativo permanente.");
+        return;
+      }
     }
-    if (items.some((i) => !i.createNew && !i.inventory_item_id && !i.lineCategoryId)) {
-      toast.error("Selecione a categoria de gasto nas linhas sem item de estoque vinculado (ex.: salário, conta de luz).");
-      return;
-    }
-    if (items.length === 0 && !manualTotalCategoryId) {
-      toast.error("Selecione a categoria de gasto do valor total.");
+    if (items.length === 0 && !manualTotalCostItemId) {
+      toast.error("Selecione o item de custo do valor total.");
       return;
     }
 
@@ -241,10 +285,6 @@ export function ExpenseForm({
       formData.set("nfce_url", nfceUrl);
       formData.set("notes", notes);
       formData.set("total_amount", String(total));
-      // Sem nenhuma linha de item, a despesa inteira ficaria invisível pro
-      // Demonstrativo de Despesas (que só lê expense_items) — sintetiza 1
-      // linha representando o valor total, carregando a categoria
-      // escolhida, sem mudar o que a tela mostra (ainda só "Valor total").
       const itemsPayload =
         items.length === 0
           ? [
@@ -253,9 +293,10 @@ export function ExpenseForm({
                 quantity: 1,
                 unit_cost: total,
                 subtotal: total,
-                inventory_item_id: null,
-                category_id: manualTotalCategoryId,
-                new_item: null,
+                cost_item_id: manualTotalCostItemId,
+                new_cost_item: null,
+                new_fixed_asset: null,
+                existing_fixed_asset_id: null,
               },
             ]
           : items.map((i) => ({
@@ -263,15 +304,29 @@ export function ExpenseForm({
               quantity: i.quantity,
               unit_cost: i.unit_cost,
               subtotal: i.quantity * i.unit_cost,
-              inventory_item_id: i.inventory_item_id,
-              category_id: !i.createNew && !i.inventory_item_id ? i.lineCategoryId || null : null,
-              new_item: i.createNew
-                ? {
-                    category_ids: i.newItemCategoryIds,
-                    unit: i.newItemUnit,
-                    turnover_group_id: i.newItemTurnoverGroupId === "none" ? null : i.newItemTurnoverGroupId,
-                  }
-                : null,
+              cost_item_id: i.existingFixedAssetId ? null : i.lineType === "cost_item" ? i.costItemId : null,
+              new_cost_item:
+                !i.existingFixedAssetId && i.lineType === "new_cost_item"
+                  ? {
+                      name: i.newItemName,
+                      is_inventory: i.newItemIsInventory,
+                      inventory_item_id: null,
+                      subcenter_links: i.newItemSubcenterLinks,
+                    }
+                  : null,
+              new_fixed_asset:
+                !i.existingFixedAssetId && i.lineType === "fixed_asset"
+                  ? {
+                      category_id: i.assetCategoryId,
+                      catalog_item_id: i.assetCatalogItemId === "none" ? null : i.assetCatalogItemId,
+                      brand: i.assetBrand.trim() || null,
+                      model: i.assetModel.trim() || null,
+                      warranty_until: i.assetWarrantyUntil || null,
+                      location: i.assetLocation.trim() || null,
+                      notes: i.assetNotes.trim() || null,
+                    }
+                  : null,
+              existing_fixed_asset_id: i.existingFixedAssetId,
             }));
       formData.set("items", JSON.stringify(itemsPayload));
       if (receiptFile) {
@@ -463,111 +518,194 @@ export function ExpenseForm({
                   <Input disabled value={`R$ ${(item.quantity * item.unit_cost).toFixed(2)}`} />
                 </div>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Vincular a item de estoque (opcional)</Label>
-                <Select
-                  value={item.createNew ? "create_new" : item.inventory_item_id ?? "none"}
-                  onValueChange={(v) => v && handleInventoryLinkChange(index, v)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Não controla estoque">
-                      {(v: string) =>
-                        v === "create_new"
-                          ? "Criar novo item de estoque"
-                          : inventoryItems.find((i) => i.id === v)?.name ?? "Não controla estoque"
-                      }
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Não controla estoque</SelectItem>
-                    <SelectItem value="create_new">+ Criar novo item de estoque</SelectItem>
-                    {inventoryItems.map((i) => (
-                      <SelectItem key={i.id} value={i.id}>
-                        {i.name} (saldo: {i.balance} {i.unit})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
 
-              {!item.createNew && !item.inventory_item_id && (
-                <div className="space-y-1 rounded-lg bg-muted/40 p-2">
-                  <Label className="text-xs text-muted-foreground">
-                    Categoria de gasto desta linha (ex.: salário, conta de luz, honorários)
-                  </Label>
-                  <Select
-                    value={item.lineCategoryId}
-                    onValueChange={(v) => updateItem(index, { lineCategoryId: v ?? "" })}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Selecione a categoria">
-                        {(v: string) => categories.find((c) => c.id === v)?.name ?? v}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              {item.existingFixedAssetId ? (
+                <div className="rounded-lg bg-muted/40 p-2 text-sm">
+                  Ativo permanente vinculado: <strong>{item.existingFixedAssetName ?? "—"}</strong>
+                  <p className="text-xs text-muted-foreground">
+                    Pra editar categoria, marca, modelo etc., use a tela &quot;Relação de Ativo Permanente&quot;.
+                  </p>
                 </div>
-              )}
-
-              {item.createNew && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 rounded-lg bg-muted/40 p-2">
-                  <div className="space-y-1 sm:col-span-3">
-                    <Label className="text-xs text-muted-foreground">Categoria(s) de gasto do novo item</Label>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {inventoryCategories.map((c) => (
-                        <label key={c.id} className="flex items-center gap-1.5 text-sm">
-                          <Checkbox
-                            checked={item.newItemCategoryIds.includes(c.id)}
-                            onCheckedChange={(checked) =>
-                              updateItem(index, {
-                                newItemCategoryIds:
-                                  checked === true
-                                    ? [...item.newItemCategoryIds, c.id]
-                                    : item.newItemCategoryIds.filter((id) => id !== c.id),
-                              })
-                            }
-                          />
-                          {c.name}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+              ) : (
+                <>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Unidade</Label>
-                    <Input
-                      value={item.newItemUnit}
-                      onChange={(e) => updateItem(index, { newItemUnit: e.target.value })}
-                      placeholder="un, kg, L..."
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Grupo de giro (opcional)</Label>
-                    <Select
-                      value={item.newItemTurnoverGroupId}
-                      onValueChange={(v) => updateItem(index, { newItemTurnoverGroupId: v ?? "none" })}
-                    >
+                    <Label className="text-xs text-muted-foreground">Alocar a</Label>
+                    <Select value={item.lineType} onValueChange={(v) => v && updateItem(index, { lineType: v as LineType })}>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Nenhum">
-                          {(v: string) => (v === "none" ? "Nenhum" : turnoverGroups.find((g) => g.id === v)?.name ?? v)}
+                        <SelectValue placeholder="Selecione">
+                          {(v: string) =>
+                            v === "cost_item"
+                              ? "Item de custo existente"
+                              : v === "new_cost_item"
+                                ? "Criar novo item de custo"
+                                : "Ativo permanente (bem novo)"
+                          }
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">Nenhum</SelectItem>
-                        {turnoverGroups.map((g) => (
-                          <SelectItem key={g.id} value={g.id}>
-                            {g.name}
+                        <SelectItem value="cost_item">Item de custo existente</SelectItem>
+                        <SelectItem value="new_cost_item">+ Criar novo item de custo</SelectItem>
+                        <SelectItem value="fixed_asset">Ativo permanente (bem novo)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {item.lineType === "cost_item" && (
+                    <Select value={item.costItemId} onValueChange={(v) => v && updateItem(index, { costItemId: v })}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Selecione o item de custo">
+                          {(v: string) => costItemOptions.find((c) => c.id === v)?.name ?? v}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {costItemOptions.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
-                </div>
+                  )}
+
+                  {item.lineType === "new_cost_item" && (
+                    <div className="space-y-2 rounded-lg bg-muted/40 p-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Nome do novo item de custo</Label>
+                        <Input
+                          value={item.newItemName}
+                          onChange={(e) => updateItem(index, { newItemName: e.target.value })}
+                          placeholder={item.description || "Nome do item"}
+                        />
+                      </div>
+                      <label className="flex items-center gap-1.5 text-sm">
+                        <Checkbox
+                          checked={item.newItemIsInventory}
+                          onCheckedChange={(checked) => updateItem(index, { newItemIsInventory: checked === true })}
+                        />
+                        Representa um item de estoque (cria/liga um item no catálogo de estoque)
+                      </label>
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs text-muted-foreground">Subcentros (os % precisam somar 100%)</Label>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => addSubcenterLink(index)}>
+                            <Plus size={12} /> Subcentro
+                          </Button>
+                        </div>
+                        {item.newItemSubcenterLinks.map((link, linkIndex) => (
+                          <div key={linkIndex} className="flex items-center gap-2">
+                            <Select
+                              value={link.subcenter_id}
+                              onValueChange={(v) => v && updateSubcenterLink(index, linkIndex, { subcenter_id: v })}
+                            >
+                              <SelectTrigger className="flex-1">
+                                <SelectValue placeholder="Subcentro">
+                                  {(v: string) => subcenterLabel(v)}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {costSubcenters.map((s) => (
+                                  <SelectItem key={s.id} value={s.id}>
+                                    {subcenterLabel(s.id)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={100}
+                              className="w-20"
+                              value={link.alloc_pct}
+                              onChange={(e) => updateSubcenterLink(index, linkIndex, { alloc_pct: Number(e.target.value) || 0 })}
+                            />
+                            <span className="text-xs text-muted-foreground">%</span>
+                            <Button type="button" variant="ghost" size="icon-sm" onClick={() => removeSubcenterLink(index, linkIndex)}>
+                              <Trash2 size={12} />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {item.lineType === "fixed_asset" && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-lg bg-muted/40 p-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Categoria</Label>
+                        <Select
+                          value={item.assetCategoryId}
+                          onValueChange={(v) => v && updateItem(index, { assetCategoryId: v, assetCatalogItemId: "none" })}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Selecione a categoria">
+                              {(v: string) => assetCategories.find((c) => c.id === v)?.name ?? v}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {assetCategories.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Item do catálogo (opcional)</Label>
+                        <Select
+                          value={item.assetCatalogItemId}
+                          onValueChange={(v) => v && updateItem(index, { assetCatalogItemId: v })}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Nenhum">
+                              {(v: string) =>
+                                v === "none" ? "Nenhum" : assetCatalogItems.find((c) => c.id === v)?.name ?? v
+                              }
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Nenhum</SelectItem>
+                            {assetCatalogItems
+                              .filter((c) => !item.assetCategoryId || c.category_id === item.assetCategoryId)
+                              .map((c) => (
+                                <SelectItem key={c.id} value={c.id}>
+                                  {c.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Marca</Label>
+                        <Input value={item.assetBrand} onChange={(e) => updateItem(index, { assetBrand: e.target.value })} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Modelo</Label>
+                        <Input value={item.assetModel} onChange={(e) => updateItem(index, { assetModel: e.target.value })} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Garantia até (opcional)</Label>
+                        <Input
+                          type="date"
+                          value={item.assetWarrantyUntil}
+                          onChange={(e) => updateItem(index, { assetWarrantyUntil: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Local</Label>
+                        <Input value={item.assetLocation} onChange={(e) => updateItem(index, { assetLocation: e.target.value })} />
+                      </div>
+                      <div className="space-y-1 sm:col-span-2">
+                        <Label className="text-xs text-muted-foreground">Observações</Label>
+                        <Textarea
+                          rows={2}
+                          value={item.assetNotes}
+                          onChange={(e) => updateItem(index, { assetNotes: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           ))}
@@ -579,15 +717,15 @@ export function ExpenseForm({
                 <Input type="number" min={0} step="0.01" value={manualTotal} onChange={(e) => setManualTotal(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label>Categoria de gasto</Label>
-                <Select value={manualTotalCategoryId} onValueChange={(v) => setManualTotalCategoryId(v ?? "")}>
+                <Label>Item de custo</Label>
+                <Select value={manualTotalCostItemId} onValueChange={(v) => setManualTotalCostItemId(v ?? "")}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecione a categoria">
-                      {(v: string) => categories.find((c) => c.id === v)?.name ?? v}
+                    <SelectValue placeholder="Selecione o item de custo">
+                      {(v: string) => costItemOptions.find((c) => c.id === v)?.name ?? v}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map((c) => (
+                    {costItemOptions.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.name}
                       </SelectItem>

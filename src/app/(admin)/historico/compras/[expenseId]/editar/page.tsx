@@ -3,17 +3,17 @@ import { PageHeader } from "@/components/shared/page-header";
 import { BackLink } from "@/components/shared/back-link";
 import { ExpenseForm } from "@/components/shared/expense-form";
 import { getExpenseWithItems } from "@/lib/actions/expenses";
-import { getExpenseCategories } from "@/lib/actions/expense-categories";
-import { getInventoryItems } from "@/lib/actions/inventory-items";
-import { getInventoryTurnoverGroups } from "@/lib/actions/inventory-turnover-groups";
+import { getCostItemOptions, getCostSubcenters } from "@/lib/actions/cost-plan";
+import { getAssetCategories, getFixedAssetCatalogItems } from "@/lib/actions/fixed-assets";
 
 export default async function EditarDespesaPage({ params }: { params: Promise<{ expenseId: string }> }) {
   const { expenseId } = await params;
-  const [expense, categories, inventoryItems, turnoverGroups] = await Promise.all([
+  const [expense, costItemOptions, costSubcenters, assetCategories, assetCatalogItems] = await Promise.all([
     getExpenseWithItems(expenseId),
-    getExpenseCategories(),
-    getInventoryItems(true),
-    getInventoryTurnoverGroups(),
+    getCostItemOptions(),
+    getCostSubcenters(),
+    getAssetCategories(),
+    getFixedAssetCatalogItems(),
   ]);
 
   if (!expense) notFound();
@@ -26,9 +26,10 @@ export default async function EditarDespesaPage({ params }: { params: Promise<{ 
         mode="edit"
         expenseId={expense.id}
         initial={expense}
-        categories={categories.filter((c) => c.active)}
-        inventoryItems={inventoryItems}
-        turnoverGroups={turnoverGroups}
+        costItemOptions={costItemOptions}
+        costSubcenters={costSubcenters}
+        assetCategories={assetCategories.filter((c) => c.active)}
+        assetCatalogItems={assetCatalogItems}
       />
     </div>
   );

@@ -1605,60 +1605,20 @@ on conflict (id) do nothing;
 --   baixa e também registra compras; admin faz tudo, incluindo cadastro de
 --   categorias/itens e contagem física periódica.
 
--- ---------- EXPENSE CATEGORIES (categorias de despesa) ----------
--- count_frequency_days: frequência de contagem física configurável por
--- categoria (ex.: mensal pra limpeza) — só usada pro aviso "está na hora
--- de contar de novo" na tela de Contagem de estoque. Null = sem lembrete.
---
--- cost_nature + os 4 alloc_*_pct (ver "Custos e Despesas", PRD_compras.md
--- seção 20): toda categoria tem uma natureza de custo —
--- 'custo_direto' (já calculado por outra regra: ficha técnica ou rateio
--- por hóspede — os 4 percentuais abaixo não se aplicam), 'custo_fixo'
--- (rateado entre os 4 centros de custo pelos percentuais, que precisam
--- somar 100) ou 'nao_custo' (ativo permanente — nunca entra no cálculo).
-create type cost_nature as enum ('custo_direto', 'custo_fixo', 'nao_custo');
-
-create table expense_categories (
-  id uuid primary key default uuid_generate_v4(),
-  name text not null unique,
-  is_inventory_category boolean not null default false,
-  count_frequency_days int check (count_frequency_days is null or count_frequency_days > 0),
-  active boolean not null default true,
-  position int not null default 0,
-  created_at timestamptz not null default now(),
-  cost_nature cost_nature not null default 'custo_fixo',
-  alloc_hospedagem_pct int not null default 100 check (alloc_hospedagem_pct between 0 and 100),
-  alloc_cafe_manha_pct int not null default 0 check (alloc_cafe_manha_pct between 0 and 100),
-  alloc_bar_pct int not null default 0 check (alloc_bar_pct between 0 and 100),
-  alloc_frigobar_pct int not null default 0 check (alloc_frigobar_pct between 0 and 100),
-  constraint exp_cat_alloc_sums_100 check (
-    cost_nature <> 'custo_fixo' or (alloc_hospedagem_pct + alloc_cafe_manha_pct + alloc_bar_pct + alloc_frigobar_pct) = 100
-  )
-);
-
--- ---------- GRUPOS DE GIRO (ciclo de reposição por categoria de controle fino) ----------
--- coverage_days: "dias de folga" daquele grupo — editável pelo admin.
-create table inventory_turnover_groups (
-  id uuid primary key default uuid_generate_v4(),
-  name text not null unique,
-  coverage_days int not null check (coverage_days > 0),
-  created_at timestamptz not null default now()
-);
-
 -- ---------- INVENTORY ITEMS (catálogo de itens controláveis em estoque) ----------
--- turnover_group_id: opcional — itens perecíveis (ex.: frutas do café da
--- manhã) nunca recebem grupo, então nunca têm ponto de reposição
--- calculado, só o controle visual via pedidos de compra.
--- portion_weight_kg: só pros itens controlados por "porção" (ex.:
--- macaxeira, camarão, filé mignon) — peso médio de 1 porção em kg, usado
--- só pra converter "porções necessárias" em "kg a comprar".
+-- coverage_days ("dias de folga", ver "Itens de estoque e ciclo de
+-- compras", PRD_compras.md seção 21): substitui o antigo grupo de giro
+-- (tela/tabela excluídas) — direto no item, sempre presente (padrão 7),
+-- editável. portion_weight_kg: só pros itens controlados por "porção"
+-- (ex.: macaxeira, camarão, filé mignon) — peso médio de 1 porção em kg,
+-- usado só pra converter "porções necessárias" em "kg a comprar".
 create table inventory_items (
   id uuid primary key default uuid_generate_v4(),
   name text not null,
   unit text not null default 'un',
   barcode text unique,
   reorder_point numeric(12,3) not null default 0,
-  turnover_group_id uuid references inventory_turnover_groups(id) on delete set null,
+  coverage_days int not null default 7 check (coverage_days > 0),
   portion_weight_kg numeric(10,4),
   active boolean not null default true,
   position int not null default 0,
@@ -1673,14 +1633,70 @@ create table inventory_items (
   cost_report_group text
 );
 
--- ---------- CATEGORIA DE GASTO POR ITEM (N-pra-N) ----------
--- Um item pode pertencer a mais de uma categoria de gasto ao mesmo tempo
--- (ex.: "Coca-Cola Zero lata" é Bar da piscina E Frigobar) — ver
--- PRD_compras.md seção 19.
-create table inventory_item_categories (
-  inventory_item_id uuid not null references inventory_items(id) on delete cascade,
-  category_id uuid not null references expense_categories(id) on delete cascade,
-  primary key (inventory_item_id, category_id)
+-- ---------- PLANO DE CONTAS: centro → subcentro → item de custo ----------
+-- Substitui por completo o modelo antigo de "categoria de gasto"
+-- (Partes 19/20) — ver PRD_compras.md seção 21. "Item de custo" é a
+-- conta mais analítica (toda compra/despesa se liga a um item de custo
+-- ou a um ativo permanente, nunca a um "centro"/"subcentro" direto —
+-- esses dois níveis são só classificação/organização, com rateio
+-- percentual em cada um).
+create table cost_centers (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null unique,
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- Subcentros NÃO têm nome único — "Gerais"/"Alimentos"/"Materiais de
+-- limpeza" existem uma vez por centro a que pertencem, cada ocorrência
+-- é uma linha própria com sua própria lista de itens (confirmado com o
+-- proprietário: mesmo nome ≠ mesma linha). count_frequency_days: mesma
+-- ideia que `expense_categories.count_frequency_days` tinha antes, só
+-- que por subcentro agora — usada pro aviso de contagem física.
+create table cost_subcenters (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  count_frequency_days int check (count_frequency_days is null or count_frequency_days > 0),
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- Um subcentro pode pertencer a mais de 1 centro (funcionalidade
+-- genérica, mesmo que no plano de contas inicial nenhum subcentro
+-- precise disso — todos ficam 100% ligados a 1 único centro).
+create table cost_subcenter_centers (
+  subcenter_id uuid not null references cost_subcenters(id) on delete cascade,
+  center_id uuid not null references cost_centers(id) on delete cascade,
+  alloc_pct numeric(6,2) not null check (alloc_pct > 0 and alloc_pct <= 100),
+  primary key (subcenter_id, center_id)
+);
+
+-- Itens de custo: a conta mais analítica — pode ou não representar
+-- estoque (is_inventory). Quando representa, liga a um item de estoque
+-- já existente (cadastro separado, nunca a mesma linha — confirmado com
+-- o proprietário) — é esse vínculo que faz uma compra lançada nesse item
+-- de custo também dar entrada no saldo de estoque dele.
+create table cost_items (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  is_inventory boolean not null default false,
+  inventory_item_id uuid references inventory_items(id) on delete set null,
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+create unique index cost_items_inventory_item_uq on cost_items (inventory_item_id) where inventory_item_id is not null;
+
+-- Um item de custo pode pertencer a mais de 1 subcentro (ex.: "água" nos
+-- "Gerais" de Hospedagem, Café da manhã e Bar da piscina) — o rateio diz
+-- quanto do gasto daquele item vai pra cada subcentro em que ele aparece.
+create table cost_item_subcenters (
+  cost_item_id uuid not null references cost_items(id) on delete cascade,
+  subcenter_id uuid not null references cost_subcenters(id) on delete cascade,
+  alloc_pct numeric(6,2) not null check (alloc_pct > 0 and alloc_pct <= 100),
+  primary key (cost_item_id, subcenter_id)
 );
 
 -- ---------- FICHA TÉCNICA (receita): ingrediente(s) por produto do cardápio ----------
@@ -1740,38 +1756,88 @@ create table expenses (
   created_at timestamptz not null default now()
 );
 
+-- ---------- ATIVO PERMANENTE ----------
+-- Bens duráveis — nunca é um custo do período, só registro patrimonial.
+-- Categorias e o catálogo de "tipos" (fixed_asset_catalog_items) seguem
+-- o plano de contas de ativo permanente (PRD_compras.md seção 21).
+create table asset_categories (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null unique,
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- Catálogo de "tipos" de ativo permanente (ex.: "Televisores", "Bombas
+-- de piscina") — serve de sugestão de nome ao registrar um bem comprado
+-- de verdade; não tem saldo nem quantidade, é só uma lista de nomes
+-- reaproveitáveis, como o "item de custo" serve pra despesas.
+create table fixed_asset_catalog_items (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  category_id uuid not null references asset_categories(id),
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- Cada linha é 1 bem específico comprado (não um "tipo") — marca,
+-- modelo, valor, garantia e local são próprios daquela unidade.
+create table fixed_assets (
+  id uuid primary key default uuid_generate_v4(),
+  category_id uuid not null references asset_categories(id),
+  catalog_item_id uuid references fixed_asset_catalog_items(id) on delete set null,
+  name text not null,
+  brand text,
+  model text,
+  purchase_date date,
+  purchase_value numeric(12,2),
+  warranty_until date,
+  supplier_name text,
+  location text,
+  notes text,
+  active boolean not null default true,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
 -- ---------- EXPENSE ITEMS (linhas de uma despesa) ----------
--- category_id: usada só quando a linha NÃO tem item de estoque vinculado
--- (salário, honorários, conta de serviço avulsa) — quando tem, a
--- categoria vem das categorias do item (inventory_item_categories), sem
--- mudança desde a Parte 19.
+-- Toda linha aponta pra UM item de custo (compra ligada a estoque ou
+-- despesa pura) OU pra UM ativo permanente comprado — nunca os dois (ver
+-- PRD_compras.md seção 21; substitui inventory_item_id/category_id das
+-- Partes 19/20).
 create table expense_items (
   id uuid primary key default uuid_generate_v4(),
   expense_id uuid not null references expenses(id) on delete cascade,
-  inventory_item_id uuid references inventory_items(id) on delete set null,
-  category_id uuid references expense_categories(id) on delete set null,
+  cost_item_id uuid references cost_items(id) on delete set null,
+  fixed_asset_id uuid references fixed_assets(id) on delete set null,
   description text not null,
   quantity numeric(12,3) not null default 1 check (quantity > 0),
   unit_cost numeric(12,2) not null default 0 check (unit_cost >= 0),
   subtotal numeric(12,2) not null default 0 check (subtotal >= 0),
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  constraint expense_items_one_target check (not (cost_item_id is not null and fixed_asset_id is not null))
 );
 
 -- ---------- INVENTORY COUNT SESSIONS (contagem física periódica) ----------
+-- subcenter_group_name: contagem organizada por GRUPO de subcentros com
+-- o mesmo nome (ex.: "Alimentos" junta o subcentro de Café da manhã e o
+-- de Bar da piscina numa contagem só) — decisão do proprietário, Parte
+-- 21. null = "todos os itens".
 create table inventory_count_sessions (
   id uuid primary key default uuid_generate_v4(),
-  category_id uuid references expense_categories(id) on delete set null,
+  subcenter_group_name text,
   status inventory_count_status not null default 'em_andamento',
   created_by uuid references profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   closed_at timestamptz
 );
 
--- No máximo 1 sessão "em_andamento" por categoria (e 1 só pra "todos os
--- itens", category_id null) — evita sessões duplicadas vazias por clique
--- duplo/corrida (ver PRD_compras.md seção 17.8).
-create unique index inventory_count_sessions_one_open_per_category
-  on inventory_count_sessions (coalesce(category_id, '00000000-0000-0000-0000-000000000000'::uuid))
+-- No máximo 1 sessão "em_andamento" por grupo (e 1 só pra "todos os
+-- itens", subcenter_group_name null) — evita sessões duplicadas vazias
+-- por clique duplo/corrida (ver PRD_compras.md seção 17.8).
+create unique index inventory_count_sessions_one_open_per_group
+  on inventory_count_sessions (coalesce(subcenter_group_name, ''))
   where status = 'em_andamento';
 
 -- ---------- INVENTORY COUNT LINES (uma linha por item contado) ----------
@@ -1813,12 +1879,12 @@ select inventory_item_id, coalesce(sum(quantity), 0) as balance
 from inventory_movements
 group by inventory_item_id;
 
--- Uma linha por contagem FECHADA, com nome/categoria do item, os limites
--- ATUAIS do item (de propósito, não congelados — mudar o limite só afeta
--- futuras decisões de outlier, nunca o que já foi calculado) e a data da
--- contagem anterior do mesmo item via LAG() — evita recalcular isso em
--- JavaScript em três lugares diferentes (tela de contagem, Histórico,
--- Resumo Executivo).
+-- Uma linha por contagem FECHADA, com nome/subcentro(s) do item, os
+-- limites ATUAIS do item (de propósito, não congelados — mudar o limite
+-- só afeta futuras decisões de outlier, nunca o que já foi calculado) e a
+-- data da contagem anterior do mesmo item via LAG() — evita recalcular
+-- isso em JavaScript em três lugares diferentes (tela de contagem,
+-- Histórico, Resumo Executivo).
 create view inventory_count_line_history
 with (security_invoker = true) as
 select
@@ -1828,10 +1894,11 @@ select
   ii.name as item_name,
   ii.unit,
   coalesce(
-    (select string_agg(ec.name, ' / ' order by ec.name)
-     from inventory_item_categories iic
-     join expense_categories ec on ec.id = iic.category_id
-     where iic.inventory_item_id = ii.id),
+    (select string_agg(distinct cs.name, ' / ' order by cs.name)
+     from cost_items ci
+     join cost_item_subcenters cis on cis.cost_item_id = ci.id
+     join cost_subcenters cs on cs.id = cis.subcenter_id
+     where ci.inventory_item_id = ii.id),
     '—'
   ) as category_name,
   cl.theoretical_qty,
@@ -1842,17 +1909,22 @@ select
   cl.indice_relativo_pct,
   ii.quebra_maxima_admitida_pct,
   ii.indice_relativo_maximo_pct,
-  cs.closed_at,
-  lag(cs.closed_at) over (partition by cl.inventory_item_id order by cs.closed_at) as previous_count_date
+  cs2.closed_at,
+  lag(cs2.closed_at) over (partition by cl.inventory_item_id order by cs2.closed_at) as previous_count_date
 from inventory_count_lines cl
-join inventory_count_sessions cs on cs.id = cl.session_id
+join inventory_count_sessions cs2 on cs2.id = cl.session_id
 join inventory_items ii on ii.id = cl.inventory_item_id
-where cs.status = 'concluida' and cl.counted_qty is not null;
+where cs2.status = 'concluida' and cl.counted_qty is not null;
 
-alter table expense_categories enable row level security;
-alter table inventory_turnover_groups enable row level security;
+alter table asset_categories enable row level security;
+alter table fixed_asset_catalog_items enable row level security;
+alter table fixed_assets enable row level security;
+alter table cost_centers enable row level security;
+alter table cost_subcenters enable row level security;
+alter table cost_subcenter_centers enable row level security;
+alter table cost_items enable row level security;
+alter table cost_item_subcenters enable row level security;
 alter table inventory_items enable row level security;
-alter table inventory_item_categories enable row level security;
 alter table inventory_item_recipes enable row level security;
 alter table purchase_requests enable row level security;
 alter table expenses enable row level security;
@@ -1861,28 +1933,36 @@ alter table inventory_count_sessions enable row level security;
 alter table inventory_count_lines enable row level security;
 alter table inventory_movements enable row level security;
 
-create policy "exp_cat_select_authenticated" on expense_categories for select using (auth.uid() is not null);
-create policy "exp_cat_admin_insert" on expense_categories for insert with check (is_admin());
-create policy "exp_cat_admin_update" on expense_categories for update using (is_admin());
-create policy "exp_cat_admin_delete" on expense_categories for delete using (is_admin());
+create policy "asset_categories_select_authenticated" on asset_categories for select using (auth.uid() is not null);
+create policy "asset_categories_admin_write" on asset_categories for all using (is_admin()) with check (is_admin());
 
-create policy "inv_turnover_groups_select_authenticated" on inventory_turnover_groups
-  for select using (auth.uid() is not null);
-create policy "inv_turnover_groups_admin_write" on inventory_turnover_groups
-  for all using (is_admin()) with check (is_admin());
+create policy "fixed_asset_catalog_items_select_authenticated" on fixed_asset_catalog_items for select using (auth.uid() is not null);
+create policy "fixed_asset_catalog_items_admin_write" on fixed_asset_catalog_items for all using (is_admin()) with check (is_admin());
+
+create policy "fixed_assets_admin_all" on fixed_assets for all using (is_admin()) with check (is_admin());
+
+create policy "cost_centers_select_authenticated" on cost_centers for select using (auth.uid() is not null);
+create policy "cost_centers_admin_write" on cost_centers for all using (is_admin()) with check (is_admin());
+
+create policy "cost_subcenters_select_authenticated" on cost_subcenters for select using (auth.uid() is not null);
+create policy "cost_subcenters_admin_write" on cost_subcenters for all using (is_admin()) with check (is_admin());
+
+create policy "cost_subcenter_centers_select_authenticated" on cost_subcenter_centers for select using (auth.uid() is not null);
+create policy "cost_subcenter_centers_admin_write" on cost_subcenter_centers for all using (is_admin()) with check (is_admin());
+
+create policy "cost_items_select_authenticated" on cost_items for select using (auth.uid() is not null);
+create policy "cost_items_insert_admin_manutencao" on cost_items for insert with check (is_admin() or is_manutencao());
+create policy "cost_items_admin_update" on cost_items for update using (is_admin());
+create policy "cost_items_admin_delete" on cost_items for delete using (is_admin());
+
+create policy "cost_item_subcenters_select_authenticated" on cost_item_subcenters for select using (auth.uid() is not null);
+create policy "cost_item_subcenters_admin_write" on cost_item_subcenters for all using (is_admin()) with check (is_admin());
 
 create policy "inv_items_select_authenticated" on inventory_items for select using (auth.uid() is not null);
 create policy "inv_items_insert_admin_manutencao" on inventory_items for insert
   with check (is_admin() or is_manutencao());
 create policy "inv_items_admin_update" on inventory_items for update using (is_admin());
 create policy "inv_items_admin_delete" on inventory_items for delete using (is_admin());
-
-create policy "inv_item_categories_select_authenticated" on inventory_item_categories
-  for select using (auth.uid() is not null);
-create policy "inv_item_categories_insert_admin_manutencao" on inventory_item_categories
-  for insert with check (is_admin() or is_manutencao());
-create policy "inv_item_categories_delete_admin_manutencao" on inventory_item_categories
-  for delete using (is_admin() or is_manutencao());
 
 create policy "inv_recipes_select_authenticated" on inventory_item_recipes
   for select using (auth.uid() is not null);
@@ -2044,25 +2124,24 @@ where movement_type in ('baixa_manual', 'baixa_consumo_hospede')
 group by inventory_item_id;
 
 -- Ponto de reposição calculado = giro semanal ÷ 7 × dias de folga do
--- grupo do item — só existe (não nulo) quando o item tem grupo de giro;
--- "sem dado" (null) é sempre diferente de "zero" (ver PRD_compras.md).
+-- próprio item (coverage_days, sempre presente desde a Parte 21 — antes
+-- vinha de um "grupo de giro" separado, e um item sem grupo ficava sem
+-- cálculo; isso não existe mais porque os itens perecíveis sem controle
+-- fino, que usavam esse "sem grupo" de propósito, agora nem chegam a ser
+-- item de estoque).
 create view inventory_purchase_suggestions
 with (security_invoker = true) as
 select
   ii.id as inventory_item_id,
   coalesce(ib.balance, 0) as balance,
   coalesce(wt.weekly_consumption, 0) as weekly_consumption,
-  tg.coverage_days,
-  case when tg.coverage_days is not null
-    then (coalesce(wt.weekly_consumption, 0) / 7.0) * tg.coverage_days
-    else null
-  end as calculated_reorder_point,
+  ii.coverage_days,
+  (coalesce(wt.weekly_consumption, 0) / 7.0) * ii.coverage_days as calculated_reorder_point,
   ii.reorder_point as manual_reorder_point,
   ii.portion_weight_kg
 from inventory_items ii
 left join inventory_balances ib on ib.inventory_item_id = ii.id
 left join inventory_weekly_turnover wt on wt.inventory_item_id = ii.id
-left join inventory_turnover_groups tg on tg.id = ii.turnover_group_id
 where ii.active;
 
 -- Dispensa da sugestão CALCULADA pelo admin (não a confunda com os
@@ -2094,32 +2173,213 @@ values (
 )
 on conflict (id) do nothing;
 
--- Categorias de despesa iniciais (ver PRD_compras.md seção 4).
-insert into expense_categories (name, is_inventory_category, position) values
-  ('Limpeza', true, 1),
-  ('Café da manhã', true, 2),
-  ('Bar da piscina', true, 3),
-  ('Enxoval (cama/banho/mesa)', true, 4),
-  ('Piscina', true, 5),
-  ('Jardim', true, 6),
-  ('Manutenção (elétrica/hidráulica/outros)', true, 7),
-  ('Ativos permanentes', false, 8),
-  ('Consumo (luz/água/internet)', false, 9),
-  ('Pessoal (salários/encargos)', false, 10),
-  ('Serviços profissionais', false, 11),
-  ('Impostos e taxas', false, 12),
-  ('Outras', false, 13)
-on conflict (name) do nothing;
+-- Plano de contas inicial (centro → subcentro → item de custo) — ver
+-- PRD_compras.md seção 21 pro plano completo com a fonte de cada linha.
+-- Rateio inicial sempre em partes iguais entre os subcentros de que cada
+-- item participa (resto de arredondamento pro primeiro, em ordem
+-- alfabética, garantindo soma exata de 100). Ver migration
+-- 065_plano_de_contas_seed.sql pra o texto completo e comentado desta
+-- mesma lógica — mantido idêntico aqui pra uma instalação nova nascer
+-- com o mesmo plano de contas que a nuvem/produção já têm.
+create temp table raw_items (item_name text, is_inventory boolean, subcenter_name text, center_name text);
+insert into raw_items (item_name, is_inventory, subcenter_name, center_name) values
+('água', false, 'Gerais', 'Hospedagem'), ('luz', false, 'Gerais', 'Hospedagem'), ('internet', false, 'Gerais', 'Hospedagem'),
+('dedetização', false, 'Gerais', 'Hospedagem'), ('limpeza coqueiros', false, 'Gerais', 'Hospedagem'), ('impostos e taxas', false, 'Gerais', 'Hospedagem'),
+('amenities', true, 'Materiais das suítes', 'Hospedagem'), ('travesseiros', true, 'Materiais das suítes', 'Hospedagem'),
+('papel higiênico', true, 'Materiais das suítes', 'Hospedagem'), ('sacos de lixo', true, 'Materiais das suítes', 'Hospedagem'),
+('secador de cabelo', true, 'Materiais das suítes', 'Hospedagem'),
+('toalhas de banho', true, 'Enxoval de cama e banho', 'Hospedagem'), ('toalhas de rosto', true, 'Enxoval de cama e banho', 'Hospedagem'),
+('lençóis', true, 'Enxoval de cama e banho', 'Hospedagem'), ('fronhas', true, 'Enxoval de cama e banho', 'Hospedagem'),
+('capas protetoras de travesseiro', true, 'Enxoval de cama e banho', 'Hospedagem'), ('capas protetoras de colchão', true, 'Enxoval de cama e banho', 'Hospedagem'),
+('salário dos funcionários de manutenção', false, 'Mão de obra de hospedagem', 'Hospedagem'), ('salário das camareiras', false, 'Mão de obra de hospedagem', 'Hospedagem'),
+('encargos', false, 'Mão de obra de hospedagem', 'Hospedagem'), ('cesta básica', false, 'Mão de obra de hospedagem', 'Hospedagem'),
+('plano de saúde', false, 'Mão de obra de hospedagem', 'Hospedagem'), ('transporte', false, 'Mão de obra de hospedagem', 'Hospedagem'),
+('outros materiais de jardinagem', false, 'Materiais de Jardim', 'Hospedagem'), ('adubo', false, 'Materiais de Jardim', 'Hospedagem'),
+('plantas', false, 'Materiais de Jardim', 'Hospedagem'), ('remédios de plantas', false, 'Materiais de Jardim', 'Hospedagem'),
+('mangueiras', false, 'Materiais de Jardim', 'Hospedagem'), ('conectores de mangueiras', false, 'Materiais de Jardim', 'Hospedagem'),
+('torneiras de jardim', false, 'Materiais de Jardim', 'Hospedagem'), ('aspersores', false, 'Materiais de Jardim', 'Hospedagem'),
+('outros materiais de irrigação', false, 'Materiais de Jardim', 'Hospedagem'),
+('outros materiais de piscina', true, 'Materiais de Piscina', 'Hospedagem'), ('cloro', true, 'Materiais de Piscina', 'Hospedagem'),
+('clarificante', true, 'Materiais de Piscina', 'Hospedagem'), ('barrilha', true, 'Materiais de Piscina', 'Hospedagem'),
+('pastilhas de cloro', true, 'Materiais de Piscina', 'Hospedagem'), ('fluidos de medidores', true, 'Materiais de Piscina', 'Hospedagem'),
+('toalhas de piscina', true, 'Materiais de Piscina', 'Hospedagem'),
+('outros materiais de manutenção', false, 'Materiais de Manutenção', 'Hospedagem'), ('lâmpadas', true, 'Materiais de Manutenção', 'Hospedagem'),
+('fita isolante', true, 'Materiais de Manutenção', 'Hospedagem'), ('fita veda rosca', true, 'Materiais de Manutenção', 'Hospedagem'),
+('cola de cano', true, 'Materiais de Manutenção', 'Hospedagem'), ('silicone', true, 'Materiais de Manutenção', 'Hospedagem'),
+('lubrificantes', true, 'Materiais de Manutenção', 'Hospedagem'), ('antioxidantes', true, 'Materiais de Manutenção', 'Hospedagem'),
+('lixas', false, 'Materiais de Manutenção', 'Hospedagem'), ('peças de reposição', true, 'Materiais de Manutenção', 'Hospedagem'),
+('parafusos', false, 'Materiais de Manutenção', 'Hospedagem'), ('porcas', false, 'Materiais de Manutenção', 'Hospedagem'),
+('prendedores de toldo', false, 'Materiais de Manutenção', 'Hospedagem'), ('fio elétrico', false, 'Materiais de Manutenção', 'Hospedagem'),
+('tomadas', true, 'Materiais de Manutenção', 'Hospedagem'), ('interruptores', true, 'Materiais de Manutenção', 'Hospedagem'),
+('outros materiais elétricos', true, 'Materiais de Manutenção', 'Hospedagem'), ('outros materiais hidráulicos', true, 'Materiais de Manutenção', 'Hospedagem'),
+('rejunte', false, 'Materiais de Manutenção', 'Hospedagem'), ('tintas de parede', true, 'Materiais de Manutenção', 'Hospedagem'),
+('cimento', false, 'Materiais de Manutenção', 'Hospedagem'), ('argamassa', false, 'Materiais de Manutenção', 'Hospedagem'),
+('areia', false, 'Materiais de Manutenção', 'Hospedagem'), ('colas em geral', false, 'Materiais de Manutenção', 'Hospedagem'),
+('impermeabilizantes', false, 'Materiais de Manutenção', 'Hospedagem'), ('cabos', false, 'Materiais de Manutenção', 'Hospedagem'),
+('filtros', false, 'Materiais de Manutenção', 'Hospedagem'), ('conduites', false, 'Materiais de Manutenção', 'Hospedagem'),
+('conectores em geral', false, 'Materiais de Manutenção', 'Hospedagem'), ('conexões hidráulicas', false, 'Materiais de Manutenção', 'Hospedagem'),
+('canos', false, 'Materiais de Manutenção', 'Hospedagem'), ('eletrodutos', false, 'Materiais de Manutenção', 'Hospedagem'),
+('telhas', false, 'Materiais de Manutenção', 'Hospedagem'), ('carrinho de mão', true, 'Materiais de Manutenção', 'Hospedagem'),
+('sacos de lixo', true, 'Materiais de Manutenção', 'Hospedagem'), ('escovão', false, 'Materiais de Manutenção', 'Hospedagem'),
+('escada', false, 'Materiais de Manutenção', 'Hospedagem'), ('caibros', false, 'Materiais de Manutenção', 'Hospedagem'),
+('ripas', false, 'Materiais de Manutenção', 'Hospedagem'), ('linhas de madeira', false, 'Materiais de Manutenção', 'Hospedagem'),
+('toras de eucalipto', false, 'Materiais de Manutenção', 'Hospedagem'), ('tábuas', false, 'Materiais de Manutenção', 'Hospedagem'),
+('medidores em geral', false, 'Materiais de Manutenção', 'Hospedagem'),
+('alicates', false, 'Ferramentas', 'Hospedagem'), ('chaves de fenda', false, 'Ferramentas', 'Hospedagem'),
+('chaves estrela', false, 'Ferramentas', 'Hospedagem'), ('chaves allen', false, 'Ferramentas', 'Hospedagem'),
+('martelos', false, 'Ferramentas', 'Hospedagem'), ('chaves inglesas', false, 'Ferramentas', 'Hospedagem'),
+('chaves de cano', false, 'Ferramentas', 'Hospedagem'), ('serrinha', false, 'Ferramentas', 'Hospedagem'),
+('trenas', false, 'Ferramentas', 'Hospedagem'), ('outras ferramentas de manutenção', false, 'Ferramentas', 'Hospedagem'),
+('Stays (CMS)', false, 'Honorários administrativos', 'Hospedagem'), ('Invictos (Comercial e Atendimento)', false, 'Honorários administrativos', 'Hospedagem'),
+('Financeiro (Márcia)', false, 'Honorários administrativos', 'Hospedagem'), ('Contabilidade (Simone Perla)', false, 'Honorários administrativos', 'Hospedagem'),
+('outras honorários administrativos', false, 'Honorários administrativos', 'Hospedagem'), ('pró-labore', false, 'Honorários administrativos', 'Hospedagem'),
+('detergente', true, 'Materiais de limpeza', 'Hospedagem'), ('álcool', true, 'Materiais de limpeza', 'Hospedagem'),
+('água sanitária', true, 'Materiais de limpeza', 'Hospedagem'), ('perfume de ambiente', false, 'Materiais de limpeza', 'Hospedagem'),
+('desinfetante', true, 'Materiais de limpeza', 'Hospedagem'), ('veja multiuso', true, 'Materiais de limpeza', 'Hospedagem'),
+('limpa vidros', true, 'Materiais de limpeza', 'Hospedagem'), ('baldes', true, 'Materiais de limpeza', 'Hospedagem'),
+('vassouras', true, 'Materiais de limpeza', 'Hospedagem'), ('rodos', true, 'Materiais de limpeza', 'Hospedagem'),
+('panos de limpeza', false, 'Materiais de limpeza', 'Hospedagem'), ('estopas', false, 'Materiais de limpeza', 'Hospedagem'),
+('buchas', false, 'Materiais de limpeza', 'Hospedagem'), ('sabão líquido', true, 'Materiais de limpeza', 'Hospedagem'),
+('sabão em pó', true, 'Materiais de limpeza', 'Hospedagem'), ('sabão em barra', true, 'Materiais de limpeza', 'Hospedagem'),
+('borrifadores', false, 'Materiais de limpeza', 'Hospedagem'), ('outros materiais de limpeza', false, 'Materiais de limpeza', 'Hospedagem'),
 
--- Grupos de giro iniciais (ciclo de reposição por categoria de controle
--- fino — ver PRD_compras.md). Itens perecíveis (ex.: frutas do café da
--- manhã) propositalmente não entram em nenhum grupo.
-insert into inventory_turnover_groups (name, coverage_days) values
-  ('Limpeza', 7),
-  ('Bebidas não alcoólicas', 7),
-  ('Alimentos (petiscos do bar da piscina)', 7),
-  ('Alimentos (café da manhã)', 7),
-  ('Bebidas alcoólicas', 60),
-  ('Materiais de piscina', 60),
-  ('Materiais de manutenção', 30)
-on conflict (name) do nothing;
+('água', false, 'Gerais', 'Café da manhã'), ('luz', false, 'Gerais', 'Café da manhã'), ('gás', false, 'Gerais', 'Café da manhã'),
+('impostos e taxas', false, 'Gerais', 'Café da manhã'),
+('frutas', false, 'Alimentos', 'Café da manhã'), ('ovos', false, 'Alimentos', 'Café da manhã'), ('café', true, 'Alimentos', 'Café da manhã'),
+('chocolate', true, 'Alimentos', 'Café da manhã'), ('farinha de trigo', true, 'Alimentos', 'Café da manhã'), ('manteiga', true, 'Alimentos', 'Café da manhã'),
+('margarina', true, 'Alimentos', 'Café da manhã'), ('requeijão', true, 'Alimentos', 'Café da manhã'), ('cream cheese', true, 'Alimentos', 'Café da manhã'),
+('croissants', true, 'Alimentos', 'Café da manhã'), ('pães', true, 'Alimentos', 'Café da manhã'), ('salgadinhos', false, 'Alimentos', 'Café da manhã'),
+('brioches', false, 'Alimentos', 'Café da manhã'), ('bolos', false, 'Alimentos', 'Café da manhã'), ('açúcar', true, 'Alimentos', 'Café da manhã'),
+('sal', true, 'Alimentos', 'Café da manhã'), ('adoçante', true, 'Alimentos', 'Café da manhã'), ('mel', true, 'Alimentos', 'Café da manhã'),
+('legumes', false, 'Alimentos', 'Café da manhã'), ('verduras', false, 'Alimentos', 'Café da manhã'), ('linguiças', true, 'Alimentos', 'Café da manhã'),
+('bacon', true, 'Alimentos', 'Café da manhã'), ('queijos', true, 'Alimentos', 'Café da manhã'), ('presuntos', true, 'Alimentos', 'Café da manhã'),
+('farinha de tapioca', true, 'Alimentos', 'Café da manhã'), ('farinha de cuscuz', true, 'Alimentos', 'Café da manhã'), ('pimenta', false, 'Alimentos', 'Café da manhã'),
+('temperos', false, 'Alimentos', 'Café da manhã'),
+('salário das camareiras', false, 'Mão de obra de café da manhã', 'Café da manhã'), ('encargos', false, 'Mão de obra de café da manhã', 'Café da manhã'),
+('cesta básica', false, 'Mão de obra de café da manhã', 'Café da manhã'), ('plano de saúde', false, 'Mão de obra de café da manhã', 'Café da manhã'),
+('transporte', false, 'Mão de obra de café da manhã', 'Café da manhã'),
+('copos', false, 'Materiais de café da manhã', 'Café da manhã'), ('xícaras', false, 'Materiais de café da manhã', 'Café da manhã'),
+('pires', false, 'Materiais de café da manhã', 'Café da manhã'), ('pratos', false, 'Materiais de café da manhã', 'Café da manhã'),
+('talheres', false, 'Materiais de café da manhã', 'Café da manhã'), ('jogos americanos', false, 'Materiais de café da manhã', 'Café da manhã'),
+('panos de prato', false, 'Materiais de café da manhã', 'Café da manhã'), ('guardanapos', false, 'Materiais de café da manhã', 'Café da manhã'),
+('papéis toalha', false, 'Materiais de café da manhã', 'Café da manhã'), ('utensílios de cozinha', false, 'Materiais de café da manhã', 'Café da manhã'),
+('Stays (CMS)', false, 'Honorários administrativos', 'Café da manhã'), ('Invictos (Comercial e Atendimento)', false, 'Honorários administrativos', 'Café da manhã'),
+('Financeiro (Márcia)', false, 'Honorários administrativos', 'Café da manhã'), ('Contabilidade (Simone Perla)', false, 'Honorários administrativos', 'Café da manhã'),
+('outras honorários administrativos', false, 'Honorários administrativos', 'Café da manhã'), ('pró-labore', false, 'Honorários administrativos', 'Café da manhã'),
+('detergente', true, 'Materiais de limpeza', 'Café da manhã'), ('álcool', true, 'Materiais de limpeza', 'Café da manhã'),
+('água sanitária', true, 'Materiais de limpeza', 'Café da manhã'), ('perfume de ambiente', false, 'Materiais de limpeza', 'Café da manhã'),
+('desinfetante', true, 'Materiais de limpeza', 'Café da manhã'), ('veja multiuso', true, 'Materiais de limpeza', 'Café da manhã'),
+('limpa vidros', true, 'Materiais de limpeza', 'Café da manhã'), ('baldes', true, 'Materiais de limpeza', 'Café da manhã'),
+('vassouras', true, 'Materiais de limpeza', 'Café da manhã'), ('rodos', true, 'Materiais de limpeza', 'Café da manhã'),
+('panos de limpeza', false, 'Materiais de limpeza', 'Café da manhã'), ('estopas', false, 'Materiais de limpeza', 'Café da manhã'),
+('buchas', false, 'Materiais de limpeza', 'Café da manhã'), ('sabão líquido', true, 'Materiais de limpeza', 'Café da manhã'),
+('sabão em pó', true, 'Materiais de limpeza', 'Café da manhã'), ('sabão em barra', true, 'Materiais de limpeza', 'Café da manhã'),
+('borrifadores', false, 'Materiais de limpeza', 'Café da manhã'), ('outros materiais de limpeza', false, 'Materiais de limpeza', 'Café da manhã'),
+
+('água', false, 'Gerais', 'Bar de piscina'), ('luz', false, 'Gerais', 'Bar de piscina'), ('gás', false, 'Gerais', 'Bar de piscina'),
+('impostos e taxas', false, 'Gerais', 'Bar de piscina'),
+('manteiga', true, 'Alimentos', 'Bar de piscina'), ('margarina', true, 'Alimentos', 'Bar de piscina'), ('pães', true, 'Alimentos', 'Bar de piscina'),
+('açúcar', true, 'Alimentos', 'Bar de piscina'), ('sal', true, 'Alimentos', 'Bar de piscina'), ('adoçante', true, 'Alimentos', 'Bar de piscina'),
+('carnes', true, 'Alimentos', 'Bar de piscina'), ('camarões', true, 'Alimentos', 'Bar de piscina'), ('queijos', true, 'Alimentos', 'Bar de piscina'),
+('ovos', false, 'Alimentos', 'Bar de piscina'), ('presuntos', true, 'Alimentos', 'Bar de piscina'), ('macaxeira', true, 'Alimentos', 'Bar de piscina'),
+('batatas fritas', true, 'Alimentos', 'Bar de piscina'), ('temperos', false, 'Alimentos', 'Bar de piscina'), ('massa de pastel', true, 'Alimentos', 'Bar de piscina'),
+('bolinhos de bacalhau', true, 'Alimentos', 'Bar de piscina'),
+('Vodka Smirnoff', true, 'Bebidas', 'Bar de piscina'), ('Vodka Absolut', true, 'Bebidas', 'Bar de piscina'), ('Cachaça', true, 'Bebidas', 'Bar de piscina'),
+('Campari', true, 'Bebidas', 'Bar de piscina'), ('Gim Tanqueray', true, 'Bebidas', 'Bar de piscina'), ('Água de Coco', true, 'Bebidas', 'Bar de piscina'),
+('Água com gás', true, 'Bebidas', 'Bar de piscina'), ('Água sem gás', true, 'Bebidas', 'Bar de piscina'), ('Refrigerante', true, 'Bebidas', 'Bar de piscina'),
+('Cerveja', true, 'Bebidas', 'Bar de piscina'), ('Café expresso', true, 'Bebidas', 'Bar de piscina'),
+('salário das camareiras', false, 'Mão de obra de bar da piscina', 'Bar de piscina'), ('encargos', false, 'Mão de obra de bar da piscina', 'Bar de piscina'),
+('cesta básica', false, 'Mão de obra de bar da piscina', 'Bar de piscina'), ('plano de saúde', false, 'Mão de obra de bar da piscina', 'Bar de piscina'),
+('transporte', false, 'Mão de obra de bar da piscina', 'Bar de piscina'),
+('taças', false, 'Materiais de bar da piscina', 'Bar de piscina'), ('palitos', false, 'Materiais de bar da piscina', 'Bar de piscina'),
+('canudos', false, 'Materiais de bar da piscina', 'Bar de piscina'), ('mexedores de drink', false, 'Materiais de bar da piscina', 'Bar de piscina'),
+('copos', false, 'Materiais de bar da piscina', 'Bar de piscina'), ('pratos', false, 'Materiais de bar da piscina', 'Bar de piscina'),
+('talheres', false, 'Materiais de bar da piscina', 'Bar de piscina'), ('guardanapos', false, 'Materiais de bar da piscina', 'Bar de piscina'),
+('papéis toalha', false, 'Materiais de bar da piscina', 'Bar de piscina'), ('utensílios de cozinha', false, 'Materiais de bar da piscina', 'Bar de piscina'),
+('Stays (CMS)', false, 'Honorários administrativos', 'Bar de piscina'), ('Invictos (Comercial e Atendimento)', false, 'Honorários administrativos', 'Bar de piscina'),
+('Financeiro (Márcia)', false, 'Honorários administrativos', 'Bar de piscina'), ('Contabilidade (Simone Perla)', false, 'Honorários administrativos', 'Bar de piscina'),
+('outras honorários administrativos', false, 'Honorários administrativos', 'Bar de piscina'), ('pró-labore', false, 'Honorários administrativos', 'Bar de piscina'),
+('detergente', true, 'Materiais de limpeza', 'Bar de piscina'), ('álcool', true, 'Materiais de limpeza', 'Bar de piscina'),
+('água sanitária', true, 'Materiais de limpeza', 'Bar de piscina'), ('perfume de ambiente', false, 'Materiais de limpeza', 'Bar de piscina'),
+('desinfetante', true, 'Materiais de limpeza', 'Bar de piscina'), ('veja multiuso', true, 'Materiais de limpeza', 'Bar de piscina'),
+('limpa vidros', true, 'Materiais de limpeza', 'Bar de piscina'), ('baldes', true, 'Materiais de limpeza', 'Bar de piscina'),
+('vassouras', true, 'Materiais de limpeza', 'Bar de piscina'), ('rodos', true, 'Materiais de limpeza', 'Bar de piscina'),
+('panos de limpeza', false, 'Materiais de limpeza', 'Bar de piscina'), ('estopas', false, 'Materiais de limpeza', 'Bar de piscina'),
+('buchas', false, 'Materiais de limpeza', 'Bar de piscina'), ('sabão líquido', true, 'Materiais de limpeza', 'Bar de piscina'),
+('sabão em pó', true, 'Materiais de limpeza', 'Bar de piscina'), ('sabão em barra', true, 'Materiais de limpeza', 'Bar de piscina'),
+('borrifadores', false, 'Materiais de limpeza', 'Bar de piscina'), ('outros materiais de limpeza', false, 'Materiais de limpeza', 'Bar de piscina'),
+
+('luz', false, 'Gerais', 'Frigobar'), ('Água com gás', true, 'Bebidas', 'Frigobar'), ('Água sem gás', true, 'Bebidas', 'Frigobar'),
+('Refrigerante', true, 'Bebidas', 'Frigobar'), ('Cerveja', true, 'Bebidas', 'Frigobar'), ('Café expresso', true, 'Bebidas', 'Frigobar');
+
+insert into cost_centers (name, position)
+select name, row_number() over ()
+from (select distinct center_name as name from raw_items) t;
+
+create temp table subcenter_map (subcenter_name text, center_name text, subcenter_id uuid);
+do $$
+declare r record; v_id uuid;
+begin
+  for r in select distinct subcenter_name, center_name from raw_items order by center_name, subcenter_name loop
+    insert into cost_subcenters (name) values (r.subcenter_name) returning id into v_id;
+    insert into subcenter_map values (r.subcenter_name, r.center_name, v_id);
+  end loop;
+end $$;
+
+insert into cost_subcenter_centers (subcenter_id, center_id, alloc_pct)
+select sm.subcenter_id, cc.id, 100 from subcenter_map sm join cost_centers cc on cc.name = sm.center_name;
+
+create temp table item_map (item_name text, cost_item_id uuid);
+do $$
+declare r record; v_item_id uuid; v_inv_id uuid;
+begin
+  for r in select item_name, bool_or(is_inventory) as is_inventory from raw_items group by item_name order by item_name loop
+    v_inv_id := null;
+    if r.is_inventory then
+      select id into v_inv_id from inventory_items where lower(name) = lower(r.item_name) limit 1;
+      if v_inv_id is null then
+        insert into inventory_items (name, unit) values (r.item_name, 'un') returning id into v_inv_id;
+      end if;
+    end if;
+    insert into cost_items (name, is_inventory, inventory_item_id) values (r.item_name, r.is_inventory, v_inv_id) returning id into v_item_id;
+    insert into item_map values (r.item_name, v_item_id);
+  end loop;
+end $$;
+
+insert into cost_item_subcenters (cost_item_id, subcenter_id, alloc_pct)
+select im.cost_item_id, sm.subcenter_id,
+  floor(100.0 / cnt.n) + case when rn.rn = 1 then 100 - cnt.n * floor(100.0 / cnt.n) else 0 end
+from raw_items ri
+join item_map im on im.item_name = ri.item_name
+join subcenter_map sm on sm.subcenter_name = ri.subcenter_name and sm.center_name = ri.center_name
+join (select item_name, count(*) as n from raw_items group by item_name) cnt on cnt.item_name = ri.item_name
+join (
+  select item_name, subcenter_name, center_name, row_number() over (partition by item_name order by center_name, subcenter_name) as rn
+  from raw_items
+) rn on rn.item_name = ri.item_name and rn.subcenter_name = ri.subcenter_name and rn.center_name = ri.center_name;
+
+-- Categorias e catálogo de ativo permanente iniciais.
+insert into asset_categories (name, position) values
+  ('Máquinas', 1), ('Metais e louças banho', 2), ('Aparelhos', 3);
+
+insert into fixed_asset_catalog_items (name, category_id, position)
+select v.name, ac.id, v.pos
+from (values
+  ('Bombas de piscina', 1), ('Bombas pressurizadoras', 2), ('Bombas de irrigação', 3), ('Bombas de poço', 4),
+  ('Boilers', 5), ('Aquecedores Cardal', 6), ('Filtros de piscina', 7), ('Politrizes', 8), ('Maquitas', 9), ('Furadeiras', 10)
+) as v(name, pos) cross join lateral (select id from asset_categories where name = 'Máquinas') ac;
+
+insert into fixed_asset_catalog_items (name, category_id, position)
+select v.name, ac.id, v.pos
+from (values
+  ('Torneiras', 1), ('Chuveiros', 2), ('Vasos sanitários', 3), ('Registros', 4), ('Ralos', 5), ('Pias', 6), ('Espelhos', 7)
+) as v(name, pos) cross join lateral (select id from asset_categories where name = 'Metais e louças banho') ac;
+
+insert into fixed_asset_catalog_items (name, category_id, position)
+select v.name, ac.id, v.pos
+from (values
+  ('Televisores', 1), ('Roteadores', 2), ('Frigobares', 3), ('Refrigeradores', 4), ('Freezers', 5), ('Bebedouros', 6),
+  ('Filtros de água', 7), ('Máquinas de café', 8), ('Ar condicionados', 9), ('Máquinas de lavar', 10),
+  ('Lavadoras pressurizada', 11), ('Aspiradores de pó', 12), ('Câmeras', 13), ('Controladoras', 14),
+  ('Computadores', 15), ('Laptops', 16), ('Impressoras', 17)
+) as v(name, pos) cross join lateral (select id from asset_categories where name = 'Aparelhos') ac;

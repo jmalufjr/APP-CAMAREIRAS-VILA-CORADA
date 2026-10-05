@@ -6,6 +6,7 @@ import type { InventoryItem, InventoryItemRecipe } from "@/lib/types";
 
 function revalidateAll() {
   revalidatePath("/compras", "layout");
+  revalidatePath("/checklists", "layout");
   revalidatePath("/estoque", "layout");
   revalidatePath("/manutencao/estoque", "layout");
   revalidatePath("/manutencao/compras", "layout");
@@ -16,51 +17,32 @@ function revalidateAll() {
 }
 
 export interface InventoryItemWithBalance extends InventoryItem {
-  category_ids: string[];
-  category_names: string[];
-  turnover_group_name: string | null;
   balance: number;
-}
-
-type CategoryLinkRaw = { inventory_item_id: string; category_id: string; expense_categories: { name: string } | null };
-
-// Pra cada item, as categorias de gasto ligadas (N-pra-N desde a Parte
-// 19) — uma consulta só, reaproveitada por getInventoryItems e por quem
-// precisar montar o mesmo mapa (ex.: relatórios).
-async function getCategoryLinksByItem(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  itemIds: string[]
-): Promise<Map<string, { ids: string[]; names: string[] }>> {
-  const map = new Map<string, { ids: string[]; names: string[] }>();
-  if (itemIds.length === 0) return map;
-  const { data } = await supabase
-    .from("inventory_item_categories")
-    .select("inventory_item_id, category_id, expense_categories(name)")
-    .in("inventory_item_id", itemIds);
-  ((data ?? []) as unknown as CategoryLinkRaw[]).forEach((r) => {
-    const entry = map.get(r.inventory_item_id) ?? { ids: [], names: [] };
-    entry.ids.push(r.category_id);
-    entry.names.push(r.expense_categories?.name ?? "—");
-    map.set(r.inventory_item_id, entry);
-  });
-  return map;
+  // Nomes dos subcentros do Plano de Contas que usam este item (via
+  // cost_items.inventory_item_id) — só pra exibição (ex.: busca/baixa de
+  // estoque); editar a categorização em si acontece no Plano de Contas,
+  // não aqui.
+  category_names: string[];
 }
 
 // Lista o catálogo com o saldo de cada item já calculado (soma de todos
 // os movimentos — nunca um número guardado à parte, ver
 // PRD_compras.md/schema.sql pro porquê). `onlyActive` filtra os
-// desativados (tela de baixa/compra não precisa mostrá-los).
+// desativados (tela de baixa/compra não precisa mostrá-los). Desde a
+// Parte 21, a identidade/categoria do item vem do Plano de Contas (item
+// de custo → subcentro → centro) — ver também
+// `getInventoryItemsWithCostPlan` em inventory-cost-view.ts pra essa
+// visão por centro/subcentro.
 export async function getInventoryItems(onlyActive = true): Promise<InventoryItemWithBalance[]> {
   const supabase = await createClient();
-  let query = supabase.from("inventory_items").select("*, inventory_turnover_groups(name)").order("position").order("name");
+  let query = supabase.from("inventory_items").select("*").order("position").order("name");
   if (onlyActive) query = query.eq("active", true);
   const { data } = await query;
 
-  type Raw = InventoryItem & { inventory_turnover_groups: { name: string } | null };
-  const items = (data ?? []) as unknown as Raw[];
+  const items = (data ?? []) as InventoryItem[];
   if (items.length === 0) return [];
 
-  const [{ data: balances }, categoryLinks] = await Promise.all([
+  const [{ data: balances }, { data: costItems }] = await Promise.all([
     supabase
       .from("inventory_balances")
       .select("inventory_item_id, balance")
@@ -68,20 +50,25 @@ export async function getInventoryItems(onlyActive = true): Promise<InventoryIte
         "inventory_item_id",
         items.map((i) => i.id)
       ),
-    getCategoryLinksByItem(supabase, items.map((i) => i.id)),
+    supabase
+      .from("cost_items")
+      .select("inventory_item_id, cost_item_subcenters(cost_subcenters(name))")
+      .in(
+        "inventory_item_id",
+        items.map((i) => i.id)
+      ),
   ]);
   const balanceMap = new Map((balances ?? []).map((b) => [b.inventory_item_id, Number(b.balance)]));
 
-  return items.map((i) => {
-    const categories = categoryLinks.get(i.id) ?? { ids: [], names: [] };
-    return {
-      ...i,
-      category_ids: categories.ids,
-      category_names: categories.names,
-      turnover_group_name: i.inventory_turnover_groups?.name ?? null,
-      balance: balanceMap.get(i.id) ?? 0,
-    };
+  type CostItemRaw = { inventory_item_id: string; cost_item_subcenters: { cost_subcenters: { name: string } | null }[] };
+  const categoryNamesByItem = new Map<string, string[]>();
+  ((costItems ?? []) as unknown as CostItemRaw[]).forEach((c) => {
+    if (!c.inventory_item_id) return;
+    const names = c.cost_item_subcenters.map((l) => l.cost_subcenters?.name).filter((n): n is string => !!n);
+    categoryNamesByItem.set(c.inventory_item_id, names);
   });
+
+  return items.map((i) => ({ ...i, balance: balanceMap.get(i.id) ?? 0, category_names: categoryNamesByItem.get(i.id) ?? [] }));
 }
 
 export async function findInventoryItemByBarcode(barcode: string): Promise<InventoryItemWithBalance | null> {
@@ -89,92 +76,13 @@ export async function findInventoryItemByBarcode(barcode: string): Promise<Inven
   return items.find((i) => i.barcode === barcode) ?? null;
 }
 
-// Grava as categorias de um item: apaga e reinsere (mesmo padrão já usado
-// no projeto pra listas N-pra-N editadas como um todo, ex.: expense_items
-// numa edição de despesa) — mais simples e seguro que tentar "diffar".
-async function setItemCategories(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  itemId: string,
-  categoryIds: string[]
-): Promise<{ error?: string }> {
-  await supabase.from("inventory_item_categories").delete().eq("inventory_item_id", itemId);
-  if (categoryIds.length === 0) return {};
-  const { error } = await supabase
-    .from("inventory_item_categories")
-    .insert(categoryIds.map((category_id) => ({ inventory_item_id: itemId, category_id })));
-  if (error) return { error: error.message };
-  return {};
-}
-
-export async function createInventoryItem(formData: FormData) {
-  const name = String(formData.get("name") ?? "").trim();
-  const categoryIds = formData.getAll("category_ids").map(String).filter(Boolean);
-  const unit = String(formData.get("unit") ?? "un").trim() || "un";
-  const barcode = String(formData.get("barcode") ?? "").trim() || null;
-  const reorderRaw = String(formData.get("reorder_point") ?? "").trim();
-  const reorder_point = reorderRaw ? Number(reorderRaw) : 0;
-  const turnover_group_id = String(formData.get("turnover_group_id") ?? "").trim() || null;
-  const portionWeightRaw = String(formData.get("portion_weight_kg") ?? "").trim();
-  const portion_weight_kg = portionWeightRaw ? Number(portionWeightRaw) : null;
-
-  if (!name) return { error: "Informe o nome do item." };
-  if (categoryIds.length === 0) return { error: "Selecione ao menos uma categoria de gasto." };
-
+// "Dias de folga" (ver "Itens de estoque e ciclo de compras",
+// PRD_compras.md seção 21) — único campo editável diretamente nessa
+// tela, com o mesmo stepper ±1 já usado no resto do projeto.
+export async function updateInventoryItemCoverageDays(id: string, days: number) {
+  if (days < 1) return { error: "Os dias de folga precisam ser pelo menos 1." };
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("inventory_items")
-    .insert({ name, unit, barcode, reorder_point, turnover_group_id, portion_weight_kg })
-    .select("id")
-    .single();
-
-  if (error) {
-    if (error.code === "23505") return { error: "Já existe um item com esse código de barras." };
-    return { error: error.message };
-  }
-
-  const catResult = await setItemCategories(supabase, data.id as string, categoryIds);
-  if (catResult.error) return { error: catResult.error };
-
-  revalidateAll();
-  return { success: true, itemId: data.id as string };
-}
-
-export async function updateInventoryItem(id: string, formData: FormData) {
-  const name = String(formData.get("name") ?? "").trim();
-  const categoryIds = formData.getAll("category_ids").map(String).filter(Boolean);
-  const unit = String(formData.get("unit") ?? "un").trim() || "un";
-  const barcode = String(formData.get("barcode") ?? "").trim() || null;
-  const reorderRaw = String(formData.get("reorder_point") ?? "").trim();
-  const reorder_point = reorderRaw ? Number(reorderRaw) : 0;
-  const turnover_group_id = String(formData.get("turnover_group_id") ?? "").trim() || null;
-  const portionWeightRaw = String(formData.get("portion_weight_kg") ?? "").trim();
-  const portion_weight_kg = portionWeightRaw ? Number(portionWeightRaw) : null;
-  const active = formData.get("active") === "on";
-
-  if (!name) return { error: "Informe o nome do item." };
-  if (categoryIds.length === 0) return { error: "Selecione ao menos uma categoria de gasto." };
-
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("inventory_items")
-    .update({ name, unit, barcode, reorder_point, turnover_group_id, portion_weight_kg, active })
-    .eq("id", id);
-
-  if (error) {
-    if (error.code === "23505") return { error: "Já existe um item com esse código de barras." };
-    return { error: error.message };
-  }
-
-  const catResult = await setItemCategories(supabase, id, categoryIds);
-  if (catResult.error) return { error: catResult.error };
-
-  revalidateAll();
-  return { success: true };
-}
-
-export async function deleteInventoryItem(id: string) {
-  const supabase = await createClient();
-  const { error } = await supabase.from("inventory_items").delete().eq("id", id);
+  const { error } = await supabase.from("inventory_items").update({ coverage_days: days }).eq("id", id);
   if (error) return { error: error.message };
   revalidateAll();
   return { success: true };
@@ -218,24 +126,6 @@ export async function getInventoryItemRecipes(inventoryItemId: string): Promise<
   return ((data ?? []) as unknown as RecipeRaw[]).map(mapRecipeRow);
 }
 
-// Todas as fichas técnicas já cadastradas, agrupadas por item de estoque
-// — usado pela tela "Itens de estoque" pra não precisar de uma consulta
-// por item.
-export async function getAllInventoryItemRecipesGrouped(): Promise<Record<string, InventoryItemRecipeView[]>> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("inventory_item_recipes")
-    .select("*, minibar_items(name), poolbar_items(name)")
-    .order("created_at");
-
-  const grouped: Record<string, InventoryItemRecipeView[]> = {};
-  ((data ?? []) as unknown as RecipeRaw[]).forEach((r) => {
-    const view = mapRecipeRow(r);
-    (grouped[r.inventory_item_id] ??= []).push(view);
-  });
-  return grouped;
-}
-
 export async function addInventoryItemRecipe(
   inventoryItemId: string,
   kind: "minibar" | "poolbar",
@@ -265,9 +155,8 @@ export async function addInventoryItemRecipe(
 }
 
 // Corrige as quantidades de uma ficha técnica já existente — usado pela
-// tela "Lista de pratos" quando o admin preenche a receita real de um
-// prato que foi cadastrado sem receita (ver seed inicial, PRD_compras.md
-// seção 19).
+// tela "Ficha técnica de petiscos e drinks" quando o admin preenche a
+// receita real de um prato que foi cadastrado sem receita.
 export async function updateInventoryItemRecipeQuantities(id: string, portionsCount: number, amountPerPortion: number) {
   if (portionsCount <= 0) return { error: "Informe uma quantidade de porções maior que zero." };
   if (amountPerPortion < 0) return { error: "A quantidade na porção não pode ser negativa." };
@@ -290,18 +179,23 @@ export async function removeInventoryItemRecipe(id: string) {
   return { success: true };
 }
 
-// ---------- "Lista de pratos: natureza do consumo" ----------
+// ---------- "Ficha técnica de petiscos e drinks" (ex-"Lista de pratos") ----------
 // Mesma ficha técnica acima, só que organizada a partir do PRATO (produto
 // vendável do bar da piscina/frigobar) em vez do ingrediente — ver
-// PRD_compras.md seção 19 pro porquê de não existir um catálogo de
+// PRD_compras.md seção 19/21 pro porquê de não existir um catálogo de
 // "pratos" separado: usar o catálogo que já existe garante que pedir o
 // prato de verdade (comanda/frigobar) já desconta estoque, porque é o
-// mesmo gatilho que já existia antes desta parte.
+// mesmo gatilho que já existia antes desta parte. Desde a Parte 21, só
+// mostra os PETISCOS e DRINKS de verdade — os produtos vendidos prontos
+// (água, café, cerveja, refrigerante, campari) e todo o frigobar saem
+// daqui, por não serem "fichas técnicas" de verdade.
+const DIRECT_BAR_ITEMS_EXCLUDED = ["água com gás", "água sem gás", "água de coco", "café expresso", "campari", "cerveja", "refrigerante"];
+
 export interface DishView {
   id: string;
   name: string;
   kind: "minibar" | "poolbar";
-  category: string | null; // só poolbar tem (Petiscos/Bebidas)
+  category: string | null; // "Petiscos" ou "Drinks"
   ingredients: InventoryIngredientLink[];
 }
 
@@ -316,9 +210,8 @@ export interface InventoryIngredientLink {
 
 export async function getDishesWithIngredients(): Promise<DishView[]> {
   const supabase = await createClient();
-  const [{ data: poolbar }, { data: minibar }, { data: recipes }] = await Promise.all([
+  const [{ data: poolbar }, { data: recipes }] = await Promise.all([
     supabase.from("poolbar_items").select("id, name, category").order("category").order("name"),
-    supabase.from("minibar_items").select("id, name").order("name"),
     supabase
       .from("inventory_item_recipes")
       .select("id, inventory_item_id, minibar_item_id, poolbar_item_id, portions_count, amount_per_portion, inventory_items(name, unit)"),
@@ -335,9 +228,9 @@ export async function getDishesWithIngredients(): Promise<DishView[]> {
   };
   const recipeRows = (recipes ?? []) as unknown as RecipeRow[];
 
-  const ingredientsFor = (kind: "minibar" | "poolbar", catalogId: string): InventoryIngredientLink[] =>
+  const ingredientsFor = (poolbarId: string): InventoryIngredientLink[] =>
     recipeRows
-      .filter((r) => (kind === "minibar" ? r.minibar_item_id === catalogId : r.poolbar_item_id === catalogId))
+      .filter((r) => r.poolbar_item_id === poolbarId)
       .map((r) => ({
         recipe_id: r.id,
         inventory_item_id: r.inventory_item_id,
@@ -347,22 +240,52 @@ export async function getDishesWithIngredients(): Promise<DishView[]> {
         amount_per_portion: Number(r.amount_per_portion),
       }));
 
-  const dishes: DishView[] = [
-    ...((poolbar ?? []) as { id: string; name: string; category: string | null }[]).map((p) => ({
+  return ((poolbar ?? []) as { id: string; name: string; category: string | null }[])
+    .filter((p) => !DIRECT_BAR_ITEMS_EXCLUDED.includes(p.name.trim().toLowerCase()))
+    .map((p) => ({
       id: p.id,
       name: p.name,
       kind: "poolbar" as const,
-      category: p.category,
-      ingredients: ingredientsFor("poolbar", p.id),
-    })),
-    ...((minibar ?? []) as { id: string; name: string }[]).map((m) => ({
-      id: m.id,
-      name: m.name,
-      kind: "minibar" as const,
-      category: null,
-      ingredients: ingredientsFor("minibar", m.id),
-    })),
-  ];
+      category: p.category === "Petiscos" ? "Petiscos" : "Drinks",
+      ingredients: ingredientsFor(p.id),
+    }));
+}
 
-  return dishes;
+// Opções do seletor de ingrediente na ficha técnica — só itens de custo
+// (que representam estoque) ligados aos subcentros "Alimentos", "Bebidas"
+// ou "Materiais de bar da piscina", como pedido (Parte 21). O vínculo em
+// si continua indo pro item de ESTOQUE (inventory_item_id), já que é o
+// que o gatilho de baixa automática usa.
+export interface IngredientOption {
+  inventory_item_id: string;
+  name: string;
+  unit: string;
+}
+
+export async function getFichaTecnicaIngredientOptions(): Promise<IngredientOption[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("cost_items")
+    .select("inventory_item_id, name, inventory_items(unit), cost_item_subcenters(cost_subcenters(name))")
+    .eq("is_inventory", true)
+    .not("inventory_item_id", "is", null);
+
+  type Raw = {
+    inventory_item_id: string;
+    name: string;
+    inventory_items: { unit: string } | null;
+    cost_item_subcenters: { cost_subcenters: { name: string } | null }[];
+  };
+  const allowed = new Set(["Alimentos", "Bebidas", "Materiais de bar da piscina"]);
+
+  const seen = new Set<string>();
+  const options: IngredientOption[] = [];
+  ((data ?? []) as unknown as Raw[]).forEach((r) => {
+    if (seen.has(r.inventory_item_id)) return;
+    const inAllowedSubcenter = r.cost_item_subcenters.some((l) => l.cost_subcenters?.name && allowed.has(l.cost_subcenters.name));
+    if (!inAllowedSubcenter) return;
+    seen.add(r.inventory_item_id);
+    options.push({ inventory_item_id: r.inventory_item_id, name: r.name, unit: r.inventory_items?.unit ?? "un" });
+  });
+  return options.sort((a, b) => a.name.localeCompare(b.name));
 }

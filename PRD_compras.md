@@ -1454,3 +1454,204 @@ configuração de café da manhã do dia) removidos do banco local depois.
 (`/custos-despesas`, `/categorias`, `/custos`, `/demonstrativo`)
 aparecendo na árvore de build e `/compras/categorias` removida dela.
 Rota de API temporária (`/api/test-custos`) removida depois do teste.
+
+## 21. Oitava leva — Plano de Contas (Centro → Subcentro → Item de custo), substituindo "Categoria de gasto"
+
+> Pedido em documento corrido, logo depois da seção 20 ter acabado de
+> implementar "Categorias de gasto" — o proprietário trouxe uma proposta
+> de reestruturação mais profunda: uma hierarquia contábil de 3 níveis
+> (Centro de custo → Subcentro de custo → Item de custo), com o plano de
+> contas completo já escrito por ele (4 centros, ~25 subcentros, ~176
+> itens de custo, mais um plano de itens de ativo permanente com 3
+> categorias e ~34 itens de catálogo). Analisei o documento, levantei
+> riscos de quebra em funcionalidades já implementadas e fiz 4 perguntas
+> de esclarecimento antes de implementar (ver abaixo) — só depois da
+> decisão em cada uma, e de uma correção do próprio proprietário no plano
+> de contas (adicionando "Honorários administrativos" e "Materias de
+> limpeza" também em Café da manhã e Bar de piscina, que na primeira
+> versão só apareciam em Hospedagem), é que a implementação começou.
+
+### 21.1 Decisões tomadas antes de implementar
+
+- **Itens de estoque e itens de custo são dois cadastros separados,
+  ligados um ao outro** (`cost_items.inventory_item_id`, opcional) — o
+  proprietário rejeitou minha recomendação inicial de mesclar os dois
+  num cadastro só.
+- **Subcentros com o mesmo nome em centros diferentes são linhas
+  distintas no banco**, mesmo compartilhando o nome (ex.: "Gerais" existe
+  uma vez por centro) — confirmado explicitamente. Compartilhamento de
+  verdade só acontece no nível de ITEM de custo (um item ligado, por N-N,
+  a mais de um subcentro distinto).
+- **Contagem física física reorganizada por NOME de subcentro**, não por
+  subcentro individual nem por categoria antiga — uma contagem de
+  "Alimentos" junta automaticamente os subcentros "Alimentos" de Café da
+  manhã e de Bar de piscina (mesmo nome, linhas diferentes) numa sessão
+  só; subcentros com nome único continuam contados isoladamente. Essa
+  regra generaliza o exemplo específico que o proprietário deu
+  (Alimentos/Bebidas/Materiais de limpeza) pra qualquer nome repetido,
+  sem precisar de uma lista especial no código.
+- **Os itens "ovos"/"água de coco" já existentes no estoque real (ligados
+  de verdade a uma ficha técnica e a compras reais) foram preservados
+  exatamente como estavam**, mesmo o novo documento não marcar
+  explicitamente o item "ovos" (uso geral de café da manhã) como "(E)" —
+  tratados como duas coisas conceitualmente diferentes (ovo avulso pro
+  café vs. o item de estoque fino já rastreado pro prato "Americano").
+- **Uma mudança de regra nunca zera retroativamente dado real**: as 4
+  despesas reais pré-existentes no banco (POLPA de fruta, OVO BRANCO)
+  foram religadas aos itens de custo corretos do plano novo durante a
+  migration, em vez de ficarem orfãs.
+
+### 21.2 Schema (migrations `064`–`067`, espelhadas em `schema.sql`)
+
+- `064_plano_de_contas.sql`: `cost_centers`, `cost_subcenters`,
+  `cost_subcenter_centers` (N-N com `alloc_pct`), `cost_items` (com
+  `inventory_item_id` opcional, único por item de estoque),
+  `cost_item_subcenters` (N-N com `alloc_pct`), `fixed_asset_catalog_items`;
+  `expense_items` ganha `cost_item_id`/`fixed_asset_id` (nunca os dois ao
+  mesmo tempo, `check` explícito) substituindo `category_id`/
+  `inventory_item_id`.
+- `065_plano_de_contas_seed.sql`: todo o conteúdo do plano de contas
+  (4 centros, 25 subcentros — contando as repetições de nome como linhas
+  distintas —, 176 itens de custo, 81 itens de estoque reais criados/
+  religados) com percentual igual entre quantos subcentros/centros cada
+  item/subcentro participa (arredondamento sobrando pra primeira linha,
+  pra sempre somar exatamente 100%); religa as 4+2 despesas reais
+  pré-existentes.
+- `066_plano_de_contas_limpeza.sql`: reescreve o trigger de baixa de
+  estoque (`create_movement_from_expense_item`) pra resolver o item de
+  estoque via `cost_items.inventory_item_id`; dropa
+  `expense_items.inventory_item_id`/`category_id`; `inventory_count_sessions`
+  troca `category_id` por `subcenter_group_name`; reescreve a view
+  `inventory_count_line_history`; dropa `inventory_item_categories` e
+  `expense_categories` inteiras; substitui as 13 categorias antigas de
+  ativo permanente pelas 3 novas (Máquinas, Metais e louças banho,
+  Aparelhos) + seed de `fixed_asset_catalog_items` (34 itens).
+- `067_dias_de_folga_no_item.sql`: `inventory_items.coverage_days`
+  (not null, padrão 7, backfill a partir do grupo de giro antigo quando
+  havia um) substitui `inventory_turnover_groups`/`turnover_group_id`
+  (tabela e coluna dropadas); view `inventory_purchase_suggestions`
+  reescrita pra ler `coverage_days` direto do item (sem mais a exceção
+  "sem grupo = sem sugestão").
+- **Gap pré-existente corrigido de passagem**: `fixed_assets`/
+  `asset_categories` nunca tinham sido adicionadas a `schema.sql` em
+  nenhuma leva anterior (só existiam via migration) — adicionadas agora,
+  já que `expense_items.fixed_asset_id` passa a referenciá-las.
+
+### 21.3 Telas novas e reorganizadas
+
+- **"Plano de Contas"**, novo item do submenu "Listas"
+  (`/checklists/plano-de-contas`), com 2 sub-telas: **"Plano de itens de
+  custo"** (3 seções editáveis — itens de custo com vínculo de
+  subcentro(s)+%, subcentros com vínculo de centro(s)+%, centros — cada
+  uma com diálogo de criar/editar, percentuais validados somando 100% no
+  servidor) e **"Plano de itens de ativo permanente"** (categorias +
+  catálogo de itens por categoria).
+- **"Itens de estoque" → "Itens de estoque e ciclo de compras"**
+  (`/compras/itens`): virou **só leitura** quanto à categorização (vem
+  do Plano de Contas, agrupada por centro/subcentro) — o único campo
+  editável continua sendo "Dias de folga" (substitui "Grupos de giro",
+  tela e tabela removidas por completo).
+- **"Lançar Compra" → "Lançar compras e despesas"**
+  (`expense-form.tsx`, compartilhado entre admin e manutenção): cada
+  linha agora aloca a um **item de custo** (existente, escolhido num
+  seletor; ou novo, criado na hora com nome + "representa estoque?" +
+  vínculo de subcentro(s)+%) **ou** a um **ativo permanente** (bem novo:
+  categoria, item do catálogo opcional, marca, modelo, garantia, local,
+  observações) — nunca os dois ao mesmo tempo, mesmo exclusividade do
+  banco (`expense_items_one_target`). Editar uma despesa cujo item já
+  está ligado a um bem existente **não cria um bem duplicado** — só
+  atualiza o bem já existente (`existing_fixed_asset_id`), corrigindo de
+  antemão um risco real que a primeira versão desta leva (ainda dentro
+  da mesma implementação, antes do teste) introduziria.
+- **"Lista de pratos: natureza do consumo" → "Ficha técnica de petiscos
+  e drinks"** (`/compras/pratos`): frigobar saiu da lista de pratos por
+  completo (só bar da piscina agora); os 7 itens de consumo direto
+  (água com/sem gás, água de coco, café expresso, campari, cerveja,
+  refrigerante) continuam fora, como já era; grupos renomeados
+  "Petiscos (Bar da piscina)"/"Bebidas (Bar da piscina)" →
+  "Petiscos"/"Drinks"; o seletor de ingrediente passou a oferecer só
+  itens de custo (que representam estoque) ligados aos subcentros
+  "Alimentos", "Bebidas" ou "Materiais de bar da piscina"
+  (`getFichaTecnicaIngredientOptions`), não mais qualquer item de
+  estoque ativo.
+- **"Contagem de estoque"** (`/compras/contagem`): sessão por grupo de
+  subcentros de mesmo nome (`startCountSession(subcenterGroupName)`),
+  substituindo a antiga sessão por categoria; `getSubcenterGroupCountStatus`
+  no lugar de `getCategoryCountStatus`; frequência de contagem editável
+  por grupo (`updateSubcenterGroupCountFrequency`, atualiza todas as
+  linhas daquele nome de uma vez).
+- **"Ativo Permanente"** perdeu o submenu (2 telas) e virou direto o
+  conteúdo antigo de "Relação de Ativo Permanente" — bens só nascem ao
+  lançar uma compra em "Lançar compras e despesas"; categorias/catálogo
+  são geridos só no Plano de Contas. CRUD manual antigo de bem individual
+  (`createFixedAsset`/`updateFixedAsset`/`deleteFixedAsset`) removido por
+  ficar sem nenhuma tela que o chamasse.
+- **"Custos" e "Demonstrativo de Despesas"**: migrados do antigo modelo
+  de 4 centros fixos no código (`hospedagem`/`cafe_manha`/`servico_bar`/
+  `frigobar`) pra uma cascata dinâmica item→subcentro→centro, sempre
+  pelos percentuais cadastrados (`getCostCentersSummaryForPeriod`,
+  `getExpenseDemonstrativoForPeriod`) — os cards/tabelas agora iteram
+  sobre `summary.centerTotals`/`breakdown`, em vez de 4 chaves fixas; o
+  card "Hospedagem (+ café da manhã)" soma os dois centros via
+  `hospedagemTotalIncludingBreakfast` (função pura, `src/lib/cost-accounting.ts`).
+  "Custos e Despesas" perdeu o item de menu "Categorias de gasto"
+  (tela e tabela dropadas por completo).
+- **Histórico**: "Total por categoria" → "Total por centro de custo"
+  (`ExpenseSummaryCards`), derivado de `getExpenseDemonstrativoForPeriod`
+  agregado por centro (sem action nova — reaproveita a mesma fonte da
+  tela de Demonstrativo).
+
+### 21.4 Bugs reais encontrados e corrigidos na mesma leva
+
+A troca de schema deixou 3 arquivos com queries Supabase apontando pra
+tabelas/colunas **já dropadas** — como `.from("nome_da_tabela")` não é
+checado pelo TypeScript, `npm run build` passou limpo mesmo assim; só
+apareceriam em teste real, em runtime:
+
+- `src/lib/actions/inventory-report.ts` (`getInventoryStockReport`/
+  `getTopPurchasedItems`): ainda selecionava de `inventory_item_categories`/
+  `expense_categories` (dropadas) e `expense_items.inventory_item_id`
+  (coluna dropada) — corrigido pra resolver categoria via `cost_items`/
+  `cost_item_subcenters`/`cost_subcenters` e o valor comprado via
+  `expense_items.cost_item_id → cost_items.inventory_item_id`.
+- `src/lib/actions/purchase-list.ts` (`getPurchaseList`): mesma
+  categoria de bug, mais uma referência a `inventory_turnover_groups`
+  (tabela dropada) — campo `turnover_group_name` removido do tipo
+  `PurchaseListRow` por completo (substituído por `coverage_days`, que já
+  vem certo da view); `purchase-list-table.tsx` ajustada.
+- Reforça, com um caso novo, a lição já registrada em CLAUDE.md sobre
+  auditar **todos** os pontos de leitura/escrita de uma tabela/coluna
+  sempre que uma migration a remove ou renomeia — não só os pontos óbvios
+  (Server Actions do próprio módulo que estava sendo reescrito), mas
+  também relatórios/exports menos visíveis que dependem dela por fora.
+
+### 21.5 Testado
+
+- `npm run build`/`npm run lint` limpos em múltiplas rodadas, incluindo
+  depois da correção dos 3 bugs de query acima (só detectáveis em
+  runtime, nunca em build/lint).
+- Dados do seed confirmados direto no Postgres local: 4 centros, 25
+  subcentros, 176 itens de custo, 81 itens de estoque, 3 categorias de
+  ativo permanente, 34 itens de catálogo.
+- Todas as telas novas/alteradas varridas via sessão autenticada real
+  (login local + cookie `sb-127-auth-token`, mesma técnica já padrão no
+  projeto): `/checklists/plano-de-contas/custo`,
+  `/checklists/plano-de-contas/ativo-permanente`, `/compras/itens`,
+  `/compras/pratos`, `/compras/nova`, `/ativo-permanente`, `/compras`,
+  `/custos-despesas/custos`, `/custos-despesas/demonstrativo`,
+  `/historico`, `/compras/contagem` — todas 200, sem erro de servidor,
+  com o conteúdo real (nomes de centro/subcentro, "Dias de folga" nos 81
+  itens, "Petiscos"/"Drinks", "Máquinas"/"Aparelhos"/"Metais e louças
+  banho") confirmado presente no HTML.
+- Fluxo ponta a ponta via rota de API temporária (`/api/test-plano`,
+  removida depois): criar centro→subcentro→item de custo com rateio 100%;
+  lançar uma despesa ligada a esse item de custo e confirmar que
+  `category_name` resolve certo via a cascata; criar um item de catálogo
+  de ativo permanente e lançar a compra de um bem novo ligado a ele;
+  editar "dias de folga" de um item real e revertê-lo. Confirmado
+  também, por outra rota temporária (`/api/test-contagem`), que iniciar
+  uma contagem do grupo "Alimentos" junta certinho os subcentros de Café
+  da manhã e Bar de piscina numa sessão só (26 itens). Todas as linhas
+  fabricadas (despesas, bem, item de catálogo, centro/subcentro/item de
+  custo, sessão de contagem) removidas do banco local depois; as duas
+  rotas de API temporárias deletadas do código.

@@ -3,24 +3,24 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type { DishView } from "@/lib/actions/inventory-items";
+import type { DishView, IngredientOption } from "@/lib/actions/inventory-items";
 import { addInventoryItemRecipe, removeInventoryItemRecipe, updateInventoryItemRecipeQuantities } from "@/lib/actions/inventory-items";
-import type { InventoryItemWithBalance } from "@/lib/actions/inventory-items";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2 } from "lucide-react";
 
-// "Lista de pratos: natureza do consumo" — ver PRD_compras.md seção 19.
+// "Ficha técnica de petiscos e drinks" — ver PRD_compras.md seção 21.
 // Mesma ficha técnica da tela "Itens de estoque", só que organizada a
-// partir do PRATO (produto do bar da piscina/frigobar) em vez do
-// ingrediente — não existe um catálogo de "pratos" separado: a lista
-// abaixo é o próprio cardápio já cadastrado em Bar da Piscina/Frigobar.
-export function DishesPanel({ dishes, ingredients }: { dishes: DishView[]; ingredients: InventoryItemWithBalance[] }) {
+// partir do PRATO/produto do bar da piscina em vez do ingrediente — não
+// existe um catálogo de "pratos" separado: a lista abaixo é o próprio
+// cardápio já cadastrado em Bar da Piscina (frigobar não entra mais
+// aqui, e o ingrediente só pode vir dos subcentros Alimentos/Bebidas/
+// Materiais de bar da piscina — ver getFichaTecnicaIngredientOptions).
+export function DishesPanel({ dishes, ingredients }: { dishes: DishView[]; ingredients: IngredientOption[] }) {
   const grouped = {
-    "Petiscos (Bar da piscina)": dishes.filter((d) => d.kind === "poolbar" && d.category === "Petiscos"),
-    "Bebidas (Bar da piscina)": dishes.filter((d) => d.kind === "poolbar" && d.category !== "Petiscos"),
-    Frigobar: dishes.filter((d) => d.kind === "minibar"),
+    Petiscos: dishes.filter((d) => d.category === "Petiscos"),
+    Drinks: dishes.filter((d) => d.category !== "Petiscos"),
   };
 
   return (
@@ -38,7 +38,7 @@ export function DishesPanel({ dishes, ingredients }: { dishes: DishView[]; ingre
   );
 }
 
-function DishCard({ dish, ingredients }: { dish: DishView; ingredients: InventoryItemWithBalance[] }) {
+function DishCard({ dish, ingredients }: { dish: DishView; ingredients: IngredientOption[] }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const [ingredientId, setIngredientId] = useState("");
@@ -46,8 +46,8 @@ function DishCard({ dish, ingredients }: { dish: DishView; ingredients: Inventor
   const [amountPerPortion, setAmountPerPortion] = useState("1");
 
   const alreadyLinkedIds = new Set(dish.ingredients.map((i) => i.inventory_item_id));
-  const availableIngredients = ingredients.filter((i) => !alreadyLinkedIds.has(i.id));
-  const selectedIngredientUnit = ingredients.find((i) => i.id === ingredientId)?.unit ?? "un";
+  const availableIngredients = ingredients.filter((i) => !alreadyLinkedIds.has(i.inventory_item_id));
+  const selectedIngredientUnit = ingredients.find((i) => i.inventory_item_id === ingredientId)?.unit ?? "un";
 
   function handleAdd() {
     startTransition(async () => {
@@ -87,12 +87,12 @@ function DishCard({ dish, ingredients }: { dish: DishView; ingredients: Inventor
         <Select value={ingredientId} onValueChange={(v) => setIngredientId(v ?? "")}>
           <SelectTrigger className="min-w-48 flex-1">
             <SelectValue placeholder="Ingrediente (item de estoque)">
-              {(v: string) => ingredients.find((i) => i.id === v)?.name ?? v}
+              {(v: string) => ingredients.find((i) => i.inventory_item_id === v)?.name ?? v}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {availableIngredients.map((i) => (
-              <SelectItem key={i.id} value={i.id}>
+              <SelectItem key={i.inventory_item_id} value={i.inventory_item_id}>
                 {i.name}
               </SelectItem>
             ))}

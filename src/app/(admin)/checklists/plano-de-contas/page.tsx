@@ -1,18 +1,20 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
-import { Calculator, FileBarChart, ChevronRight } from "lucide-react";
+import { BackLink } from "@/components/shared/back-link";
+import { FolderTree, Package, ChevronRight } from "lucide-react";
 
 const menuItems = [
-  { href: "/custos-despesas/custos", label: "Custos", icon: Calculator },
-  { href: "/custos-despesas/demonstrativo", label: "Demonstrativo de Despesas", icon: FileBarChart },
+  { href: "/checklists/plano-de-contas/custo", label: "Plano de itens de custo", icon: FolderTree },
+  { href: "/checklists/plano-de-contas/ativo-permanente", label: "Plano de itens de ativo permanente", icon: Package },
 ];
 
-export default function CustosDespesasPage() {
+export default function PlanoDeContasPage() {
   return (
     <div className="space-y-6">
+      <BackLink href="/checklists" />
       <PageHeader
-        title="Custos e Despesas"
-        subtitle="Custo da hospedagem, do café da manhã e dos pratos/produtos servidos, e o demonstrativo de todas as despesas por centro de custo. A categorização em si (Plano de Contas) é gerida em Listas."
+        title="Plano de Contas"
+        subtitle="Centro de custo → subcentro de custo → item de custo — a base de toda categorização de compras e despesas."
       />
       <nav className="max-w-md space-y-1.5">
         {menuItems.map((item) => (

@@ -305,28 +305,49 @@ export interface BarComandaItem {
 
 // ---------- Compras, despesas e estoque (PRD_compras.md) ----------
 
-export type CostNature = "custo_direto" | "custo_fixo" | "nao_custo";
-
-export interface ExpenseCategory {
+// Plano de Contas (Parte 21): centro de custo → subcentro de custo →
+// item de custo, substitui por completo o antigo modelo de "categoria de
+// gasto".
+export interface CostCenter {
   id: string;
   name: string;
-  is_inventory_category: boolean;
+  active: boolean;
+  position: number;
+  created_at: string;
+}
+
+export interface CostSubcenter {
+  id: string;
+  name: string;
   count_frequency_days: number | null;
   active: boolean;
   position: number;
   created_at: string;
-  cost_nature: CostNature;
-  alloc_hospedagem_pct: number;
-  alloc_cafe_manha_pct: number;
-  alloc_bar_pct: number;
-  alloc_frigobar_pct: number;
 }
 
-export interface InventoryTurnoverGroup {
+export interface CostSubcenterCenterLink {
+  subcenter_id: string;
+  center_id: string;
+  alloc_pct: number;
+}
+
+// Item de custo: a conta mais analítica — pode ou não representar
+// estoque (is_inventory), ligado a um item de estoque já existente
+// quando representa (cadastro separado, nunca a mesma linha).
+export interface CostItem {
   id: string;
   name: string;
-  coverage_days: number;
+  is_inventory: boolean;
+  inventory_item_id: string | null;
+  active: boolean;
+  position: number;
   created_at: string;
+}
+
+export interface CostItemSubcenterLink {
+  cost_item_id: string;
+  subcenter_id: string;
+  alloc_pct: number;
 }
 
 export interface InventoryItem {
@@ -335,7 +356,9 @@ export interface InventoryItem {
   unit: string;
   barcode: string | null;
   reorder_point: number;
-  turnover_group_id: string | null;
+  // "Dias de folga" — substitui o antigo grupo de giro (Parte 21): direto
+  // no item, sempre presente (padrão 7), editável.
+  coverage_days: number;
   portion_weight_kg: number | null;
   active: boolean;
   position: number;
@@ -393,6 +416,7 @@ export interface AssetCategory {
 export interface FixedAsset {
   id: string;
   category_id: string;
+  catalog_item_id: string | null;
   name: string;
   brand: string | null;
   model: string | null;
@@ -404,6 +428,18 @@ export interface FixedAsset {
   notes: string | null;
   active: boolean;
   created_by: string | null;
+  created_at: string;
+}
+
+// Catálogo de "tipos" de ativo permanente (ex.: "Televisores") — só um
+// nome reaproveitável, sem saldo nem quantidade (ver "Plano de Contas",
+// PRD_compras.md seção 21).
+export interface FixedAssetCatalogItem {
+  id: string;
+  name: string;
+  category_id: string;
+  active: boolean;
+  position: number;
   created_at: string;
 }
 
@@ -446,7 +482,7 @@ export interface InventoryMovement {
 
 export interface InventoryCountSession {
   id: string;
-  category_id: string | null;
+  subcenter_group_name: string | null;
   status: InventoryCountStatus;
   created_by: string | null;
   created_at: string;

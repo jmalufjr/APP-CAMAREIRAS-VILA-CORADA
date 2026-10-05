@@ -9,6 +9,8 @@ function revalidateAll() {
   revalidatePath("/compras", "layout");
   revalidatePath("/manutencao/compras", "layout");
   revalidatePath("/custos-despesas", "layout");
+  revalidatePath("/ativo-permanente", "layout");
+  revalidatePath("/checklists", "layout");
   revalidatePath("/dashboard");
 }
 
@@ -17,65 +19,166 @@ export interface ExpenseItemInput {
   quantity: number;
   unit_cost: number;
   subtotal: number;
-  inventory_item_id: string | null;
-  // Categoria da própria linha — só usada (e só obrigatória) quando NÃO
-  // há item de estoque vinculado (nem existente, nem novo), ex.: salário,
-  // conta de luz avulsa, honorários (Parte 20 — fecha a lacuna da Parte
-  // 19, que só dava categoria a quem tinha item de estoque).
-  category_id: string | null;
-  // Presente só quando a pessoa escolheu "criar novo item de estoque" pra
-  // esta linha, em vez de vincular a um já existente ou deixar sem
-  // controle de estoque — ver resolveOrCreateInventoryItemId abaixo.
-  // category_ids: um item pode pertencer a mais de uma categoria de gasto
-  // ao mesmo tempo (Parte 19) — essa informação vive só no item, não na
-  // despesa inteira (uma despesa pode ter itens de categorias diferentes).
-  new_item?: { category_ids: string[]; unit: string; turnover_group_id: string | null } | null;
+  // Linha já ligada a um item de custo existente.
+  cost_item_id: string | null;
+  // Linha que cria um item de custo novo na hora (Plano de Contas) —
+  // ver resolveOrCreateCostItemId.
+  new_cost_item?: {
+    name: string;
+    is_inventory: boolean;
+    inventory_item_id: string | null;
+    subcenter_links: { subcenter_id: string; alloc_pct: number }[];
+  } | null;
+  // Linha de ativo permanente — cria 1 bem novo (cada compra é uma
+  // unidade física própria, nunca reaproveita um bem já existente).
+  new_fixed_asset?: {
+    category_id: string;
+    catalog_item_id: string | null;
+    brand: string | null;
+    model: string | null;
+    warranty_until: string | null;
+    location: string | null;
+    notes: string | null;
+  } | null;
+  // Linha que já estava ligada a um bem de ativo permanente (edição de
+  // uma despesa já salva) — atualiza o bem existente em vez de criar um
+  // novo a cada edição.
+  existing_fixed_asset_id?: string | null;
 }
 
-// Resolve o item de estoque de uma linha: usa o vinculado (se houver),
-// cria um novo (se pedido), ou deixa null (sem controle de estoque). Pra
-// nunca duplicar um item já existente por causa de maiúscula/minúscula
-// ou de alguém esquecer de vincular numa segunda compra, confere por
-// nome exato (sem diferenciar caixa) antes de criar — ver PRD_compras.md
-// seção 16.6 pro caso real que motivou essa checagem.
-async function resolveOrCreateInventoryItemId(
+// Resolve o item de custo de uma linha: usa o vinculado (se houver) ou
+// cria um novo (se pedido), incluindo o item de estoque por trás dele
+// quando representa estoque. Pra nunca duplicar um item de estoque já
+// existente por causa de maiúscula/minúscula, confere por nome exato
+// antes de criar (ver PRD_compras.md seção 16.6).
+async function resolveOrCreateCostItemId(
   supabase: Awaited<ReturnType<typeof createClient>>,
   item: ExpenseItemInput
 ): Promise<{ id: string | null; error?: string }> {
-  if (item.inventory_item_id) return { id: item.inventory_item_id };
-  if (!item.new_item) return { id: null };
+  if (item.cost_item_id) return { id: item.cost_item_id };
+  if (!item.new_cost_item) return { id: null };
 
-  const name = item.description.trim();
+  const name = item.new_cost_item.name.trim() || item.description.trim();
   if (!name) return { id: null };
 
-  const { data: existing } = await supabase.from("inventory_items").select("id").ilike("name", name).maybeSingle();
-  if (existing) return { id: existing.id as string };
+  let inventoryItemId: string | null = null;
+  if (item.new_cost_item.is_inventory) {
+    if (item.new_cost_item.inventory_item_id) {
+      inventoryItemId = item.new_cost_item.inventory_item_id;
+    } else {
+      const { data: existing } = await supabase.from("inventory_items").select("id").ilike("name", name).maybeSingle();
+      if (existing) {
+        inventoryItemId = existing.id as string;
+      } else {
+        const { data: created, error } = await supabase.from("inventory_items").insert({ name, unit: "un" }).select("id").single();
+        if (error || !created) return { id: null, error: error?.message ?? "Erro ao criar item de estoque." };
+        inventoryItemId = created.id as string;
+      }
+    }
+  }
 
-  const { data: created, error } = await supabase
-    .from("inventory_items")
+  const links = item.new_cost_item.subcenter_links.filter((l) => l.subcenter_id);
+  if (links.length > 0) {
+    const sum = links.reduce((s, l) => s + l.alloc_pct, 0);
+    if (sum !== 100) return { id: null, error: `Os percentuais dos subcentros do novo item de custo precisam somar 100% (soma atual: ${sum}%).` };
+  }
+
+  const { data: createdItem, error: itemError } = await supabase
+    .from("cost_items")
+    .insert({ name, is_inventory: item.new_cost_item.is_inventory, inventory_item_id: inventoryItemId })
+    .select("id")
+    .single();
+  if (itemError || !createdItem) return { id: null, error: itemError?.message ?? "Erro ao criar item de custo." };
+
+  if (links.length > 0) {
+    const { error: linkError } = await supabase
+      .from("cost_item_subcenters")
+      .insert(links.map((l) => ({ cost_item_id: createdItem.id, subcenter_id: l.subcenter_id, alloc_pct: l.alloc_pct })));
+    if (linkError) return { id: null, error: linkError.message };
+  }
+
+  return { id: createdItem.id as string };
+}
+
+// Resolve o bem de ativo permanente de uma linha: atualiza o já
+// existente (edição de uma despesa já salva, nunca cria um bem novo
+// nesse caso) ou cria 1 bem novo (linha nova de ativo permanente).
+async function upsertFixedAssetForLine(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  item: ExpenseItemInput,
+  date: string,
+  supplierName: string | null,
+  userId: string | null
+): Promise<{ id: string | null; error?: string }> {
+  if (item.existing_fixed_asset_id) {
+    const { error } = await supabase
+      .from("fixed_assets")
+      .update({ name: item.description.trim(), purchase_value: item.subtotal })
+      .eq("id", item.existing_fixed_asset_id);
+    if (error) return { id: null, error: error.message };
+    return { id: item.existing_fixed_asset_id };
+  }
+
+  if (!item.new_fixed_asset) return { id: null };
+  const { data, error } = await supabase
+    .from("fixed_assets")
     .insert({
-      name,
-      unit: item.new_item.unit || "un",
-      turnover_group_id: item.new_item.turnover_group_id || null,
+      category_id: item.new_fixed_asset.category_id,
+      catalog_item_id: item.new_fixed_asset.catalog_item_id,
+      name: item.description.trim(),
+      brand: item.new_fixed_asset.brand,
+      model: item.new_fixed_asset.model,
+      purchase_date: date,
+      purchase_value: item.subtotal,
+      warranty_until: item.new_fixed_asset.warranty_until,
+      supplier_name: supplierName,
+      location: item.new_fixed_asset.location,
+      notes: item.new_fixed_asset.notes,
+      created_by: userId,
     })
     .select("id")
     .single();
-  if (error || !created) return { id: null, error: error?.message ?? "Erro ao criar item de estoque." };
+  if (error || !data) return { id: null, error: error?.message ?? "Erro ao registrar o ativo permanente." };
+  return { id: data.id as string };
+}
 
-  const categoryIds = item.new_item.category_ids.filter(Boolean);
-  if (categoryIds.length > 0) {
-    const { error: catError } = await supabase
-      .from("inventory_item_categories")
-      .insert(categoryIds.map((category_id) => ({ inventory_item_id: created.id as string, category_id })));
-    if (catError) return { id: null, error: catError.message };
+async function resolveExpenseItemsForInsert(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  items: ExpenseItemInput[],
+  date: string,
+  supplierName: string | null,
+  userId: string | null
+): Promise<{ rows?: Record<string, unknown>[]; error?: string }> {
+  const rows: Record<string, unknown>[] = [];
+  for (const i of items) {
+    let costItemId: string | null = null;
+    let fixedAssetId: string | null = null;
+
+    if (i.existing_fixed_asset_id || i.new_fixed_asset) {
+      const resolved = await upsertFixedAssetForLine(supabase, i, date, supplierName, userId);
+      if (resolved.error) return { error: resolved.error };
+      fixedAssetId = resolved.id;
+    } else {
+      const resolved = await resolveOrCreateCostItemId(supabase, i);
+      if (resolved.error) return { error: resolved.error };
+      costItemId = resolved.id;
+    }
+
+    rows.push({
+      cost_item_id: costItemId,
+      fixed_asset_id: fixedAssetId,
+      description: i.description,
+      quantity: i.quantity,
+      unit_cost: i.unit_cost,
+      subtotal: i.subtotal,
+    });
   }
-
-  return { id: created.id as string };
+  return { rows };
 }
 
 // Cria uma despesa (com ou sem linhas de item, com ou sem foto de
-// recibo). Se algum item tiver inventory_item_id preenchido, a entrada de
-// estoque correspondente é gerada sozinha por um trigger no banco (ver
+// recibo). Se algum item tiver cost_item_id (ligado a estoque), a entrada
+// de estoque correspondente é gerada sozinha por um trigger no banco (ver
 // create_movement_from_expense_item em schema.sql) — esta action só
 // grava a despesa e as linhas, nunca mexe em inventory_movements
 // diretamente.
@@ -108,45 +211,23 @@ export async function createExpense(formData: FormData) {
 
   const { data: expense, error } = await supabase
     .from("expenses")
-    .insert({
-      date,
-      supplier_name,
-      total_amount,
-      payment_method,
-      nfce_url,
-      notes,
-      created_by: user.id,
-    })
+    .insert({ date, supplier_name, total_amount, payment_method, nfce_url, notes, created_by: user.id })
     .select("id")
     .single();
 
   if (error || !expense) return { error: error?.message ?? "Erro ao criar despesa." };
 
   if (items.length > 0) {
-    const resolvedIds: (string | null)[] = [];
-    for (const i of items) {
-      const resolved = await resolveOrCreateInventoryItemId(supabase, i);
-      if (resolved.error) {
-        await supabase.from("expenses").delete().eq("id", expense.id);
-        return { error: resolved.error };
-      }
-      resolvedIds.push(resolved.id);
+    const resolved = await resolveExpenseItemsForInsert(supabase, items, date, supplier_name, user.id);
+    if (resolved.error || !resolved.rows) {
+      await supabase.from("expenses").delete().eq("id", expense.id);
+      return { error: resolved.error ?? "Erro ao resolver os itens da despesa." };
     }
 
-    const { error: itemsError } = await supabase.from("expense_items").insert(
-      items.map((i, idx) => ({
-        expense_id: expense.id,
-        inventory_item_id: resolvedIds[idx],
-        category_id: resolvedIds[idx] ? null : i.category_id,
-        description: i.description,
-        quantity: i.quantity,
-        unit_cost: i.unit_cost,
-        subtotal: i.subtotal,
-      }))
-    );
+    const { error: itemsError } = await supabase
+      .from("expense_items")
+      .insert(resolved.rows.map((r) => ({ ...r, expense_id: expense.id })));
     if (itemsError) {
-      // Desfaz a despesa já criada pra não deixar um cabeçalho sem linhas
-      // por causa de um erro no meio do caminho.
       await supabase.from("expenses").delete().eq("id", expense.id);
       return { error: itemsError.message };
     }
@@ -157,7 +238,6 @@ export async function createExpense(formData: FormData) {
       const path = await uploadExpenseReceipt(expense.id, receipt);
       await supabase.from("expenses").update({ receipt_storage_path: path }).eq("id", expense.id);
     } catch (e) {
-      // Melhor esforço: a despesa já está salva, só o anexo da foto falhou.
       return { success: true, expenseId: expense.id as string, photoError: (e as Error).message };
     }
   }
@@ -166,15 +246,17 @@ export async function createExpense(formData: FormData) {
   return { success: true, expenseId: expense.id as string };
 }
 
-// Edita uma despesa já lançada (admin only, ver RLS "expenses_admin_update").
-// As linhas de item são sempre apagadas e recriadas do zero (nunca
-// "diffadas") — como inventory_movements.reference_expense_item_id tem
-// `on delete cascade`, apagar as linhas antigas já desfaz sozinho a
-// entrada de estoque original, e recriá-las gera uma entrada nova com a
-// quantidade corrigida, via o mesmo trigger de sempre. Mais simples e
-// mais seguro que tentar ajustar quantidades em cima da entrada antiga.
+// Edita uma despesa já lançada (admin only). As linhas de item são sempre
+// apagadas e recriadas do zero (nunca "diffadas") — como
+// inventory_movements.reference_expense_item_id tem `on delete cascade`,
+// apagar as linhas antigas já desfaz sozinho a entrada de estoque
+// original, e recriá-las gera uma entrada nova com a quantidade
+// corrigida, via o mesmo trigger de sempre.
 export async function updateExpense(id: string, formData: FormData) {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const date = String(formData.get("date") ?? "").trim() || new Date().toISOString().slice(0, 10);
   const supplier_name = String(formData.get("supplier_name") ?? "").trim() || null;
@@ -206,24 +288,12 @@ export async function updateExpense(id: string, formData: FormData) {
   if (deleteItemsError) return { error: deleteItemsError.message };
 
   if (items.length > 0) {
-    const resolvedIds: (string | null)[] = [];
-    for (const i of items) {
-      const resolved = await resolveOrCreateInventoryItemId(supabase, i);
-      if (resolved.error) return { error: resolved.error };
-      resolvedIds.push(resolved.id);
-    }
+    const resolved = await resolveExpenseItemsForInsert(supabase, items, date, supplier_name, user?.id ?? null);
+    if (resolved.error || !resolved.rows) return { error: resolved.error ?? "Erro ao resolver os itens da despesa." };
 
-    const { error: itemsError } = await supabase.from("expense_items").insert(
-      items.map((i, idx) => ({
-        expense_id: id,
-        inventory_item_id: resolvedIds[idx],
-        category_id: resolvedIds[idx] ? null : i.category_id,
-        description: i.description,
-        quantity: i.quantity,
-        unit_cost: i.unit_cost,
-        subtotal: i.subtotal,
-      }))
-    );
+    const { error: itemsError } = await supabase
+      .from("expense_items")
+      .insert(resolved.rows.map((r) => ({ ...r, expense_id: id })));
     if (itemsError) return { error: itemsError.message };
   }
 
@@ -257,7 +327,15 @@ export interface ExpenseWithItems {
   notes: string | null;
   total_amount: number;
   receipt_url: string | null;
-  items: ExpenseItemInput[];
+  items: {
+    description: string;
+    quantity: number;
+    unit_cost: number;
+    subtotal: number;
+    cost_item_id: string | null;
+    fixed_asset_id: string | null;
+    fixed_asset_name: string | null;
+  }[];
 }
 
 export async function getExpenseWithItems(id: string): Promise<ExpenseWithItems | null> {
@@ -267,9 +345,19 @@ export async function getExpenseWithItems(id: string): Promise<ExpenseWithItems 
 
   const { data: items } = await supabase
     .from("expense_items")
-    .select("description, quantity, unit_cost, subtotal, inventory_item_id, category_id")
+    .select("description, quantity, unit_cost, subtotal, cost_item_id, fixed_asset_id, fixed_assets(name)")
     .eq("expense_id", id)
     .order("created_at");
+
+  type Raw = {
+    description: string;
+    quantity: number;
+    unit_cost: number;
+    subtotal: number;
+    cost_item_id: string | null;
+    fixed_asset_id: string | null;
+    fixed_assets: { name: string } | null;
+  };
 
   return {
     id: expense.id,
@@ -280,16 +368,23 @@ export async function getExpenseWithItems(id: string): Promise<ExpenseWithItems 
     notes: expense.notes,
     total_amount: Number(expense.total_amount),
     receipt_url: expense.receipt_storage_path ? await signExpenseReceiptUrl(expense.receipt_storage_path) : null,
-    items: (items ?? []) as ExpenseItemInput[],
+    items: ((items ?? []) as unknown as Raw[]).map((i) => ({
+      description: i.description,
+      quantity: i.quantity,
+      unit_cost: i.unit_cost,
+      subtotal: i.subtotal,
+      cost_item_id: i.cost_item_id,
+      fixed_asset_id: i.fixed_asset_id,
+      fixed_asset_name: i.fixed_assets?.name ?? null,
+    })),
   };
 }
 
-// Categoria(s) de gasto de uma despesa, pra exibição — derivadas dos
-// itens ligados a item de estoque (Parte 19: a despesa em si não tem mais
-// categoria própria, já que pode ter itens de categorias diferentes).
-// "Sem categoria" cobre despesa sem item nenhum, item sem vínculo de
-// estoque, ou item vinculado mas ainda sem nenhuma categoria escolhida.
-async function getCategoryNamesByExpense(
+// Nomes dos CENTROS de custo a que as linhas de uma despesa pertencem
+// (via item de custo → subcentro → centro) — pra exibição no Histórico.
+// "Ativo permanente" cobre linhas de bem permanente; "Sem item" cobre
+// despesa sem nenhuma linha (valor total só).
+async function getCenterNamesByExpense(
   supabase: Awaited<ReturnType<typeof createClient>>,
   expenseIds: string[]
 ): Promise<Map<string, string[]>> {
@@ -298,31 +393,36 @@ async function getCategoryNamesByExpense(
 
   const { data } = await supabase
     .from("expense_items")
-    .select("expense_id, inventory_item_id")
-    .in("expense_id", expenseIds)
-    .not("inventory_item_id", "is", null);
-  type Raw = { expense_id: string; inventory_item_id: string };
+    .select("expense_id, cost_item_id, fixed_asset_id")
+    .in("expense_id", expenseIds);
+  type Raw = { expense_id: string; cost_item_id: string | null; fixed_asset_id: string | null };
   const rows = (data ?? []) as unknown as Raw[];
-  const itemIds = [...new Set(rows.map((r) => r.inventory_item_id))];
-  if (itemIds.length === 0) return result;
+  const costItemIds = [...new Set(rows.filter((r) => r.cost_item_id).map((r) => r.cost_item_id as string))];
 
-  const { data: links } = await supabase
-    .from("inventory_item_categories")
-    .select("inventory_item_id, expense_categories(name)")
-    .in("inventory_item_id", itemIds);
-  type LinkRaw = { inventory_item_id: string; expense_categories: { name: string } | null };
-  const namesByItem = new Map<string, Set<string>>();
+  const { data: links } = costItemIds.length
+    ? await supabase
+        .from("cost_item_subcenters")
+        .select("cost_item_id, cost_subcenters(cost_subcenter_centers(cost_centers(name)))")
+        .in("cost_item_id", costItemIds)
+    : { data: [] };
+  type LinkRaw = {
+    cost_item_id: string;
+    cost_subcenters: { cost_subcenter_centers: { cost_centers: { name: string } | null }[] } | null;
+  };
+  const centersByCostItem = new Map<string, Set<string>>();
   ((links ?? []) as unknown as LinkRaw[]).forEach((l) => {
-    if (!l.expense_categories?.name) return;
-    const set = namesByItem.get(l.inventory_item_id) ?? new Set<string>();
-    set.add(l.expense_categories.name);
-    namesByItem.set(l.inventory_item_id, set);
+    const set = centersByCostItem.get(l.cost_item_id) ?? new Set<string>();
+    l.cost_subcenters?.cost_subcenter_centers.forEach((csc) => {
+      if (csc.cost_centers?.name) set.add(csc.cost_centers.name);
+    });
+    centersByCostItem.set(l.cost_item_id, set);
   });
 
   const setsByExpense = new Map<string, Set<string>>();
   rows.forEach((r) => {
     const set = setsByExpense.get(r.expense_id) ?? new Set<string>();
-    (namesByItem.get(r.inventory_item_id) ?? new Set<string>()).forEach((n) => set.add(n));
+    if (r.fixed_asset_id) set.add("Ativo permanente");
+    if (r.cost_item_id) (centersByCostItem.get(r.cost_item_id) ?? []).forEach((n) => set.add(n));
     setsByExpense.set(r.expense_id, set);
   });
   setsByExpense.forEach((set, expenseId) => result.set(expenseId, Array.from(set)));
@@ -368,13 +468,13 @@ export async function getExpenses(from: string, to: string): Promise<ExpenseList
     created_by_profile: { name: string } | null;
   };
   const rows = (data ?? []) as unknown as Raw[];
-  const categoryNamesByExpense = await getCategoryNamesByExpense(supabase, rows.map((r) => r.id));
+  const centerNamesByExpense = await getCenterNamesByExpense(supabase, rows.map((r) => r.id));
 
   return Promise.all(
     rows.map(async (r) => ({
       id: r.id,
       date: r.date,
-      category_name: (categoryNamesByExpense.get(r.id) ?? []).join(" / ") || "Sem categoria",
+      category_name: (centerNamesByExpense.get(r.id) ?? []).join(" / ") || "Sem categoria",
       supplier_name: r.supplier_name,
       total_amount: Number(r.total_amount),
       payment_method: r.payment_method,
@@ -385,52 +485,6 @@ export async function getExpenses(from: string, to: string): Promise<ExpenseList
       created_at: r.created_at,
     }))
   );
-}
-
-export interface ExpenseCategorySummaryRow {
-  category_name: string;
-  total: number;
-}
-
-// Soma por categoria de gasto, derivada dos ITENS de cada despesa (Parte
-// 19) — um item em 2 categorias soma o próprio subtotal (não o total da
-// despesa inteira) nas duas. Itens sem vínculo de estoque, ou despesas
-// sem item nenhum, caem em "Sem categoria".
-export async function getExpenseSummaryByCategory(from: string, to: string): Promise<ExpenseCategorySummaryRow[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("expense_items")
-    .select("subtotal, inventory_item_id, expenses!inner(date)")
-    .gte("expenses.date", from)
-    .lte("expenses.date", to);
-
-  type Raw = { subtotal: number; inventory_item_id: string | null };
-  const rows = (data ?? []) as unknown as Raw[];
-  const itemIds = [...new Set(rows.filter((r) => r.inventory_item_id).map((r) => r.inventory_item_id as string))];
-
-  const { data: links } = await supabase
-    .from("inventory_item_categories")
-    .select("inventory_item_id, expense_categories(name)")
-    .in("inventory_item_id", itemIds.length > 0 ? itemIds : ["00000000-0000-0000-0000-000000000000"]);
-  type LinkRaw = { inventory_item_id: string; expense_categories: { name: string } | null };
-  const categoriesByItem = new Map<string, string[]>();
-  ((links ?? []) as unknown as LinkRaw[]).forEach((l) => {
-    if (!l.expense_categories?.name) return;
-    const names = categoriesByItem.get(l.inventory_item_id) ?? [];
-    names.push(l.expense_categories.name);
-    categoriesByItem.set(l.inventory_item_id, names);
-  });
-
-  const byCategory = new Map<string, number>();
-  rows.forEach((r) => {
-    const names = r.inventory_item_id ? categoriesByItem.get(r.inventory_item_id) ?? [] : [];
-    const targets = names.length > 0 ? names : ["Sem categoria"];
-    targets.forEach((name) => byCategory.set(name, (byCategory.get(name) ?? 0) + Number(r.subtotal)));
-  });
-
-  return Array.from(byCategory.entries())
-    .map(([category_name, total]) => ({ category_name, total }))
-    .sort((a, b) => b.total - a.total);
 }
 
 export interface ExpenseSupplierSummaryRow {
