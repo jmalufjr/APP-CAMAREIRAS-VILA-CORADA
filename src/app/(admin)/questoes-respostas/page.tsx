@@ -626,6 +626,458 @@ export default function QuestoesRespostasPage() {
             </div>
           </AccordionPanel>
         </AccordionItem>
+
+        {/* 13. Compras */}
+        <AccordionItem value="compras">
+          <AccordionTrigger>
+            <span className="font-heading text-base">
+              13. Como funcionam as compras, e como elas se relacionam com o resto do aplicativo?
+            </span>
+          </AccordionTrigger>
+          <AccordionPanel>
+            <div className="space-y-3">
+              <P>
+                “Compra” e “despesa” são, aqui dentro, a mesma coisa: qualquer dinheiro que a pousada
+                gasta, seja um saco de farinha ou a visita de um encanador. Tudo isso é lançado numa
+                única tela, chamada <strong>“Lançar compras e despesas”</strong> — ela está no menu
+                principal “Compras” (pro administrador) e também no menu do funcionário de manutenção
+                (os dois podem lançar). A camareira não lança compra nenhuma: ela só avisa quando algo
+                está acabando e dá baixa manual num item (ver pergunta 14).
+              </P>
+
+              <SubHeading>Como uma compra é registrada, campo por campo</SubHeading>
+              <List
+                items={[
+                  <>
+                    <strong>Data</strong>, <strong>fornecedor</strong> (opcional) e{" "}
+                    <strong>forma de pagamento</strong> (Pix, cartão de crédito, cartão de débito,
+                    transferência bancária, dinheiro ou boleto).
+                  </>,
+                  <>
+                    <strong>Link ou código da nota fiscal</strong> (opcional) — pode digitar, ou apontar a
+                    câmera do celular pro QR code da nota e deixar o aplicativo ler sozinho.
+                  </>,
+                  <>
+                    <strong>Observações</strong> livres.
+                  </>,
+                  <>
+                    <strong>Foto ou PDF da nota/recibo</strong> (opcional) — tire uma foto na hora ou
+                    escolha um arquivo já salvo no celular.
+                  </>,
+                  <>
+                    Com a foto/PDF anexado, o botão <strong>“Ler nota com IA”</strong> faz a inteligência
+                    artificial ler a nota sozinha e já preencher fornecedor, data, forma de pagamento e os
+                    itens comprados — sempre vale conferir os dados antes de salvar, já que a leitura
+                    pode errar, principalmente em notas manuscritas ou mal fotografadas.
+                  </>,
+                  <>
+                    <strong>Itens da compra</strong> (opcional): se a nota tiver vários produtos diferentes
+                    (uma compra de supermercado, por exemplo), cada um vira uma linha, com descrição,
+                    quantidade e custo unitário. Se a despesa não tiver “itens” de verdade (uma conta de
+                    luz, o honorário de um contador), não é preciso cadastrar nenhuma linha — só o valor
+                    total.
+                  </>,
+                ]}
+              />
+
+              <SubHeading>Pra onde cada linha (ou o valor total) é classificada</SubHeading>
+              <P>
+                Toda compra ou despesa precisa cair numa de duas “gavetas”, nunca as duas ao mesmo
+                tempo: um <strong>item de custo</strong> ou um <strong>ativo permanente</strong>.
+              </P>
+              <List
+                items={[
+                  <>
+                    <strong>Item de custo</strong>: é a etiqueta que diz o que foi comprado — “farinha de
+                    trigo”, “detergente”, “salário das camareiras”, “conta de luz”. Essas etiquetas moram
+                    numa estrutura de 3 níveis chamada <strong>Plano de Contas</strong>: cada item de
+                    custo pertence a um ou mais <strong>subcentros</strong> (uma categoria menor, como
+                    “Alimentos” ou “Materiais de limpeza”), e cada subcentro pertence a um ou mais{" "}
+                    <strong>centros de custo</strong> (a área grande da pousada: Hospedagem, Café da
+                    manhã, Bar da piscina ou Frigobar). Quando um item/subcentro pertence a mais de um
+                    subcentro/centro, o valor é repartido entre eles por um percentual (que sempre precisa
+                    somar 100%). Esse cadastro completo fica na tela{" "}
+                    <strong>“Plano de Contas”</strong> (menu “Listas” → “Plano de Contas” →{" "}
+                    <strong>“Plano de itens de custo”</strong>), com 3 listas editáveis — itens de custo,
+                    subcentros e centros. Ao lançar a compra, você escolhe um item de custo já existente,
+                    ou cria um novo ali mesmo, sem precisar ir até “Listas” — nesse momento você também
+                    diz se esse item novo “representa um item de estoque” (pergunta 14) e a quais
+                    subcentros ele pertence.
+                  </>,
+                  <>
+                    <strong>Ativo permanente</strong>: bens que não se consomem (geladeira, televisão,
+                    liquidificador, ferramentas maiores etc.). Ao lançar uma compra desse tipo, você
+                    escolhe a categoria do bem (Máquinas, Aparelhos, Metais e louças de banho),
+                    opcionalmente um item já catalogado (ex.: “Liquidificador”), marca, modelo, garantia e
+                    o local onde vai ficar guardado. Categorias e catálogo são geridos em{" "}
+                    <strong>“Plano de Contas” → “Plano de itens de ativo permanente”</strong>; cada bem
+                    comprado nasce sozinho, já com esses dados, na tela <strong>“Ativo Permanente”</strong>{" "}
+                    (menu principal), organizada por categoria.
+                  </>,
+                ]}
+              />
+
+              <SubHeading>A tela “Lista de compras”</SubHeading>
+              <P>
+                Essa tela (menu “Compras”) junta dois sinais diferentes de “isso precisa ser comprado”,
+                item por item:
+              </P>
+              <List
+                items={[
+                  <>
+                    <strong>Sugestão calculada pelo sistema</strong>: baseada em quanto o item costuma ser
+                    consumido e na quantidade de “dias de folga” configurada pra ele (quantos dias de
+                    estoque a pousada quer sempre ter de reserva — editável, item por item, na tela
+                    “Itens de estoque e ciclo de compras”, ver pergunta 14). Se o admin sabe que não
+                    precisa comprar aquilo agora, pode “dispensar” essa sugestão — ela só reaparece se o
+                    saldo daquele item mudar de novo (uma compra nova ou mais consumo). As dispensas
+                    ativas aparecem numa seção própria, com um botão “Reativar”.
+                  </>,
+                  <>
+                    <strong>Pedidos da equipe</strong>: a camareira e o funcionário de manutenção têm,
+                    cada um no próprio menu, uma tela <strong>“Pedidos de compra”</strong> onde avisam
+                    “isso está acabando”, escolhendo o item e a quantidade. Na “Lista de compras”, você
+                    vê a soma de todos os pedidos pendentes daquele item e quem pediu. Assim que alguém
+                    lança uma compra desse item em “Lançar compras e despesas”, todos os pedidos
+                    pendentes dele são resolvidos automaticamente — não é preciso marcar nada à parte.
+                  </>,
+                ]}
+              />
+
+              <SubHeading>Todas as relações das compras com o resto do aplicativo</SubHeading>
+              <List
+                items={[
+                  <>
+                    <strong>Estoque</strong>: toda compra de um item marcado “representa estoque” entra
+                    sozinha no saldo dele — visível na tela “Itens de estoque e ciclo de compras”, sem
+                    nenhum lançamento separado (pergunta 14).
+                  </>,
+                  <>
+                    <strong>Custos</strong>: toda compra/despesa (menos ativo permanente) alimenta as
+                    telas “Custos” e “Demonstrativo de Despesas” (menu “Custos e Despesas”), que somam os
+                    valores conforme a classificação escolhida no lançamento (pergunta 15).
+                  </>,
+                  <>
+                    <strong>Ativo permanente</strong>: compras lançadas assim nunca entram em nenhum
+                    cálculo de custo — só aparecem na “Relação de Ativo Permanente”.
+                  </>,
+                  <>
+                    <strong>Inventário (contagem física)</strong>: o saldo que nasce das compras (e das
+                    baixas) é exatamente o número comparado contra a contagem física de verdade, na tela
+                    “Contagem de estoque” (pergunta 14).
+                  </>,
+                  <>
+                    <strong>Ficha técnica do bar da piscina</strong>: quando um item de custo representa
+                    estoque e é ingrediente de algum petisco/drink (ficha técnica cadastrada em “Ficha
+                    técnica de petiscos e drinks”, menu Compras), comprar esse ingrediente sobe o estoque
+                    dele, e vender o petisco/drink numa comanda desce o estoque sozinho, sem nenhuma baixa
+                    manual (pergunta 14 tem o detalhe completo).
+                  </>,
+                  <>
+                    <strong>Histórico</strong>: toda compra/despesa lançada aparece na tela “Histórico”,
+                    seção “Compras e despesas no período” — com total por centro de custo, total por
+                    fornecedor, a lista completa (com opção de editar ou excluir uma despesa já lançada) e
+                    exportação em planilha.
+                  </>,
+                  <>
+                    <strong>Resumo Executivo</strong>: a tela “Estoque” (dentro do menu do Resumo
+                    Executivo) mostra os 20 itens mais comprados no mês e desde sempre (por valor), além
+                    do saldo e da previsão de dias restantes de cada item de estoque.
+                  </>,
+                ]}
+              />
+              <P>
+                <strong>Quem pode fazer o quê:</strong> admin e funcionário de manutenção lançam compras
+                em “Lançar compras e despesas”; camareira e funcionário de manutenção registram pedidos
+                de compra e dão baixa de estoque; as telas de relatório (Custos, Demonstrativo,
+                Histórico, Plano de Contas) são só do admin.
+              </P>
+            </div>
+          </AccordionPanel>
+        </AccordionItem>
+
+        {/* 14. Estoques */}
+        <AccordionItem value="estoques">
+          <AccordionTrigger>
+            <span className="font-heading text-base">
+              14. Como funciona o controle de estoque da pousada?
+            </span>
+          </AccordionTrigger>
+          <AccordionPanel>
+            <div className="space-y-3">
+              <P>
+                Nem toda mercadoria comprada é controlada como “estoque” — essa é a primeira coisa
+                importante de entender aqui.
+              </P>
+
+              <SubHeading>Quais mercadorias e produtos são classificados como estoque</SubHeading>
+              <P>
+                Dentro do Plano de Contas (tela “Plano de Contas” → “Plano de itens de custo”, menu
+                Listas), cada item de custo tem uma marcação chamada “representa estoque”. Só os itens
+                marcados assim têm saldo controlado e entram nas telas de estoque — os demais (salário,
+                conta de luz, honorários de contabilidade, serviços em geral) são só uma despesa, sem
+                quantidade nenhuma pra acompanhar.
+              </P>
+              <P>
+                Isso também vale pra comida: dentro de “Alimentos” do Café da manhã, por exemplo, itens
+                como <strong>café</strong>, <strong>farinha de trigo</strong>, <strong>manteiga</strong>,{" "}
+                <strong>queijos</strong> e <strong>linguiças</strong> são controlados como estoque — mas{" "}
+                <strong>frutas</strong>, <strong>ovos</strong>, <strong>legumes</strong>,{" "}
+                <strong>verduras</strong> e <strong>temperos</strong>, mesmo sendo produtos físicos
+                comprados o tempo todo, não são, por serem itens muito variáveis e perecíveis, sem
+                sentido prático em controlar “quantos restam” com precisão. Essa escolha é feita item por
+                item, no momento em que o item de custo é criado (dentro da própria tela “Lançar compras
+                e despesas”, ou direto no Plano de Contas) — e pode ser revista a qualquer momento.
+              </P>
+
+              <SubHeading>Onde fica registrado o estoque</SubHeading>
+              <P>
+                Nenhum número de saldo fica guardado fixo em lugar nenhum. O saldo de qualquer item de
+                estoque é sempre <strong>calculado na hora</strong>, somando todo o histórico de
+                “movimentos” dele desde que foi cadastrado — entradas e saídas, misturadas em ordem
+                cronológica. Você vê esse saldo atual, item por item, na tela{" "}
+                <strong>“Itens de estoque e ciclo de compras”</strong> (menu “Compras”), junto do
+                centro/subcentro a que o item pertence (vindo do Plano de Contas) e da unidade de medida
+                dele (un, kg, L etc.). Essa tela é só leitura quanto à identidade do item — o único campo
+                editável ali é a quantidade de “dias de folga” (explicada mais abaixo).
+              </P>
+
+              <SubHeading>Os 4 tipos de movimento que alteram o saldo</SubHeading>
+              <List
+                items={[
+                  <>
+                    <strong>Compra</strong>: toda vez que uma compra desse item é lançada em “Lançar
+                    compras e despesas”, o saldo sobe pela quantidade comprada (ver pergunta 13).
+                  </>,
+                  <>
+                    <strong>Baixa manual</strong>: qualquer pessoa da equipe (camareira, funcionário de
+                    manutenção ou admin) pode registrar que usou uma certa quantidade de um item, na tela{" "}
+                    <strong>“Baixa de estoque”</strong> (existe no menu de cada um dos três papéis) —
+                    busca o item pelo nome ou lê o código de barras com a câmera do celular, escolhe a
+                    quantidade usada com um seletor de mais/menos (sem precisar digitar número nenhum), e
+                    o saldo desce na hora.
+                  </>,
+                  <>
+                    <strong>Consumo automático do hóspede</strong>: quando um petisco ou drink do bar da
+                    piscina é vendido (numa comanda) e tem uma “ficha técnica” cadastrada — quais
+                    ingredientes ele usa, e em que quantidade, na tela “Ficha técnica de petiscos e
+                    drinks” (menu Compras) — o estoque de cada ingrediente usado desce sozinho, no
+                    momento em que a conta daquela suíte é paga. Nenhuma camareira precisa dar baixa
+                    manual nesses ingredientes.
+                  </>,
+                  <>
+                    <strong>Ajuste de contagem física</strong>: ao fechar uma contagem (explicada abaixo),
+                    se o que foi contado de verdade for diferente do saldo calculado, o sistema grava um
+                    ajuste pra igualar o saldo ao número contado.
+                  </>,
+                ]}
+              />
+              <P>
+                Um <strong>pedido de compra</strong> (feito pela camareira ou pela manutenção, na tela
+                “Pedidos de compra” de cada uma) é diferente de tudo isso: é só um aviso visual pro
+                admin, nunca altera saldo nenhum.
+              </P>
+
+              <SubHeading>“Dias de folga” e o ponto de reposição</SubHeading>
+              <P>
+                Cada item de estoque tem uma quantidade de <strong>“dias de folga”</strong> — quantos
+                dias de estoque a pousada quer sempre ter de reserva pra esse item — editável a qualquer
+                momento na tela “Itens de estoque e ciclo de compras”, com um seletor de mais/menos. A
+                partir disso, o sistema calcula sozinho o <strong>ponto de reposição</strong> do item
+                (quanto ele deveria ter em estoque pra nunca faltar), multiplicando quanto o item costuma
+                ser consumido por semana pelos dias de folga configurados. Esse ponto de reposição
+                calculado é o que decide se o item aparece na “Lista de compras” (pergunta 13) — quando o
+                saldo atual fica abaixo dele.
+              </P>
+
+              <SubHeading>Contagem física (o inventário)</SubHeading>
+              <P>
+                É o processo de comparar, de tempos em tempos, o que o sistema calcula que deveria ter em
+                estoque (o “saldo teórico”) com o que realmente existe, contando os produtos físicos de
+                verdade — tela <strong>“Contagem de estoque”</strong> (menu Compras).
+              </P>
+              <P>
+                <strong>Quais produtos se sujeitam a ela:</strong> só os itens de estoque ativos (os
+                marcados “representa estoque” no Plano de Contas), sempre organizados por{" "}
+                <strong>grupo</strong> — um grupo reúne todos os subcentros do Plano de Contas que têm o{" "}
+                <strong>mesmo nome</strong>, mesmo pertencendo a centros diferentes. Por exemplo: existe
+                um subcentro “Alimentos” dentro de “Café da manhã” e outro subcentro “Alimentos” dentro
+                de “Bar da piscina” — são dois cadastros diferentes no Plano de Contas, mas uma única
+                contagem de “Alimentos” já junta os itens dos dois de uma vez, numa visita só, sem
+                precisar contar o mesmo tipo de produto duas vezes em dois lugares separados. Também é
+                possível contar “todos os itens” de uma vez, sem separar por grupo.
+              </P>
+              <P>
+                <strong>Como é feito:</strong> na tela “Contagem de estoque”, clique em “Iniciar
+                contagem” (de um grupo específico, ou de tudo) — isso abre uma sessão nova mostrando,
+                lado a lado, cada item do grupo com o saldo que o sistema calcula naquele momento
+                (“teórico”). Conte os produtos de verdade (na despensa, no almoxarifado, etc.) e digite,
+                item por item, a quantidade contada. Quando todos os itens do grupo estiverem
+                preenchidos, clique em “Fechar contagem e ajustar estoque”: o sistema grava um ajuste pra
+                cada item que ficou diferente (pra mais ou pra menos) e a contagem passa a valer como
+                histórico — não dá mais pra editar os números depois disso.
+              </P>
+              <P>
+                <strong>Quando é feito:</strong> não existe uma data automática fixa. Cada grupo de
+                subcentro pode ter uma “frequência de contagem” configurada, em dias (na própria tela
+                “Contagem de estoque”) — se configurada, a tela avisa com destaque vermelho quando já
+                passou da hora de contar aquele grupo de novo. Sem frequência configurada pra um grupo,
+                nenhum aviso aparece pra ele, mas a contagem continua podendo ser feita a qualquer
+                momento, por iniciativa própria.
+              </P>
+
+              <SubHeading>Quebra de estoque</SubHeading>
+              <P>
+                Ao fechar uma contagem, cada item ganha uma <strong>“quebra de estoque”</strong>: a
+                diferença, em percentual, entre o que foi contado e o saldo teórico (por exemplo, se o
+                sistema esperava 100 unidades e só havia 92 de verdade, a quebra foi de -8%). Esse
+                percentual é comparado com um limite próprio de cada item — a “quebra máxima admitida”,
+                editável na própria tela de contagem com um seletor de mais/menos, em passos de 1%.
+                Sempre que uma contagem fecha com quebra acima desse limite, o item passa a aparecer na
+                tela <strong>“Quebra de Estoque”</strong> (menu do Resumo Executivo), como um alerta pra
+                investigar o motivo (furto, erro de lançamento, perda por vencimento, etc.), ordenado do
+                desvio mais grave pro menos grave.
+              </P>
+              <P>
+                O sistema também calcula uma <strong>“quebra média dos últimos 12 meses”</strong> de cada
+                item, visível já durante a própria contagem (pra servir de referência de comparação) —
+                e, pra essa média não ser distorcida por um erro único e grande (alguém que digitou um
+                número errado numa contagem antiga, por exemplo), contagens cuja quebra foi muito fora do
+                padrão normal daquele item são automaticamente deixadas fora da média, sem precisar de
+                nenhuma decisão manual.
+              </P>
+            </div>
+          </AccordionPanel>
+        </AccordionItem>
+
+        {/* 15. Custos */}
+        <AccordionItem value="custos">
+          <AccordionTrigger>
+            <span className="font-heading text-base">
+              15. Como o aplicativo trata os custos da pousada?
+            </span>
+          </AccordionTrigger>
+          <AccordionPanel>
+            <div className="space-y-3">
+              <P>
+                “Despesa” e “custo” não são exatamente a mesma coisa aqui dentro. A despesa é o dinheiro
+                gasto, registrado em “Lançar compras e despesas” (pergunta 13) — já o custo é essa mesma
+                informação, organizada e somada de um jeito que responde perguntas como “quanto custou
+                hospedar um hóspede” ou “quanto custou servir o café da manhã”. Essas contas já prontas
+                ficam nas telas <strong>“Custos”</strong> e <strong>“Demonstrativo de Despesas”</strong>{" "}
+                (menu principal “Custos e Despesas”).
+              </P>
+
+              <SubHeading>Como o valor de cada despesa chega até o custo de um centro</SubHeading>
+              <P>
+                Toda despesa (menos ativo permanente, ver mais abaixo) é ligada, no momento em que é
+                lançada, a um <strong>item de custo</strong>. Cada item de custo pertence a um ou mais{" "}
+                <strong>subcentros</strong>, e cada subcentro pertence a um ou mais{" "}
+                <strong>centros de custo</strong> (hoje a pousada tem 4: Hospedagem, Café da manhã, Bar
+                da piscina e Frigobar) — tudo isso cadastrado na tela “Plano de Contas” (pergunta 13). O
+                sistema soma, automaticamente, o valor de cada despesa espalhado por toda essa cadeia de
+                percentuais — é essa soma final, por centro, que aparece nos cards da tela “Custos”.
+              </P>
+              <P>
+                <strong>Exemplo prático:</strong> a conta de água da pousada serve tanto os quartos
+                quanto a cozinha do café da manhã. No Plano de Contas, o item de custo “água” pode estar
+                ligado ao subcentro “Gerais” de Hospedagem e também ao subcentro “Gerais” de Café da
+                manhã, cada um com uma porcentagem (por exemplo, metade pra cada) — é essa divisão que
+                garante que uma única conta de água apareça, com o pedaço certo, no custo de cada parte
+                da pousada, em vez de inflar um centro só ou de ter que lançar a mesma conta duas vezes.
+              </P>
+
+              <SubHeading>O que a tela “Custos” mostra</SubHeading>
+              <List
+                items={[
+                  <>
+                    <strong>Um card por centro de custo</strong>, com o total gasto nele no período
+                    escolhido, mais um card extra, <strong>“Hospedagem (+ café da manhã)”</strong>, que
+                    soma os dois juntos — porque o café da manhã vem incluído na diária (o hóspede não
+                    paga por ele separadamente), então o custo real de hospedar alguém por uma noite
+                    precisa somar os dois. O card “Café da manhã” sozinho continua mostrando o mesmo
+                    valor do café, à parte, só como referência.
+                  </>,
+                  <>
+                    <strong>Custo médio por diária ocupada</strong>: o total de “Hospedagem (+ café da
+                    manhã)” dividido pela quantidade de noites realmente ocupadas no período (contagem que
+                    vem da integração com a Stays).
+                  </>,
+                  <>
+                    <strong>Rateio dos custos, por item de custo</strong>: uma tabela detalhada mostrando,
+                    item por item, quanto foi gasto no total e como esse valor foi dividido entre cada
+                    subcentro/centro — útil pra confirmar que a divisão configurada no Plano de Contas
+                    está correta.
+                  </>,
+                  <>
+                    <strong>Café da manhã, em detalhe</strong>: quanto foi gasto em cada item desse centro
+                    no período, a quantidade de hóspedes-noite (vinda da tela “Mesas do café”) e o custo
+                    médio por hóspede (total do centro ÷ hóspedes-noite). Alguns itens podem aparecer já
+                    agrupados sob um rótulo só (por exemplo, “Frutas e ovos” juntos) quando não há
+                    controle fino de quantidade sobre eles — ver pergunta 14 sobre quais itens entram ou
+                    não no controle de estoque.
+                  </>,
+                  <>
+                    <strong>Custo médio por prato/produto servido</strong>: para cada petisco/drink do bar
+                    da piscina e cada item do frigobar que tenha uma “ficha técnica” cadastrada (tela
+                    “Ficha técnica de petiscos e drinks”, pergunta 13), o sistema calcula quanto custou 1
+                    porção dele — multiplicando a quantidade de cada ingrediente pelo preço médio pago por
+                    esse ingrediente nas compras daquele mesmo período (nunca um preço fixo digitado à
+                    mão, sempre a média real do que foi pago). Um produto sem ficha técnica cadastrada
+                    aparece como “sem receita cadastrada”.
+                  </>,
+                ]}
+              />
+
+              <SubHeading>O que a tela “Demonstrativo de Despesas” mostra</SubHeading>
+              <P>
+                É a mesma informação de custos, só que organizada como uma tabela mês a mês: uma linha
+                por centro de custo, uma coluna por mês — útil pra comparar a evolução dos gastos ao
+                longo do tempo (ver se um centro está gastando mais ou menos do que em meses anteriores).
+                O período padrão é os últimos 12 meses, mas pode ser trocado por qualquer outro intervalo.
+              </P>
+
+              <SubHeading>O que nunca entra no cálculo de custo</SubHeading>
+              <P>
+                Uma compra lançada como <strong>ativo permanente</strong> (uma geladeira nova, por
+                exemplo) nunca aparece em nenhum dos cálculos acima — comprar um bem desses não é um
+                custo do período, é um bem que a pousada passa a ter, e por isso só aparece na tela
+                “Relação de Ativo Permanente” (pergunta 13).
+              </P>
+
+              <SubHeading>Quais são os principais itens de custo</SubHeading>
+              <P>
+                Toda essa lista — centros, subcentros e itens de custo — fica sempre visível e editável
+                na tela “Plano de Contas” (Listas → Plano de Contas → Plano de itens de custo), e pode
+                crescer: ao lançar uma despesa nova, o admin pode criar um item de custo na hora, se
+                nenhum dos já existentes encaixar. Alguns exemplos reais já cadastrados, pra dar uma
+                ideia do tamanho e da variedade:
+              </P>
+              <List
+                items={[
+                  <>
+                    <strong>Hospedagem</strong>: água, luz, internet, dedetização e impostos (Gerais);
+                    amenities, papel higiênico, secador de cabelo (Materiais das suítes); toalhas,
+                    lençóis, fronhas (Enxoval de cama e banho); salário das camareiras e dos funcionários
+                    de manutenção, encargos, cesta básica, plano de saúde, transporte (Mão de obra);
+                    materiais de jardim, de piscina e de manutenção, ferramentas; honorários
+                    administrativos (Stays, contabilidade, financeiro, pró-labore); materiais de limpeza.
+                  </>,
+                  <>
+                    <strong>Café da manhã</strong>: água, luz e gás (Gerais); frutas, ovos, café, pães,
+                    queijos, legumes, verduras e temperos, entre muitos outros (Alimentos); salário e
+                    encargos da mão de obra própria desse centro; honorários administrativos e materiais
+                    de limpeza, também com cadastro próprio aqui.
+                  </>,
+                  <>
+                    <strong>Bar da piscina e Frigobar</strong>: estrutura parecida, cada um com seus
+                    próprios itens de bebida/petisco e materiais específicos.
+                  </>,
+                ]}
+              />
+            </div>
+          </AccordionPanel>
+        </AccordionItem>
       </Accordion>
     </div>
   );
