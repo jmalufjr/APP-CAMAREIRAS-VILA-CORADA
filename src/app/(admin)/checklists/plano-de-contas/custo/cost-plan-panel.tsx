@@ -258,6 +258,11 @@ function CostItemDialog({
   const [newInventoryItemName, setNewInventoryItemName] = useState("");
   const [links, setLinks] = useState<LinkRow[]>(item?.subcenters.map((s) => ({ id: s.subcenter_id, pct: s.alloc_pct })) ?? []);
 
+  // Só mostra o seletor de item de estoque quando ainda não existe
+  // nenhum vínculo — um já existente nunca é trocado por outro, só
+  // criado (ao marcar pela primeira vez) ou removido (ao desmarcar).
+  const hasExistingLink = !!item?.inventory_item_id;
+
   function handleSave() {
     if (!name.trim()) {
       toast.error("Informe o nome.");
@@ -265,15 +270,11 @@ function CostItemDialog({
     }
     startTransition(async () => {
       const subcenterLinks = links.map((l) => ({ subcenter_id: l.id, alloc_pct: l.pct }));
+      const newLinkInventoryItemId = isInventory && inventoryItemId !== "new" ? inventoryItemId : null;
+      const newLinkName = isInventory && inventoryItemId === "new" ? newInventoryItemName : null;
       const result = isEdit
-        ? await updateCostItem(item.id, name, active, subcenterLinks)
-        : await createCostItem(
-            name,
-            isInventory,
-            isInventory && inventoryItemId !== "new" ? inventoryItemId : null,
-            isInventory && inventoryItemId === "new" ? newInventoryItemName : null,
-            subcenterLinks
-          );
+        ? await updateCostItem(item.id, name, active, isInventory, newLinkInventoryItemId, newLinkName, subcenterLinks)
+        : await createCostItem(name, isInventory, newLinkInventoryItemId, newLinkName, subcenterLinks);
       if (result?.error) toast.error(result.error);
       else {
         toast.success("Item de custo salvo.");
@@ -312,42 +313,45 @@ function CostItemDialog({
               <Switch checked={active} onCheckedChange={setActive} /> Ativo
             </label>
           )}
-          {!isEdit && (
-            <>
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox checked={isInventory} onCheckedChange={(c) => setIsInventory(c === true)} />
-                Representa um item de estoque
-              </label>
-              {isInventory && (
-                <div className="space-y-1.5 rounded-lg bg-muted/40 p-2">
-                  <Label className="text-xs text-muted-foreground">Item de estoque</Label>
-                  <Select value={inventoryItemId} onValueChange={(v) => v && setInventoryItemId(v)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Selecione">
-                        {(v: string) =>
-                          v === "new" ? "Criar novo item de estoque" : availableInventoryItems.find((i) => i.id === v)?.name ?? v
-                        }
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="new">+ Criar novo item de estoque</SelectItem>
-                      {availableInventoryItems.map((i) => (
-                        <SelectItem key={i.id} value={i.id}>
-                          {i.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {inventoryItemId === "new" && (
-                    <Input
-                      value={newInventoryItemName}
-                      onChange={(e) => setNewInventoryItemName(e.target.value)}
-                      placeholder={name || "Nome do novo item de estoque"}
-                    />
-                  )}
-                </div>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={isInventory} onCheckedChange={(c) => setIsInventory(c === true)} />
+            Representa um item de estoque
+          </label>
+          {isInventory && hasExistingLink && (
+            <p className="text-xs text-muted-foreground rounded-lg bg-muted/40 p-2">
+              Vinculado ao item de estoque <strong>{item?.inventory_item_name}</strong> — esse vínculo não muda
+              depois de criado. Desmarque a opção acima pra desvincular (o item de estoque em si, com saldo e
+              histórico, não é apagado).
+            </p>
+          )}
+          {isInventory && !hasExistingLink && (
+            <div className="space-y-1.5 rounded-lg bg-muted/40 p-2">
+              <Label className="text-xs text-muted-foreground">Item de estoque</Label>
+              <Select value={inventoryItemId} onValueChange={(v) => v && setInventoryItemId(v)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecione">
+                    {(v: string) =>
+                      v === "new" ? "Criar novo item de estoque" : availableInventoryItems.find((i) => i.id === v)?.name ?? v
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new">+ Criar novo item de estoque</SelectItem>
+                  {availableInventoryItems.map((i) => (
+                    <SelectItem key={i.id} value={i.id}>
+                      {i.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {inventoryItemId === "new" && (
+                <Input
+                  value={newInventoryItemName}
+                  onChange={(e) => setNewInventoryItemName(e.target.value)}
+                  placeholder={name || "Nome do novo item de estoque"}
+                />
               )}
-            </>
+            </div>
           )}
           <PctLinksEditor options={subcenterOptions} value={links} onChange={setLinks} />
         </div>

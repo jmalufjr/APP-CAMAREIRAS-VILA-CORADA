@@ -214,6 +214,27 @@ async function setItemSubcenterLinks(
   return {};
 }
 
+// Resolve o inventory_item_id a usar quando isInventory=true e o item de
+// custo ainda não tem nenhum vínculo — liga a um item de estoque
+// existente (inventoryItemId) ou cria um novo na hora (newInventoryItemName).
+async function resolveNewInventoryLink(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  inventoryItemId: string | null,
+  newInventoryItemName: string | null
+): Promise<{ id?: string | null; error?: string }> {
+  if (inventoryItemId) return { id: inventoryItemId };
+  if (newInventoryItemName?.trim()) {
+    const { data: newItem, error } = await supabase
+      .from("inventory_items")
+      .insert({ name: newInventoryItemName.trim(), unit: "un" })
+      .select("id")
+      .single();
+    if (error || !newItem) return { error: error?.message ?? "Erro ao criar item de estoque." };
+    return { id: newItem.id as string };
+  }
+  return { error: "Selecione um item de estoque existente, ou informe o nome de um novo." };
+}
+
 // isInventory=true sempre liga a um item de estoque — existente
 // (inventoryItemId) ou novo (newInventoryItemName, criado na hora).
 export async function createCostItem(
@@ -228,19 +249,9 @@ export async function createCostItem(
 
   let resolvedInventoryItemId: string | null = null;
   if (isInventory) {
-    if (inventoryItemId) {
-      resolvedInventoryItemId = inventoryItemId;
-    } else if (newInventoryItemName?.trim()) {
-      const { data: newItem, error: newItemError } = await supabase
-        .from("inventory_items")
-        .insert({ name: newInventoryItemName.trim(), unit: "un" })
-        .select("id")
-        .single();
-      if (newItemError || !newItem) return { error: newItemError?.message ?? "Erro ao criar item de estoque." };
-      resolvedInventoryItemId = newItem.id as string;
-    } else {
-      return { error: "Selecione um item de estoque existente, ou informe o nome de um novo." };
-    }
+    const resolved = await resolveNewInventoryLink(supabase, inventoryItemId, newInventoryItemName);
+    if (resolved.error) return { error: resolved.error };
+    resolvedInventoryItemId = resolved.id ?? null;
   }
 
   const { data, error } = await supabase
@@ -259,16 +270,49 @@ export async function createCostItem(
   return { success: true, id: data.id as string };
 }
 
+// "Representa estoque" pode ser ligada/desligada numa edição: marcar
+// liga a um item de estoque (existente ou novo, igual à criação);
+// desmarcar só desliga o vínculo (inventory_item_id volta a null — o
+// item de estoque em si, com todo o saldo/histórico dele, não é
+// apagado, só deixa de aparecer em "Itens de estoque e ciclo de
+// compras"). Um vínculo já existente nunca é trocado por outro aqui —
+// só criado (quando ainda não havia nenhum) ou removido.
 export async function updateCostItem(
   id: string,
   name: string,
   active: boolean,
+  isInventory: boolean,
+  inventoryItemId: string | null,
+  newInventoryItemName: string | null,
   subcenterLinks: { subcenter_id: string; alloc_pct: number }[]
 ) {
   if (!name.trim()) return { error: "Informe o nome do item de custo." };
   const supabase = await createClient();
-  const { error } = await supabase.from("cost_items").update({ name: name.trim(), active }).eq("id", id);
-  if (error) return { error: error.message };
+
+  const { data: current, error: currentError } = await supabase
+    .from("cost_items")
+    .select("inventory_item_id")
+    .eq("id", id)
+    .single();
+  if (currentError || !current) return { error: currentError?.message ?? "Item de custo não encontrado." };
+
+  let resolvedInventoryItemId: string | null = current.inventory_item_id as string | null;
+  if (isInventory && !resolvedInventoryItemId) {
+    const resolved = await resolveNewInventoryLink(supabase, inventoryItemId, newInventoryItemName);
+    if (resolved.error) return { error: resolved.error };
+    resolvedInventoryItemId = resolved.id ?? null;
+  } else if (!isInventory) {
+    resolvedInventoryItemId = null;
+  }
+
+  const { error } = await supabase
+    .from("cost_items")
+    .update({ name: name.trim(), active, is_inventory: isInventory, inventory_item_id: resolvedInventoryItemId })
+    .eq("id", id);
+  if (error) {
+    if (error.code === "23505") return { error: "Esse item de estoque já está ligado a outro item de custo." };
+    return { error: error.message };
+  }
 
   const linkResult = await setItemSubcenterLinks(supabase, id, subcenterLinks);
   if (linkResult.error) return { error: linkResult.error };
