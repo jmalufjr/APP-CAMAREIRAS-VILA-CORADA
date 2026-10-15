@@ -2000,9 +2000,82 @@ qualquer implementação:
   despesas/custos/estoque/CMV, que teria que ser construída do zero.
 
 Com esse levantamento em mãos, uma lista de pontos de decisão foi levada
-ao proprietário em conversa (não reproduzida aqui porque não é, ela
-mesma, uma decisão — só o convite a decidir). **O resultado dessa
-consulta ainda não chegou no momento em que esta seção foi escrita.**
-Assim que chegar, esta seção 22 será reescrita por completo com: as
-decisões tomadas, o plano de levas definitivo, e o changelog de cada
-leva implementada, no mesmo formato já usado nas seções 15 a 21 acima.
+ao proprietário em conversa, em duas rodadas (4 perguntas de múltipla
+escolha sobre os pontos mais estruturais, mais uma lista de perguntas
+em texto livre sobre os pontos restantes). Todas as respostas chegaram
+em 15/10/2026 — ver seção 22.3. A implementação, dividida em levas
+(cada uma testada e documentada como uma nova seção própria, a partir
+da seção 23), começa a partir daqui.
+
+### 22.3 Decisões tomadas (15/10/2026)
+
+1. **Ordem de implementação**: a proposta de 7 levas foi aceita —
+   (1) plano de contas contábil + motor de partidas dobradas, sem
+   mexer nas telas existentes; (2) compras/despesas reformuladas +
+   fornecedores + contas a pagar; (3) estoque com saldo em R$; (4) a
+   conta transitória por trás de comandas/consumo por suítes, incluindo
+   a mudança de comportamento do item 3 abaixo; (5) café da manhã; (6)
+   o menu "Módulo Contábil" + relatórios; (7) só a parte de exportação
+   (CSV/XLSX/PDF) da integração — a API de verdade com o sistema
+   financeiro fica de fora por enquanto (ver item 9).
+2. **Subcentros removidos, mas o rateio por percentual entre centros
+   continua existindo** — um item de custo que hoje é compartilhado
+   entre vários centros (água, luz, salário das camareiras, honorários
+   administrativos, materiais de limpeza) continua podendo ser, só que
+   ligando direto no centro, sem a camada de subcentro no meio. Caiu
+   junto a convenção de agrupar a contagem física por nome de
+   subcentro (ex.: "Alimentos" de dois centros numa sessão só) — vai
+   ser repensada na Leva 3 (estoque), já que a base que a sustentava
+   deixa de existir.
+3. **Hóspede avulso**: implementado como uma suíte virtual "Consumo
+   avulso" (sem número de quarto de verdade) — reaproveita inteiramente
+   a estrutura de conta/comanda já existente, permitindo várias contas
+   abertas ao mesmo tempo (uma por avulso). Decidido na Leva 4.
+4. **Baixa de estoque no momento da venda, não mais no pagamento** — o
+   gatilho que hoje desconta o estoque só quando a conta da suíte é
+   paga será desligado; o desconto passa a acontecer na hora da
+   comanda/lançamento de frigobar. Confirmado explicitamente como uma
+   mudança de comportamento, ciente de que é um sistema em produção.
+   Consequência direta: a pergunta "os ingredientes foram recuperados
+   ou perdidos?" ao cancelar uma comanda já com estoque baixado deixa
+   de ser opcional — é necessária a partir de agora.
+5. **Fornecedor**: ao criar o cadastro, os nomes já digitados em
+   compras/ativo permanente serão unificados automaticamente
+   (ignorando maiúscula/minúscula), pra não perder a referência das
+   compras antigas.
+6. **Duplicidade de nota** (mesmo fornecedor/número/data/valor): o
+   sistema só avisa ("tem certeza?"), nunca bloqueia de verdade.
+7. **Depreciação**: a conta contábil "Depreciação acumulada" é criada
+   desde já, mas sem nenhum cálculo automático — fica disponível pra
+   lançamento manual, ou pra uma regra própria numa fase futura, se um
+   dia for decidido.
+8. **Bancos**: começa com uma única conta genérica "Banco" — contas
+   reais (uma por banco de verdade) ficam pra quando precisar.
+9. **Café da manhã** — a fórmula proposta inicialmente (baseada em
+   variação de estoque/contagem) foi descartada por complicar à toa;
+   a lógica definitiva, me corrigindo de volta pro que o próprio
+   documento original já descrevia: itens perecíveis = 100% do
+   comprado numa semana vira custo daquela semana; itens não
+   perecíveis = o sistema soma a quantidade **baixada manualmente**
+   (mesma tela "Baixa de estoque" que já existe, sem nada novo) pra
+   aquele item, destinada ao centro Café da manhã, durante o mês,
+   multiplicada pelo custo médio do item naquele mês — sem nenhuma
+   contagem física nem cálculo de variação de estoque envolvido. Cada
+   item do café da manhã ganha um campo "é perecível?" editável
+   (não uma lista fixa), com os exemplos do documento como sugestão
+   inicial.
+10. **"Cafés servidos"**: um número por dia (não por suíte), que nasce
+    igual ao total de hóspedes hospedados e só pode ser editado pra
+    baixo, nunca pra cima.
+11. **Menu**: os 5 itens soltos hoje no menu principal do admin
+    (Lançar Compra, Lista de compras, Estoque, Ativo Permanente, Custos
+    e Despesas) saem de lá e passam a existir só dentro do novo menu
+    "Módulo Contábil" (Leva 6).
+12. **Forma de pagamento**: separada em dois conjuntos de opções
+    distintos — um pro hóspede pagando a própria conta (já existente),
+    outro pra pousada pagando um fornecedor (ganha "a prazo").
+13. **Integração com o sistema financeiro**: só a parte de exportação
+    (arquivos CSV/XLSX/PDF, pros relatórios da Leva 6) é implementada
+    agora. A parte de API de verdade entre os dois sistemas fica de
+    fora até o sistema financeiro passar por mudanças próprias e os
+    dois lados decidirem juntos o que exatamente será consumido.
