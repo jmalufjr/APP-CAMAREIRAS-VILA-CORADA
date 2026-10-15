@@ -1,11 +1,21 @@
-# PRD — Módulo de Compras, Despesas e Controle de Estoque
+# PRD — Módulo de Compras, Despesas, Controle de Estoque e Contábil
 
 > Documento de estudo e proposta, preparado antes de qualquer implementação.
 > Segue o mesmo formato dos demais `PRD_*.md` deste projeto: um registro
 > vivo que vai sendo atualizado conforme decisões forem tomadas e a
 > implementação avançar. **Plano aprovado e implementado (seções 1-14, e a
 > segunda leva na seção 15) na branch `feature/compras` — testado
-> localmente, aguardando aprovação pra merge em `main`/produção.**
+> localmente, aguardando aprovação pra merge em `main`/produção.** As
+> seções 16-21 documentam mais seis levas feitas depois dessa aprovação,
+> ainda na mesma branch. A seção 22 registra um novo documento do
+> proprietário (15/10/2026) pedindo uma reformulação profunda deste módulo
+> num sistema contábil formal de partidas dobradas — **recebido e ainda em
+> fase de esclarecimento de dúvidas, nenhuma parte dele foi implementada
+> ainda** (ver seção 22 para o estado exato da consulta).
+>
+> Este arquivo mudou de nome de `PRD_compras.md` para
+> `PRD_compras&contabil.md` em 15/10/2026, a pedido do proprietário, pra
+> refletir esse novo escopo contábil somado ao que já existia.
 
 ## 1. Contexto e objetivo
 
@@ -1655,3 +1665,344 @@ apareceriam em teste real, em runtime:
   fabricadas (despesas, bem, item de catálogo, centro/subcentro/item de
   custo, sessão de contagem) removidas do banco local depois; as duas
   rotas de API temporárias deletadas do código.
+
+## 22. PRD Contábil — recebido em 15/10/2026, consulta em andamento
+
+> **Nenhuma linha de código foi alterada por causa desta seção ainda.**
+> O proprietário enviou um documento pedindo a reformulação do módulo
+> inteiro (compras, despesas, estoque, custos) num sistema contábil
+> formal de partidas dobradas, com dois papéis de usuário novos
+> ("gerente operacional" e "contador" — cujas telas ficam pra depois dos
+> testes locais do proprietário, por instrução explícita dele), um menu
+> "Módulo Contábil" próprio reunindo tudo, cadastro de fornecedores,
+> contas a pagar, conceito de "hóspede avulso" sem suíte, e uma
+> reformulação do cálculo de custo do café da manhã. O documento
+> termina com uma instrução explícita e repetida: **não presumir
+> solução pra nenhum ponto relevante ou ambíguo — sempre consultar
+> antes, esperar a decisão, só depois implementar.** Por isso, antes de
+> qualquer código, foi feito um levantamento completo de como cada parte
+> relacionada já funciona hoje (Plano de Contas, contas de suíte,
+> comandas, estoque, ativo permanente, ficha técnica, café da manhã,
+> papéis de usuário, menu do admin, forma de pagamento, a integração já
+> existente com o sistema financeiro) e uma lista de pontos de decisão
+> foi levada ao proprietário em conversa — ainda sem resposta no momento
+> em que esta seção foi escrita. Assim que as decisões chegarem, esta
+> seção será reescrita com o plano definitivo, antes de qualquer
+> implementação começar.
+
+### 22.1 Texto integral do documento recebido
+
+> Colado aqui sem edição nenhuma, exatamente como enviado pelo
+> proprietário, pra nunca depender só do histórico da conversa com o
+> Claude pra recuperar o pedido original.
+
+PRD_contabil — Sistema Gerencial de Custos, Estoques e Movimentações Financeiras da Pousada
+Status: Especificação funcional e técnica para implementação
+1. Objetivo do produto
+Desenvolver, dentro do web app CAMAREIRAS, um modulo separado chamado de "Módulo Contábil", utilizado por dois novos usuarios que chamaremos de "gerente operacional" e de "contador", para registrar compras, despesas, vendas do bar e do frigobar, movimentações de estoque e pagamentos/recebimentos operacionais.
+Parte desse modulo já está sendo utilizado pelo usuário "Camareira", tais como o registro das vendas do bar através das comandas e do frigobar pelos checklist de serviços nas suites bem como pela movimentacao da conta individual de cada suite com o registro do fechamento das contas e do seu pagamento. Além disso, a baixa de itens de estoque tambem continuara sendo possivel de ser realizada pela camareira. Tambem o registro de compra e de baixa de estoque continuara sendo realizado tambem pelo funcionario de manutencao.
+A motivação principal de implementar este novo módulo, que nada mais é que uma mudanca organizacional do que já tinha sido implementado no app, tem a ver com o fato de que não estava satisfatória a forma muito simplificada que estava sendo concebida para o registro das contas do estoque e de custos. Então a mudança principal agora será a de elaborar um sistema de registro com método contábil formal, de modo que a metodologia utilizada para o registro de compras, estoques, custos, ativos em geral, seja aquela comumente conhecida e aceita da ciência contábil e assim possa ser auditável e reportada utilizando os meios já conhecidos, com uma linguagem não somente já conhecida, mas que confira uniformidade e segurança no registro.
+Porém, havera uma segunda mudança que é a de transformar essas funcionalidades em um módulo separado, de modo que o seu acesso seja feito por um caminho mais claro, em telas que reunam todas as funcionalidade de forma clara e centralizada, de modo que as telas do admin passem a ter um separação em módulos, com o objetivo de uma melhor organizacao frente ao crescente número de telas do admin. Por fim, criaremos um tipo de usuário que chamaremos de gerente operacional, que terá menos telas do que as do admin de modo a facilitar o trabalho do dia a dia com o aplicativo.
+Assim, teremos um sistema que deve aplicar automaticamente partidas dobradas (método da ciência contábil), calcular custos por centro de custo e gerar demonstrativos gerenciais. Deve ser simples para o usuário operacional: ele registra o fato uma vez; o sistema cria os movimentos de estoque, caixa/banco, obrigações, receitas operacionais e lançamentos contábeis gerenciais correspondentes.
+O sistema não substitui a escrituração do contador nem o sistema financeiro (que é um segundo web app que está sendo desenvolvido), porém ele deve produzir dados confiáveis e exportáveis para a consolidação gerencial e para a contabilidade.
+Por fim, todas as alteração que serão implementadas com base neste documento devem ser analisadas juntamente com as funcionalidades e respectivos códigos para que seja aproveitado tudo o que já foi feito, que não colida com as instruções aqui passadas, mas também para que se evite duplicidade de códigos no sistema, de modo que aquilo que não for compatível deve ser substituido, porém o que for compatível e até mesmo complementar deve ser aproveitado. Ressaltando que o presente documento altera apenas a parte de registrar compras, despesas, vendas do bar e do frigobar, movimentações de estoque e pagamentos/recebimentos operacionais, não devendo alterar outras partes do aplicativo que não estejam ligadas a essas funcionalidades.
+Toda vez que surgir qualquer questão que fuja das regras aqui estabelecidas, que envolva pontos relevantes ou lacunas que devam ser melhor explicitados, não presuma uma solução sem antes me consultar. O mesmo vale para pontos que possam implicar em providência contrária ao que está sendo determinado neste documento, ou seja, se houver alguma questão relevante, mesmo que ela possa implicar em quebrar alguma regra posta aqui neste documento, faça a consulta a mim mesmo assim, porém sempre aguarde minha decisão para fazer qualquer alteração. Toda vez que for fazer qualquer sugestão ou consulta, sempre seja didático e objetivo nas suas palavras e evite o uso de jargões técnicos.
+1.1 Objetivos específicos
+1. Registrar compras de produtos e materiais, com itens, quantidades, custos, fornecedor, destino e forma de pagamento.
+2. Registrar despesas incorridas, pagas ou pendentes, separando competência e pagamento.
+3. Controlar estoque por produto e local, incluindo entradas, consumo, vendas, transferências, perdas e inventários.
+4. Registrar as receitas e vendas do bar da piscina e do frigobar, bem como os respectivos recebimentos no checkout.
+5. Controlar o custo dos produtos vendidos (CMV) e o custo das receitas preparadas, como petiscos e drinks.
+6. Apurar separadamente os custos de hospedagem, café da manhã, bar da piscina, frigobar e administração/áreas comuns.
+7. Calcular o custo do café da manhã por hóspede/serviço servido.
+8. Controlar contas operacionais de caixa, bancos e fornecedores, sem duplicar o controle das receitas de hospedagem, pois estas estão sendo controladas em outro aplicativo para o qual forneceremos nossos dados via api que já fornecemos para acessar os dados de vendas do bar e frigobar.
+9. Produzir relatórios gerenciais, trilha de auditoria e exportações para o sistema financeiro e a contabilidade.
+10. Permitir futura integração por API ou importação de arquivos com o sistema financeiro/de reservas.
+1.2 Fora do escopo inicial
+● Registrar ou cobrar a receita de hospedagem, administrar suas contas a receber ou realizar conciliação bancária em tempo real dessas receitas. Isso permanece no sistema financeiro, aquela para o qual já fornecemos api para obter dados de consumo de bar e frigobar (chamarei esse sistema de apenas "sistema financeiro".
+● Substituir o sistema fiscal ou a escrituração contábil oficial.
+● Emitir NFC-e/NFS-e ou apurar automaticamente tributos sem projeto fiscal específico.
+● Executar pagamentos diretamente no banco.
+● Fazer folha de pagamento completa. O sistema pode registrar custos/despesas de pessoal e obrigações agregadas.
+● Gerenciar reservas, tarifas, disponibilidade de quartos ou o processo completo de check-in/check-out.
+● Tratar venda a prazo ao público. Consumos do bar e frigobar podem ficar vinculados ao hóspede durante a estadia (conforme metodologia já implementada no presente aplicativo, ou seja, por meio do controle da conta da suite combinada com o nome do hóspede), mas devem ser liquidados no checkout, sem financiamento ou parcelamento pela pousada, conforme já estávamos considerando, agora explicitamente, no aplicativo.
+2. Contexto operacional e regras fundamentais
+2.1 Centros de custo obrigatórios
+Passaremos a ter apenas os seguintes centros de custo que não podem ser fundidos nos relatórios, abandonando a ideia de subcentros de custo (ou seja, as contas estarao classificadas diretemente nesses centros de custo, devendo ser execluidos o subcentros de custo):
+1. Hospedagem — custos de operação dos quartos e da hospedagem, exceto café da manhã, bar e frigobar.
+2. Café da manhã — alimentos, bebidas e mão de obra/insumos associados ao serviço de café da manhã incluído na diária.
+3. Bar da piscina — venda de petiscos, cervejas, refrigerantes, drinks e demais produtos servidos no bar da piscina.
+4. Frigobar — bebidas armazenadas nos frigobares e vendidas aos hóspedes.
+5. Administração e áreas comuns — custos administrativos e gastos compartilhados não atribuíveis diretamente a um dos quatro centros anteriores.
+Centros adicionais poderão ser cadastrados no futuro, sem alterar o histórico já lançado.
+2.2 Princípios de operação
+● Uma compra ou despesa é digitada uma única vez.
+● O sistema gera automaticamente lançamentos equilibrados por partidas dobradas.
+● A compra de item estocável aumenta o estoque; não vira despesa imediatamente só por ter sido comprada.
+● O custo é reconhecido quando o item é vendido, consumido, perdido ou baixado por outro motivo justificado.
+● Cada lançamento deve indicar conta contábil gerencial, centro de custo quando aplicável, data de competência, data de caixa e origem.
+● O sistema deve distinguir data de competência, data do documento e data de pagamento/recebimento.
+● Não se deve apagar definitivamente lançamento confirmado. Correções devem ocorrer por estorno e novo lançamento, mantendo histórico.
+● O sistema deve bloquear a confirmação se o total dos débitos não for igual ao total dos créditos.
+● Relatórios gerenciais devem mostrar separadamente custos, despesas, receitas do bar/frigobar, posição de caixa/bancos, estoque e obrigações.
+3. Usuários, perfis e permissões
+3.1 Perfis novos
+"Gerente operacional" - Registrar e consultar compras, despesas, vendas, consumos, pagamentos e recebimentos operacionais. - Consultar estoque, custos, inventários e relatórios operacionais. - Não pode apagar lançamentos confirmados nem alterar períodos fechados. - Pode solicitar correção por estorno, conforme permissões definidas.
+"Contador" (consulta e exportação) - Novo tipo de usuário que terá acesso de leitura a lançamentos, documentos, balancete, relatórios e exportações. - Sem permissão para editar dados operacionais.
+Observação: o administrador do sistema continua com todas as funcionalidades e correspondentes permissões já existentes, incluindo gerenciar usuários, permissões, cadastros, contas, centros de custo, regras de rateio e períodos.
+3.2 Segurança
+● Autenticação individual; não usar uma única conta compartilhada.
+● Permissões por função.
+● Encerrar sessões inativas e permitir revogação de acesso.
+● Criptografar o tráfego com HTTPS.
+● Guardar senhas com algoritmo próprio para hash seguro; nunca em texto puro.
+● Registrar usuário, data/hora e ação em toda inclusão, edição, confirmação, estorno, exportação e fechamento.
+● Fazer backup automático e testar restauração periodicamente.
+● Não armazenar dados completos de cartão de pagamento.
+4. Navegação e telas
+Menu principal do "módulo contábil" para o admin do sistema:
+1. Painel
+2. Compras
+3. Despesas
+4. Vendas e consumos
+5. Estoque
+6. Pagamentos e recebimentos
+7. Centros de custo
+8. Relatórios
+9. Cadastros
+10. Integrações e exportações
+11. Auditoria e configurações
+Lembrando que o web app deve ser responsivo e priorizar o uso em celular, com formulários curtos, seletores, pesquisa e preenchimento automático. Deve funcionar nos navegadores modernos sem exigir instalação de aplicativo.
+4.1 Tela de compras
+Campos obrigatórios: - Data do documento e data de competência. - Fornecedor. - Número do documento, quando houver. - Um ou mais itens. - Para cada item: produto, quantidade, unidade, custo unitário, desconto, frete/outros custos atribuíveis, tributos recuperáveis/não recuperáveis quando informados, total e local de estoque. - Centro de custo/uso pretendido. - Forma de pagamento: banco/PIX, dinheiro, cartão corporativo ou a prazo com fornecedor. - Conta financeira usada, se pago. - Vencimento, se a prazo. - Observações.
+Comportamento: - Calcular subtotais e total automaticamente. - Permitir ratear itens da mesma nota entre diferentes centros de custo e locais de estoque. - Produtos estocáveis entram no estoque. - Itens de consumo imediato não estocáveis podem ser lançados diretamente como custo/despesa, com centro de custo obrigatório. - Ao confirmar, gerar entrada de estoque e lançamento contábil gerencial. - Se a compra for paga no ato, reduzir caixa/banco; se não, criar obrigação com fornecedor. - Ao pagar obrigação existente, registrar apenas a liquidação, sem reconhecer a despesa/estoque novamente. - Impedir duplicidade provável por fornecedor, número de documento, data e valor, com possibilidade de revisão autorizada.
+4.2 Tela de despesas
+Campos: - Data de competência. - Data do documento. - Categoria/conta de despesa ou custo. - Centro de custo. - Fornecedor/prestador, se aplicável. - Descrição. - Valor. - Forma e conta de pagamento ou indicação de pendência. - Vencimento, se houver. - Documento/recibo anexado. - Regra de rateio, se compartilhada. - Observações.
+Comportamento: - Despesa paga: reconhecer despesa/custo e saída de caixa/banco no mesmo evento, salvo se for pagamento de obrigação previamente reconhecida. - Despesa ainda não paga: reconhecer despesa/custo contra obrigação a pagar. - Pagamento posterior: baixar obrigação contra banco/caixa, sem lançar a despesa novamente. - Permitir dividir uma despesa entre centros de custo; a soma dos rateios deve ser igual ao valor total. - Para despesas recorrentes, permitir copiar lançamento anterior, sem gerar pagamentos automáticos.
+4.3 Tela de vendas e consumos do bar/frigobar
+A receita do bar e do frigobar é responsabilidade deste Sistema.
+Campos por item vendido: - Data/hora. - Setor: bar da piscina ou frigobar. - Produto vendido ou item do cardápio. - Quantidade. - Preço de venda unitário. - Desconto, se autorizado. - Identificador do hóspede/quarto ou código de consumo, limitado ao necessário. - Status: aberto na conta de consumo, pago no checkout, cancelado ou estornado. - Forma de recebimento no checkout. - Usuário responsável e observação para cancelamentos.
+Regras: - A venda deve registrar receita do bar/frigobar e custo da mercadoria/ingredientes, quando o evento for confirmado segundo a política de reconhecimento configurada. - Durante a estadia, o consumo fica em uma conta transitória de consumo a liquidar no checkout, vinculada ao hóspede/quarto (conforme já estávamos fazendo no sistema com a tela "consumo por suites", porém agora devemos registrar numa conta contábil transitória de modo que ela apareça nessa conta contábil seu saldo total e o saldo de cada subconta vinculada ao hospede/quarto, de modo que as telas existentes de comandas e de consumos por suites não devem ser alteradas, nem deve ser alterada qualquer sistemática que já haviamos estabelecido para essas telas) . Isso não significa conceder crédito comercial ou permitir saldo após o checkout. - No checkout, registrar o recebimento em dinheiro, PIX, cartão ou outra forma aceita, baixar a conta transitória e emitir/registrar comprovante conforme processo operacional. - O pagamento não deve gerar uma segunda receita: apenas liquida o valor já registrado na venda. - Se o consumo for cancelado antes da venda ser concluída, não reconhecer receita nem custo; se já tiver sido confirmado, fazer estorno rastreável. - O sistema deve permitir registrar consumo sem que esteja ligado a um hóspede ou suite, para registrar o consumo de um hóspede que já fechou sua conta e acabou retornando ou para um passante, de qualquer forma, nesse caso, o lançamento da comanda desse consumidor deve ser precedido da abertura da conta de "consumo avulso", com a identificação do consumidor (mínimo de nome do consumidor, mas campos para cpf, email, endereço e telefone), devendo esse consumo ser visualizado e registrado também na tela de consumo por suite, da mesma forma que se faz para o consumo ligado ao hospede/quarto nessa tela. - O bar e o frigobar devem ter estoque e relatórios separados.
+4.4 Tela de estoque
+Funções: - Consultar saldo por produto e local. - Consultar custo médio e valor total. - Registrar inventário físico. - Registrar perda, vencimento, quebra, consumo interno e ajuste, exigindo motivo. - Consultar histórico completo de entradas e saídas. - Alertar para estoque abaixo do mínimo, validade próxima e diferenças de inventário.
+Local de estoque único: - Depósito/estoque central. Não há transferência entre locais pois os estoques são centralizados num único local.
+5. Cadastro de produtos, receitas e unidades (as telas que hoje temos, de ficha técnica dos pratos por exemplo, devem ser adaptadas e integradas a estas novas regras)
+5.1 Cadastro de produto
+Campos: - Código interno/SKU. - Nome e descrição. - Categoria. - Tipo: revenda, ingrediente de receita, material de consumo, material de limpeza, embalagem ou outro. - Unidade-base: unidade, garrafa, litro, mililitro, quilo, grama, pacote etc. - Conversões de unidade (ex.: garrafa de 750 ml = 0,75 litro). - Controla estoque: sim/não. - Centro de custo padrão. - Locais de estoque permitidos. - Estoque mínimo. - Prazo de validade, quando aplicável. - Custo médio atual. - Ativo/inativo.
+Não excluir produtos com histórico; desativá-los.
+5.2 Receitas técnicas (fichas de preparo) ( a tela que existe hoje deve ser adaptada, bem como devem ser adaptadas as funcionalidades e sistemáticas existentes hoje, aproveitando-se o que for possível)
+Para petiscos e drinks: - Nome do item de cardápio. - Centro de custo: bar da piscina. - Ingredientes e quantidades por porção. - Unidade-base e conversões. - Rendimento esperado. - Perdas de preparo estimadas, quando aplicável. - Custo calculado de cada ingrediente e custo total teórico por porção. - Versão e data de vigência da ficha. - Preço de venda atual, apenas para cálculo gerencial, sem alterar a política comercial.
+Quando uma porção for vendida, o sistema baixa do estoque as quantidades previstas na ficha técnica. Se houver cancelamento após o preparo, deve permitir registrar se os ingredientes foram recuperados ou perdidos; a baixa não pode ser desfeita automaticamente sem verificar a ocorrência real.
+Para cervejas, refrigerantes e outras bebidas vendidas por unidade fechada, a baixa é direta por unidade. Para drinks, a baixa deve ocorrer pelos ingredientes da ficha técnica.
+5.3 Café da manhã
+● Centro de custo exclusivo.
+● Cadastro dos insumos e das compras destinadas ao café (basta deixar uma caixa de seleção no registro da compra, para cada item, se aquele item se destina ao café da manhã). Assim, embora o estoque esteja centralizado, o custo do café da manhã será calculado com base na compra de produtos para o cafe da manhã, porque se torna inviável que quem prepare o cafe da manha registre cada item consumido naquele momento, assim será necessário fazer um calculo indireto de custo de café da manhã considerando que todos os itens perecíveis (frutas) comprados para café da manha numa semana foram consumidos naquela semana, já os itens não perecíveis serão baixados manualmente e passa ser contabilizado seu custo médio no mês considerando proporcionalmente à quantidade consumida no mes (forneça uma regra matemática, sujeita a minha aprovação, para o cálculo do custo dos itens não perecíveis no cálculo do custo do café da manha, tais como requeijão, manteiga, leite, ovos, queijo, presunto, farinhas etc.). Assim, por conta dessa regra, poderemos ter o fechamento apenas com periodicidade mensal do custo do café da manha total e por hóspedes.
+● Registro do número de cafés servidos por dia (o sistema sempre parte do número de hospedes registrados, porém deve haver a possibilidade de registrar número menor de café servidos para contemplar o fato de que determinados hóspedes não tomarem café, ou seja, o sistema deve tratar número de hóspedes e número de cafés servidos como grandezas distintas).
+● Possibilidade de registrar desperdício e consumo interno separadamente.
+● Mão de obra e custos indiretos podem ser atribuídos ao centro de custo por lançamento direto ou rateio.
+6. Plano de contas gerencial e partidas dobradas
+O plano de contas deve ser editável por administrador, mas começar com a estrutura abaixo. Cada conta deve ter código, nome, natureza, grupo, indicação de uso e status.
+6.1 Ativo
+● Caixa.
+● Banco — uma conta por conta bancária real.
+● Consumos de bar/frigobar a liquidar no checkout (conta transitória).
+● Estoque central de bebidas.
+● Estoque central de alimentos/ingredientes.
+● Estoque de materiais de limpeza e amenidades.
+● Outros estoques operacionais.
+● Equipamentos e imobilizado.
+● Depreciação acumulada.
+6.2 Passivo
+● Fornecedores a pagar.
+● Despesas operacionais a pagar.
+● Salários/encargos a pagar (valores agregados).
+● Tributos e taxas a pagar (valores informados pelo responsável/contador).
+● Outras obrigações operacionais.
+6.3 Receitas operacionais deste sistema
+● Receita de bebidas — bar da piscina.
+● Receita de petiscos — bar da piscina.
+● Receita de drinks — bar da piscina.
+● Receita de bebidas — frigobar.
+● Descontos concedidos no bar/frigobar (conta redutora de receita).
+● Cancelamentos/devoluções do bar/frigobar (conta redutora de receita).
+Não criar conta de receita de hospedagem neste sistema. A receita de hospedagem é gerenciada no sistema financeiro.
+6.4 Custos diretos
+● CMV de bebidas — bar da piscina.
+● Custo de ingredientes/petiscos — bar da piscina.
+● Custo de ingredientes/drinks — bar da piscina.
+● CMV de bebidas — frigobar.
+● Custo de alimentos e bebidas consumidos — café da manhã.
+● Materiais de limpeza e amenidades — hospedagem.
+● Lavanderia — hospedagem.
+● Mão de obra operacional — centro correspondente.
+● Perdas e desperdícios de estoque, por centro.
+6.5 Despesas operacionais e indiretas
+● Energia elétrica.
+● Água e esgoto.
+● Gás.
+● Internet e telefonia.
+● Manutenção.
+● Jardinagem.
+● Piscina.
+● Limpeza de áreas comuns.
+● Contabilidade e serviços profissionais.
+● Material administrativo.
+● Tarifas bancárias.
+● Despesas financeiras.
+● Despesas com pessoal administrativo.
+● Outras despesas operacionais.
+As contas podem ser ampliadas sem mudar os lançamentos históricos.
+6.6 Regras de partidas dobradas
+Todo evento confirmado gera um ou mais lançamentos, com débitos iguais aos créditos. O usuário operacional não precisa escolher débito e crédito.
+Exemplos:
+Compra de 24 cervejas a R$ 4,50, paga pelo banco - Débito: Estoque Central de bebidas: R$ 108,00. - Crédito: Banco: R$ 108,00. - Efeito imediato no resultado: zero; o custo é reconhecido quando vendido, consumido ou perdido.
+Compra de alimentos a prazo - Débito: Estoque Central de alimentos/ingreditentes - Crédito: Fornecedores a pagar.
+Pagamento posterior ao fornecedor - Débito: Fornecedores a pagar. - Crédito: Banco.
+Venda de cerveja no bar - Débito: Consumos de bar a liquidar no checkout. - Crédito: Receita de bebidas — Bar da piscina. - Débito: CMV de bebidas — Bar da piscina. - Crédito: Estoque Central de bebidas.
+Recebimento no checkout - Débito: Banco ou Caixa. - Crédito: Consumos de bar a liquidar no checkout. - Não reconhecer receita novamente.
+Venda de drink - Débito: Consumos de bar a liquidar no checkout. - Crédito: Receita de drinks — Bar da piscina. - Débito: Custo de ingredientes/drinks — Bar da piscina. - Crédito: Estoque central de alimentos/ingredientes, consumidos conforme a ficha técnica.
+Consumo de alimentos no café da manhã - Débito: Custo de alimentos e bebidas — Café da manhã. - Crédito: Estoques Central de alimentos/ingredientes.
+Conta de energia paga no ato - Débito: Despesa de energia, distribuída entre os centros de custo aplicáveis. - Crédito: Banco.
+Conta de energia recebida e ainda não paga - Débito: Despesa de energia, distribuída entre os centros. - Crédito: Despesas operacionais a pagar. - Quando pagar: débito em despesas a pagar e crédito em banco.
+Perda de produto - Débito: Perdas de estoque no centro de custo responsável. - Crédito: Estoque Central do produto. - Exigir motivo, quantidade, custo e usuário responsável.
+6.7 Regras de custo e valorização
+● Usar custo médio ponderado móvel como método padrão de custo gerencial para itens estocáveis.
+● Custo de aquisição pode incluir frete e outros custos diretamente atribuíveis; descontos reduzem o custo.
+● Tributos recuperáveis não compõem o custo; tributos não recuperáveis podem compor, conforme classificação validada pelo contador.
+● Registrar separadamente consumo vendido, consumo interno, desperdício e perda sempre que houver informação suficiente.
+● Ajustes de inventário exigem motivo e autorização conforme perfil (somente admin e gerente operacional).
+● Não permitir estoque negativo por padrão. Se for necessária exceção operacional, exigir permissão especial e destacar o relatório afetado.
+● Para o CMV teórico, usar as fichas técnicas; para a apuração real do período, conciliar estoque inicial, compras, transferências, saídas e estoque final contado.
+● Não somar duas vezes o mesmo custo: quando uma compra entra em estoque, ela não deve ser lançada também como despesa/custo até ocorrer a saída apropriada.
+7. Cálculos e indicadores gerenciais
+7.1 Estoque
+Por produto e local:
+Estoque final = Estoque inicial + Entradas + Transferências recebidas - Saídas - Transferências enviadas - Perdas ± Ajustes
+O sistema deve armazenar cada movimento individual; o saldo é calculado a partir dos movimentos e pode ser materializado para melhorar o desempenho.
+7.2 CMV de bebidas e mercadorias
+CMV do período = Estoque inicial + Compras líquidas + Transferências de entrada - Transferências de saída - Estoque final
+Para demonstrativos gerenciais, perdas identificadas devem ser apresentadas separadamente. A fórmula operacional deve garantir que uma transferência entre centros não seja tratada como compra ou custo consolidado da pousada.
+7.3 Custo das fichas técnicas
+Custo teórico da porção = soma (quantidade de cada ingrediente × custo unitário convertido) + custos diretos adicionais
+Custo teórico vendido = quantidade de porções vendidas × custo teórico por porção
+Comparar custo teórico com consumo real, destacando diferenças. A diferença não deve ser classificada automaticamente como fraude; pode decorrer de desperdício, variação de preparo, erro de cadastro, erro de inventário ou consumo não lançado.
+7.4 Café da manhã por hóspede
+Métricas obrigatórias: - Custo total dos alimentos/bebidas consumidos no café da manhã. - Número de cafés servidos. - Custo de insumos por café servido. - Custos diretos adicionais atribuídos ao centro. - Custo total do café da manhã por serviço servido. - Quantidade de desperdício, se registrada.
+Fórmulas: - Custo de insumos por café = custo de insumos consumidos no período ÷ número de cafés servidos. - Custo total por café = custos totais atribuídos ao centro Café da manhã ÷ número de cafés servidos.
+Definir claramente que o denominador é "cafés servidos" e não "hóspedes hospedados". Se cada hóspede recebe um café por dia, ambos podem coincidir, mas o sistema não deve assumir isso, na verdade o valor de cafés servidos deve ser inicialmente igualado ao número de hóspedes hospedados, com a possibilidade de que o gerente operacional e o admin alterem esse dado para permitir considerar que alguns hóspedes não tomaram café da manhã.
+Para dias sem contagem, sinalizar dado ausente; não inventar denominador nem apresentar custo unitário como zero.
+7.5 Hospedagem
+Calcular, quando houver dados: - Custos do centro Hospedagem. - Diárias ocupadas importadas da Stays (já existente). - Custo por diária ocupada. - Custos de hospedagem excluindo café da manhã, bar e frigobar.
+7.6 Bar e frigobar
+Indicadores: - Receita bruta, descontos e receita líquida por setor. - CMV por setor. - Margem bruta gerencial = receita líquida − CMV. - Margem bruta percentual = margem bruta ÷ receita líquida, quando receita líquida maior que zero. - Quantidade vendida por item. - Consumo pendente de checkout. - Perdas e diferenças de inventário. - Custo teórico versus real para petiscos e drinks.
+7.7 Despesas compartilhadas
+Cada regra de rateio deve conter: - Despesa/categoria aplicável. - Centros participantes. - Critério: percentual fixo, valor, medidor/consumo ou outro critério documentado. - Percentual ou parâmetro de cálculo. - Data de vigência e histórico.
+A soma dos percentuais deve ser 100%. Se o rateio for manual, o usuário deve informar os valores por centro e o sistema validar a soma. Não alterar períodos encerrados quando uma regra mudar; mudanças só valem a partir da data de vigência.
+8. Integração entre os dois sistemas
+8.1 Princípio
+O presente Sistema é a fonte oficial de compras, despesas operacionais, vendas do bar/frigobar, estoques e custos dos centros sob sua responsabilidade.
+O Sistema Financeiro é a fonte oficial das receitas de hospedagem, contas a receber da hospedagem e conciliação bancária real time dessas receitas.
+O presente Sistema deve permitir integração via API autenticada (o que já existe parcialmente, pois atualmente somente são fornecidos dados de consumo) e, antes disso, exportação CSV/XLSX/JSON com esquema documentado.
+8.2 Assim, os dados que o presente Sistema deve enviar ao Sistema Financeiro são inicialmente
+● Receitas do bar e frigobar por período e centro.
+● Recebimentos de checkout por forma de pagamento.
+● Custos diretos e indiretos por centro.
+● Despesas por categoria.
+● Saldos de estoque e valores.
+● CMV e margem bruta do bar/frigobar.
+● Custo do café da manhã por serviço/hóspede.
+● Metadados para conciliação, trilha de auditoria e referência dos lançamentos.
+O envio deve incluir período, moeda, fuso horário, identificadores únicos e data de geração. O Sistema Financeiro deve poder rejeitar ou sinalizar dados duplicados/inconsistentes sem modificar os registros de origem no nosso presente Sistema.
+8.3 Regras de consolidação
+● Nunca somar duas vezes uma receita ou um custo.
+● Os recebimentos do bar/frigobar são liquidação da conta transitória de consumo, não nova receita.
+● Transferências entre centros não alteram o resultado consolidado da pousada.
+● O custo do café da manhã é custo gerencial separado; não criar receita de café da manhã, pois está incluído na diária.
+9. Relatórios e demonstrativos
+Todos os relatórios devem aceitar filtro por período, centro de custo, conta, produto, fornecedor e situação, conforme aplicável. Devem permitir exportação CSV/XLSX e PDF.
+9.1 Painel operacional
+● Compras do mês.
+● Despesas do mês.
+● Saldo de caixa e bancos.
+● Valor do estoque por local e total.
+● Consumos de bar/frigobar pendentes de checkout.
+● CMV e margem bruta do bar/frigobar.
+● Custo por café da manhã servido.
+● Alertas de estoque baixo, validade e inventário.
+● Pendências de pagamento e documentos sem anexo.
+9.2 Demonstrativo gerencial por centro de custo
+Colunas mínimas: - Centro de custo. - Custos diretos. - Despesas diretas. - Rateios recebidos. - Total de custos/despesas. - Receita, apenas para os centros bar da piscina e frigobar. - Margem bruta, para bar e frigobar. - Indicadores unitários aplicáveis.
+O centro Café da manhã deve mostrar custo total e custo por serviço/hóspede, sem receita separada. O centro Hospedagem deve mostrar os custos da hospedagem excluindo café da manhã, bar e frigobar.
+9.3 Demonstrativo de resultado gerencial parcial
+Mostrar: - Receita líquida do bar. - Receita líquida do frigobar. - CMV/custo de ingredientes por centro. - Margem bruta de bar e frigobar. - Custos de hospedagem. - Custos do café da manhã. - Despesas administrativas/áreas comuns. - Total de custos e despesas operacionais registrados neste sistema.
+Identificar claramente que o relatório é parcial pois não mostra receita de hospedagem. Não rotular o resultado parcial como lucro líquido total da pousada.
+9.4 Movimentação de estoque
+● Saldo inicial.
+● Compras.
+● Transferências.
+● Vendas/consumo.
+● Perdas e ajustes.
+● Saldo calculado.
+● Saldo contado.
+● Diferença em quantidade e valor.
+● Custo médio unitário.
+9.5 Livro de lançamentos e balancete gerencial
+● Data, documento, histórico, conta debitada, conta creditada, valor, centro de custo, origem, usuário e estado do lançamento.
+● Balancete com saldo inicial, débitos, créditos e saldo final.
+● Validação automática de que débitos e créditos totais coincidem.
+● Exportação para o contador, com mapeamento de contas configurável.
+Palavras finais: busque as melhores práticas e mais modernas formas de apresentação de relatórios contábeis e gerenciais, prezando por um acesso fácil desses documentos em telas inteligentemente elaboradas. Aproveite as telas existentes naquilo que for possível, considerando que o módulo contábil passa a entrar no menu principal como um menu separado dos demais e que integra todas as funcionalidades aqui descritas, em submenus e subtelas, ainda que algumas delas sejam aproveitadas de outras telas existentes de forma espalhada no aplicativo, ou seja, todas as telas, mesmo as aproveitadas, devem ser centralizadas sob o menu modulo contábil. Implemente as mudanças acima com o melhor dos seus esforços, sempre pensando na identidade visual existente do sistema da pousada, porém melhorando a visibilidade e a ergonomia sempre que possível e sempre atendo à facilidade de uso e beleza.
+Esse documento deve ser fundido com o PRD_compras, de modo que esse arquivo passa a se chamar PRD_compras&contabil, salvo no projeto e editado toda vez que houver mudanças aqui.
+Sempre que houver alguma dúvida não invente, pergunte! Sempre que houver alguma questão relevante não decida, pergunte! Após todas as dúvidas e questões relevantes esclarecidas, implemente localmente, teste e prepare tudo para que eu possa testar localmente. As telas dos usuários novos, gerente operacional e contador, serão decididas apos esses meus testes locais.
+Mãos à obra!
+
+### 22.2 Levantamento do que já existe hoje (feito antes de perguntar)
+
+Antes de formular qualquer pergunta, foi mapeado em detalhe como cada
+parte relacionada do app funciona hoje — contas de suíte (`room_bills`),
+comandas do bar, o Plano de Contas recém-criado (seção 21), estoque,
+ativo permanente, ficha técnica, café da manhã, papéis de usuário, menu
+do admin, forma de pagamento, e a integração já existente com o sistema
+financeiro. Os pontos de maior atrito encontrados entre o que já existe
+e o que este documento pede, todos levados ao proprietário antes de
+qualquer implementação:
+
+- **Hoje toda conta/comanda é obrigatoriamente ligada a uma suíte** — não
+  existe, em lugar nenhum do banco de dados, a possibilidade de uma
+  conta "sem quarto". O "consumo avulso" pedido na seção 4.3 é a mudança
+  mais profunda tecnicamente de todo o documento por esbarrar nisso.
+- **O Plano de Contas tem hoje uma camada de ~25 subcentros** entre os 4
+  centros e os ~175 itens de custo (seção 21 deste arquivo) — construída
+  há poucos dias, a pedido do próprio proprietário. Esse documento pede
+  removê-la. Muitos itens de custo hoje (água, luz, salário das
+  camareiras, honorários administrativos, materiais de limpeza) são
+  **compartilhados entre vários subcentros de centros diferentes ao
+  mesmo tempo**, com percentual — a remoção da camada precisa decidir o
+  que acontece com esses itens compartilhados.
+- **O saldo de estoque hoje só existe em quantidade, nunca em R$** — não
+  há nenhum valor monetário de estoque guardado ou calculado de forma
+  permanente. O "custo médio ponderado móvel" pedido pela seção 6.7 é
+  uma peça inteiramente nova.
+- **Fornecedor hoje é só texto livre**, em duas colunas independentes
+  (uma em despesas, outra em ativo permanente) que nem batem entre si.
+  Não existe cadastro de fornecedor, nem conceito de "conta a pagar"/
+  compra a prazo — despesas hoje são só um fato do passado, sem estado
+  "em aberto"/"paga".
+- **O estoque de uma venda do bar só desce quando a conta da suíte é
+  paga**, não no momento do pedido — às vezes dias depois. O documento
+  mostra o lançamento contábil da venda acontecendo no momento da venda,
+  não do pagamento.
+- **O menu do admin hoje é uma lista única, sem nenhum conceito de
+  "módulo"** — nenhuma base de código pra reaproveitar nesse sentido,
+  seria uma estrutura de navegação nova.
+- **O token usado pela integração externa hoje só expõe dados de conta
+  de suíte** — nenhuma infraestrutura equivalente existe pra expor
+  despesas/custos/estoque/CMV, que teria que ser construída do zero.
+
+Com esse levantamento em mãos, uma lista de pontos de decisão foi levada
+ao proprietário em conversa (não reproduzida aqui porque não é, ela
+mesma, uma decisão — só o convite a decidir). **O resultado dessa
+consulta ainda não chegou no momento em que esta seção foi escrita.**
+Assim que chegar, esta seção 22 será reescrita por completo com: as
+decisões tomadas, o plano de levas definitivo, e o changelog de cada
+leva implementada, no mesmo formato já usado nas seções 15 a 21 acima.
