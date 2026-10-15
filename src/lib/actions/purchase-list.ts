@@ -66,7 +66,7 @@ export async function getPurchaseList(): Promise<PurchaseListRow[]> {
     supabase.from("inventory_items").select("id, name, unit, active").eq("active", true),
     supabase
       .from("cost_items")
-      .select("inventory_item_id, cost_item_subcenters(cost_subcenters(name))")
+      .select("inventory_item_id, cost_item_centers(cost_centers(name))")
       .eq("is_inventory", true)
       .not("inventory_item_id", "is", null),
     supabase.from("inventory_purchase_suggestions").select("*"),
@@ -78,13 +78,13 @@ export async function getPurchaseList(): Promise<PurchaseListRow[]> {
   const itemRows = (items ?? []) as unknown as ItemRaw[];
   type CostItemLinkRaw = {
     inventory_item_id: string;
-    cost_item_subcenters: { cost_subcenters: { name: string } | null }[];
+    cost_item_centers: { cost_centers: { name: string } | null }[];
   };
   const categoryNamesByItem = new Map<string, string[]>();
   ((costItemLinks ?? []) as unknown as CostItemLinkRaw[]).forEach((r) => {
     const names = categoryNamesByItem.get(r.inventory_item_id) ?? [];
-    r.cost_item_subcenters.forEach((l) => {
-      if (l.cost_subcenters?.name) names.push(l.cost_subcenters.name);
+    r.cost_item_centers.forEach((l) => {
+      if (l.cost_centers?.name) names.push(l.cost_centers.name);
     });
     categoryNamesByItem.set(r.inventory_item_id, names);
   });

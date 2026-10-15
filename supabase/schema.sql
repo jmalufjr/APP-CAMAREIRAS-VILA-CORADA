@@ -40,6 +40,12 @@ create type inventory_movement_type as enum (
 );
 create type inventory_count_status as enum ('em_andamento', 'concluida');
 create type purchase_request_status as enum ('pendente', 'atendido', 'cancelado');
+-- Módulo Contábil (PRD_compras&contabil.md): plano de contas contábil +
+-- partidas dobradas — dimensão "que TIPO de movimento é isso", nunca
+-- confundir com centro de custo ("de qual PARTE da pousada é isso").
+create type ledger_account_group as enum ('ativo', 'passivo', 'receita', 'custo', 'despesa');
+create type ledger_entry_status as enum ('confirmado', 'estornado');
+create type ledger_entry_direction as enum ('debito', 'credito');
 
 -- ---------- PROFILES ----------
 -- Espelha auth.users com dados de perfil e papel (admin | camareira)
@@ -1640,37 +1646,18 @@ create table inventory_items (
 -- ou a um ativo permanente, nunca a um "centro"/"subcentro" direto —
 -- esses dois níveis são só classificação/organização, com rateio
 -- percentual em cada um).
+-- Centro de custo — item de custo liga direto aqui (sem subcentro no
+-- meio, removido no Módulo Contábil Leva 1, ver
+-- PRD_compras&contabil.md seção 22.3 item 2; até então havia uma camada
+-- de subcentro entre os dois). count_frequency_days: usado pro aviso de
+-- contagem física (cada centro é um grupo de contagem próprio).
 create table cost_centers (
   id uuid primary key default uuid_generate_v4(),
   name text not null unique,
-  active boolean not null default true,
-  position int not null default 0,
-  created_at timestamptz not null default now()
-);
-
--- Subcentros NÃO têm nome único — "Gerais"/"Alimentos"/"Materiais de
--- limpeza" existem uma vez por centro a que pertencem, cada ocorrência
--- é uma linha própria com sua própria lista de itens (confirmado com o
--- proprietário: mesmo nome ≠ mesma linha). count_frequency_days: mesma
--- ideia que `expense_categories.count_frequency_days` tinha antes, só
--- que por subcentro agora — usada pro aviso de contagem física.
-create table cost_subcenters (
-  id uuid primary key default uuid_generate_v4(),
-  name text not null,
   count_frequency_days int check (count_frequency_days is null or count_frequency_days > 0),
   active boolean not null default true,
   position int not null default 0,
   created_at timestamptz not null default now()
-);
-
--- Um subcentro pode pertencer a mais de 1 centro (funcionalidade
--- genérica, mesmo que no plano de contas inicial nenhum subcentro
--- precise disso — todos ficam 100% ligados a 1 único centro).
-create table cost_subcenter_centers (
-  subcenter_id uuid not null references cost_subcenters(id) on delete cascade,
-  center_id uuid not null references cost_centers(id) on delete cascade,
-  alloc_pct numeric(6,2) not null check (alloc_pct > 0 and alloc_pct <= 100),
-  primary key (subcenter_id, center_id)
 );
 
 -- Itens de custo: a conta mais analítica — pode ou não representar
@@ -1689,15 +1676,172 @@ create table cost_items (
 );
 create unique index cost_items_inventory_item_uq on cost_items (inventory_item_id) where inventory_item_id is not null;
 
--- Um item de custo pode pertencer a mais de 1 subcentro (ex.: "água" nos
--- "Gerais" de Hospedagem, Café da manhã e Bar da piscina) — o rateio diz
--- quanto do gasto daquele item vai pra cada subcentro em que ele aparece.
-create table cost_item_subcenters (
+-- Um item de custo pode pertencer a mais de 1 centro (ex.: "água" em
+-- Hospedagem, Café da manhã e Bar da piscina ao mesmo tempo) — o rateio
+-- diz quanto do gasto daquele item vai pra cada centro em que aparece.
+create table cost_item_centers (
   cost_item_id uuid not null references cost_items(id) on delete cascade,
-  subcenter_id uuid not null references cost_subcenters(id) on delete cascade,
+  center_id uuid not null references cost_centers(id) on delete cascade,
   alloc_pct numeric(6,2) not null check (alloc_pct > 0 and alloc_pct <= 100),
-  primary key (cost_item_id, subcenter_id)
+  primary key (cost_item_id, center_id)
 );
+
+-- ---------- MÓDULO CONTÁBIL: plano de contas contábil + partidas dobradas ----------
+-- Ver PRD_compras&contabil.md seção 22. `code` é o identificador estável
+-- usado pelo código do app (nunca editável depois de criado); `display_code`
+-- é só o "1.01" cosmético que aparece pro usuário no balancete/livro-razão.
+create table ledger_accounts (
+  id uuid primary key default uuid_generate_v4(),
+  code text not null unique,
+  display_code text,
+  name text not null,
+  account_group ledger_account_group not null,
+  requires_cost_center boolean not null default false,
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- Um "lançamento" é 1 evento econômico que gera 2+ linhas (débito/
+-- crédito). Nunca é apagado depois de confirmado — uma correção sempre
+-- nasce como um novo lançamento de estorno (reverses_entry_id).
+create table ledger_entries (
+  id uuid primary key default uuid_generate_v4(),
+  entry_date date not null,
+  document_date date,
+  cash_date date,
+  description text not null,
+  origin text not null,
+  source_type text,
+  source_id uuid,
+  status ledger_entry_status not null default 'confirmado',
+  reverses_entry_id uuid references ledger_entries(id) on delete set null,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index ledger_entries_source_idx on ledger_entries (source_type, source_id);
+create index ledger_entries_entry_date_idx on ledger_entries (entry_date);
+
+-- Uma linha = 1 débito OU 1 crédito, numa conta, com centro de custo
+-- opcional. A soma dos débitos de um lançamento sempre bate com a soma
+-- dos créditos — garantido por post_ledger_entry, nunca confiado a um
+-- INSERT direto.
+create table ledger_entry_lines (
+  id uuid primary key default uuid_generate_v4(),
+  entry_id uuid not null references ledger_entries(id) on delete cascade,
+  account_id uuid not null references ledger_accounts(id),
+  cost_center_id uuid references cost_centers(id),
+  direction ledger_entry_direction not null,
+  amount numeric(12,2) not null check (amount > 0),
+  created_at timestamptz not null default now()
+);
+create index ledger_entry_lines_entry_idx on ledger_entry_lines (entry_id);
+create index ledger_entry_lines_account_idx on ledger_entry_lines (account_id);
+
+-- Único jeito de criar um lançamento — nunca INSERT direto pelo client.
+-- Recebe as linhas como JSON e confere débitos=créditos (1 centavo de
+-- tolerância pra arredondamento) antes de gravar qualquer coisa.
+create or replace function post_ledger_entry(
+  p_entry_date date,
+  p_document_date date,
+  p_cash_date date,
+  p_description text,
+  p_origin text,
+  p_source_type text,
+  p_source_id uuid,
+  p_lines jsonb
+) returns uuid as $$
+declare
+  v_entry_id uuid;
+  v_total_debito numeric := 0;
+  v_total_credito numeric := 0;
+  v_line jsonb;
+  v_line_count int;
+begin
+  if auth.uid() is null then
+    raise exception 'not authorized';
+  end if;
+
+  select count(*) into v_line_count from jsonb_array_elements(p_lines);
+  if v_line_count < 2 then
+    raise exception 'Um lançamento precisa de pelo menos 2 linhas (1 débito e 1 crédito).';
+  end if;
+
+  for v_line in select * from jsonb_array_elements(p_lines) loop
+    if (v_line->>'direction') = 'debito' then
+      v_total_debito := v_total_debito + (v_line->>'amount')::numeric;
+    elsif (v_line->>'direction') = 'credito' then
+      v_total_credito := v_total_credito + (v_line->>'amount')::numeric;
+    else
+      raise exception 'direction inválida: %', v_line->>'direction';
+    end if;
+  end loop;
+
+  if abs(v_total_debito - v_total_credito) > 0.01 then
+    raise exception 'Lançamento desbalanceado: débitos % ≠ créditos %', v_total_debito, v_total_credito;
+  end if;
+
+  insert into ledger_entries (entry_date, document_date, cash_date, description, origin, source_type, source_id, created_by)
+  values (p_entry_date, p_document_date, p_cash_date, p_description, p_origin, p_source_type, p_source_id, auth.uid())
+  returning id into v_entry_id;
+
+  insert into ledger_entry_lines (entry_id, account_id, cost_center_id, direction, amount)
+  select
+    v_entry_id,
+    la.id,
+    nullif(elem->>'cost_center_id', '')::uuid,
+    (elem->>'direction')::ledger_entry_direction,
+    (elem->>'amount')::numeric
+  from jsonb_array_elements(p_lines) elem
+  join ledger_accounts la on la.code = (elem->>'account_code');
+
+  if (select count(*) from jsonb_array_elements(p_lines)) <> (select count(*) from ledger_entry_lines where entry_id = v_entry_id) then
+    raise exception 'Uma ou mais contas (account_code) não foram encontradas no plano de contas.';
+  end if;
+
+  return v_entry_id;
+end;
+$$ language plpgsql security definer;
+
+-- Estorna um lançamento confirmado: marca o original como 'estornado' e
+-- cria um novo lançamento espelhado (débito↔crédito invertidos),
+-- preservando o histórico dos dois.
+create or replace function reverse_ledger_entry(p_entry_id uuid, p_reason text) returns uuid as $$
+declare
+  v_new_entry_id uuid;
+  v_original ledger_entries%rowtype;
+begin
+  if auth.uid() is null then
+    raise exception 'not authorized';
+  end if;
+
+  select * into v_original from ledger_entries where id = p_entry_id;
+  if not found then
+    raise exception 'Lançamento não encontrado.';
+  end if;
+  if v_original.status = 'estornado' then
+    raise exception 'Este lançamento já foi estornado.';
+  end if;
+
+  insert into ledger_entries (entry_date, document_date, cash_date, description, origin, source_type, source_id, reverses_entry_id, created_by)
+  values (current_date, v_original.document_date, v_original.cash_date, coalesce(p_reason, 'Estorno de: ' || v_original.description), 'estorno', v_original.source_type, v_original.source_id, p_entry_id, auth.uid())
+  returning id into v_new_entry_id;
+
+  insert into ledger_entry_lines (entry_id, account_id, cost_center_id, direction, amount)
+  select
+    v_new_entry_id,
+    l.account_id,
+    l.cost_center_id,
+    (case when l.direction = 'debito' then 'credito' else 'debito' end)::ledger_entry_direction,
+    l.amount
+  from ledger_entry_lines l
+  where l.entry_id = p_entry_id;
+
+  update ledger_entries set status = 'estornado' where id = p_entry_id;
+
+  return v_new_entry_id;
+end;
+$$ language plpgsql security definer;
 
 -- ---------- FICHA TÉCNICA (receita): ingrediente(s) por produto do cardápio ----------
 -- Um ingrediente pode alimentar vários produtos (frigobar OU bar da
@@ -1820,13 +1964,14 @@ create table expense_items (
 );
 
 -- ---------- INVENTORY COUNT SESSIONS (contagem física periódica) ----------
--- subcenter_group_name: contagem organizada por GRUPO de subcentros com
--- o mesmo nome (ex.: "Alimentos" junta o subcentro de Café da manhã e o
--- de Bar da piscina numa contagem só) — decisão do proprietário, Parte
--- 21. null = "todos os itens".
+-- count_group_name: contagem organizada por CENTRO de custo (até o
+-- Módulo Contábil Leva 1, era por nome de subcentro, agrupando vários
+-- centros de mesmo nome numa contagem só — decisão da Parte 21; a
+-- camada de subcentro foi removida, então o agrupamento passou a ser
+-- por centro inteiro). null = "todos os itens".
 create table inventory_count_sessions (
   id uuid primary key default uuid_generate_v4(),
-  subcenter_group_name text,
+  count_group_name text,
   status inventory_count_status not null default 'em_andamento',
   created_by uuid references profiles(id) on delete set null,
   created_at timestamptz not null default now(),
@@ -1834,10 +1979,10 @@ create table inventory_count_sessions (
 );
 
 -- No máximo 1 sessão "em_andamento" por grupo (e 1 só pra "todos os
--- itens", subcenter_group_name null) — evita sessões duplicadas vazias
--- por clique duplo/corrida (ver PRD_compras.md seção 17.8).
+-- itens", count_group_name null) — evita sessões duplicadas vazias por
+-- clique duplo/corrida (ver PRD_compras.md seção 17.8).
 create unique index inventory_count_sessions_one_open_per_group
-  on inventory_count_sessions (coalesce(subcenter_group_name, ''))
+  on inventory_count_sessions (coalesce(count_group_name, ''))
   where status = 'em_andamento';
 
 -- ---------- INVENTORY COUNT LINES (uma linha por item contado) ----------
@@ -1894,10 +2039,10 @@ select
   ii.name as item_name,
   ii.unit,
   coalesce(
-    (select string_agg(distinct cs.name, ' / ' order by cs.name)
+    (select string_agg(distinct cc.name, ' / ' order by cc.name)
      from cost_items ci
-     join cost_item_subcenters cis on cis.cost_item_id = ci.id
-     join cost_subcenters cs on cs.id = cis.subcenter_id
+     join cost_item_centers cic on cic.cost_item_id = ci.id
+     join cost_centers cc on cc.id = cic.center_id
      where ci.inventory_item_id = ii.id),
     '—'
   ) as category_name,
@@ -1920,10 +2065,11 @@ alter table asset_categories enable row level security;
 alter table fixed_asset_catalog_items enable row level security;
 alter table fixed_assets enable row level security;
 alter table cost_centers enable row level security;
-alter table cost_subcenters enable row level security;
-alter table cost_subcenter_centers enable row level security;
 alter table cost_items enable row level security;
-alter table cost_item_subcenters enable row level security;
+alter table cost_item_centers enable row level security;
+alter table ledger_accounts enable row level security;
+alter table ledger_entries enable row level security;
+alter table ledger_entry_lines enable row level security;
 alter table inventory_items enable row level security;
 alter table inventory_item_recipes enable row level security;
 alter table purchase_requests enable row level security;
@@ -1944,19 +2090,21 @@ create policy "fixed_assets_admin_all" on fixed_assets for all using (is_admin()
 create policy "cost_centers_select_authenticated" on cost_centers for select using (auth.uid() is not null);
 create policy "cost_centers_admin_write" on cost_centers for all using (is_admin()) with check (is_admin());
 
-create policy "cost_subcenters_select_authenticated" on cost_subcenters for select using (auth.uid() is not null);
-create policy "cost_subcenters_admin_write" on cost_subcenters for all using (is_admin()) with check (is_admin());
-
-create policy "cost_subcenter_centers_select_authenticated" on cost_subcenter_centers for select using (auth.uid() is not null);
-create policy "cost_subcenter_centers_admin_write" on cost_subcenter_centers for all using (is_admin()) with check (is_admin());
-
 create policy "cost_items_select_authenticated" on cost_items for select using (auth.uid() is not null);
 create policy "cost_items_insert_admin_manutencao" on cost_items for insert with check (is_admin() or is_manutencao());
 create policy "cost_items_admin_update" on cost_items for update using (is_admin());
 create policy "cost_items_admin_delete" on cost_items for delete using (is_admin());
 
-create policy "cost_item_subcenters_select_authenticated" on cost_item_subcenters for select using (auth.uid() is not null);
-create policy "cost_item_subcenters_admin_write" on cost_item_subcenters for all using (is_admin()) with check (is_admin());
+create policy "cost_item_centers_select_authenticated" on cost_item_centers for select using (auth.uid() is not null);
+create policy "cost_item_centers_admin_write" on cost_item_centers for all using (is_admin()) with check (is_admin());
+
+create policy "ledger_accounts_select_authenticated" on ledger_accounts for select using (auth.uid() is not null);
+create policy "ledger_accounts_admin_write" on ledger_accounts for all using (is_admin()) with check (is_admin());
+
+-- Ninguém grava direto em ledger_entries/ledger_entry_lines — sempre via
+-- post_ledger_entry/reverse_ledger_entry (security definer).
+create policy "ledger_entries_select_authenticated" on ledger_entries for select using (auth.uid() is not null);
+create policy "ledger_entry_lines_select_authenticated" on ledger_entry_lines for select using (auth.uid() is not null);
 
 create policy "inv_items_select_authenticated" on inventory_items for select using (auth.uid() is not null);
 create policy "inv_items_insert_admin_manutencao" on inventory_items for insert
@@ -2316,19 +2464,6 @@ insert into cost_centers (name, position)
 select name, row_number() over ()
 from (select distinct center_name as name from raw_items) t;
 
-create temp table subcenter_map (subcenter_name text, center_name text, subcenter_id uuid);
-do $$
-declare r record; v_id uuid;
-begin
-  for r in select distinct subcenter_name, center_name from raw_items order by center_name, subcenter_name loop
-    insert into cost_subcenters (name) values (r.subcenter_name) returning id into v_id;
-    insert into subcenter_map values (r.subcenter_name, r.center_name, v_id);
-  end loop;
-end $$;
-
-insert into cost_subcenter_centers (subcenter_id, center_id, alloc_pct)
-select sm.subcenter_id, cc.id, 100 from subcenter_map sm join cost_centers cc on cc.name = sm.center_name;
-
 create temp table item_map (item_name text, cost_item_id uuid);
 do $$
 declare r record; v_item_id uuid; v_inv_id uuid;
@@ -2346,17 +2481,22 @@ begin
   end loop;
 end $$;
 
-insert into cost_item_subcenters (cost_item_id, subcenter_id, alloc_pct)
-select im.cost_item_id, sm.subcenter_id,
+-- Item de custo → centro, direto (sem subcentro no meio — removido no
+-- Módulo Contábil Leva 1, PRD_compras&contabil.md seção 22.3 item 2).
+-- Rateio igual entre os centros distintos em que cada item aparece,
+-- com a sobra de arredondamento absorvida pelo primeiro centro em
+-- ordem alfabética (garante soma exata de 100%).
+insert into cost_item_centers (cost_item_id, center_id, alloc_pct)
+select im.cost_item_id, cc.id,
   floor(100.0 / cnt.n) + case when rn.rn = 1 then 100 - cnt.n * floor(100.0 / cnt.n) else 0 end
-from raw_items ri
+from (select distinct item_name, center_name from raw_items) ri
 join item_map im on im.item_name = ri.item_name
-join subcenter_map sm on sm.subcenter_name = ri.subcenter_name and sm.center_name = ri.center_name
-join (select item_name, count(*) as n from raw_items group by item_name) cnt on cnt.item_name = ri.item_name
+join cost_centers cc on cc.name = ri.center_name
+join (select item_name, count(distinct center_name) as n from raw_items group by item_name) cnt on cnt.item_name = ri.item_name
 join (
-  select item_name, subcenter_name, center_name, row_number() over (partition by item_name order by center_name, subcenter_name) as rn
-  from raw_items
-) rn on rn.item_name = ri.item_name and rn.subcenter_name = ri.subcenter_name and rn.center_name = ri.center_name;
+  select item_name, center_name, row_number() over (partition by item_name order by center_name) as rn
+  from (select distinct item_name, center_name from raw_items) t
+) rn on rn.item_name = ri.item_name and rn.center_name = ri.center_name;
 
 -- Categorias e catálogo de ativo permanente iniciais.
 insert into asset_categories (name, position) values
@@ -2383,3 +2523,57 @@ from (values
   ('Lavadoras pressurizada', 11), ('Aspiradores de pó', 12), ('Câmeras', 13), ('Controladoras', 14),
   ('Computadores', 15), ('Laptops', 16), ('Impressoras', 17)
 ) as v(name, pos) cross join lateral (select id from asset_categories where name = 'Aparelhos') ac;
+
+-- Plano de contas contábil inicial (PRD_compras&contabil.md seção 22.1,
+-- seção 6). `requires_cost_center`: contas de Ativo/Passivo "de
+-- posição" (Caixa, Banco, Estoques, Fornecedores a pagar etc.) não
+-- precisam de centro; Receita/Custo/Despesa sempre fazem mais sentido
+-- com centro, pra alimentar os relatórios por centro.
+insert into ledger_accounts (code, display_code, name, account_group, requires_cost_center) values
+  ('caixa', '1.01', 'Caixa', 'ativo', false),
+  ('banco', '1.02', 'Banco', 'ativo', false),
+  ('consumos-a-liquidar', '1.03', 'Consumos de bar/frigobar a liquidar no checkout', 'ativo', false),
+  ('estoque-bebidas', '1.04', 'Estoque Central de bebidas', 'ativo', false),
+  ('estoque-alimentos', '1.05', 'Estoque Central de alimentos/ingredientes', 'ativo', false),
+  ('estoque-limpeza', '1.06', 'Estoque de materiais de limpeza e amenidades', 'ativo', false),
+  ('estoque-outros', '1.07', 'Outros estoques operacionais', 'ativo', false),
+  ('equipamentos-imobilizado', '1.08', 'Equipamentos e imobilizado', 'ativo', false),
+  ('depreciacao-acumulada', '1.09', 'Depreciação acumulada', 'ativo', false),
+
+  ('fornecedores-a-pagar', '2.01', 'Fornecedores a pagar', 'passivo', false),
+  ('despesas-a-pagar', '2.02', 'Despesas operacionais a pagar', 'passivo', false),
+  ('salarios-a-pagar', '2.03', 'Salários/encargos a pagar', 'passivo', false),
+  ('tributos-a-pagar', '2.04', 'Tributos e taxas a pagar', 'passivo', false),
+  ('outras-obrigacoes', '2.05', 'Outras obrigações operacionais', 'passivo', false),
+
+  ('receita-bebidas-bar', '3.01', 'Receita de bebidas — Bar da piscina', 'receita', true),
+  ('receita-petiscos-bar', '3.02', 'Receita de petiscos — Bar da piscina', 'receita', true),
+  ('receita-drinks-bar', '3.03', 'Receita de drinks — Bar da piscina', 'receita', true),
+  ('receita-bebidas-frigobar', '3.04', 'Receita de bebidas — Frigobar', 'receita', true),
+  ('descontos-bar-frigobar', '3.05', 'Descontos concedidos no bar/frigobar', 'receita', true),
+  ('cancelamentos-bar-frigobar', '3.06', 'Cancelamentos/devoluções do bar/frigobar', 'receita', true),
+
+  ('cmv-bebidas-bar', '4.01', 'CMV de bebidas — Bar da piscina', 'custo', true),
+  ('custo-petiscos-bar', '4.02', 'Custo de ingredientes/petiscos — Bar da piscina', 'custo', true),
+  ('custo-drinks-bar', '4.03', 'Custo de ingredientes/drinks — Bar da piscina', 'custo', true),
+  ('cmv-bebidas-frigobar', '4.04', 'CMV de bebidas — Frigobar', 'custo', true),
+  ('custo-cafe-manha', '4.05', 'Custo de alimentos e bebidas consumidos — Café da manhã', 'custo', true),
+  ('materiais-limpeza-hospedagem', '4.06', 'Materiais de limpeza e amenidades — Hospedagem', 'custo', true),
+  ('lavanderia-hospedagem', '4.07', 'Lavanderia — Hospedagem', 'custo', true),
+  ('mao-de-obra-operacional', '4.08', 'Mão de obra operacional', 'custo', true),
+  ('perdas-estoque', '4.09', 'Perdas e desperdícios de estoque', 'custo', true),
+
+  ('energia-eletrica', '5.01', 'Energia elétrica', 'despesa', true),
+  ('agua-esgoto', '5.02', 'Água e esgoto', 'despesa', true),
+  ('gas', '5.03', 'Gás', 'despesa', true),
+  ('internet-telefonia', '5.04', 'Internet e telefonia', 'despesa', true),
+  ('manutencao', '5.05', 'Manutenção', 'despesa', true),
+  ('jardinagem', '5.06', 'Jardinagem', 'despesa', true),
+  ('piscina', '5.07', 'Piscina', 'despesa', true),
+  ('limpeza-areas-comuns', '5.08', 'Limpeza de áreas comuns', 'despesa', true),
+  ('contabilidade-servicos', '5.09', 'Contabilidade e serviços profissionais', 'despesa', true),
+  ('material-administrativo', '5.10', 'Material administrativo', 'despesa', true),
+  ('tarifas-bancarias', '5.11', 'Tarifas bancárias', 'despesa', false),
+  ('despesas-financeiras', '5.12', 'Despesas financeiras', 'despesa', false),
+  ('pessoal-administrativo', '5.13', 'Despesas com pessoal administrativo', 'despesa', true),
+  ('outras-despesas', '5.14', 'Outras despesas operacionais', 'despesa', true);

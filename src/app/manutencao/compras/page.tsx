@@ -1,12 +1,12 @@
 import { PageHeader } from "@/components/shared/page-header";
 import { ExpenseForm } from "@/components/shared/expense-form";
-import { getCostItemOptions, getCostSubcenters } from "@/lib/actions/cost-plan";
+import { getCostItemOptions, getCostCenters } from "@/lib/actions/cost-plan";
 import { getAssetCategories, getFixedAssetCatalogItems } from "@/lib/actions/fixed-assets";
 
 export default async function ManutencaoComprasPage() {
-  const [costItemOptions, costSubcenters, assetCategories, assetCatalogItems] = await Promise.all([
+  const [costItemOptions, costCenters, assetCategories, assetCatalogItems] = await Promise.all([
     getCostItemOptions(),
-    getCostSubcenters(),
+    getCostCenters(),
     getAssetCategories(),
     getFixedAssetCatalogItems(),
   ]);
@@ -16,7 +16,7 @@ export default async function ManutencaoComprasPage() {
       <PageHeader title="Lançar compras e despesas" subtitle="Tire uma foto, escolha um arquivo (foto ou PDF) ou preencha manualmente." />
       <ExpenseForm
         costItemOptions={costItemOptions}
-        costSubcenters={costSubcenters}
+        costCenters={costCenters}
         assetCategories={assetCategories.filter((c) => c.active)}
         assetCatalogItems={assetCatalogItems}
       />

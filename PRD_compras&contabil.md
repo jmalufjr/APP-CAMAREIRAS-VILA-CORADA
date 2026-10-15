@@ -2079,3 +2079,153 @@ da seção 23), começa a partir daqui.
     agora. A parte de API de verdade entre os dois sistemas fica de
     fora até o sistema financeiro passar por mudanças próprias e os
     dois lados decidirem juntos o que exatamente será consumido.
+
+## 23. Módulo Contábil — Leva 1: plano de contas contábil + motor de partidas dobradas
+
+> Primeira leva do PRD Contábil (seção 22), feita direto em `main`, pós
+> Parte 21. Escopo: só a fundação (contas contábeis + lançamentos de
+> partidas dobradas) — nenhuma tela de compras/estoque/bar que a
+> camareira ou o funcionário de manutenção já usa foi alterada
+> visualmente. Inclui também a remoção da camada de subcentros do
+> Plano de Contas (item de custo passa a ligar direto no centro), que
+> tecnicamente precisava acontecer antes de mais nada por estar
+> entrelaçada com o resto do módulo de compras.
+
+### 23.1 Plano de contas contábil (`ledger_accounts`)
+
+Nova tabela, editável pelo admin, com 43 contas já cadastradas de
+fábrica (migration `068_contabil_plano_de_contas_e_lancamentos.sql`),
+seguindo a estrutura do documento original (seção 6): 9 contas de
+Ativo (Caixa, Banco — uma conta genérica única por ora, decisão
+explícita do proprietário, não uma por banco real —, Consumos a
+liquidar, 4 Estoques, Equipamentos e imobilizado, Depreciação
+acumulada — esta última sem nenhum cálculo automático, só a conta
+cadastrada pra uso futuro, também decisão explícita), 5 de Passivo
+(Fornecedores a pagar, Despesas a pagar, Salários/encargos a pagar,
+Tributos a pagar, Outras obrigações), 6 de Receita e 9 de Custo (bar da
+piscina, frigobar, café da manhã, hospedagem), 14 de Despesa. Cada
+conta tem um `code` estável (nunca editável depois de criada — é o que
+o código do app usa pra saber qual conta usar em cada lançamento
+automático das próximas levas), um `display_code` cosmético opcional
+("1.01") e `requires_cost_center` (se todo lançamento nessa conta
+precisa também informar um centro de custo — true pra Receita/Custo/
+Despesa, false pra contas de posição como Caixa/Banco/Fornecedores).
+Tela nova: **"Plano de contas"**, dentro do novo menu **"Módulo
+Contábil"** (`/contabil/plano-de-contas`).
+
+### 23.2 Motor de partidas dobradas (`ledger_entries`/`ledger_entry_lines`)
+
+Um "lançamento" (`ledger_entries`) é 1 evento econômico com 2+ linhas
+de débito/crédito (`ledger_entry_lines`), cada linha numa conta
+contábil e, quando a conta pede, também num centro de custo. Nunca
+apagado depois de confirmado — uma correção sempre nasce como um novo
+lançamento de estorno. Toda a gravação passa por 2 funções `security
+definer` (mesmo padrão já estabelecido no projeto pra transição de
+estado sensível):
+
+- `post_ledger_entry(...)`: recebe a lista de linhas como JSON, confere
+  que a soma dos débitos bate com a soma dos créditos (1 centavo de
+  tolerância pra arredondamento) **antes** de gravar qualquer coisa —
+  se não bater, nada é inserido, erro claro devolvido. Resolve cada
+  linha pelo `account_code` estável, nunca por um id solto vindo do
+  cliente.
+- `reverse_ledger_entry(...)`: marca o lançamento original como
+  `estornado` e cria um novo lançamento espelhado (débito↔crédito
+  invertidos), preservando os dois no histórico. Bloqueia estornar o
+  mesmo lançamento duas vezes.
+
+Tela nova: **"Livro de lançamentos"** (`/contabil/lancamentos`) — lista
+os lançamentos do período (filtro de data), com um formulário de
+**lançamento manual** (linhas dinâmicas, conta + centro de custo
+opcional + débito/crédito + valor, valida o balanceamento no próprio
+navegador antes de enviar) e um botão "Estornar" por lançamento
+confirmado. Serve, por ora, tanto pra lançamentos manuais quanto de
+teste — as próximas levas (compras, vendas do bar, pagamentos) vão
+chamar `post_ledger_entry` automaticamente por trás das próprias
+Server Actions já existentes, sem o usuário precisar passar por este
+formulário manual pra cada fato do dia a dia.
+
+### 23.3 Remoção da camada de subcentros do Plano de Contas
+
+Decisão tomada com o proprietário (seção 22.3 item 2): o Plano de
+Contas de centro de custo (o que já existia, Parte 21 — diferente do
+plano de contas CONTÁBIL da seção 23.1/23.2 acima) tinha uma camada de
+~25 subcentros entre os 4 centros e os ~175 itens de custo. Essa camada
+foi removida — item de custo passa a ligar **direto** no centro
+(`cost_item_centers`, substituindo `cost_item_subcenters` +
+`cost_subcenter_centers` + a própria tabela `cost_subcenters`), mantendo
+a mesma ideia de rateio por percentual de antes, só com uma cascata a
+menos. Migration `069_remove_subcentros_cost_item_centers.sql` derivou
+os percentuais combinados a partir do que já existia (multiplicando os
+dois percentuais antigos e somando quando o mesmo centro era alcançado
+por mais de um subcentro), confirmado batendo 100% exato pros 176 itens
+de custo existentes antes de apagar as tabelas antigas.
+
+Consequências diretas, todas ajustadas na mesma leva:
+
+- Tela **"Plano de itens de custo"** perdeu a seção "Subcentros de
+  custo" — só "Itens de custo" (ligados direto a 1+ centros) e "Centros
+  de custo" continuam.
+- **Contagem física de estoque**: o agrupamento por nome de subcentro
+  (que juntava, por exemplo, o "Alimentos" de Café da manhã com o de
+  Bar da piscina numa única contagem) deixou de existir — cada centro
+  de custo inteiro vira um grupo de contagem próprio, mais grosso.
+  `count_frequency_days` migrou do subcentro pro próprio centro.
+  Aceito conscientemente por ora (decisão do proprietário, seção 22.3
+  item 2) — pode ser repensado na Leva 3 (estoque), se fizer falta.
+- `getFichaTecnicaIngredientOptions` (filtro de ingrediente na Ficha
+  Técnica de petiscos e drinks) simplificou: antes filtrava por 3
+  nomes de subcentro espalhados ("Alimentos", "Bebidas", "Materiais de
+  bar da piscina"), que eram todos do centro "Bar de piscina" — agora
+  filtra direto pelo centro "Bar de piscina", sem precisar da lista de
+  nomes.
+- `getCostCentersSummaryForPeriod`/`getExpenseDemonstrativoForPeriod`
+  (telas "Custos" e "Demonstrativo de Despesas") perderam uma cascata
+  de cálculo — rateiam direto item→centro, sem passar por subcentro no
+  meio. A tabela "Rateio dos custos, por item de custo" perdeu a coluna
+  "Subcentro".
+- Tela **"Lançar compras e despesas"**: ao criar um item de custo novo
+  na hora, o seletor de vínculo agora liga direto a centro(s) de custo,
+  não mais a subcentro(s).
+
+### 23.4 O que NÃO mudou nesta leva
+
+Nenhuma tela de compras/vendas/estoque do dia a dia (Lançar compras e
+despesas — exceto o detalhe do item 23.3 acima —, Lista de compras,
+Baixa de estoque, Consumo por quartos, Comandas, Consumo de Bar e
+Frigobar) gera lançamento contábil ainda. Os 5 itens de menu que hoje
+vivem soltos (Lançar Compra, Lista de compras, Estoque, Ativo
+Permanente, Custos e Despesas) continuam exatamente onde estavam — só
+foi acrescentado um item novo, "Módulo Contábil", sem remover nada
+ainda (a consolidação do menu é a Leva 6). Fornecedores, contas a
+pagar, hóspede avulso, baixa de estoque no momento da venda e a nova
+fórmula do café da manhã ficam para as próximas levas.
+
+### 23.5 Testado
+
+- `npm run build`/`npm run lint` limpos em múltiplas rodadas.
+- Migrations `068`/`069` aplicadas com sucesso no Postgres local via
+  Docker — confirmado 43 contas contábeis criadas, 263 vínculos
+  item→centro derivados corretamente (ex.: "água" saiu 34%/33%/33%
+  entre Bar de piscina/Café da manhã/Hospedagem, idêntico ao que já
+  valia antes via subcentro), 0 itens com soma ≠ 100%, view
+  `inventory_count_line_history` e a tabela `inventory_count_sessions`
+  renomeada funcionando sem erro.
+- Telas novas/alteradas varridas via sessão autenticada real (login
+  local + cookie `sb-127-auth-token`): `/contabil`,
+  `/contabil/plano-de-contas`, `/contabil/lancamentos`,
+  `/checklists/plano-de-contas/custo`, `/compras/contagem`,
+  `/custos-despesas/custos`, `/compras/itens`, `/compras/pratos` — todas
+  200, com dado real confirmado no HTML (contas contábeis, itens de
+  custo ligados a centro).
+- Fluxo ponta a ponta via rota de API temporária (`/api/test-leva1`,
+  removida depois), exercitando as Server Actions de verdade (não SQL
+  direto): lançamento manual balanceado criado com sucesso; lançamento
+  desbalanceado corretamente rejeitado com a mensagem de erro exata;
+  estorno criado e status do original virando "estornado"; item de
+  custo novo ligado a 2 centros (60%/40%) via `createCostItem`;
+  contagem física iniciada agrupada por centro via
+  `startCountSession`; despesa lançada criando um item de custo novo
+  inline com `center_links`, via `createExpense`. Todas as linhas
+  fabricadas (lançamentos, item de custo, sessão de contagem, despesa)
+  removidas do banco local depois.

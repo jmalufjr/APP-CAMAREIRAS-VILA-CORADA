@@ -30,6 +30,7 @@ import {
   Plus,
   Archive,
   Calculator,
+  BookOpen,
 } from "lucide-react";
 
 interface NavItem {
@@ -52,6 +53,7 @@ const adminNav: NavItem[] = [
   { href: "/compras", label: "Estoque", icon: ShoppingCart },
   { href: "/ativo-permanente", label: "Ativo Permanente", icon: Archive },
   { href: "/custos-despesas", label: "Custos e Despesas", icon: Calculator },
+  { href: "/contabil", label: "Módulo Contábil", icon: BookOpen },
   { href: "/checklists", label: "Listas", icon: ClipboardList },
   { href: "/manutencao-preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
   { href: "/usuarios", label: "Usuários", icon: Users },

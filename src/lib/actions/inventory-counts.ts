@@ -29,21 +29,22 @@ export interface CountLineView {
 }
 
 // Abre uma nova sessão de contagem física: congela o saldo teórico de
-// cada item ativo (de um GRUPO de subcentros com o mesmo nome, ou de
-// todos) no momento da abertura — a variância faz sentido mesmo que
-// outros movimentos aconteçam durante a contagem (ver PRD_compras.md
-// seção 5.5). Desde a Parte 21, o agrupamento é por NOME do subcentro
-// (ex.: "Alimentos" junta o subcentro de Café da manhã e o de Bar da
-// piscina numa contagem só, mesmo sendo linhas diferentes no Plano de
-// Contas) — decisão explícita do proprietário, pra não precisar contar o
-// mesmo tipo de material em visitas separadas só porque ele é rateado
-// entre centros diferentes.
+// cada item ativo (de um CENTRO de custo, ou de todos) no momento da
+// abertura — a variância faz sentido mesmo que outros movimentos
+// aconteçam durante a contagem (ver PRD_compras.md seção 5.5). Até a
+// Parte 21, o agrupamento era por nome de subcentro (juntando, por
+// exemplo, o "Alimentos" de Café da manhã com o de Bar da piscina numa
+// contagem só) — a camada de subcentro foi removida no Módulo Contábil
+// Leva 1 (PRD_compras&contabil.md seção 22.3 item 2), então o
+// agrupamento passou a ser por centro inteiro, mais grosso (perde essa
+// conveniência de juntar tipos iguais de centros diferentes — aceito
+// conscientemente por ora, a repensar na Leva 3 de estoque).
 //
 // Antes de criar, confere se já não existe uma sessão "em_andamento" pro
-// mesmo grupo (ou pra "todos os itens", quando subcenterGroupName vem
-// vazio) — se existir, reaproveita ela em vez de abrir outra (ver
+// mesmo grupo (ou pra "todos os itens", quando centerName vem vazio) —
+// se existir, reaproveita ela em vez de abrir outra (ver
 // PRD_compras.md seção 17.8).
-export async function startCountSession(subcenterGroupName?: string) {
+export async function startCountSession(centerName?: string) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -54,29 +55,27 @@ export async function startCountSession(subcenterGroupName?: string) {
     .from("inventory_count_sessions")
     .select("id")
     .eq("status", "em_andamento");
-  existingQuery = subcenterGroupName
-    ? existingQuery.eq("subcenter_group_name", subcenterGroupName)
-    : existingQuery.is("subcenter_group_name", null);
+  existingQuery = centerName ? existingQuery.eq("count_group_name", centerName) : existingQuery.is("count_group_name", null);
   const { data: existing } = await existingQuery.maybeSingle();
   if (existing) return { success: true, sessionId: existing.id as string };
 
   let itemsQuery = supabase.from("inventory_items").select("id").eq("active", true);
-  if (subcenterGroupName) {
-    const { data: subcenters } = await supabase.from("cost_subcenters").select("id").eq("name", subcenterGroupName);
-    const subcenterIds = (subcenters ?? []).map((s) => s.id as string);
-    const { data: itemLinks } = subcenterIds.length
-      ? await supabase.from("cost_item_subcenters").select("cost_item_id").in("subcenter_id", subcenterIds)
+  if (centerName) {
+    const { data: centers } = await supabase.from("cost_centers").select("id").eq("name", centerName);
+    const centerIds = (centers ?? []).map((c) => c.id as string);
+    const { data: itemLinks } = centerIds.length
+      ? await supabase.from("cost_item_centers").select("cost_item_id").in("center_id", centerIds)
       : { data: [] };
     const costItemIds = [...new Set((itemLinks ?? []).map((l) => l.cost_item_id as string))];
     const { data: costItems } = costItemIds.length
       ? await supabase.from("cost_items").select("inventory_item_id").in("id", costItemIds).eq("is_inventory", true)
       : { data: [] };
     const itemIdsInGroup = [...new Set((costItems ?? []).map((c) => c.inventory_item_id).filter(Boolean) as string[])];
-    if (itemIdsInGroup.length === 0) return { error: "Nenhum item de estoque encontrado nesse grupo." };
+    if (itemIdsInGroup.length === 0) return { error: "Nenhum item de estoque encontrado nesse centro." };
     itemsQuery = itemsQuery.in("id", itemIdsInGroup);
   }
   const { data: items } = await itemsQuery;
-  if (!items || items.length === 0) return { error: "Nenhum item de estoque encontrado nesse grupo." };
+  if (!items || items.length === 0) return { error: "Nenhum item de estoque encontrado nesse centro." };
 
   const { data: balances } = await supabase
     .from("inventory_balances")
@@ -89,7 +88,7 @@ export async function startCountSession(subcenterGroupName?: string) {
 
   const { data: session, error } = await supabase
     .from("inventory_count_sessions")
-    .insert({ subcenter_group_name: subcenterGroupName || null, created_by: user.id })
+    .insert({ count_group_name: centerName || null, created_by: user.id })
     .select("id")
     .single();
   if (error || !session) {
@@ -375,24 +374,23 @@ export interface SubcenterGroupCountStatus {
   is_due: boolean;
 }
 
-// Pra cada GRUPO de subcentros com o mesmo nome (ex.: "Alimentos" junta o
-// subcentro de Café da manhã e o de Bar da piscina — ver startCountSession
-// pro porquê), quando foi a última contagem FECHADA (de qualquer sessão,
-// mesmo uma sem grupo — "todos os itens" conta pra todos) e se já passou
-// da frequência configurada — base do aviso "está na hora de contar de
-// novo". Só aparecem grupos com pelo menos 1 item de estoque de verdade
-// ligado (sem isso, não haveria nada pra contar). Grupo sem
-// `count_frequency_days` em nenhum dos seus subcentros nunca aparece
-// como "devido" (sem lembrete configurado = sem cobrança nenhuma).
+// Pra cada CENTRO de custo (grupo de contagem desde a remoção dos
+// subcentros, ver startCountSession), quando foi a última contagem
+// FECHADA (de qualquer sessão, mesmo uma sem grupo — "todos os itens"
+// conta pra todos) e se já passou da frequência configurada — base do
+// aviso "está na hora de contar de novo". Só aparecem centros com pelo
+// menos 1 item de estoque de verdade ligado (sem isso, não haveria nada
+// pra contar). Centro sem `count_frequency_days` nunca aparece como
+// "devido" (sem lembrete configurado = sem cobrança nenhuma).
 export async function getSubcenterGroupCountStatus(): Promise<SubcenterGroupCountStatus[]> {
   const supabase = await createClient();
-  const [{ data: subcenters }, { data: itemLinks }, { data: costItems }, { data: sessions }] = await Promise.all([
-    supabase.from("cost_subcenters").select("id, name, count_frequency_days").eq("active", true),
-    supabase.from("cost_item_subcenters").select("cost_item_id, subcenter_id"),
+  const [{ data: centers }, { data: itemLinks }, { data: costItems }, { data: sessions }] = await Promise.all([
+    supabase.from("cost_centers").select("id, name, count_frequency_days").eq("active", true),
+    supabase.from("cost_item_centers").select("cost_item_id, center_id"),
     supabase.from("cost_items").select("id, is_inventory"),
     supabase
       .from("inventory_count_sessions")
-      .select("subcenter_group_name, closed_at")
+      .select("count_group_name, closed_at")
       .eq("status", "concluida")
       .not("closed_at", "is", null)
       .order("closed_at", { ascending: false }),
@@ -401,43 +399,33 @@ export async function getSubcenterGroupCountStatus(): Promise<SubcenterGroupCoun
   const inventoryCostItemIds = new Set(
     ((costItems ?? []) as { id: string; is_inventory: boolean }[]).filter((c) => c.is_inventory).map((c) => c.id)
   );
-  const subcentersWithStock = new Set(
-    ((itemLinks ?? []) as { cost_item_id: string; subcenter_id: string }[])
+  const centersWithStock = new Set(
+    ((itemLinks ?? []) as { cost_item_id: string; center_id: string }[])
       .filter((l) => inventoryCostItemIds.has(l.cost_item_id))
-      .map((l) => l.subcenter_id)
+      .map((l) => l.center_id)
   );
 
-  // "Todos os itens" (subcenter_group_name null) conta como contagem
+  // "Todos os itens" (count_group_name null) conta como contagem
   // recente pra qualquer grupo — se o admin contou tudo de uma vez,
   // nenhum grupo fica "devido" por causa disso.
-  const sessionRows = (sessions ?? []) as { subcenter_group_name: string | null; closed_at: string }[];
-  const globalLastClosedAt = sessionRows.find((s) => s.subcenter_group_name === null)?.closed_at ?? null;
+  const sessionRows = (sessions ?? []) as { count_group_name: string | null; closed_at: string }[];
+  const globalLastClosedAt = sessionRows.find((s) => s.count_group_name === null)?.closed_at ?? null;
   const lastClosedByGroup = new Map<string, string>();
   sessionRows.forEach((s) => {
-    if (s.subcenter_group_name && !lastClosedByGroup.has(s.subcenter_group_name)) lastClosedByGroup.set(s.subcenter_group_name, s.closed_at);
-  });
-
-  const byGroupName = new Map<string, { frequency: number | null; hasStock: boolean }>();
-  ((subcenters ?? []) as { id: string; name: string; count_frequency_days: number | null }[]).forEach((s) => {
-    const entry = byGroupName.get(s.name) ?? { frequency: null, hasStock: false };
-    if (subcentersWithStock.has(s.id)) entry.hasStock = true;
-    if (s.count_frequency_days !== null && (entry.frequency === null || s.count_frequency_days < entry.frequency)) {
-      entry.frequency = s.count_frequency_days;
-    }
-    byGroupName.set(s.name, entry);
+    if (s.count_group_name && !lastClosedByGroup.has(s.count_group_name)) lastClosedByGroup.set(s.count_group_name, s.closed_at);
   });
 
   const now = Date.now();
-  return Array.from(byGroupName.entries())
-    .filter(([, v]) => v.hasStock)
-    .map(([name, v]) => {
-      const candidates = [lastClosedByGroup.get(name), globalLastClosedAt].filter((x): x is string => !!x);
+  return ((centers ?? []) as { id: string; name: string; count_frequency_days: number | null }[])
+    .filter((c) => centersWithStock.has(c.id))
+    .map((c) => {
+      const candidates = [lastClosedByGroup.get(c.name), globalLastClosedAt].filter((x): x is string => !!x);
       const lastClosedAt = candidates.length > 0 ? candidates.sort().reverse()[0] : null;
       const daysSince = lastClosedAt ? Math.floor((now - new Date(lastClosedAt).getTime()) / 86400000) : null;
-      const isDue = v.frequency !== null && (daysSince === null || daysSince >= v.frequency);
+      const isDue = c.count_frequency_days !== null && (daysSince === null || daysSince >= c.count_frequency_days);
       return {
-        group_name: name,
-        count_frequency_days: v.frequency,
+        group_name: c.name,
+        count_frequency_days: c.count_frequency_days,
         last_closed_at: lastClosedAt,
         days_since_last_count: daysSince,
         is_due: isDue,

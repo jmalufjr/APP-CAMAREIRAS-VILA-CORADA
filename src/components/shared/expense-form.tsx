@@ -6,10 +6,9 @@ import { toast } from "sonner";
 import { createExpense, updateExpense } from "@/lib/actions/expenses";
 import type { ExpenseWithItems } from "@/lib/actions/expenses";
 import type { CostItemOption } from "@/lib/actions/cost-plan";
-import type { CostSubcenterWithLinks } from "@/lib/actions/cost-plan";
 import { parseReceiptWithAI } from "@/lib/actions/receipt-ai";
 import { compressImageForUpload } from "@/lib/image-compression";
-import type { AssetCategory, FixedAssetCatalogItem } from "@/lib/types";
+import type { AssetCategory, CostCenter, FixedAssetCatalogItem } from "@/lib/types";
 import { PAYMENT_METHOD_OPTIONS } from "@/lib/payment-method";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,8 +23,8 @@ import { Sparkles, Trash2, Plus, X, FileText, FolderOpen } from "lucide-react";
 
 type LineType = "cost_item" | "new_cost_item" | "fixed_asset";
 
-interface SubcenterLinkRow {
-  subcenter_id: string;
+interface CenterLinkRow {
+  center_id: string;
   alloc_pct: number;
 }
 
@@ -39,7 +38,7 @@ interface ItemRow {
   // target = "new_cost_item"
   newItemName: string;
   newItemIsInventory: boolean;
-  newItemSubcenterLinks: SubcenterLinkRow[];
+  newItemCenterLinks: CenterLinkRow[];
   // target = "fixed_asset" (bem novo)
   assetCategoryId: string;
   assetCatalogItemId: string; // "none" ou id
@@ -66,7 +65,7 @@ function emptyItem(): ItemRow {
     costItemId: "",
     newItemName: "",
     newItemIsInventory: false,
-    newItemSubcenterLinks: [],
+    newItemCenterLinks: [],
     assetCategoryId: "",
     assetCatalogItemId: "none",
     assetBrand: "",
@@ -89,7 +88,7 @@ function emptyItem(): ItemRow {
 // (bem novo) — nunca os dois ao mesmo tempo (PRD_compras.md seção 21).
 export function ExpenseForm({
   costItemOptions,
-  costSubcenters,
+  costCenters,
   assetCategories,
   assetCatalogItems,
   mode = "create",
@@ -97,7 +96,7 @@ export function ExpenseForm({
   initial,
 }: {
   costItemOptions: CostItemOption[];
-  costSubcenters: CostSubcenterWithLinks[];
+  costCenters: CostCenter[];
   assetCategories: AssetCategory[];
   assetCatalogItems: FixedAssetCatalogItem[];
   mode?: "create" | "edit";
@@ -126,7 +125,7 @@ export function ExpenseForm({
       costItemId: i.cost_item_id ?? "",
       newItemName: "",
       newItemIsInventory: false,
-      newItemSubcenterLinks: [],
+      newItemCenterLinks: [],
       assetCategoryId: "",
       assetCatalogItemId: "none",
       assetBrand: "",
@@ -147,11 +146,8 @@ export function ExpenseForm({
   const itemsTotal = items.reduce((sum, i) => sum + i.quantity * i.unit_cost, 0);
   const total = items.length > 0 ? itemsTotal : Number(manualTotal || 0);
 
-  function subcenterLabel(id: string): string {
-    const s = costSubcenters.find((s) => s.id === id);
-    if (!s) return id;
-    const centers = s.centers.map((c) => c.center_name).join("/");
-    return centers ? `${s.name} (${centers})` : s.name;
+  function centerLabel(id: string): string {
+    return costCenters.find((c) => c.id === id)?.name ?? id;
   }
 
   function handlePickReceipt(file: File | null) {
@@ -214,22 +210,22 @@ export function ExpenseForm({
     setItems((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function addSubcenterLink(index: number) {
-    const current = items[index].newItemSubcenterLinks;
-    const firstOption = costSubcenters[0]?.id ?? "";
-    updateItem(index, { newItemSubcenterLinks: [...current, { subcenter_id: firstOption, alloc_pct: current.length === 0 ? 100 : 0 }] });
+  function addCenterLink(index: number) {
+    const current = items[index].newItemCenterLinks;
+    const firstOption = costCenters[0]?.id ?? "";
+    updateItem(index, { newItemCenterLinks: [...current, { center_id: firstOption, alloc_pct: current.length === 0 ? 100 : 0 }] });
   }
 
-  function updateSubcenterLink(index: number, linkIndex: number, patch: Partial<SubcenterLinkRow>) {
-    const current = items[index].newItemSubcenterLinks;
+  function updateCenterLink(index: number, linkIndex: number, patch: Partial<CenterLinkRow>) {
+    const current = items[index].newItemCenterLinks;
     updateItem(index, {
-      newItemSubcenterLinks: current.map((l, i) => (i === linkIndex ? { ...l, ...patch } : l)),
+      newItemCenterLinks: current.map((l, i) => (i === linkIndex ? { ...l, ...patch } : l)),
     });
   }
 
-  function removeSubcenterLink(index: number, linkIndex: number) {
-    const current = items[index].newItemSubcenterLinks;
-    updateItem(index, { newItemSubcenterLinks: current.filter((_, i) => i !== linkIndex) });
+  function removeCenterLink(index: number, linkIndex: number) {
+    const current = items[index].newItemCenterLinks;
+    updateItem(index, { newItemCenterLinks: current.filter((_, i) => i !== linkIndex) });
   }
 
   function handleScanNfceQr(value: string) {
@@ -257,13 +253,13 @@ export function ExpenseForm({
           toast.error("Informe o nome do novo item de custo.");
           return;
         }
-        if (i.newItemSubcenterLinks.length === 0) {
-          toast.error("Ligue o novo item de custo a pelo menos 1 subcentro.");
+        if (i.newItemCenterLinks.length === 0) {
+          toast.error("Ligue o novo item de custo a pelo menos 1 centro de custo.");
           return;
         }
-        const sum = i.newItemSubcenterLinks.reduce((s, l) => s + l.alloc_pct, 0);
+        const sum = i.newItemCenterLinks.reduce((s, l) => s + l.alloc_pct, 0);
         if (sum !== 100) {
-          toast.error(`Os percentuais dos subcentros do novo item de custo precisam somar 100% (soma atual: ${sum}%).`);
+          toast.error(`Os percentuais dos centros do novo item de custo precisam somar 100% (soma atual: ${sum}%).`);
           return;
         }
       }
@@ -311,7 +307,7 @@ export function ExpenseForm({
                       name: i.newItemName,
                       is_inventory: i.newItemIsInventory,
                       inventory_item_id: null,
-                      subcenter_links: i.newItemSubcenterLinks,
+                      center_links: i.newItemCenterLinks,
                     }
                   : null,
               new_fixed_asset:
@@ -586,26 +582,26 @@ export function ExpenseForm({
                       </label>
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
-                          <Label className="text-xs text-muted-foreground">Subcentros (os % precisam somar 100%)</Label>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => addSubcenterLink(index)}>
-                            <Plus size={12} /> Subcentro
+                          <Label className="text-xs text-muted-foreground">Centros de custo (os % precisam somar 100%)</Label>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => addCenterLink(index)}>
+                            <Plus size={12} /> Centro
                           </Button>
                         </div>
-                        {item.newItemSubcenterLinks.map((link, linkIndex) => (
+                        {item.newItemCenterLinks.map((link, linkIndex) => (
                           <div key={linkIndex} className="flex items-center gap-2">
                             <Select
-                              value={link.subcenter_id}
-                              onValueChange={(v) => v && updateSubcenterLink(index, linkIndex, { subcenter_id: v })}
+                              value={link.center_id}
+                              onValueChange={(v) => v && updateCenterLink(index, linkIndex, { center_id: v })}
                             >
                               <SelectTrigger className="flex-1">
-                                <SelectValue placeholder="Subcentro">
-                                  {(v: string) => subcenterLabel(v)}
+                                <SelectValue placeholder="Centro de custo">
+                                  {(v: string) => centerLabel(v)}
                                 </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
-                                {costSubcenters.map((s) => (
-                                  <SelectItem key={s.id} value={s.id}>
-                                    {subcenterLabel(s.id)}
+                                {costCenters.map((c) => (
+                                  <SelectItem key={c.id} value={c.id}>
+                                    {centerLabel(c.id)}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -616,10 +612,10 @@ export function ExpenseForm({
                               max={100}
                               className="w-20"
                               value={link.alloc_pct}
-                              onChange={(e) => updateSubcenterLink(index, linkIndex, { alloc_pct: Number(e.target.value) || 0 })}
+                              onChange={(e) => updateCenterLink(index, linkIndex, { alloc_pct: Number(e.target.value) || 0 })}
                             />
                             <span className="text-xs text-muted-foreground">%</span>
-                            <Button type="button" variant="ghost" size="icon-sm" onClick={() => removeSubcenterLink(index, linkIndex)}>
+                            <Button type="button" variant="ghost" size="icon-sm" onClick={() => removeCenterLink(index, linkIndex)}>
                               <Trash2 size={12} />
                             </Button>
                           </div>

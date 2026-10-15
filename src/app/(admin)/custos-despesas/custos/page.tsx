@@ -95,36 +95,34 @@ export default async function CustosPage({ searchParams }: { searchParams: Promi
                 <TableRow>
                   <TableHead>Item de custo</TableHead>
                   <TableHead>Gasto total</TableHead>
-                  <TableHead>Subcentro</TableHead>
                   <TableHead>Centro</TableHead>
                   <TableHead>Valor no centro</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {summary.breakdown.flatMap((row) =>
-                  row.by_subcenter.length > 0 ? (
-                    row.by_subcenter.map((s, i) => (
-                      <TableRow key={`${row.cost_item_id}-${s.subcenter_id}-${s.center_id}`}>
-                        {i === 0 && <TableCell rowSpan={row.by_subcenter.length}>{row.cost_item_name}</TableCell>}
-                        {i === 0 && <TableCell rowSpan={row.by_subcenter.length}>{fmt(row.total_spend)}</TableCell>}
-                        <TableCell>{s.subcenter_name}</TableCell>
-                        <TableCell>{s.center_name}</TableCell>
-                        <TableCell>{fmt(s.amount)}</TableCell>
+                  row.by_center.length > 0 ? (
+                    row.by_center.map((c, i) => (
+                      <TableRow key={`${row.cost_item_id}-${c.center_id}`}>
+                        {i === 0 && <TableCell rowSpan={row.by_center.length}>{row.cost_item_name}</TableCell>}
+                        {i === 0 && <TableCell rowSpan={row.by_center.length}>{fmt(row.total_spend)}</TableCell>}
+                        <TableCell>{c.center_name}</TableCell>
+                        <TableCell>{fmt(c.amount)}</TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow key={row.cost_item_id}>
                       <TableCell>{row.cost_item_name}</TableCell>
                       <TableCell>{fmt(row.total_spend)}</TableCell>
-                      <TableCell colSpan={3} className="text-muted-foreground">
-                        Sem subcentro vinculado
+                      <TableCell colSpan={2} className="text-muted-foreground">
+                        Sem centro vinculado
                       </TableCell>
                     </TableRow>
                   )
                 )}
                 {summary.breakdown.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    <TableCell colSpan={4} className="text-center text-muted-foreground">
                       Nenhuma despesa vinculada a item de custo no período.
                     </TableCell>
                   </TableRow>

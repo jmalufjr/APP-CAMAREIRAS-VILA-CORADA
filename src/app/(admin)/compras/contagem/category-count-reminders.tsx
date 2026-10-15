@@ -4,15 +4,15 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { SubcenterGroupCountStatus } from "@/lib/actions/inventory-counts";
-import { updateSubcenterGroupCountFrequency } from "@/lib/actions/cost-plan";
+import { updateCostCenterCountFrequencyByName } from "@/lib/actions/cost-plan";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { StartCountButton } from "./start-count-button";
 import { formatDatePt } from "@/lib/date";
 import { AlertTriangle } from "lucide-react";
 
-// Agrupado por nome de subcentro (ex.: "Alimentos" junta Café da manhã e
-// Bar da piscina numa contagem só) — ver startCountSession.
+// Agrupado por centro de custo (até a Parte 21, era por nome de
+// subcentro — removido no Módulo Contábil Leva 1) — ver startCountSession.
 export function CategoryCountReminders({ statuses }: { statuses: SubcenterGroupCountStatus[] }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -25,7 +25,7 @@ export function CategoryCountReminders({ statuses }: { statuses: SubcenterGroupC
     const value = raw === "" ? null : Number(raw);
     if (value === original) return;
     startTransition(async () => {
-      const result = await updateSubcenterGroupCountFrequency(groupName, value);
+      const result = await updateCostCenterCountFrequencyByName(groupName, value);
       if (result?.error) toast.error(result.error);
       else router.refresh();
     });

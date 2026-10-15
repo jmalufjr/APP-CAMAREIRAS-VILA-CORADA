@@ -7,14 +7,11 @@ import {
   createCostItem,
   updateCostItem,
   deleteCostItem,
-  createCostSubcenter,
-  updateCostSubcenter,
-  deleteCostSubcenter,
   createCostCenter,
   updateCostCenter,
   deleteCostCenter,
 } from "@/lib/actions/cost-plan";
-import type { CostItemWithLinks, CostSubcenterWithLinks } from "@/lib/actions/cost-plan";
+import type { CostItemWithLinks } from "@/lib/actions/cost-plan";
 import type { CostCenter } from "@/lib/types";
 import type { InventoryItemWithBalance } from "@/lib/actions/inventory-items";
 import { Button } from "@/components/ui/button";
@@ -35,8 +32,8 @@ function sumPct(links: LinkRow[]): number {
   return links.reduce((s, l) => s + l.pct, 0);
 }
 
-// Editor genérico de vínculos N-N com percentual (item→subcentro ou
-// subcentro→centro) — os % precisam somar exatamente 100%.
+// Editor de vínculos item de custo → centro de custo, com percentual —
+// os % precisam somar exatamente 100%.
 function PctLinksEditor({
   options,
   value,
@@ -65,10 +62,10 @@ function PctLinksEditor({
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <Label className="text-xs text-muted-foreground">
-          Vínculos (% precisam somar 100% — soma atual: {sum}%)
+          Centros (% precisam somar 100% — soma atual: {sum}%)
         </Label>
         <Button type="button" variant="ghost" size="sm" onClick={add} disabled={value.length >= options.length}>
-          <Plus size={12} /> Vínculo
+          <Plus size={12} /> Centro
         </Button>
       </div>
       {value.map((link, index) => (
@@ -101,23 +98,20 @@ function PctLinksEditor({
           </Button>
         </div>
       ))}
-      {value.length === 0 && <p className="text-xs text-muted-foreground">Nenhum vínculo ainda.</p>}
+      {value.length === 0 && <p className="text-xs text-muted-foreground">Nenhum centro vinculado ainda.</p>}
     </div>
   );
 }
 
 export function CostPlanPanel({
   items,
-  subcenters,
   centers,
   inventoryItems,
 }: {
   items: CostItemWithLinks[];
-  subcenters: CostSubcenterWithLinks[];
   centers: CostCenter[];
   inventoryItems: InventoryItemWithBalance[];
 }) {
-  const subcenterOptions = subcenters.map((s) => ({ id: s.id, label: s.name }));
   const centerOptions = centers.map((c) => ({ id: c.id, label: c.name }));
   const usedInventoryItemIds = new Set(items.filter((i) => i.inventory_item_id).map((i) => i.inventory_item_id as string));
   const availableInventoryItems = inventoryItems.filter((i) => !usedInventoryItemIds.has(i.id));
@@ -127,7 +121,7 @@ export function CostPlanPanel({
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-heading text-lg">Itens de custo</h3>
-          <CostItemDialog subcenterOptions={subcenterOptions} availableInventoryItems={availableInventoryItems} />
+          <CostItemDialog centerOptions={centerOptions} availableInventoryItems={availableInventoryItems} />
         </div>
         <div className="space-y-2">
           {items.map((item) => (
@@ -140,13 +134,13 @@ export function CostPlanPanel({
                     {!item.active && <span className="ml-1.5 text-xs text-muted-foreground">· Inativo</span>}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {item.subcenters.length > 0
-                      ? item.subcenters.map((s) => `${s.subcenter_name} (${s.center_name}) ${s.alloc_pct}%`).join(" · ")
-                      : "Sem subcentro vinculado"}
+                    {item.centers.length > 0
+                      ? item.centers.map((c) => `${c.center_name} ${c.alloc_pct}%`).join(" · ")
+                      : "Sem centro vinculado"}
                   </p>
                 </div>
                 <div className="flex gap-1 shrink-0">
-                  <CostItemDialog item={item} subcenterOptions={subcenterOptions} availableInventoryItems={availableInventoryItems} />
+                  <CostItemDialog item={item} centerOptions={centerOptions} availableInventoryItems={availableInventoryItems} />
                   <DeleteButton action={() => deleteCostItem(item.id)} />
                 </div>
               </div>
@@ -158,46 +152,21 @@ export function CostPlanPanel({
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-heading text-lg">Subcentros de custo</h3>
-          <CostSubcenterDialog centerOptions={centerOptions} />
-        </div>
-        <div className="space-y-2">
-          {subcenters.map((s) => (
-            <div key={s.id} className="rounded-lg border border-border bg-card p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-medium text-sm">
-                    {s.name}
-                    {!s.active && <span className="ml-1.5 text-xs text-muted-foreground">· Inativo</span>}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {s.centers.map((c) => `${c.center_name} ${c.alloc_pct}%`).join(" · ") || "Sem centro vinculado"}
-                    {s.count_frequency_days !== null && ` · contagem a cada ${s.count_frequency_days} dia(s)`}
-                  </p>
-                </div>
-                <div className="flex gap-1 shrink-0">
-                  <CostSubcenterDialog subcenter={s} centerOptions={centerOptions} />
-                  <DeleteButton action={() => deleteCostSubcenter(s.id)} />
-                </div>
-              </div>
-            </div>
-          ))}
-          {subcenters.length === 0 && <p className="text-center text-muted-foreground py-6 text-sm">Nenhum subcentro cadastrado.</p>}
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
           <h3 className="font-heading text-lg">Centros de custo</h3>
           <CostCenterDialog />
         </div>
         <div className="space-y-2">
           {centers.map((c) => (
             <div key={c.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
-              <p className="font-medium text-sm">
-                {c.name}
-                {!c.active && <span className="ml-1.5 text-xs text-muted-foreground">· Inativo</span>}
-              </p>
+              <div>
+                <p className="font-medium text-sm">
+                  {c.name}
+                  {!c.active && <span className="ml-1.5 text-xs text-muted-foreground">· Inativo</span>}
+                </p>
+                {c.count_frequency_days !== null && (
+                  <p className="text-xs text-muted-foreground mt-0.5">contagem a cada {c.count_frequency_days} dia(s)</p>
+                )}
+              </div>
               <div className="flex gap-1 shrink-0">
                 <CostCenterDialog center={c} />
                 <DeleteButton action={() => deleteCostCenter(c.id)} />
@@ -239,11 +208,11 @@ function DeleteButton({ action }: { action: () => Promise<{ error?: string }> })
 
 function CostItemDialog({
   item,
-  subcenterOptions,
+  centerOptions,
   availableInventoryItems,
 }: {
   item?: CostItemWithLinks;
-  subcenterOptions: { id: string; label: string }[];
+  centerOptions: { id: string; label: string }[];
   availableInventoryItems: InventoryItemWithBalance[];
 }) {
   const [open, setOpen] = useState(false);
@@ -256,7 +225,7 @@ function CostItemDialog({
   const [isInventory, setIsInventory] = useState(item?.is_inventory ?? false);
   const [inventoryItemId, setInventoryItemId] = useState("new");
   const [newInventoryItemName, setNewInventoryItemName] = useState("");
-  const [links, setLinks] = useState<LinkRow[]>(item?.subcenters.map((s) => ({ id: s.subcenter_id, pct: s.alloc_pct })) ?? []);
+  const [links, setLinks] = useState<LinkRow[]>(item?.centers.map((c) => ({ id: c.center_id, pct: c.alloc_pct })) ?? []);
 
   // Só mostra o seletor de item de estoque quando ainda não existe
   // nenhum vínculo — um já existente nunca é trocado por outro, só
@@ -269,12 +238,12 @@ function CostItemDialog({
       return;
     }
     startTransition(async () => {
-      const subcenterLinks = links.map((l) => ({ subcenter_id: l.id, alloc_pct: l.pct }));
+      const centerLinks = links.map((l) => ({ center_id: l.id, alloc_pct: l.pct }));
       const newLinkInventoryItemId = isInventory && inventoryItemId !== "new" ? inventoryItemId : null;
       const newLinkName = isInventory && inventoryItemId === "new" ? newInventoryItemName : null;
       const result = isEdit
-        ? await updateCostItem(item.id, name, active, isInventory, newLinkInventoryItemId, newLinkName, subcenterLinks)
-        : await createCostItem(name, isInventory, newLinkInventoryItemId, newLinkName, subcenterLinks);
+        ? await updateCostItem(item.id, name, active, isInventory, newLinkInventoryItemId, newLinkName, centerLinks)
+        : await createCostItem(name, isInventory, newLinkInventoryItemId, newLinkName, centerLinks);
       if (result?.error) toast.error(result.error);
       else {
         toast.success("Item de custo salvo.");
@@ -353,92 +322,6 @@ function CostItemDialog({
               )}
             </div>
           )}
-          <PctLinksEditor options={subcenterOptions} value={links} onChange={setLinks} />
-        </div>
-        <DialogFooter>
-          <Button onClick={handleSave} disabled={isPending}>
-            {isPending ? "Salvando..." : "Salvar"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function CostSubcenterDialog({
-  subcenter,
-  centerOptions,
-}: {
-  subcenter?: CostSubcenterWithLinks;
-  centerOptions: { id: string; label: string }[];
-}) {
-  const [open, setOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
-  const router = useRouter();
-  const isEdit = !!subcenter;
-
-  const [name, setName] = useState(subcenter?.name ?? "");
-  const [active, setActive] = useState(subcenter?.active ?? true);
-  const [countFrequencyDays, setCountFrequencyDays] = useState(
-    subcenter?.count_frequency_days !== undefined && subcenter?.count_frequency_days !== null
-      ? String(subcenter.count_frequency_days)
-      : ""
-  );
-  const [links, setLinks] = useState<LinkRow[]>(subcenter?.centers.map((c) => ({ id: c.center_id, pct: c.alloc_pct })) ?? []);
-
-  function handleSave() {
-    if (!name.trim()) {
-      toast.error("Informe o nome.");
-      return;
-    }
-    const days = countFrequencyDays.trim() ? Number(countFrequencyDays) : null;
-    startTransition(async () => {
-      const centerLinks = links.map((l) => ({ center_id: l.id, alloc_pct: l.pct }));
-      const result = isEdit
-        ? await updateCostSubcenter(subcenter.id, name, active, days, centerLinks)
-        : await createCostSubcenter(name, days, centerLinks);
-      if (result?.error) toast.error(result.error);
-      else {
-        toast.success("Subcentro salvo.");
-        setOpen(false);
-        router.refresh();
-      }
-    });
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          isEdit ? (
-            <Button variant="ghost" size="icon-sm">
-              <Pencil size={14} />
-            </Button>
-          ) : (
-            <Button size="sm">
-              <Plus size={14} /> Novo subcentro
-            </Button>
-          )
-        }
-      />
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar subcentro" : "Novo subcentro de custo"}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label>Nome</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Frequência de contagem física (dias, opcional)</Label>
-            <Input type="number" min={1} value={countFrequencyDays} onChange={(e) => setCountFrequencyDays(e.target.value)} />
-          </div>
-          {isEdit && (
-            <label className="flex items-center gap-2 text-sm">
-              <Switch checked={active} onCheckedChange={setActive} /> Ativo
-            </label>
-          )}
           <PctLinksEditor options={centerOptions} value={links} onChange={setLinks} />
         </div>
         <DialogFooter>
@@ -459,6 +342,9 @@ function CostCenterDialog({ center }: { center?: CostCenter }) {
 
   const [name, setName] = useState(center?.name ?? "");
   const [active, setActive] = useState(center?.active ?? true);
+  const [countFrequencyDays, setCountFrequencyDays] = useState(
+    center?.count_frequency_days !== undefined && center?.count_frequency_days !== null ? String(center.count_frequency_days) : ""
+  );
 
   function handleSave() {
     if (!name.trim()) {
@@ -466,7 +352,8 @@ function CostCenterDialog({ center }: { center?: CostCenter }) {
       return;
     }
     startTransition(async () => {
-      const result = isEdit ? await updateCostCenter(center.id, name, active) : await createCostCenter(name);
+      const days = countFrequencyDays.trim() ? Number(countFrequencyDays) : null;
+      const result = isEdit ? await updateCostCenter(center.id, name, active, days) : await createCostCenter(name);
       if (result?.error) toast.error(result.error);
       else {
         toast.success("Centro salvo.");
@@ -501,9 +388,15 @@ function CostCenterDialog({ center }: { center?: CostCenter }) {
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           {isEdit && (
-            <label className="flex items-center gap-2 text-sm">
-              <Switch checked={active} onCheckedChange={setActive} /> Ativo
-            </label>
+            <>
+              <div className="space-y-1.5">
+                <Label>Frequência de contagem física (dias, opcional)</Label>
+                <Input type="number" min={1} value={countFrequencyDays} onChange={(e) => setCountFrequencyDays(e.target.value)} />
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <Switch checked={active} onCheckedChange={setActive} /> Ativo
+              </label>
+            </>
           )}
         </div>
         <DialogFooter>

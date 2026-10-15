@@ -27,7 +27,7 @@ export interface ExpenseItemInput {
     name: string;
     is_inventory: boolean;
     inventory_item_id: string | null;
-    subcenter_links: { subcenter_id: string; alloc_pct: number }[];
+    center_links: { center_id: string; alloc_pct: number }[];
   } | null;
   // Linha de ativo permanente — cria 1 bem novo (cada compra é uma
   // unidade física própria, nunca reaproveita um bem já existente).
@@ -77,10 +77,10 @@ async function resolveOrCreateCostItemId(
     }
   }
 
-  const links = item.new_cost_item.subcenter_links.filter((l) => l.subcenter_id);
+  const links = item.new_cost_item.center_links.filter((l) => l.center_id);
   if (links.length > 0) {
     const sum = links.reduce((s, l) => s + l.alloc_pct, 0);
-    if (sum !== 100) return { id: null, error: `Os percentuais dos subcentros do novo item de custo precisam somar 100% (soma atual: ${sum}%).` };
+    if (sum !== 100) return { id: null, error: `Os percentuais dos centros do novo item de custo precisam somar 100% (soma atual: ${sum}%).` };
   }
 
   const { data: createdItem, error: itemError } = await supabase
@@ -92,8 +92,8 @@ async function resolveOrCreateCostItemId(
 
   if (links.length > 0) {
     const { error: linkError } = await supabase
-      .from("cost_item_subcenters")
-      .insert(links.map((l) => ({ cost_item_id: createdItem.id, subcenter_id: l.subcenter_id, alloc_pct: l.alloc_pct })));
+      .from("cost_item_centers")
+      .insert(links.map((l) => ({ cost_item_id: createdItem.id, center_id: l.center_id, alloc_pct: l.alloc_pct })));
     if (linkError) return { id: null, error: linkError.message };
   }
 
@@ -400,21 +400,13 @@ async function getCenterNamesByExpense(
   const costItemIds = [...new Set(rows.filter((r) => r.cost_item_id).map((r) => r.cost_item_id as string))];
 
   const { data: links } = costItemIds.length
-    ? await supabase
-        .from("cost_item_subcenters")
-        .select("cost_item_id, cost_subcenters(cost_subcenter_centers(cost_centers(name)))")
-        .in("cost_item_id", costItemIds)
+    ? await supabase.from("cost_item_centers").select("cost_item_id, cost_centers(name)").in("cost_item_id", costItemIds)
     : { data: [] };
-  type LinkRaw = {
-    cost_item_id: string;
-    cost_subcenters: { cost_subcenter_centers: { cost_centers: { name: string } | null }[] } | null;
-  };
+  type LinkRaw = { cost_item_id: string; cost_centers: { name: string } | null };
   const centersByCostItem = new Map<string, Set<string>>();
   ((links ?? []) as unknown as LinkRaw[]).forEach((l) => {
     const set = centersByCostItem.get(l.cost_item_id) ?? new Set<string>();
-    l.cost_subcenters?.cost_subcenter_centers.forEach((csc) => {
-      if (csc.cost_centers?.name) set.add(csc.cost_centers.name);
-    });
+    if (l.cost_centers?.name) set.add(l.cost_centers.name);
     centersByCostItem.set(l.cost_item_id, set);
   });
 

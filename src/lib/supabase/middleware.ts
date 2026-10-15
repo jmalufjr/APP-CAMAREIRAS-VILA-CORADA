@@ -89,6 +89,7 @@ export async function updateSession(request: NextRequest) {
       "/compras",
       "/ativo-permanente",
       "/custos-despesas",
+      "/contabil",
     ];
     const camareiraOnlyPrefixes = ["/tarefas", "/bar-piscina", "/comanda", "/estoque", "/pedidos-compra"];
     const manutencaoOnlyPrefixes = ["/manutencao"];

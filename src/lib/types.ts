@@ -305,30 +305,20 @@ export interface BarComandaItem {
 
 // ---------- Compras, despesas e estoque (PRD_compras.md) ----------
 
-// Plano de Contas (Parte 21): centro de custo → subcentro de custo →
-// item de custo, substitui por completo o antigo modelo de "categoria de
-// gasto".
+// Plano de Contas (Parte 21, subcentros removidos no Módulo Contábil
+// Leva 1 — PRD_compras&contabil.md seção 22.3 item 2): centro de custo
+// → item de custo, direto, com rateio percentual quando um item
+// pertence a mais de um centro. Substitui por completo o antigo modelo
+// de "categoria de gasto".
 export interface CostCenter {
   id: string;
   name: string;
-  active: boolean;
-  position: number;
-  created_at: string;
-}
-
-export interface CostSubcenter {
-  id: string;
-  name: string;
+  // "Dias entre uma contagem física e outra" (aviso de contagem
+  // devida) — migrou do antigo subcentro direto pro centro.
   count_frequency_days: number | null;
   active: boolean;
   position: number;
   created_at: string;
-}
-
-export interface CostSubcenterCenterLink {
-  subcenter_id: string;
-  center_id: string;
-  alloc_pct: number;
 }
 
 // Item de custo: a conta mais analítica — pode ou não representar
@@ -344,10 +334,55 @@ export interface CostItem {
   created_at: string;
 }
 
-export interface CostItemSubcenterLink {
+export interface CostItemCenterLink {
   cost_item_id: string;
-  subcenter_id: string;
+  center_id: string;
   alloc_pct: number;
+}
+
+// ---------- Módulo Contábil (PRD_compras&contabil.md): plano de contas
+// contábil + partidas dobradas — dimensão "que TIPO de movimento é
+// isso" (Ativo/Passivo/Receita/Custo/Despesa), nunca confundir com
+// centro de custo ("de qual PARTE da pousada é isso"), acima.
+export type LedgerAccountGroup = "ativo" | "passivo" | "receita" | "custo" | "despesa";
+export type LedgerEntryStatus = "confirmado" | "estornado";
+export type LedgerEntryDirection = "debito" | "credito";
+
+export interface LedgerAccount {
+  id: string;
+  code: string;
+  display_code: string | null;
+  name: string;
+  account_group: LedgerAccountGroup;
+  requires_cost_center: boolean;
+  active: boolean;
+  position: number;
+  created_at: string;
+}
+
+export interface LedgerEntry {
+  id: string;
+  entry_date: string;
+  document_date: string | null;
+  cash_date: string | null;
+  description: string;
+  origin: string;
+  source_type: string | null;
+  source_id: string | null;
+  status: LedgerEntryStatus;
+  reverses_entry_id: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface LedgerEntryLine {
+  id: string;
+  entry_id: string;
+  account_id: string;
+  cost_center_id: string | null;
+  direction: LedgerEntryDirection;
+  amount: number;
+  created_at: string;
 }
 
 export interface InventoryItem {
@@ -482,7 +517,7 @@ export interface InventoryMovement {
 
 export interface InventoryCountSession {
   id: string;
-  subcenter_group_name: string | null;
+  count_group_name: string | null;
   status: InventoryCountStatus;
   created_by: string | null;
   created_at: string;

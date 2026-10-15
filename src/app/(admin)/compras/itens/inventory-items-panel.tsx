@@ -52,7 +52,7 @@ function ItemRow({ item }: { item: InventoryItemWithCostPlan }) {
       <div>
         <p className="text-sm font-medium">{item.name}</p>
         <p className="text-xs text-muted-foreground">
-          {item.subcenter_names.join(" / ") || "—"} · Saldo: {item.balance} {item.unit}
+          {item.center_names.join(" / ") || "—"} · Saldo: {item.balance} {item.unit}
           {item.reorder_point > 0 ? ` · Ponto de reposição manual: ${item.reorder_point} ${item.unit}` : ""}
         </p>
       </div>

@@ -3,15 +3,15 @@ import { PageHeader } from "@/components/shared/page-header";
 import { BackLink } from "@/components/shared/back-link";
 import { ExpenseForm } from "@/components/shared/expense-form";
 import { getExpenseWithItems } from "@/lib/actions/expenses";
-import { getCostItemOptions, getCostSubcenters } from "@/lib/actions/cost-plan";
+import { getCostItemOptions, getCostCenters } from "@/lib/actions/cost-plan";
 import { getAssetCategories, getFixedAssetCatalogItems } from "@/lib/actions/fixed-assets";
 
 export default async function EditarDespesaPage({ params }: { params: Promise<{ expenseId: string }> }) {
   const { expenseId } = await params;
-  const [expense, costItemOptions, costSubcenters, assetCategories, assetCatalogItems] = await Promise.all([
+  const [expense, costItemOptions, costCenters, assetCategories, assetCatalogItems] = await Promise.all([
     getExpenseWithItems(expenseId),
     getCostItemOptions(),
-    getCostSubcenters(),
+    getCostCenters(),
     getAssetCategories(),
     getFixedAssetCatalogItems(),
   ]);
@@ -27,7 +27,7 @@ export default async function EditarDespesaPage({ params }: { params: Promise<{ 
         expenseId={expense.id}
         initial={expense}
         costItemOptions={costItemOptions}
-        costSubcenters={costSubcenters}
+        costCenters={costCenters}
         assetCategories={assetCategories.filter((c) => c.active)}
         assetCatalogItems={assetCatalogItems}
       />

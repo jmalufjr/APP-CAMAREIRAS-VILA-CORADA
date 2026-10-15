@@ -57,13 +57,8 @@ async function getSpendByCostItem(supabase: Supabase, from: string, to: string):
   return map;
 }
 
-interface ItemSubcenterLink {
+interface ItemCenterLink {
   cost_item_id: string;
-  subcenter_id: string;
-  alloc_pct: number;
-}
-interface SubcenterCenterLink {
-  subcenter_id: string;
   center_id: string;
   alloc_pct: number;
 }
@@ -78,8 +73,8 @@ export interface CostItemBreakdownRow {
   cost_item_id: string;
   cost_item_name: string;
   total_spend: number;
-  // Contribuição desse item em cada subcentro (já em R$, não %).
-  by_subcenter: { subcenter_id: string; subcenter_name: string; center_id: string; center_name: string; amount: number }[];
+  // Contribuição desse item em cada centro (já em R$, não %).
+  by_center: { center_id: string; center_name: string; amount: number }[];
 }
 
 export interface CostCentersSummary {
@@ -88,60 +83,45 @@ export interface CostCentersSummary {
 }
 
 // Núcleo do módulo de custos: rateia o gasto de cada item de custo pelos
-// subcentros a que pertence (% do item), depois rateia cada subcentro
-// pelos centros a que pertence (% do subcentro) — 2 cascatas, sempre
-// pelos percentuais cadastrados no Plano de Contas (nunca fixo no
-// código, pra se atualizar sozinho quando o admin editar um percentual).
+// centros a que pertence (% do item), direto — sempre pelos percentuais
+// cadastrados no Plano de Contas (nunca fixo no código, pra se
+// atualizar sozinho quando o admin editar um percentual). Até o Módulo
+// Contábil Leva 1, havia uma camada extra de subcentro no meio (2
+// cascatas); removida — ver PRD_compras&contabil.md seção 22.3 item 2.
 export async function getCostCentersSummaryForPeriod(from: string, to: string): Promise<CostCentersSummary> {
   const supabase = await createClient();
-  const [spendByItem, { data: items }, { data: itemLinks }, { data: subcenterLinks }] = await Promise.all([
+  const [spendByItem, { data: items }, { data: itemLinks }] = await Promise.all([
     getSpendByCostItem(supabase, from, to),
     supabase.from("cost_items").select("id, name"),
-    supabase.from("cost_item_subcenters").select("cost_item_id, subcenter_id, alloc_pct"),
-    supabase.from("cost_subcenter_centers").select("subcenter_id, center_id, alloc_pct, cost_subcenters(name), cost_centers(name)"),
+    supabase.from("cost_item_centers").select("cost_item_id, center_id, alloc_pct, cost_centers(name)"),
   ]);
 
   const itemNameById = new Map(((items ?? []) as { id: string; name: string }[]).map((i) => [i.id, i.name]));
 
-  type SubcenterCenterRaw = SubcenterCenterLink & { cost_subcenters: { name: string } | null; cost_centers: { name: string } | null };
-  const subcenterCenterLinksBySubcenter = new Map<string, SubcenterCenterRaw[]>();
-  const subcenterNameById = new Map<string, string>();
+  type LinkRaw = ItemCenterLink & { cost_centers: { name: string } | null };
+  const linksByItem = new Map<string, LinkRaw[]>();
   const centerNameById = new Map<string, string>();
-  ((subcenterLinks ?? []) as unknown as SubcenterCenterRaw[]).forEach((l) => {
-    const list = subcenterCenterLinksBySubcenter.get(l.subcenter_id) ?? [];
+  ((itemLinks ?? []) as unknown as LinkRaw[]).forEach((l) => {
+    const list = linksByItem.get(l.cost_item_id) ?? [];
     list.push(l);
-    subcenterCenterLinksBySubcenter.set(l.subcenter_id, list);
-    if (l.cost_subcenters?.name) subcenterNameById.set(l.subcenter_id, l.cost_subcenters.name);
+    linksByItem.set(l.cost_item_id, list);
     if (l.cost_centers?.name) centerNameById.set(l.center_id, l.cost_centers.name);
-  });
-
-  const itemLinksByItem = new Map<string, ItemSubcenterLink[]>();
-  ((itemLinks ?? []) as ItemSubcenterLink[]).forEach((l) => {
-    const list = itemLinksByItem.get(l.cost_item_id) ?? [];
-    list.push(l);
-    itemLinksByItem.set(l.cost_item_id, list);
   });
 
   const centerTotalsMap = new Map<string, number>();
   const breakdown: CostItemBreakdownRow[] = [];
 
   spendByItem.forEach((totalSpend, costItemId) => {
-    const links = itemLinksByItem.get(costItemId) ?? [];
-    const bySubcenter: CostItemBreakdownRow["by_subcenter"] = [];
+    const links = linksByItem.get(costItemId) ?? [];
+    const byCenter: CostItemBreakdownRow["by_center"] = [];
 
     links.forEach((il) => {
-      const amountAtSubcenter = totalSpend * (il.alloc_pct / 100);
-      const centerLinks = subcenterCenterLinksBySubcenter.get(il.subcenter_id) ?? [];
-      centerLinks.forEach((cl) => {
-        const amountAtCenter = amountAtSubcenter * (cl.alloc_pct / 100);
-        centerTotalsMap.set(cl.center_id, (centerTotalsMap.get(cl.center_id) ?? 0) + amountAtCenter);
-        bySubcenter.push({
-          subcenter_id: il.subcenter_id,
-          subcenter_name: subcenterNameById.get(il.subcenter_id) ?? "—",
-          center_id: cl.center_id,
-          center_name: centerNameById.get(cl.center_id) ?? "—",
-          amount: amountAtCenter,
-        });
+      const amountAtCenter = totalSpend * (il.alloc_pct / 100);
+      centerTotalsMap.set(il.center_id, (centerTotalsMap.get(il.center_id) ?? 0) + amountAtCenter);
+      byCenter.push({
+        center_id: il.center_id,
+        center_name: centerNameById.get(il.center_id) ?? "—",
+        amount: amountAtCenter,
       });
     });
 
@@ -149,7 +129,7 @@ export async function getCostCentersSummaryForPeriod(from: string, to: string): 
       cost_item_id: costItemId,
       cost_item_name: itemNameById.get(costItemId) ?? "—",
       total_spend: totalSpend,
-      by_subcenter: bySubcenter,
+      by_center: byCenter,
     });
   });
 
@@ -256,7 +236,7 @@ export async function getBreakfastCostForPeriod(from: string, to: string, summar
   const guestNights = await getBreakfastGuestNightsForPeriod(supabase, from, to);
   const totalSpend = summary.centerTotals.find((c) => c.center_name === "Café da manhã")?.total ?? 0;
 
-  const costItemIds = [...new Set(summary.breakdown.flatMap((b) => (b.by_subcenter.some((s) => s.center_name === "Café da manhã") ? [b.cost_item_id] : [])))];
+  const costItemIds = [...new Set(summary.breakdown.flatMap((b) => (b.by_center.some((s) => s.center_name === "Café da manhã") ? [b.cost_item_id] : [])))];
   const { data: items } = costItemIds.length
     ? await supabase.from("cost_items").select("id, name, inventory_item_id, inventory_items(cost_report_group)").in("id", costItemIds)
     : { data: [] };
@@ -267,7 +247,7 @@ export async function getBreakfastCostForPeriod(from: string, to: string, summar
 
   const byLabel = new Map<string, number>();
   summary.breakdown.forEach((b) => {
-    const amount = b.by_subcenter.filter((s) => s.center_name === "Café da manhã").reduce((sum, s) => sum + s.amount, 0);
+    const amount = b.by_center.filter((s) => s.center_name === "Café da manhã").reduce((sum, s) => sum + s.amount, 0);
     if (amount === 0) return;
     const label = labelByItem.get(b.cost_item_id) ?? b.cost_item_name;
     byLabel.set(label, (byLabel.get(label) ?? 0) + amount);
@@ -305,25 +285,16 @@ export async function getExpenseDemonstrativoForPeriod(from: string, to: string)
   const itemRows = (rows ?? []) as unknown as Raw[];
   const costItemIds = [...new Set(itemRows.filter((r) => r.cost_item_id).map((r) => r.cost_item_id as string))];
 
-  const [{ data: itemLinks }, { data: subcenterLinks }] = await Promise.all([
-    costItemIds.length
-      ? supabase.from("cost_item_subcenters").select("cost_item_id, subcenter_id, alloc_pct").in("cost_item_id", costItemIds)
-      : Promise.resolve({ data: [] as { cost_item_id: string; subcenter_id: string; alloc_pct: number }[] }),
-    supabase.from("cost_subcenter_centers").select("subcenter_id, center_id, alloc_pct, cost_centers(name)"),
-  ]);
+  const { data: itemLinks } = costItemIds.length
+    ? await supabase.from("cost_item_centers").select("cost_item_id, center_id, alloc_pct, cost_centers(name)").in("cost_item_id", costItemIds)
+    : { data: [] };
 
-  type SubRaw = { subcenter_id: string; center_id: string; alloc_pct: number; cost_centers: { name: string } | null };
-  const centerLinksBySubcenter = new Map<string, SubRaw[]>();
-  ((subcenterLinks ?? []) as unknown as SubRaw[]).forEach((l) => {
-    const list = centerLinksBySubcenter.get(l.subcenter_id) ?? [];
+  type LinkRaw = { cost_item_id: string; center_id: string; alloc_pct: number; cost_centers: { name: string } | null };
+  const linksByItem = new Map<string, LinkRaw[]>();
+  ((itemLinks ?? []) as unknown as LinkRaw[]).forEach((l) => {
+    const list = linksByItem.get(l.cost_item_id) ?? [];
     list.push(l);
-    centerLinksBySubcenter.set(l.subcenter_id, list);
-  });
-  const itemLinksByItem = new Map<string, { subcenter_id: string; alloc_pct: number }[]>();
-  (itemLinks ?? []).forEach((l) => {
-    const list = itemLinksByItem.get(l.cost_item_id) ?? [];
-    list.push({ subcenter_id: l.subcenter_id, alloc_pct: l.alloc_pct });
-    itemLinksByItem.set(l.cost_item_id, list);
+    linksByItem.set(l.cost_item_id, list);
   });
 
   const totals = new Map<string, number>(); // key = `${month}__${center_name}`
@@ -335,20 +306,16 @@ export async function getExpenseDemonstrativoForPeriod(from: string, to: string)
       totals.set(key, (totals.get(key) ?? 0) + Number(r.subtotal));
       return;
     }
-    const itemLinksForRow = itemLinksByItem.get(r.cost_item_id) ?? [];
+    const itemLinksForRow = linksByItem.get(r.cost_item_id) ?? [];
     if (itemLinksForRow.length === 0) {
       const key = `${month}__Sem categoria`;
       totals.set(key, (totals.get(key) ?? 0) + Number(r.subtotal));
       return;
     }
     itemLinksForRow.forEach((il) => {
-      const amountAtSubcenter = Number(r.subtotal) * (il.alloc_pct / 100);
-      const centerLinks = centerLinksBySubcenter.get(il.subcenter_id) ?? [];
-      centerLinks.forEach((cl) => {
-        const amountAtCenter = amountAtSubcenter * (cl.alloc_pct / 100);
-        const key = `${month}__${cl.cost_centers?.name ?? "—"}`;
-        totals.set(key, (totals.get(key) ?? 0) + amountAtCenter);
-      });
+      const amountAtCenter = Number(r.subtotal) * (il.alloc_pct / 100);
+      const key = `${month}__${il.cost_centers?.name ?? "—"}`;
+      totals.set(key, (totals.get(key) ?? 0) + amountAtCenter);
     });
   });
 

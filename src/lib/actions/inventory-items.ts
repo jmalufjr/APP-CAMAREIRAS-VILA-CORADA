@@ -52,7 +52,7 @@ export async function getInventoryItems(onlyActive = true): Promise<InventoryIte
       ),
     supabase
       .from("cost_items")
-      .select("inventory_item_id, cost_item_subcenters(cost_subcenters(name))")
+      .select("inventory_item_id, cost_item_centers(cost_centers(name))")
       .in(
         "inventory_item_id",
         items.map((i) => i.id)
@@ -60,11 +60,11 @@ export async function getInventoryItems(onlyActive = true): Promise<InventoryIte
   ]);
   const balanceMap = new Map((balances ?? []).map((b) => [b.inventory_item_id, Number(b.balance)]));
 
-  type CostItemRaw = { inventory_item_id: string; cost_item_subcenters: { cost_subcenters: { name: string } | null }[] };
+  type CostItemRaw = { inventory_item_id: string; cost_item_centers: { cost_centers: { name: string } | null }[] };
   const categoryNamesByItem = new Map<string, string[]>();
   ((costItems ?? []) as unknown as CostItemRaw[]).forEach((c) => {
     if (!c.inventory_item_id) return;
-    const names = c.cost_item_subcenters.map((l) => l.cost_subcenters?.name).filter((n): n is string => !!n);
+    const names = c.cost_item_centers.map((l) => l.cost_centers?.name).filter((n): n is string => !!n);
     categoryNamesByItem.set(c.inventory_item_id, names);
   });
 
@@ -252,10 +252,13 @@ export async function getDishesWithIngredients(): Promise<DishView[]> {
 }
 
 // Opções do seletor de ingrediente na ficha técnica — só itens de custo
-// (que representam estoque) ligados aos subcentros "Alimentos", "Bebidas"
-// ou "Materiais de bar da piscina", como pedido (Parte 21). O vínculo em
-// si continua indo pro item de ESTOQUE (inventory_item_id), já que é o
-// que o gatilho de baixa automática usa.
+// (que representam estoque) ligados ao centro "Bar de piscina", como
+// pedido (Parte 21 — na época, filtrava pelos subcentros "Alimentos",
+// "Bebidas" e "Materiais de bar da piscina", todos debaixo desse mesmo
+// centro; a camada de subcentro foi removida no Módulo Contábil Leva 1,
+// então o filtro simplificou pro centro direto). O vínculo em si
+// continua indo pro item de ESTOQUE (inventory_item_id), já que é o que
+// o gatilho de baixa automática usa.
 export interface IngredientOption {
   inventory_item_id: string;
   name: string;
@@ -266,7 +269,7 @@ export async function getFichaTecnicaIngredientOptions(): Promise<IngredientOpti
   const supabase = await createClient();
   const { data } = await supabase
     .from("cost_items")
-    .select("inventory_item_id, name, inventory_items(unit), cost_item_subcenters(cost_subcenters(name))")
+    .select("inventory_item_id, name, inventory_items(unit), cost_item_centers(cost_centers(name))")
     .eq("is_inventory", true)
     .not("inventory_item_id", "is", null);
 
@@ -274,16 +277,15 @@ export async function getFichaTecnicaIngredientOptions(): Promise<IngredientOpti
     inventory_item_id: string;
     name: string;
     inventory_items: { unit: string } | null;
-    cost_item_subcenters: { cost_subcenters: { name: string } | null }[];
+    cost_item_centers: { cost_centers: { name: string } | null }[];
   };
-  const allowed = new Set(["Alimentos", "Bebidas", "Materiais de bar da piscina"]);
 
   const seen = new Set<string>();
   const options: IngredientOption[] = [];
   ((data ?? []) as unknown as Raw[]).forEach((r) => {
     if (seen.has(r.inventory_item_id)) return;
-    const inAllowedSubcenter = r.cost_item_subcenters.some((l) => l.cost_subcenters?.name && allowed.has(l.cost_subcenters.name));
-    if (!inAllowedSubcenter) return;
+    const inBarDePiscina = r.cost_item_centers.some((l) => l.cost_centers?.name === "Bar de piscina");
+    if (!inBarDePiscina) return;
     seen.add(r.inventory_item_id);
     options.push({ inventory_item_id: r.inventory_item_id, name: r.name, unit: r.inventory_items?.unit ?? "un" });
   });
