@@ -12,7 +12,7 @@ import {
   deleteCostCenter,
 } from "@/lib/actions/cost-plan";
 import type { CostItemWithLinks } from "@/lib/actions/cost-plan";
-import type { CostCenter } from "@/lib/types";
+import type { CostCenter, LedgerAccount } from "@/lib/types";
 import type { InventoryItemWithBalance } from "@/lib/actions/inventory-items";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -107,21 +107,24 @@ export function CostPlanPanel({
   items,
   centers,
   inventoryItems,
+  ledgerAccounts,
 }: {
   items: CostItemWithLinks[];
   centers: CostCenter[];
   inventoryItems: InventoryItemWithBalance[];
+  ledgerAccounts: LedgerAccount[];
 }) {
   const centerOptions = centers.map((c) => ({ id: c.id, label: c.name }));
   const usedInventoryItemIds = new Set(items.filter((i) => i.inventory_item_id).map((i) => i.inventory_item_id as string));
   const availableInventoryItems = inventoryItems.filter((i) => !usedInventoryItemIds.has(i.id));
+  const ledgerAccountById = new Map(ledgerAccounts.map((a) => [a.code, a]));
 
   return (
     <div className="space-y-10">
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-heading text-lg">Itens de custo</h3>
-          <CostItemDialog centerOptions={centerOptions} availableInventoryItems={availableInventoryItems} />
+          <CostItemDialog centerOptions={centerOptions} availableInventoryItems={availableInventoryItems} ledgerAccounts={ledgerAccounts} />
         </div>
         <div className="space-y-2">
           {items.map((item) => (
@@ -138,9 +141,20 @@ export function CostPlanPanel({
                       ? item.centers.map((c) => `${c.center_name} ${c.alloc_pct}%`).join(" · ")
                       : "Sem centro vinculado"}
                   </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Conta contábil:{" "}
+                    {item.ledger_account_code
+                      ? (ledgerAccountById.get(item.ledger_account_code)?.name ?? item.ledger_account_code)
+                      : "Padrão automático"}
+                  </p>
                 </div>
                 <div className="flex gap-1 shrink-0">
-                  <CostItemDialog item={item} centerOptions={centerOptions} availableInventoryItems={availableInventoryItems} />
+                  <CostItemDialog
+                    item={item}
+                    centerOptions={centerOptions}
+                    availableInventoryItems={availableInventoryItems}
+                    ledgerAccounts={ledgerAccounts}
+                  />
                   <DeleteButton action={() => deleteCostItem(item.id)} />
                 </div>
               </div>
@@ -210,10 +224,12 @@ function CostItemDialog({
   item,
   centerOptions,
   availableInventoryItems,
+  ledgerAccounts,
 }: {
   item?: CostItemWithLinks;
   centerOptions: { id: string; label: string }[];
   availableInventoryItems: InventoryItemWithBalance[];
+  ledgerAccounts: LedgerAccount[];
 }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -226,6 +242,7 @@ function CostItemDialog({
   const [inventoryItemId, setInventoryItemId] = useState("new");
   const [newInventoryItemName, setNewInventoryItemName] = useState("");
   const [links, setLinks] = useState<LinkRow[]>(item?.centers.map((c) => ({ id: c.center_id, pct: c.alloc_pct })) ?? []);
+  const [ledgerAccountCode, setLedgerAccountCode] = useState(item?.ledger_account_code ?? "auto");
 
   // Só mostra o seletor de item de estoque quando ainda não existe
   // nenhum vínculo — um já existente nunca é trocado por outro, só
@@ -241,9 +258,10 @@ function CostItemDialog({
       const centerLinks = links.map((l) => ({ center_id: l.id, alloc_pct: l.pct }));
       const newLinkInventoryItemId = isInventory && inventoryItemId !== "new" ? inventoryItemId : null;
       const newLinkName = isInventory && inventoryItemId === "new" ? newInventoryItemName : null;
+      const resolvedLedgerAccountCode = ledgerAccountCode === "auto" ? null : ledgerAccountCode;
       const result = isEdit
-        ? await updateCostItem(item.id, name, active, isInventory, newLinkInventoryItemId, newLinkName, centerLinks)
-        : await createCostItem(name, isInventory, newLinkInventoryItemId, newLinkName, centerLinks);
+        ? await updateCostItem(item.id, name, active, isInventory, newLinkInventoryItemId, newLinkName, centerLinks, resolvedLedgerAccountCode)
+        : await createCostItem(name, isInventory, newLinkInventoryItemId, newLinkName, centerLinks, resolvedLedgerAccountCode);
       if (result?.error) toast.error(result.error);
       else {
         toast.success("Item de custo salvo.");
@@ -323,6 +341,28 @@ function CostItemDialog({
             </div>
           )}
           <PctLinksEditor options={centerOptions} value={links} onChange={setLinks} />
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">
+              Conta contábil (Módulo Contábil — opcional, usa um padrão automático se não escolher)
+            </Label>
+            <Select value={ledgerAccountCode} onValueChange={(v) => v && setLedgerAccountCode(v)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Selecione">
+                  {(v: string) => (v === "auto" ? "Padrão automático" : ledgerAccounts.find((a) => a.code === v)?.name ?? v)}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Padrão automático</SelectItem>
+                {ledgerAccounts
+                  .filter((a) => a.active && (a.account_group === "custo" || a.account_group === "despesa"))
+                  .map((a) => (
+                    <SelectItem key={a.code} value={a.code}>
+                      {a.display_code ? `${a.display_code} — ${a.name}` : a.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <DialogFooter>
           <Button onClick={handleSave} disabled={isPending}>

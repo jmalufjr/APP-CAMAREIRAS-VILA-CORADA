@@ -19,8 +19,12 @@ export interface ParsedReceiptItem {
 
 export interface ParsedReceipt {
   supplier_name: string | null;
-  payment_method: string | null; // um de PAYMENT_METHOD_OPTIONS, ou null se não identificado
+  // Um de SUPPLIER_PAYMENT_METHOD_OPTIONS (banco_pix/dinheiro/
+  // cartao_corporativo/a_prazo — Módulo Contábil Leva 2), ou null se não
+  // identificado.
+  payment_method: string | null;
   date: string | null; // "YYYY-MM-DD", se legível na nota
+  document_number: string | null; // número da nota/cupom fiscal, se impresso
   total_amount: number | null;
   nfce_url: string | null; // link/código da nota fiscal, se impresso no documento
   items: ParsedReceiptItem[];
@@ -32,8 +36,9 @@ depois, sem bloco de código markdown) no formato:
 
 {
   "supplier_name": string ou null,
-  "payment_method": um destes valores ou null: "pix", "cartao_credito", "cartao_debito", "transferencia_bancaria", "dinheiro", "boleto",
+  "payment_method": um destes valores ou null: "banco_pix", "dinheiro", "cartao_corporativo", "a_prazo",
   "date": "YYYY-MM-DD" ou null,
+  "document_number": string ou null,
   "total_amount": número ou null,
   "nfce_url": string ou null,
   "items": [
@@ -47,9 +52,15 @@ Regras:
 - Se não der pra separar itens (ex.: um comprovante de maquininha de
   cartão só com o valor total, ou uma conta de luz/água), devolva
   "items" como lista vazia e preencha "total_amount".
-- "payment_method": procure por palavras como PIX, DÉBITO, CRÉDITO,
-  DINHEIRO, BOLETO no documento. Se não houver nenhuma indicação clara,
-  devolva null — nunca invente.
+- "payment_method": é a forma como A POUSADA pagou o fornecedor (nunca
+  confundir com forma de pagamento de hóspede). "banco_pix" cobre PIX,
+  transferência bancária e boleto já pago; "dinheiro" é dinheiro em
+  espécie; "cartao_corporativo" cobre cartão de crédito ou débito da
+  empresa; "a_prazo" só quando o documento deixa claro que ainda NÃO foi
+  pago (ex.: boleto com vencimento futuro, nota "a prazo"). Se não houver
+  nenhuma indicação clara, devolva null — nunca invente.
+- "document_number": o número da nota fiscal/cupom/NFC-e impresso no
+  documento (não o link, só o número/código). null se não houver.
 - "nfce_url": o link (geralmente abaixo de um QR code) ou o código de
   acesso da NFC-e/nota fiscal, se estiver impresso no documento. null se
   não houver.
@@ -136,8 +147,9 @@ export async function parseReceiptWithAI(formData: FormData): Promise<{ error: s
       subtotal: number;
       matched_catalog_index: number | null;
     };
-    const parsed = JSON.parse(cleaned) as Omit<ParsedReceipt, "items" | "nfce_url"> & {
+    const parsed = JSON.parse(cleaned) as Omit<ParsedReceipt, "items" | "nfce_url" | "document_number"> & {
       nfce_url?: string | null;
+      document_number?: string | null;
       items: RawItem[];
     };
 
@@ -159,6 +171,7 @@ export async function parseReceiptWithAI(formData: FormData): Promise<{ error: s
         supplier_name: parsed.supplier_name ?? null,
         payment_method: parsed.payment_method ?? null,
         date: parsed.date ?? null,
+        document_number: parsed.document_number ?? null,
         total_amount: parsed.total_amount ?? null,
         nfce_url: parsed.nfce_url ?? null,
         items,

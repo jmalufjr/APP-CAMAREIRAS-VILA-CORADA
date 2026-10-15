@@ -2,13 +2,15 @@ import { PageHeader } from "@/components/shared/page-header";
 import { BackLink } from "@/components/shared/back-link";
 import { getCostItems, getCostCenters } from "@/lib/actions/cost-plan";
 import { getInventoryItems } from "@/lib/actions/inventory-items";
+import { getLedgerAccounts } from "@/lib/actions/ledger";
 import { CostPlanPanel } from "./cost-plan-panel";
 
 export default async function PlanoDeItensDeCustoPage() {
-  const [items, centers, inventoryItems] = await Promise.all([
+  const [items, centers, inventoryItems, ledgerAccounts] = await Promise.all([
     getCostItems(),
     getCostCenters(),
     getInventoryItems(false),
+    getLedgerAccounts(),
   ]);
 
   return (
@@ -18,7 +20,7 @@ export default async function PlanoDeItensDeCustoPage() {
         title="Plano de itens de custo"
         subtitle="Itens de custo (os mais analíticos), ligados direto a 1 ou mais centros de custo. Quando um item se liga a mais de 1 centro, os percentuais precisam somar 100%."
       />
-      <CostPlanPanel items={items} centers={centers} inventoryItems={inventoryItems} />
+      <CostPlanPanel items={items} centers={centers} inventoryItems={inventoryItems} ledgerAccounts={ledgerAccounts} />
     </div>
   );
 }

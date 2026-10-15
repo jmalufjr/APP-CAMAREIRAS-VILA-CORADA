@@ -29,6 +29,13 @@ create type payment_method as enum (
 -- outros dois só existem num dia de Saída com Chegada em que a conta do
 -- hóspede que sai ainda não foi paga quando o hóspede novo chega.
 create type room_bill_guest_slot as enum ('unica', 'saida_hoje', 'chegada_hoje');
+-- Forma de pagamento do lado FORNECEDOR (a pousada pagando uma compra/
+-- despesa) — diferente de payment_method acima, que é do lado HÓSPEDE
+-- (pagando a própria conta de consumo). 'a_prazo' não é uma forma de
+-- pagamento de verdade, é a ausência dele por ora (ver expense_payment_status).
+-- Módulo Contábil Leva 2 — PRD_compras&contabil.md seção 22.3 item 12.
+create type supplier_payment_method as enum ('banco_pix', 'dinheiro', 'cartao_corporativo', 'a_prazo');
+create type expense_payment_status as enum ('pago', 'pendente');
 create type comanda_status as enum ('original', 'cancelada', 'editada');
 -- Módulo de compras/despesas/estoque (PRD_compras.md) — ver schema.sql
 -- mais abaixo, seção "COMPRAS, DESPESAS E ESTOQUE".
@@ -1843,6 +1850,15 @@ begin
 end;
 $$ language plpgsql security definer;
 
+-- Conta do plano de contas CONTÁBIL que o gasto de um item de custo
+-- posta nos lançamentos automáticos (Módulo Contábil Leva 2) — null
+-- usa um padrão genérico (estoque-outros se representa estoque,
+-- outras-despesas se não), sempre editável pelo admin em "Plano de
+-- itens de custo". Coluna separada (não inline em `create table
+-- cost_items` acima) porque `ledger_accounts` só existe a partir
+-- daqui.
+alter table cost_items add column ledger_account_code text references ledger_accounts(code);
+
 -- ---------- FICHA TÉCNICA (receita): ingrediente(s) por produto do cardápio ----------
 -- Um ingrediente pode alimentar vários produtos (frigobar OU bar da
 -- piscina, nunca os dois na mesma linha), e um produto pode consumir
@@ -1886,13 +1902,41 @@ create table purchase_requests (
   updated_at timestamptz not null default now()
 );
 
+-- ---------- FORNECEDORES (Módulo Contábil Leva 2) ----------
+-- Cadastro de verdade — substitui os antigos campos de texto livre
+-- `expenses.supplier_name`/`fixed_assets.supplier_name`, que nem
+-- batiam entre si por causa de maiúscula/minúscula.
+create table suppliers (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  cpf_cnpj text,
+  email text,
+  phone text,
+  address text,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create unique index suppliers_name_uq on suppliers (lower(name));
+
 -- ---------- EXPENSES (despesas/compras — cabeçalho) ----------
+-- A despesa em si já carrega o estado "pago"/"pendente" — não existe
+-- uma tabela separada de "conta a pagar": a despesa É a obrigação
+-- enquanto pendente. "Pagar" só atualiza esta mesma linha (status/
+-- paid_at/forma) e gera o lançamento contábil de liquidação, sem
+-- reconhecer a despesa de novo (ver pay_expense em
+-- src/lib/actions/expenses.ts). competence_date é a data de
+-- competência contábil (pode diferir de `date`, a data do documento).
 create table expenses (
   id uuid primary key default uuid_generate_v4(),
   date date not null default current_date,
-  supplier_name text,
+  competence_date date not null default current_date,
+  document_number text,
+  supplier_id uuid references suppliers(id) on delete set null,
   total_amount numeric(12,2) not null default 0 check (total_amount >= 0),
-  payment_method payment_method,
+  payment_method supplier_payment_method,
+  payment_status expense_payment_status not null default 'pago',
+  due_date date,
+  paid_at timestamptz,
   receipt_storage_path text,
   nfce_url text,
   notes text,
@@ -1937,7 +1981,7 @@ create table fixed_assets (
   purchase_date date,
   purchase_value numeric(12,2),
   warranty_until date,
-  supplier_name text,
+  supplier_id uuid references suppliers(id) on delete set null,
   location text,
   notes text,
   active boolean not null default true,
@@ -1959,6 +2003,15 @@ create table expense_items (
   quantity numeric(12,3) not null default 1 check (quantity > 0),
   unit_cost numeric(12,2) not null default 0 check (unit_cost >= 0),
   subtotal numeric(12,2) not null default 0 check (subtotal >= 0),
+  -- Desconto/frete/tributos (Módulo Contábil Leva 2) — guardados só
+  -- pra transparência/auditoria; `subtotal` acima já vem calculado
+  -- pelo formulário como o custo líquido final (ver ExpenseItemInput
+  -- em src/lib/actions/expenses.ts). Tributo recuperável nunca compõe
+  -- o custo.
+  discount numeric(12,2) not null default 0 check (discount >= 0),
+  freight_and_other_costs numeric(12,2) not null default 0 check (freight_and_other_costs >= 0),
+  recoverable_tax numeric(12,2) not null default 0 check (recoverable_tax >= 0),
+  non_recoverable_tax numeric(12,2) not null default 0 check (non_recoverable_tax >= 0),
   created_at timestamptz not null default now(),
   constraint expense_items_one_target check (not (cost_item_id is not null and fixed_asset_id is not null))
 );
@@ -2073,6 +2126,7 @@ alter table ledger_entry_lines enable row level security;
 alter table inventory_items enable row level security;
 alter table inventory_item_recipes enable row level security;
 alter table purchase_requests enable row level security;
+alter table suppliers enable row level security;
 alter table expenses enable row level security;
 alter table expense_items enable row level security;
 alter table inventory_count_sessions enable row level security;
@@ -2126,6 +2180,11 @@ create policy "purchase_req_insert_own" on purchase_requests
 create policy "purchase_req_update_own_pending" on purchase_requests
   for update using (requested_by = auth.uid() and status = 'pendente')
   with check (requested_by = auth.uid());
+
+create policy "suppliers_select_authenticated" on suppliers for select using (auth.uid() is not null);
+create policy "suppliers_insert_admin_manutencao" on suppliers for insert with check (is_admin() or is_manutencao());
+create policy "suppliers_admin_update" on suppliers for update using (is_admin());
+create policy "suppliers_admin_delete" on suppliers for delete using (is_admin());
 
 create policy "expenses_select_admin_manutencao" on expenses for select
   using (is_admin() or is_manutencao());

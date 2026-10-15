@@ -5,15 +5,17 @@ import { ExpenseForm } from "@/components/shared/expense-form";
 import { getExpenseWithItems } from "@/lib/actions/expenses";
 import { getCostItemOptions, getCostCenters } from "@/lib/actions/cost-plan";
 import { getAssetCategories, getFixedAssetCatalogItems } from "@/lib/actions/fixed-assets";
+import { getSupplierOptions } from "@/lib/actions/suppliers";
 
 export default async function EditarDespesaPage({ params }: { params: Promise<{ expenseId: string }> }) {
   const { expenseId } = await params;
-  const [expense, costItemOptions, costCenters, assetCategories, assetCatalogItems] = await Promise.all([
+  const [expense, costItemOptions, costCenters, assetCategories, assetCatalogItems, supplierOptions] = await Promise.all([
     getExpenseWithItems(expenseId),
     getCostItemOptions(),
     getCostCenters(),
     getAssetCategories(),
     getFixedAssetCatalogItems(),
+    getSupplierOptions(),
   ]);
 
   if (!expense) notFound();
@@ -30,6 +32,7 @@ export default async function EditarDespesaPage({ params }: { params: Promise<{ 
         costCenters={costCenters}
         assetCategories={assetCategories.filter((c) => c.active)}
         assetCatalogItems={assetCatalogItems}
+        supplierOptions={supplierOptions}
       />
     </div>
   );

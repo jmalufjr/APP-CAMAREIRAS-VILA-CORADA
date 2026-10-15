@@ -13,6 +13,12 @@ export type PaymentMethod =
   | "transferencia_bancaria"
   | "dinheiro"
   | "boleto";
+// Forma de pagamento do lado FORNECEDOR (a pousada pagando uma compra/
+// despesa) — diferente de PaymentMethod acima, que é do lado HÓSPEDE
+// (pagando a própria conta de consumo). Ver PRD_compras&contabil.md
+// seção 22.3 item 12.
+export type SupplierPaymentMethod = "banco_pix" | "dinheiro" | "cartao_corporativo" | "a_prazo";
+export type ExpensePaymentStatus = "pago" | "pendente";
 export type InventoryMovementType = "compra" | "baixa_manual" | "baixa_consumo_hospede" | "ajuste_contagem";
 export type InventoryCountStatus = "em_andamento" | "concluida";
 export type PurchaseRequestStatus = "pendente" | "atendido" | "cancelado";
@@ -329,6 +335,10 @@ export interface CostItem {
   name: string;
   is_inventory: boolean;
   inventory_item_id: string | null;
+  // Conta do plano de contas CONTÁBIL (ledger_accounts.code) que o
+  // gasto deste item posta — null usa um padrão genérico (Módulo
+  // Contábil Leva 2).
+  ledger_account_code: string | null;
   active: boolean;
   position: number;
   created_at: string;
@@ -458,7 +468,7 @@ export interface FixedAsset {
   purchase_date: string | null;
   purchase_value: number | null;
   warranty_until: string | null;
-  supplier_name: string | null;
+  supplier_id: string | null;
   location: string | null;
   notes: string | null;
   active: boolean;
@@ -478,27 +488,17 @@ export interface FixedAssetCatalogItem {
   created_at: string;
 }
 
-export interface Expense {
+// Fornecedor — cadastro de verdade (Módulo Contábil Leva 2), substitui
+// os antigos campos de texto livre `expenses.supplier_name`/
+// `fixed_assets.supplier_name`, que nem batiam entre si.
+export interface Supplier {
   id: string;
-  date: string;
-  supplier_name: string | null;
-  total_amount: number;
-  payment_method: PaymentMethod | null;
-  receipt_storage_path: string | null;
-  nfce_url: string | null;
-  notes: string | null;
-  created_by: string | null;
-  created_at: string;
-}
-
-export interface ExpenseItem {
-  id: string;
-  expense_id: string;
-  inventory_item_id: string | null;
-  description: string;
-  quantity: number;
-  unit_cost: number;
-  subtotal: number;
+  name: string;
+  cpf_cnpj: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  active: boolean;
   created_at: string;
 }
 

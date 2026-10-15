@@ -143,12 +143,17 @@ async function resolveNewInventoryLink(
 
 // isInventory=true sempre liga a um item de estoque — existente
 // (inventoryItemId) ou novo (newInventoryItemName, criado na hora).
+// ledgerAccountCode: qual conta do plano de contas CONTÁBIL esse item
+// posta nos lançamentos automáticos (Módulo Contábil Leva 2) — null
+// usa o padrão genérico (ver resolveLedgerAccountForCostItem em
+// expenses.ts).
 export async function createCostItem(
   name: string,
   isInventory: boolean,
   inventoryItemId: string | null,
   newInventoryItemName: string | null,
-  centerLinks: { center_id: string; alloc_pct: number }[]
+  centerLinks: { center_id: string; alloc_pct: number }[],
+  ledgerAccountCode: string | null = null
 ) {
   if (!name.trim()) return { error: "Informe o nome do item de custo." };
   const supabase = await createClient();
@@ -162,7 +167,12 @@ export async function createCostItem(
 
   const { data, error } = await supabase
     .from("cost_items")
-    .insert({ name: name.trim(), is_inventory: isInventory, inventory_item_id: resolvedInventoryItemId })
+    .insert({
+      name: name.trim(),
+      is_inventory: isInventory,
+      inventory_item_id: resolvedInventoryItemId,
+      ledger_account_code: ledgerAccountCode,
+    })
     .select("id")
     .single();
   if (error || !data) {
@@ -190,7 +200,8 @@ export async function updateCostItem(
   isInventory: boolean,
   inventoryItemId: string | null,
   newInventoryItemName: string | null,
-  centerLinks: { center_id: string; alloc_pct: number }[]
+  centerLinks: { center_id: string; alloc_pct: number }[],
+  ledgerAccountCode: string | null = null
 ) {
   if (!name.trim()) return { error: "Informe o nome do item de custo." };
   const supabase = await createClient();
@@ -213,7 +224,13 @@ export async function updateCostItem(
 
   const { error } = await supabase
     .from("cost_items")
-    .update({ name: name.trim(), active, is_inventory: isInventory, inventory_item_id: resolvedInventoryItemId })
+    .update({
+      name: name.trim(),
+      active,
+      is_inventory: isInventory,
+      inventory_item_id: resolvedInventoryItemId,
+      ledger_account_code: ledgerAccountCode,
+    })
     .eq("id", id);
   if (error) {
     if (error.code === "23505") return { error: "Esse item de estoque já está ligado a outro item de custo." };

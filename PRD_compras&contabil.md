@@ -2229,3 +2229,205 @@ fórmula do café da manhã ficam para as próximas levas.
   inline com `center_links`, via `createExpense`. Todas as linhas
   fabricadas (lançamentos, item de custo, sessão de contagem, despesa)
   removidas do banco local depois.
+
+## 24. Módulo Contábil — Leva 2: fornecedores, contas a pagar e lançamento automático de compras/despesas
+
+Segunda leva da implementação completa aprovada em 15/10/2026 (ver seção
+22.3) — feita direto em `main`... na verdade em `feature/compras` (a
+branch ainda não mesclada), pós Leva 1 (seção 23), sem pausa pra
+aprovação entre levas (pedido explícito do proprietário: "pode fazer a
+implementação completa sem ter que parar em cada leva").
+
+### 24.1 Fornecedores (cadastro de verdade)
+
+Nova tabela `suppliers` (migration
+`070_fornecedores_contas_a_pagar.sql`): nome (único, case-insensitive),
+CPF/CNPJ, e-mail, telefone, endereço, ativo. Substitui os antigos campos
+de texto livre `expenses.supplier_name`/`fixed_assets.supplier_name`,
+que podiam divergir entre si por causa de maiúscula/minúscula —
+**backfill automático** (decisão 22.3 item 5, "posso juntar
+automaticamente os nomes iguais das compras já lançadas ao criar o
+cadastro? Sim"): a migration junta os nomes já digitados nas duas
+tabelas (ignorando caixa), cria 1 fornecedor por nome distinto, e
+reaponta `expenses`/`fixed_assets` pro `supplier_id` correspondente
+antes de descartar as colunas de texto. `src/lib/actions/suppliers.ts`
+(`getSuppliers`/`getSupplierOptions`/`createSupplier`/`updateSupplier`/
+`deleteSupplier`) segue o mesmo padrão já usado por item de custo/item
+de estoque — confere nome duplicado (`ilike`) antes de criar.
+
+No formulário "Lançar compras e despesas" (`expense-form.tsx`), o campo
+"Fornecedor" virou um seletor (existente ou "+ Criar novo fornecedor",
+com nome inline) em vez de texto livre — a criação de fato acontece no
+momento de salvar a despesa (`createSupplier` chamado a partir do
+cliente, antes de montar o FormData da despesa), não dentro de
+`createExpense`/`updateExpense` em si.
+
+### 24.2 Contas a pagar — sem tabela própria
+
+Decisão de modelagem (22.3 item 3 implícito, refinado nesta leva): como
+1 despesa já representa exatamente 1 obrigação com 1 fornecedor, **não
+existe uma tabela "contas a pagar" separada** — a própria linha de
+`expenses` carrega o estado:
+
+- `payment_status` (`pago`/`pendente`, novo enum `expense_payment_status`).
+- `due_date` (vencimento, obrigatório só quando a forma de pagamento é
+  "A prazo").
+- `paid_at` (quando foi efetivamente paga).
+- `competence_date` (data de competência contábil, pode diferir da data
+  do documento — nasce igual à data se o campo ficar em branco).
+- `document_number` (número da nota/cupom, usado também pra detecção de
+  duplicidade — ver 24.4).
+
+Forma de pagamento do lado FORNECEDOR ganhou um enum próprio,
+`supplier_payment_method` (`banco_pix`/`dinheiro`/`cartao_corporativo`/
+`a_prazo`), **separado** do `payment_method` já existente (que é do
+hóspede pagando a própria conta de consumo) — decisão 22.3 item 12.
+"A prazo" não é uma forma de pagamento de verdade, é a ausência dele por
+ora: ao escolher essa opção, `payment_status` é automaticamente
+`pendente` e o campo "Vencimento" aparece como obrigatório; qualquer
+outra forma grava `payment_status = pago` com `paid_at = agora`, sem
+pedir vencimento nenhum.
+
+**Registrar o pagamento depois**: nova tela `/contabil/pagamentos`
+("Pagamentos e recebimentos" — só o lado "pagamentos" por ora, já que
+este app nunca teve conceito de "a receber" de hóspede, sempre à vista)
+lista as despesas `pendente`, ordenadas por vencimento, com um botão
+"Registrar pagamento" (diálogo pedindo a forma — banco/PIX, dinheiro ou
+cartão corporativo, nunca "a prazo" de novo) chamando a nova Server
+Action `payExpense(id, paymentMethod)`: atualiza a mesma linha de
+`expenses` (`payment_status = pago`, `paid_at`, `payment_method`) e
+posta um lançamento contábil de **liquidação** — nunca reconhece a
+despesa de novo, só credita caixa/banco e debita a conta de "a pagar"
+que já tinha sido creditada na criação.
+
+### 24.3 Lançamento contábil automático por trás de toda compra/despesa
+
+`postExpenseLedgerEntry` (função interna de `expenses.ts`, chamada por
+`createExpense`/`updateExpense`) monta e posta (via `postLedgerEntry`,
+Leva 1) um lançamento balanceado a cada despesa salva, sem nenhuma tela
+nova pro admin entender débito/crédito:
+
+- **Débito**: 1 linha por (item de custo × centro de custo em que ele
+  está cadastrado), valor = subtotal do item × percentual do centro —
+  resolvido via `resolveLedgerAccountForCostItem` (conta =
+  `cost_items.ledger_account_code` se o admin já configurou, senão um
+  padrão genérico: `estoque-outros` se representa estoque,
+  `outras-despesas` se não — mesmo fallback documentado na Leva 1). Uma
+  linha de ativo permanente debita sempre `equipamentos-imobilizado`,
+  sem split por centro. Sobra de arredondamento do rateio percentual
+  (ex.: item "água" 33%/34%/33%) é corrigida na última linha, garantindo
+  que a soma bate exatamente o subtotal — mesmo padrão de correção já
+  usado no projeto (ex.: migration 069).
+- **Crédito**: 1 linha só — `fornecedores-a-pagar` (se há fornecedor) ou
+  `despesas-a-pagar` (se não há) quando `payment_status = pendente`;
+  `caixa` (dinheiro) ou `banco` (qualquer outra forma) quando já paga.
+
+**Conta contábil por item de custo, agora editável**: "Plano de itens de
+custo" (`cost-plan-panel.tsx`) ganhou um seletor "Conta contábil"
+(opcional, "Padrão automático" se não escolher) — `createCostItem`/
+`updateCostItem` (`cost-plan.ts`) ganharam um parâmetro a mais,
+`ledgerAccountCode`, já desde a Leva 1 no schema (`cost_items.
+ledger_account_code`) mas só exposto na UI nesta leva.
+
+**Edição de uma despesa já lançada**: nunca edita o lançamento confirmado
+— sempre estorna o antigo e posta um novo, mesma regra de sempre. **Bug
+real encontrado e corrigido durante o teste desta leva**: a busca pelo
+"lançamento antigo" a estornar usava só
+`source_type='expenses' and source_id=X and status='confirmado'`, sem
+filtrar por `origin` — uma despesa já paga tem **2** lançamentos
+confirmados com o mesmo `source_id` (o de reconhecimento, `origin=
+'despesa'`, e o de liquidação, `origin='pagamento'`), então
+`.maybeSingle()` encontrava 2 linhas, retornava `null` silenciosamente
+(sem erro visível) e o estorno nunca acontecia — mesma categoria de bug
+já registrada no projeto (nunca assumir que uma busca "única" vai mesmo
+achar só 1 linha). Além disso, o lançamento novo reconhecia a despesa
+usando o `payment_status` ATUAL (já pago) e creditava banco/caixa
+**direto**, duplicando a saída de caixa (a liquidação original já tinha
+feito isso uma vez). Corrigido em duas partes: (1) a busca do lançamento
+a estornar agora filtra também por `origin='despesa'`; (2) antes de
+postar o novo lançamento, o código confere se já existe um lançamento de
+pagamento confirmado pra essa despesa — se existir, força o novo
+lançamento de reconhecimento a creditar `fornecedores-a-pagar`/
+`despesas-a-pagar` (nunca caixa/banco direto), preservando o lançamento
+de pagamento original como o único registro do movimento de caixa de
+verdade. `deleteExpense` tinha o mesmo risco (`.maybeSingle()` numa
+despesa com 2 lançamentos) — corrigido estornando **todos** os
+lançamentos confirmados ligados à despesa, não só "um".
+
+### 24.4 Duplicidade — só avisa, nunca bloqueia
+
+Decisão 22.3 item 6. Antes de criar/editar uma despesa, confere se já
+existe outra com o mesmo fornecedor + número do documento + data + valor
+total — se existir e a tela ainda não tiver confirmado, devolve
+`duplicateWarning: true` em vez de um erro comum; o formulário mostra
+isso num `confirm()` do navegador e, se o usuário confirmar, reenvia a
+mesma requisição com `confirm_duplicate=true`, que pula a checagem. Só
+compara quando há número de documento informado (sem ele, o aviso seria
+ruído constante).
+
+### 24.5 Desconto, frete e tributos por item
+
+`expense_items` ganhou 4 colunas novas (`discount`/
+`freight_and_other_costs`/`recoverable_tax`/`non_recoverable_tax`),
+colapsáveis no formulário ("Desconto, frete e tributos", escondido por
+padrão, abre sozinho ao editar uma despesa que já tem algum desses
+valores). O subtotal final de uma linha —
+quantidade×custo − desconto + frete + tributo **não** recuperável — é o
+único valor que afeta o lançamento contábil; o tributo **recuperável**
+é só registrado pra transparência/auditoria (representa crédito a
+recuperar depois, não um custo de verdade).
+
+### 24.6 Leitura automática por IA, atualizada
+
+`receipt-ai.ts` passou a pedir o vocabulário novo de forma de pagamento
+(`banco_pix`/`dinheiro`/`cartao_corporativo`/`a_prazo`, com a regra
+explícita de só devolver "a_prazo" quando o documento deixa claro que
+ainda não foi pago) e a extrair `document_number` (número da nota/cupom)
+— preenchido automaticamente no formulário junto com fornecedor
+(casado por nome contra os já cadastrados, ou "+ Criar novo fornecedor"
+se não achar), data e itens, como já acontecia antes.
+
+### 24.7 O que NÃO mudou nesta leva
+
+Estoque continua com saldo só em quantidade (sem valorização monetária —
+Leva 3); consumo de bar/frigobar continua baixando estoque no momento do
+PAGAMENTO, não da venda (Leva 4); café da manhã continua com a fórmula
+antiga (Leva 5); os 5 itens de menu soltos continuam soltos (Leva 6);
+nenhuma exportação pro sistema financeiro existe ainda (Leva 7).
+
+### 24.8 Testado
+
+- `npm run build`/`npm run lint` limpos (rota nova
+  `/contabil/pagamentos` aparece na árvore).
+- Migration `070` aplicada com sucesso no Postgres local via Docker —
+  conferido o backfill real: 3 fornecedores distintos criados a partir
+  dos nomes já digitados, 4 despesas reais corretamente reapontadas pra
+  `supplier_id` (com `payment_method` mapeado como esperado:
+  cartão crédito/débito → cartão corporativo, PIX → banco/PIX),
+  `payment_status`/`competence_date`/`paid_at` backfilados como "já
+  paga" pra tudo que existia antes.
+- Fluxo ponta a ponta via rota de API temporária (`/api/test-leva2`,
+  removida depois), com sessão autenticada real (login local + cookie
+  `sb-127-auth-token`), exercitando as Server Actions de verdade:
+  fornecedor novo criado; despesa "a prazo" com 2 itens (um split em 3
+  centros — "água" 33/34/33 — outro com desconto/frete/tributos)
+  lançada, conferido o lançamento contábil gerado (crédito
+  `fornecedores-a-pagar`, débito `outras-despesas` por centro, com a
+  sobra de arredondamento corrigida na última linha, batendo exatamente
+  com o total); duplicidade detectada e, confirmada, aceita; pagamento
+  registrado (lançamento de liquidação: débito `fornecedores-a-pagar`,
+  crédito `banco`) e pagamento duplicado corretamente rejeitado;
+  **edição de uma despesa já paga testada e o bug da seção 24.3
+  encontrado e corrigido nesta mesma rodada** — confirmado depois da
+  correção que o lançamento original é estornado de verdade (status
+  `estornado`, estorno com débito/crédito invertidos) e que o novo
+  lançamento de reconhecimento credita `fornecedores-a-pagar` (não mais
+  banco direto); override de conta contábil por item de custo
+  confirmado (água temporariamente configurada pra postar em "caixa"
+  sem split, revertido depois); exclusão de uma despesa já paga
+  confirmada estornando o único lançamento dela; `getExpenses`/
+  `getExpenseWithItems`/`getExpenseSummaryBySupplier`/
+  `getPendingExpenses` conferidos com os dados reais do teste. Todas as
+  linhas fabricadas (despesas, itens, lançamentos, fornecedor) removidas
+  do banco local depois; `cost_items.ledger_account_code` da água
+  revertido pra `null`.

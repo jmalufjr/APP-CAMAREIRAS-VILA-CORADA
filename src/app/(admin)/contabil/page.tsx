@@ -1,17 +1,18 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
-import { BookOpen, FolderTree, ChevronRight } from "lucide-react";
+import { BookOpen, FolderTree, ChevronRight, CircleDollarSign } from "lucide-react";
 
-// Módulo Contábil — Leva 1 (PRD_compras&contabil.md seção 22): por ora
-// só o plano de contas contábil e o livro de lançamentos, a fundação do
-// motor de partidas dobradas. As próximas levas vão trazer compras,
-// vendas, estoque, pagamentos/recebimentos etc. pra dentro deste mesmo
-// menu, reunindo tudo que hoje está espalhado (Compras, Custos e
+// Módulo Contábil — Leva 1 trouxe o plano de contas contábil e o livro
+// de lançamentos, a fundação do motor de partidas dobradas; a Leva 2
+// (PRD_compras&contabil.md seção 24) somou "Pagamentos e recebimentos".
+// As próximas levas vão trazer estoque, vendas etc. pra dentro deste
+// mesmo menu, reunindo tudo que hoje está espalhado (Compras, Custos e
 // Despesas, Ativo Permanente) — ver o plano de levas combinado com o
 // proprietário.
 const menuItems = [
   { href: "/contabil/plano-de-contas", label: "Plano de contas", icon: FolderTree },
   { href: "/contabil/lancamentos", label: "Livro de lançamentos", icon: BookOpen },
+  { href: "/contabil/pagamentos", label: "Pagamentos e recebimentos", icon: CircleDollarSign },
 ];
 
 export default function ModuloContabilPage() {

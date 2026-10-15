@@ -6,7 +6,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import type { ExpenseListRow } from "@/lib/actions/expenses";
 import { deleteExpense } from "@/lib/actions/expenses";
-import { PAYMENT_METHOD_LABELS } from "@/lib/payment-method";
+import { SUPPLIER_PAYMENT_METHOD_LABELS } from "@/lib/payment-method";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Download, FileText, Trash2, Pencil } from "lucide-react";
@@ -44,13 +44,15 @@ export function ComprasHistoryTable({
           size="sm"
           onClick={() =>
             downloadCsv("compras-despesas.csv", [
-              ["Data", "Categoria", "Fornecedor", "Valor (R$)", "Forma de pagamento", "Lançado por"],
+              ["Data", "Categoria", "Fornecedor", "Valor (R$)", "Forma de pagamento", "Status", "Vencimento", "Lançado por"],
               ...rows.map((r) => [
                 r.date,
                 r.category_name,
                 r.supplier_name ?? "—",
                 r.total_amount.toFixed(2),
-                r.payment_method ? PAYMENT_METHOD_LABELS[r.payment_method] : "—",
+                r.payment_method ? SUPPLIER_PAYMENT_METHOD_LABELS[r.payment_method] : "—",
+                r.payment_status === "pendente" ? "Pendente" : "Pago",
+                r.due_date ? r.due_date.split("-").reverse().join("/") : "—",
                 r.created_by_name ?? "—",
               ]),
             ])
@@ -69,6 +71,7 @@ export function ComprasHistoryTable({
               <TableHead>Fornecedor</TableHead>
               <TableHead>Valor</TableHead>
               <TableHead>Pagamento</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead>Lançado por</TableHead>
               <TableHead></TableHead>
             </TableRow>
@@ -80,7 +83,16 @@ export function ComprasHistoryTable({
                 <TableCell>{r.category_name}</TableCell>
                 <TableCell>{r.supplier_name ?? "—"}</TableCell>
                 <TableCell>R$ {r.total_amount.toFixed(2)}</TableCell>
-                <TableCell>{r.payment_method ? PAYMENT_METHOD_LABELS[r.payment_method] : "—"}</TableCell>
+                <TableCell>{r.payment_method ? SUPPLIER_PAYMENT_METHOD_LABELS[r.payment_method] : "—"}</TableCell>
+                <TableCell>
+                  {r.payment_status === "pendente" ? (
+                    <span className="text-amber-600 dark:text-amber-400">
+                      Pendente{r.due_date ? ` (venc. ${r.due_date.split("-").reverse().join("/")})` : ""}
+                    </span>
+                  ) : (
+                    "Pago"
+                  )}
+                </TableCell>
                 <TableCell>{r.created_by_name ?? "—"}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1">
@@ -121,7 +133,7 @@ export function ComprasHistoryTable({
             ))}
             {rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   Nenhuma despesa no período.
                 </TableCell>
               </TableRow>

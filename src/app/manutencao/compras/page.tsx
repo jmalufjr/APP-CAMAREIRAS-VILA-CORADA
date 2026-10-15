@@ -2,13 +2,15 @@ import { PageHeader } from "@/components/shared/page-header";
 import { ExpenseForm } from "@/components/shared/expense-form";
 import { getCostItemOptions, getCostCenters } from "@/lib/actions/cost-plan";
 import { getAssetCategories, getFixedAssetCatalogItems } from "@/lib/actions/fixed-assets";
+import { getSupplierOptions } from "@/lib/actions/suppliers";
 
 export default async function ManutencaoComprasPage() {
-  const [costItemOptions, costCenters, assetCategories, assetCatalogItems] = await Promise.all([
+  const [costItemOptions, costCenters, assetCategories, assetCatalogItems, supplierOptions] = await Promise.all([
     getCostItemOptions(),
     getCostCenters(),
     getAssetCategories(),
     getFixedAssetCatalogItems(),
+    getSupplierOptions(),
   ]);
 
   return (
@@ -19,6 +21,7 @@ export default async function ManutencaoComprasPage() {
         costCenters={costCenters}
         assetCategories={assetCategories.filter((c) => c.active)}
         assetCatalogItems={assetCatalogItems}
+        supplierOptions={supplierOptions}
       />
     </div>
   );

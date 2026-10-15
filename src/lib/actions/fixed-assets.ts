@@ -99,17 +99,22 @@ export async function deleteFixedAssetCatalogItem(id: string) {
 
 export interface FixedAssetWithCategory extends FixedAsset {
   category_name: string;
+  supplier_name: string | null;
 }
 
 export async function getFixedAssets(): Promise<FixedAssetWithCategory[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("fixed_assets")
-    .select("*, asset_categories(name)")
+    .select("*, asset_categories(name), suppliers(name)")
     .order("created_at", { ascending: false });
 
-  type Raw = FixedAsset & { asset_categories: { name: string } | null };
-  return ((data ?? []) as unknown as Raw[]).map((r) => ({ ...r, category_name: r.asset_categories?.name ?? "—" }));
+  type Raw = FixedAsset & { asset_categories: { name: string } | null; suppliers: { name: string } | null };
+  return ((data ?? []) as unknown as Raw[]).map((r) => ({
+    ...r,
+    category_name: r.asset_categories?.name ?? "—",
+    supplier_name: r.suppliers?.name ?? null,
+  }));
 }
 
 // Um bem só é criado ao lançar uma compra de ativo permanente em

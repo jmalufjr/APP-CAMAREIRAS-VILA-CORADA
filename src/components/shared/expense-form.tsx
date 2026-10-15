@@ -6,10 +6,12 @@ import { toast } from "sonner";
 import { createExpense, updateExpense } from "@/lib/actions/expenses";
 import type { ExpenseWithItems } from "@/lib/actions/expenses";
 import type { CostItemOption } from "@/lib/actions/cost-plan";
+import { createSupplier } from "@/lib/actions/suppliers";
+import type { SupplierOption } from "@/lib/actions/suppliers";
 import { parseReceiptWithAI } from "@/lib/actions/receipt-ai";
 import { compressImageForUpload } from "@/lib/image-compression";
 import type { AssetCategory, CostCenter, FixedAssetCatalogItem } from "@/lib/types";
-import { PAYMENT_METHOD_OPTIONS } from "@/lib/payment-method";
+import { SUPPLIER_PAYMENT_METHOD_OPTIONS } from "@/lib/payment-method";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { BarcodeScannerButton } from "@/components/shared/barcode-scanner";
 import { CameraCaptureButton } from "@/components/shared/camera-capture-button";
-import { Sparkles, Trash2, Plus, X, FileText, FolderOpen } from "lucide-react";
+import { Sparkles, Trash2, Plus, X, FileText, FolderOpen, ChevronDown, ChevronUp } from "lucide-react";
 
 type LineType = "cost_item" | "new_cost_item" | "fixed_asset";
 
@@ -32,6 +34,13 @@ interface ItemRow {
   description: string;
   quantity: number;
   unit_cost: number;
+  // Desconto/frete/tributos (Módulo Contábil Leva 2) — campo colapsável,
+  // só aparece quando a linha realmente tem algum desses valores.
+  discount: number;
+  freight: number;
+  recoverableTax: number;
+  nonRecoverableTax: number;
+  showAdjustments: boolean;
   lineType: LineType;
   // target = "cost_item"
   costItemId: string;
@@ -61,6 +70,11 @@ function emptyItem(): ItemRow {
     description: "",
     quantity: 1,
     unit_cost: 0,
+    discount: 0,
+    freight: 0,
+    recoverableTax: 0,
+    nonRecoverableTax: 0,
+    showAdjustments: false,
     lineType: "cost_item",
     costItemId: "",
     newItemName: "",
@@ -78,6 +92,14 @@ function emptyItem(): ItemRow {
   };
 }
 
+// Custo líquido final de uma linha: quantidade×custo − desconto + frete
+// + tributo NÃO recuperável. O tributo recuperável nunca entra aqui —
+// representa crédito a recuperar depois, não um custo de verdade (ver
+// PRD_compras&contabil.md seção 24).
+function lineSubtotal(item: ItemRow): number {
+  return item.quantity * item.unit_cost - item.discount + item.freight + item.nonRecoverableTax;
+}
+
 // Formulário de lançamento de compra/despesa — compartilhado entre admin
 // ("Lançar compras e despesas", menu principal) e funcionário de
 // manutenção ("Lançar Compra", menu principal dele); a camareira nunca
@@ -86,11 +108,15 @@ function emptyItem(): ItemRow {
 // leitura automática por IA. Cada linha é alocada a um item de custo do
 // Plano de Contas (existente ou novo) OU a um item de ativo permanente
 // (bem novo) — nunca os dois ao mesmo tempo (PRD_compras.md seção 21).
+// Desde o Módulo Contábil Leva 2, também gera o lançamento contábil
+// automático (débito/crédito) por trás — sem nenhum campo novo pra isso
+// aqui, é resolvido no servidor a partir da conta contábil de cada item.
 export function ExpenseForm({
   costItemOptions,
   costCenters,
   assetCategories,
   assetCatalogItems,
+  supplierOptions,
   mode = "create",
   expenseId,
   initial,
@@ -99,6 +125,7 @@ export function ExpenseForm({
   costCenters: CostCenter[];
   assetCategories: AssetCategory[];
   assetCatalogItems: FixedAssetCatalogItem[];
+  supplierOptions: SupplierOption[];
   mode?: "create" | "edit";
   expenseId?: string;
   initial?: ExpenseWithItems;
@@ -108,8 +135,12 @@ export function ExpenseForm({
   const router = useRouter();
 
   const [date, setDate] = useState(initial?.date ?? todayKey());
-  const [supplierName, setSupplierName] = useState(initial?.supplier_name ?? "");
+  const [competenceDate, setCompetenceDate] = useState(initial?.competence_date ?? "");
+  const [documentNumber, setDocumentNumber] = useState(initial?.document_number ?? "");
+  const [supplierId, setSupplierId] = useState(initial?.supplier_id ?? "");
+  const [newSupplierName, setNewSupplierName] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<string>(initial?.payment_method ?? "");
+  const [dueDate, setDueDate] = useState(initial?.due_date ?? "");
   const [nfceUrl, setNfceUrl] = useState(initial?.nfce_url ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [manualTotal, setManualTotal] = useState(
@@ -121,6 +152,11 @@ export function ExpenseForm({
       description: i.description,
       quantity: i.quantity,
       unit_cost: i.unit_cost,
+      discount: i.discount,
+      freight: i.freight_and_other_costs,
+      recoverableTax: i.recoverable_tax,
+      nonRecoverableTax: i.non_recoverable_tax,
+      showAdjustments: i.discount > 0 || i.freight_and_other_costs > 0 || i.recoverable_tax > 0 || i.non_recoverable_tax > 0,
       lineType: i.fixed_asset_id ? "fixed_asset" : "cost_item",
       costItemId: i.cost_item_id ?? "",
       newItemName: "",
@@ -143,7 +179,7 @@ export function ExpenseForm({
   const [existingReceiptUrl, setExistingReceiptUrl] = useState(initial?.receipt_url ?? null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const itemsTotal = items.reduce((sum, i) => sum + i.quantity * i.unit_cost, 0);
+  const itemsTotal = items.reduce((sum, i) => sum + lineSubtotal(i), 0);
   const total = items.length > 0 ? itemsTotal : Number(manualTotal || 0);
 
   function centerLabel(id: string): string {
@@ -174,8 +210,17 @@ export function ExpenseForm({
     }
 
     const data = result.data;
-    if (data.supplier_name) setSupplierName(data.supplier_name);
+    if (data.supplier_name) {
+      const match = supplierOptions.find((s) => s.name.toLowerCase() === data.supplier_name!.trim().toLowerCase());
+      if (match) {
+        setSupplierId(match.id);
+      } else {
+        setSupplierId("new");
+        setNewSupplierName(data.supplier_name);
+      }
+    }
     if (data.date) setDate(data.date);
+    if (data.document_number) setDocumentNumber(data.document_number);
     if (data.payment_method) setPaymentMethod(data.payment_method);
     if (data.nfce_url) setNfceUrl(data.nfce_url);
     if (data.items.length > 0) {
@@ -272,23 +317,38 @@ export function ExpenseForm({
       toast.error("Selecione o item de custo do valor total.");
       return;
     }
+    if (paymentMethod === "a_prazo" && !dueDate.trim()) {
+      toast.error("Informe o vencimento — compra/despesa a prazo precisa de uma data de vencimento.");
+      return;
+    }
+    if (supplierId === "new" && !newSupplierName.trim()) {
+      toast.error("Informe o nome do novo fornecedor, ou selecione um existente na lista.");
+      return;
+    }
 
     startTransition(async () => {
-      const formData = new FormData();
-      formData.set("date", date);
-      formData.set("supplier_name", supplierName);
-      formData.set("payment_method", paymentMethod);
-      formData.set("nfce_url", nfceUrl);
-      formData.set("notes", notes);
-      formData.set("total_amount", String(total));
+      let resolvedSupplierId = supplierId === "new" || supplierId === "" ? null : supplierId;
+      if (supplierId === "new") {
+        const supplierResult = await createSupplier(newSupplierName, null, null, null, null);
+        if (supplierResult.error || !supplierResult.id) {
+          toast.error(supplierResult.error ?? "Erro ao criar fornecedor.");
+          return;
+        }
+        resolvedSupplierId = supplierResult.id;
+      }
+
       const itemsPayload =
         items.length === 0
           ? [
               {
-                description: supplierName.trim() || "Despesa sem item detalhado",
+                description: notes.trim() || "Despesa sem item detalhado",
                 quantity: 1,
                 unit_cost: total,
                 subtotal: total,
+                discount: 0,
+                freight_and_other_costs: 0,
+                recoverable_tax: 0,
+                non_recoverable_tax: 0,
                 cost_item_id: manualTotalCostItemId,
                 new_cost_item: null,
                 new_fixed_asset: null,
@@ -299,7 +359,11 @@ export function ExpenseForm({
               description: i.description,
               quantity: i.quantity,
               unit_cost: i.unit_cost,
-              subtotal: i.quantity * i.unit_cost,
+              subtotal: lineSubtotal(i),
+              discount: i.discount,
+              freight_and_other_costs: i.freight,
+              recoverable_tax: i.recoverableTax,
+              non_recoverable_tax: i.nonRecoverableTax,
               cost_item_id: i.existingFixedAssetId ? null : i.lineType === "cost_item" ? i.costItemId : null,
               new_cost_item:
                 !i.existingFixedAssetId && i.lineType === "new_cost_item"
@@ -324,14 +388,37 @@ export function ExpenseForm({
                   : null,
               existing_fixed_asset_id: i.existingFixedAssetId,
             }));
-      formData.set("items", JSON.stringify(itemsPayload));
+
+      let preparedReceipt: { blob: Blob; filename: string } | null = null;
       if (receiptFile) {
         const isPdf = receiptFile.type === "application/pdf";
         const toUpload = isPdf ? receiptFile : await compressImageForUpload(receiptFile);
-        formData.set("receipt", toUpload, isPdf ? "recibo.pdf" : "recibo.jpg");
+        preparedReceipt = { blob: toUpload, filename: isPdf ? "recibo.pdf" : "recibo.jpg" };
       }
 
-      const result = mode === "edit" && expenseId ? await updateExpense(expenseId, formData) : await createExpense(formData);
+      async function doSubmit(confirmDuplicate: boolean) {
+        const formData = new FormData();
+        formData.set("date", date);
+        formData.set("competence_date", competenceDate.trim() || date);
+        formData.set("document_number", documentNumber.trim());
+        if (resolvedSupplierId) formData.set("supplier_id", resolvedSupplierId);
+        formData.set("payment_method", paymentMethod);
+        if (paymentMethod === "a_prazo") formData.set("due_date", dueDate);
+        formData.set("nfce_url", nfceUrl);
+        formData.set("notes", notes);
+        formData.set("total_amount", String(total));
+        formData.set("items", JSON.stringify(itemsPayload));
+        if (confirmDuplicate) formData.set("confirm_duplicate", "true");
+        if (preparedReceipt) formData.set("receipt", preparedReceipt.blob, preparedReceipt.filename);
+        return mode === "edit" && expenseId ? await updateExpense(expenseId, formData) : await createExpense(formData);
+      }
+
+      let result = await doSubmit(false);
+      if (result && "duplicateWarning" in result && result.duplicateWarning) {
+        if (!confirm(result.error)) return;
+        result = await doSubmit(true);
+      }
+
       if (result?.error) {
         toast.error(result.error);
         return;
@@ -418,19 +505,61 @@ export function ExpenseForm({
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
             <div className="space-y-1.5">
+              <Label>Data de competência (opcional)</Label>
+              <Input
+                type="date"
+                value={competenceDate}
+                onChange={(e) => setCompetenceDate(e.target.value)}
+                placeholder={date}
+              />
+              <p className="text-xs text-muted-foreground">Em branco, usa a mesma data acima.</p>
+            </div>
+            <div className="space-y-1.5">
               <Label>Fornecedor (opcional)</Label>
-              <Input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="Nome da loja/fornecedor" />
+              <Select value={supplierId || "none"} onValueChange={(v) => setSupplierId(v === "none" ? "" : (v ?? ""))}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Nenhum">
+                    {(v: string) =>
+                      v === "none"
+                        ? "Nenhum"
+                        : v === "new"
+                          ? "Criar novo fornecedor"
+                          : (supplierOptions.find((s) => s.id === v)?.name ?? v)
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum</SelectItem>
+                  <SelectItem value="new">+ Criar novo fornecedor</SelectItem>
+                  {supplierOptions.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {supplierId === "new" && (
+                <Input
+                  value={newSupplierName}
+                  onChange={(e) => setNewSupplierName(e.target.value)}
+                  placeholder="Nome do novo fornecedor"
+                />
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Número do documento (opcional)</Label>
+              <Input value={documentNumber} onChange={(e) => setDocumentNumber(e.target.value)} placeholder="Nº da nota/cupom" />
             </div>
             <div className="space-y-1.5">
               <Label>Forma de pagamento</Label>
               <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v ?? "")}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecione (opcional)">
-                    {(v: string) => PAYMENT_METHOD_OPTIONS.find((o) => o.value === v)?.label ?? v}
+                    {(v: string) => SUPPLIER_PAYMENT_METHOD_OPTIONS.find((o) => o.value === v)?.label ?? v}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {PAYMENT_METHOD_OPTIONS.map((o) => (
+                  {SUPPLIER_PAYMENT_METHOD_OPTIONS.map((o) => (
                     <SelectItem key={o.value} value={o.value}>
                       {o.label}
                     </SelectItem>
@@ -438,6 +567,12 @@ export function ExpenseForm({
                 </SelectContent>
               </Select>
             </div>
+            {paymentMethod === "a_prazo" && (
+              <div className="space-y-1.5">
+                <Label>Vencimento</Label>
+                <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              </div>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -511,9 +646,68 @@ export function ExpenseForm({
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Subtotal</Label>
-                  <Input disabled value={`R$ ${(item.quantity * item.unit_cost).toFixed(2)}`} />
+                  <Input disabled value={`R$ ${lineSubtotal(item).toFixed(2)}`} />
                 </div>
               </div>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground"
+                onClick={() => updateItem(index, { showAdjustments: !item.showAdjustments })}
+              >
+                {item.showAdjustments ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                Desconto, frete e tributos
+              </Button>
+              {item.showAdjustments && (
+                <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/40 p-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Desconto (R$)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={item.discount}
+                      onChange={(e) => updateItem(index, { discount: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Frete e outros custos (R$)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={item.freight}
+                      onChange={(e) => updateItem(index, { freight: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Tributo recuperável (R$)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={item.recoverableTax}
+                      onChange={(e) => updateItem(index, { recoverableTax: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Tributo não recuperável (R$)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={item.nonRecoverableTax}
+                      onChange={(e) => updateItem(index, { nonRecoverableTax: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <p className="col-span-2 text-xs text-muted-foreground">
+                    Desconto reduz o custo; frete e tributo não recuperável aumentam. Tributo recuperável é só registrado
+                    (não muda o subtotal) — representa crédito a recuperar depois, não um custo.
+                  </p>
+                </div>
+              )}
 
               {item.existingFixedAssetId ? (
                 <div className="rounded-lg bg-muted/40 p-2 text-sm">
