@@ -2657,3 +2657,119 @@ que já existiria sob o mecanismo antigo; não é um bug desta leva).
   antes do teste. Fixtures (ingrediente, item de frigobar, item de bar,
   fichas técnicas, comandas, movimentos) removidas do banco local
   depois.
+
+## 27. Módulo Contábil — Leva 5: fórmula de custo do café da manhã
+
+Quinta leva da implementação completa aprovada em 15/10/2026 (seção
+22.3, itens 9 e 10), pós Leva 4 (seção 26), sem pausa pra aprovação
+entre levas.
+
+### 27.1 A fórmula (decisão 22.3 item 9)
+
+Cada item de custo ligado ao centro "Café da manhã" entra no cálculo de
+um jeito diferente, dependendo de uma propriedade nova,
+`inventory_items.is_perishable` ("É perecível?", editável pelo admin em
+"Itens de estoque e ciclo de compras", `/compras/itens` — nunca uma
+lista fixa de nomes, mesmo com os exemplos do documento original
+— frutas, ovos = perecíveis; requeijão, manteiga, leite, queijo,
+presunto, farinhas = não perecíveis — servindo só de sugestão inicial
+pro admin marcar manualmente):
+
+- **Perecível**: 100% do que foi COMPRADO no período (mesma regra já
+  valia pra café da manhã antes desta leva, sem distinção nenhuma —
+  agora é restrita só aos itens marcados como perecíveis).
+- **Não perecível**: a quantidade BAIXADA MANUALMENTE no período (mesma
+  tela "Baixa de estoque" que já existe, sem nenhum campo novo nela) ×
+  o custo médio ponderado móvel do item **no fim do período** — nunca o
+  custo médio de hoje, o de ENTÃO, derivado dos próprios movimentos
+  (possível sem nenhuma coluna nova porque cada movimento já carrega seu
+  próprio `unit_cost`/`total_value` desde a Leva 3 — basta filtrar os
+  movimentos até aquele instante e refazer a mesma divisão soma/soma).
+- **Item de custo sem vínculo de estoque** (ex.: gás, embalagens):
+  continua pela regra geral (comprado no período), já que não existe
+  "baixa" nenhuma pra esses.
+
+**Por que não precisou de nenhum campo novo de "destino" na tela de
+baixa de estoque** (decisão explícita, "sem nada novo"): a atribuição a
+"Café da manhã" continua vindo do MESMO percentual já cadastrado no
+Plano de Contas (`cost_item_centers.alloc_pct`) — a quantidade baixada é
+multiplicada por esse % de sempre, exatamente como as compras já eram
+multiplicadas por ele antes. Isso também resolve o caso de um item não
+perecível que teve baixa este período mas nenhuma compra (a função busca
+os itens ligados ao centro direto do Plano de Contas, nunca a partir do
+"quem comprou algo neste período" — diferente da cascata geral de
+Custos/`summary`, que só enxerga itens com compra no próprio período).
+
+### 27.2 "Cafés servidos" (decisão 22.3 item 10)
+
+Novo campo `daily_breakfast_settings.guests_served` — um número por DIA
+inteiro (não por suíte), que nasce igual ao total de hóspedes hospedados
+(soma de `daily_breakfast_room_assignments.guest_count` naquele dia) e
+só pode ser reduzido, nunca aumentado — nem além do teto calculado, nem
+além de um valor já reduzido antes (`setBreakfastGuestsServed` confere
+os dois). A coluna guarda só o OVERRIDE (null = "usa o teto calculado na
+hora"), nunca o teto em si — mesmo princípio já usado em
+`eligible_suites_count`/outras colunas deste projeto ("nunca persistir
+um valor que pode ser sempre recalculado"). Editável em "Mesas do café"
+(`/mesas/gerenciar`), ao lado dos outros dados do dia, com o
+`QuantityStepper` de sempre (`max` = teto calculado).
+
+Esse número é o denominador CORRETO das duas razões pedidas pelo
+documento original (seção 7.4) — nunca "hóspedes-noite", que continua
+calculado e exibido só como informação complementar:
+
+- **Custo de insumos por café servido** = custo de insumos (itens de
+  estoque ligados ao centro, pelas regras acima) ÷ cafés servidos.
+- **Custo total por café servido** = custo de insumos + outros custos
+  diretos do centro (ex.: gás) ÷ cafés servidos.
+
+### 27.3 Divergência esperada com a cascata geral de Custos
+
+O card "Café da manhã" dentro de "Rateio dos custos"/"Hospedagem (+
+café da manhã)" (tela `/custos-despesas/custos`, cascata de
+`getCostCentersSummaryForPeriod` — **não alterada nesta leva**) continua
+medindo em regime de caixa puro: 100% do comprado no período, pelo %,
+pra TODO item, sem distinção de perecível/não-perecível. O novo card
+"Café da manhã" detalhado (com as duas razões por café servido) usa a
+fórmula corrigida desta leva. Os dois números PODEM divergir pra itens
+não perecíveis — decisão deliberada, documentada na própria tela (nota
+explicando a diferença): a cascata geral mede dinheiro gasto; o card
+detalhado mede ingrediente realmente consumido, valorizado. Juntar os
+dois exigiria propagar a correção pra dentro de `summary`, usado por
+outras telas que não pediram essa mudança (Demonstrativo de Despesas,
+rateio geral) — fora do escopo desta leva.
+
+### 27.4 Testado
+
+- `npm run build`/`npm run lint` limpos.
+- Migration `073` aplicada com sucesso no Postgres local via Docker.
+- Fluxo completo via rota de API temporária (`/api/test-leva5`, removida
+  depois), com sessão autenticada real como admin: 2 itens de custo
+  fabricados (ligados 100% ao centro "Café da manhã") — um marcado
+  perecível, com uma compra de R$20 dentro do período testado; outro não
+  perecível, com uma compra de R$30 (10 un a R$3) **antes** do período
+  (estabelecendo custo médio 3,00) e uma baixa manual de 4 unidades
+  **dentro** do período. Resultado batendo exatamente com o esperado:
+  item perecível = R$20,00 (comprado); item não perecível = R$12,00
+  (4×R$3,00, baixado) — confirmando as duas fórmulas isoladamente, sem
+  contaminação de dados reais (isolado filtrando só os 2 itens
+  fabricados, já que o período de teste — últimos 3 dias — também inclui
+  qualquer item real com movimento nesse intervalo). "Cafés servidos"
+  testado via override direto (5), confirmando `costPerGuestInsumos =
+  32/5 = 6,40`.
+- **Bug real encontrado e corrigido durante este mesmo teste**: a
+  primeira versão de `getWithdrawnQuantityForPeriod` comparava
+  `inventory_movements.created_at` (timestamptz) contra uma string
+  ingênua (`` `${from}T00:00:00` ``) pro limite inferior — mesma
+  categoria de bug já registrada e corrigida antes neste projeto (Partes
+  38/39), cometida de novo aqui por mim mesmo nesta leva. Descoberto
+  porque o primeiro teste (período fixo em janeiro/2026, antes de este
+  app ter qualquer dado real) deu TUDO zero — incluindo os próprios
+  itens fabricados — e a investigação revelou que `registerStockWithdrawal`
+  sempre grava `created_at = now()` (não aceita data retroativa), então
+  o teste originalmente desenhado não testava o período que pensava testar.
+  Corrigido usando `startOfDayBrasiliaUtc(from)` (já existente em
+  `src/lib/date.ts`) em vez da string ingênua, e o teste refeito com um
+  período que inclui o dia de hoje de verdade. Fixtures (2 itens de
+  custo, 2 itens de estoque, 2 despesas, 1 baixa manual, o override de
+  cafés servidos) removidas do banco local depois.

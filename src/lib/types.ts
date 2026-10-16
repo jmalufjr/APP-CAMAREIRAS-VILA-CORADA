@@ -107,6 +107,10 @@ export interface DailyBreakfastRoomAssignment {
 export interface DailyBreakfastSettings {
   date: string;
   notes: string | null;
+  // "Cafés servidos" (Módulo Contábil Leva 5) — null = usa o total de
+  // hóspedes hospedados calculado; um valor aqui é um teto que só pode
+  // ser reduzido, nunca aumentado (ver setBreakfastGuestsServed).
+  guests_served: number | null;
   updated_at: string;
 }
 
@@ -411,6 +415,10 @@ export interface InventoryItem {
   quebra_maxima_admitida_pct: number;
   indice_relativo_maximo_pct: number;
   cost_report_group: string | null;
+  // Módulo Contábil Leva 5 — decide como o item entra no custo do café da
+  // manhã: perecível = 100% do comprado no período; não perecível = o
+  // que foi baixado manualmente, valorizado pelo custo médio.
+  is_perishable: boolean;
 }
 
 // Ficha técnica: qual(is) produto(s) do cardápio (frigobar OU bar da

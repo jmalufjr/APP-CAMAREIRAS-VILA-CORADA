@@ -4,9 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { InventoryItemWithCostPlan } from "@/lib/actions/inventory-cost-view";
-import { updateInventoryItemCoverageDays } from "@/lib/actions/inventory-items";
+import { updateInventoryItemCoverageDays, updateInventoryItemPerishable } from "@/lib/actions/inventory-items";
 import { QuantityStepper } from "@/components/shared/quantity-stepper";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // Agrupado por centro de custo, pra ficar fácil de navegar mesmo com
 // muitos itens — a identidade/categoria vem do Plano de Contas, essa
@@ -48,6 +49,7 @@ function ItemRow({ item }: { item: InventoryItemWithCostPlan }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const [coverageDays, setCoverageDays] = useState(item.coverage_days);
+  const [isPerishable, setIsPerishable] = useState(item.is_perishable);
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
@@ -59,21 +61,41 @@ function ItemRow({ item }: { item: InventoryItemWithCostPlan }) {
           {item.reorder_point > 0 ? ` · Ponto de reposição manual: ${item.reorder_point} ${item.unit}` : ""}
         </p>
       </div>
-      <div className="flex items-center gap-2">
-        <Badge variant="secondary">Dias de folga</Badge>
-        <QuantityStepper
-          value={coverageDays}
-          min={1}
-          disabled={isPending}
-          onChange={(v) => {
-            setCoverageDays(v);
-            startTransition(async () => {
-              const result = await updateInventoryItemCoverageDays(item.inventory_item_id, v);
-              if (result?.error) toast.error(result.error);
-              else router.refresh();
-            });
-          }}
-        />
+      <div className="flex items-center gap-4">
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Checkbox
+            checked={isPerishable}
+            disabled={isPending}
+            onCheckedChange={(checked) => {
+              const next = checked === true;
+              setIsPerishable(next);
+              startTransition(async () => {
+                const result = await updateInventoryItemPerishable(item.inventory_item_id, next);
+                if (result?.error) {
+                  toast.error(result.error);
+                  setIsPerishable(!next);
+                } else router.refresh();
+              });
+            }}
+          />
+          Perecível (café da manhã)
+        </label>
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary">Dias de folga</Badge>
+          <QuantityStepper
+            value={coverageDays}
+            min={1}
+            disabled={isPending}
+            onChange={(v) => {
+              setCoverageDays(v);
+              startTransition(async () => {
+                const result = await updateInventoryItemCoverageDays(item.inventory_item_id, v);
+                if (result?.error) toast.error(result.error);
+                else router.refresh();
+              });
+            }}
+          />
+        </div>
       </div>
     </div>
   );

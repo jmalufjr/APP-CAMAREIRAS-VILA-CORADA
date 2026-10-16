@@ -88,6 +88,19 @@ export async function updateInventoryItemCoverageDays(id: string, days: number) 
   return { success: true };
 }
 
+// "É perecível?" (Módulo Contábil Leva 5) — só importa pro cálculo do
+// custo do café da manhã (ver getBreakfastCostForPeriod em
+// cost-accounting.ts): perecível entra pelo total comprado no período;
+// não perecível entra pelo total baixado manualmente, valorizado pelo
+// custo médio.
+export async function updateInventoryItemPerishable(id: string, isPerishable: boolean) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("inventory_items").update({ is_perishable: isPerishable }).eq("id", id);
+  if (error) return { error: error.message };
+  revalidateAll();
+  return { success: true };
+}
+
 // ---------- Ficha técnica (receita): ingrediente(s) por produto do cardápio ----------
 // Natureza de consumo (ver PRD_compras.md seção 19): um item de estoque é
 // sempre "consumo autônomo" (baixa manual, ou venda direta no bar/frigobar

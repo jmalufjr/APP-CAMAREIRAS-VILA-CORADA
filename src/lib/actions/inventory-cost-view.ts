@@ -21,12 +21,16 @@ export interface InventoryItemWithCostPlan {
   stock_value: number;
   reorder_point: number;
   center_names: string[];
+  // Módulo Contábil Leva 5 — só importa pro custo do café da manhã (ver
+  // getBreakfastCostForPeriod em cost-accounting.ts); mostrado pra todo
+  // item aqui por simplicidade, mesmo quando irrelevante pra ele.
+  is_perishable: boolean;
 }
 
 export async function getInventoryItemsWithCostPlan(): Promise<InventoryItemWithCostPlan[]> {
   const supabase = await createClient();
   const [{ data: items }, { data: balances }, { data: links }] = await Promise.all([
-    supabase.from("inventory_items").select("id, name, unit, coverage_days, reorder_point").eq("active", true),
+    supabase.from("inventory_items").select("id, name, unit, coverage_days, reorder_point, is_perishable").eq("active", true),
     supabase.from("inventory_balances").select("inventory_item_id, balance, value, avg_cost"),
     supabase.from("cost_items").select("inventory_item_id, cost_item_centers(cost_centers(name))").eq("is_inventory", true),
   ]);
@@ -45,7 +49,14 @@ export async function getInventoryItemsWithCostPlan(): Promise<InventoryItemWith
   });
 
   return (
-    (items ?? []) as { id: string; name: string; unit: string; coverage_days: number; reorder_point: number }[]
+    (items ?? []) as {
+      id: string;
+      name: string;
+      unit: string;
+      coverage_days: number;
+      reorder_point: number;
+      is_perishable: boolean;
+    }[]
   )
     .map((i) => {
       const b = balanceMap.get(i.id);
@@ -59,6 +70,7 @@ export async function getInventoryItemsWithCostPlan(): Promise<InventoryItemWith
         avg_cost: b ? Number(b.avg_cost) : 0,
         stock_value: b ? Number(b.value) : 0,
         center_names: centersByItem.get(i.id) ?? [],
+        is_perishable: i.is_perishable,
       };
     })
     .sort((a, b) => (a.center_names[0] ?? "").localeCompare(b.center_names[0] ?? "") || a.name.localeCompare(b.name));

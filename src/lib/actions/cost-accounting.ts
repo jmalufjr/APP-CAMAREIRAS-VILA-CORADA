@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { weightedAverageUnitCost, computeDishCost } from "@/lib/cost-accounting";
+import { startOfDayBrasiliaUtc, nextDayBrasiliaUtcBoundary } from "@/lib/date";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -32,6 +33,62 @@ export async function getOccupiedRoomNightsForPeriod(from: string, to: string): 
 async function getBreakfastGuestNightsForPeriod(supabase: Supabase, from: string, to: string): Promise<number> {
   const { data } = await supabase.from("daily_breakfast_room_assignments").select("guest_count").gte("date", from).lte("date", to);
   return (data ?? []).reduce((sum, r) => sum + Number(r.guest_count), 0);
+}
+
+// "Cafés servidos" no período (Módulo Contábil Leva 5, PRD_compras&contabil.md
+// seção 27): soma, dia a dia, o override do admin (daily_breakfast_settings.
+// guests_served) quando existir, senão o teto calculado (total de hóspedes
+// hospedados naquele dia) — mesmo padrão de fallback já usado por
+// getOccupiedRoomNightsForPeriod.
+async function getGuestsServedForPeriod(supabase: Supabase, from: string, to: string): Promise<number> {
+  const [{ data: settings }, { data: assignments }] = await Promise.all([
+    supabase.from("daily_breakfast_settings").select("date, guests_served").gte("date", from).lte("date", to),
+    supabase.from("daily_breakfast_room_assignments").select("date, guest_count").gte("date", from).lte("date", to),
+  ]);
+
+  const ceilingByDate = new Map<string, number>();
+  (assignments ?? []).forEach((a) => ceilingByDate.set(a.date, (ceilingByDate.get(a.date) ?? 0) + Number(a.guest_count)));
+  const overrideByDate = new Map(((settings ?? []) as { date: string; guests_served: number | null }[]).map((s) => [s.date, s.guests_served]));
+  const allDates = new Set<string>([...ceilingByDate.keys(), ...overrideByDate.keys()]);
+
+  let total = 0;
+  allDates.forEach((date) => {
+    const override = overrideByDate.get(date);
+    total += override !== undefined && override !== null ? override : ceilingByDate.get(date) ?? 0;
+  });
+  return total;
+}
+
+// Quantidade baixada manualmente (tela "Baixa de estoque", sem nada novo
+// — ver PRD_compras&contabil.md seção 22.3 item 9) de um item no período
+// — usado pro custo de itens NÃO perecíveis do café da manhã.
+async function getWithdrawnQuantityForPeriod(supabase: Supabase, inventoryItemId: string, from: string, to: string): Promise<number> {
+  const { data } = await supabase
+    .from("inventory_movements")
+    .select("quantity")
+    .eq("inventory_item_id", inventoryItemId)
+    .eq("movement_type", "baixa_manual")
+    .gte("created_at", startOfDayBrasiliaUtc(from))
+    .lt("created_at", nextDayBrasiliaUtcBoundary(to));
+  // quantity é negativa pra uma baixa — devolve a quantidade positiva baixada.
+  return -((data ?? []).reduce((sum, m) => sum + Number(m.quantity), 0));
+}
+
+// Custo médio ponderado móvel de um item COMO ESTAVA no fim de uma data
+// (não o custo médio atual) — soma só os movimentos até aquele instante,
+// a mesma matemática de inventory_balances.avg_cost, só que num corte no
+// passado. Sempre possível porque cada movimento já carrega seu próprio
+// unit_cost/total_value (Módulo Contábil Leva 3) — nenhum valor
+// "materializado" que precisasse ser desfeito pra voltar no tempo.
+async function getAvgCostAsOfDate(supabase: Supabase, inventoryItemId: string, asOfDateKey: string): Promise<number> {
+  const { data } = await supabase
+    .from("inventory_movements")
+    .select("quantity, total_value")
+    .eq("inventory_item_id", inventoryItemId)
+    .lt("created_at", nextDayBrasiliaUtcBoundary(asOfDateKey));
+  const totalQty = (data ?? []).reduce((sum, m) => sum + Number(m.quantity), 0);
+  const totalValue = (data ?? []).reduce((sum, m) => sum + Number(m.total_value), 0);
+  return totalQty > 0 ? totalValue / totalQty : 0;
 }
 
 interface ExpenseItemCostRow {
@@ -219,47 +276,121 @@ export async function getDishCostsForPeriod(from: string, to: string): Promise<D
   return rows;
 }
 
-export interface BreakfastCostSummary {
-  totalSpend: number;
-  guestNights: number;
-  costPerGuest: number | null;
-  byItem: { label: string; total: number }[];
+export interface BreakfastCostItemRow {
+  label: string;
+  total: number;
+  // "comprado" = item perecível (ou não rastreado em estoque): 100% do
+  // gasto no período. "baixado" = item não perecível: quantidade baixada
+  // manualmente no período × custo médio do item no fim do período —
+  // ver PRD_compras&contabil.md seção 27 (Módulo Contábil Leva 5).
+  method: "comprado" | "baixado";
 }
 
-// Custo do café da manhã no período: usa o mesmo total do centro "Café
-// da manhã" já calculado pela cascata (consistente com o card principal
-// de Custos), dividido pelos hóspedes-noite; detalhado por item de custo
-// (agrupando pelo cost_report_group do item de estoque por trás, quando
-// houver — ex.: "Frutas e ovos").
-export async function getBreakfastCostForPeriod(from: string, to: string, summary: CostCentersSummary): Promise<BreakfastCostSummary> {
+export interface BreakfastCostSummary {
+  guestNights: number;
+  // "Cafés servidos" (Módulo Contábil Leva 5) — o denominador correto
+  // pedido pelo PRD, nunca hóspedes-noite (guestNights continua exibido
+  // só como informação complementar).
+  guestsServed: number;
+  insumosCost: number;
+  otherCost: number;
+  totalCost: number;
+  costPerGuestInsumos: number | null;
+  costPerGuestTotal: number | null;
+  byItem: BreakfastCostItemRow[];
+}
+
+// Custo do café da manhã no período (Módulo Contábil Leva 5): para cada
+// item de custo ligado ao centro "Café da manhã" — buscado direto do
+// Plano de Contas, não via `summary` (que só lista itens com alguma
+// COMPRA neste período — insuficiente pra um item não perecível baixado
+// neste período mas comprado antes) — o método de custeio depende de
+// `inventory_items.is_perishable`: perecível = 100% do comprado no
+// período; não perecível = quantidade baixada manualmente no período ×
+// custo médio do item no fim do período (sempre derivável, mesmo no
+// passado, porque cada movimento já carrega seu próprio valor — Módulo
+// Contábil Leva 3). Itens de custo sem vínculo de estoque (ex.: gás,
+// embalagens) continuam pela regra geral (comprado no período), já que
+// não têm "baixa" nenhuma pra seguir.
+//
+// Nota importante: este total pode DIVERGIR do que aparece pra "Café da
+// manhã" na cascata geral de `summary`/"Rateio dos custos" (que é
+// sempre regime de caixa — tudo pelo comprado no período) — divergência
+// esperada e não um bug: aqui mede ingrediente REALMENTE consumido,
+// valorizado; lá mede dinheiro gasto no período.
+export async function getBreakfastCostForPeriod(from: string, to: string): Promise<BreakfastCostSummary> {
   const supabase = await createClient();
-  const guestNights = await getBreakfastGuestNightsForPeriod(supabase, from, to);
-  const totalSpend = summary.centerTotals.find((c) => c.center_name === "Café da manhã")?.total ?? 0;
+  const [guestNights, guestsServed, spendByItem] = await Promise.all([
+    getBreakfastGuestNightsForPeriod(supabase, from, to),
+    getGuestsServedForPeriod(supabase, from, to),
+    getSpendByCostItem(supabase, from, to),
+  ]);
 
-  const costItemIds = [...new Set(summary.breakdown.flatMap((b) => (b.by_center.some((s) => s.center_name === "Café da manhã") ? [b.cost_item_id] : [])))];
-  const { data: items } = costItemIds.length
-    ? await supabase.from("cost_items").select("id, name, inventory_item_id, inventory_items(cost_report_group)").in("id", costItemIds)
+  const { data: links } = await supabase
+    .from("cost_item_centers")
+    .select("cost_item_id, alloc_pct, cost_centers!inner(name)")
+    .eq("cost_centers.name", "Café da manhã");
+  type LinkRaw = { cost_item_id: string; alloc_pct: number };
+  const centerLinks = (links ?? []) as unknown as LinkRaw[];
+
+  const costItemIds = [...new Set(centerLinks.map((l) => l.cost_item_id))];
+  const { data: costItemsData } = costItemIds.length
+    ? await supabase.from("cost_items").select("id, name, inventory_item_id, inventory_items(cost_report_group, is_perishable)").in("id", costItemIds)
     : { data: [] };
-  type Raw = { id: string; name: string; inventory_items: { cost_report_group: string | null } | null };
-  const labelByItem = new Map(
-    ((items ?? []) as unknown as Raw[]).map((i) => [i.id, i.inventory_items?.cost_report_group || i.name])
-  );
+  type CostItemRaw = {
+    id: string;
+    name: string;
+    inventory_item_id: string | null;
+    inventory_items: { cost_report_group: string | null; is_perishable: boolean } | null;
+  };
+  const costItemById = new Map(((costItemsData ?? []) as unknown as CostItemRaw[]).map((c) => [c.id, c]));
 
-  const byLabel = new Map<string, number>();
-  summary.breakdown.forEach((b) => {
-    const amount = b.by_center.filter((s) => s.center_name === "Café da manhã").reduce((sum, s) => sum + s.amount, 0);
-    if (amount === 0) return;
-    const label = labelByItem.get(b.cost_item_id) ?? b.cost_item_name;
-    byLabel.set(label, (byLabel.get(label) ?? 0) + amount);
-  });
+  const byLabel = new Map<string, BreakfastCostItemRow>();
+  let insumosCost = 0;
+  let otherCost = 0;
+
+  for (const link of centerLinks) {
+    const costItem = costItemById.get(link.cost_item_id);
+    if (!costItem) continue;
+    const pct = Number(link.alloc_pct) / 100;
+    const invItem = costItem.inventory_items;
+    const label = invItem?.cost_report_group || costItem.name;
+
+    let amount: number;
+    let method: "comprado" | "baixado";
+    let isInsumo: boolean;
+
+    if (costItem.inventory_item_id && invItem && !invItem.is_perishable) {
+      const withdrawn = await getWithdrawnQuantityForPeriod(supabase, costItem.inventory_item_id, from, to);
+      const avgCost = await getAvgCostAsOfDate(supabase, costItem.inventory_item_id, to);
+      amount = withdrawn * avgCost * pct;
+      method = "baixado";
+      isInsumo = true;
+    } else {
+      amount = (spendByItem.get(link.cost_item_id) ?? 0) * pct;
+      method = "comprado";
+      isInsumo = !!costItem.inventory_item_id;
+    }
+
+    if (isInsumo) insumosCost += amount;
+    else otherCost += amount;
+
+    const entry = byLabel.get(label) ?? { label, total: 0, method };
+    entry.total += amount;
+    byLabel.set(label, entry);
+  }
+
+  const totalCost = insumosCost + otherCost;
 
   return {
-    totalSpend,
     guestNights,
-    costPerGuest: guestNights > 0 ? totalSpend / guestNights : null,
-    byItem: Array.from(byLabel.entries())
-      .map(([label, total]) => ({ label, total }))
-      .sort((a, b) => b.total - a.total),
+    guestsServed,
+    insumosCost,
+    otherCost,
+    totalCost,
+    costPerGuestInsumos: guestsServed > 0 ? insumosCost / guestsServed : null,
+    costPerGuestTotal: guestsServed > 0 ? totalCost / guestsServed : null,
+    byItem: Array.from(byLabel.values()).sort((a, b) => b.total - a.total),
   };
 }
 

@@ -28,12 +28,12 @@ export default async function CustosPage({ searchParams }: { searchParams: Promi
   const from = sp.from || range.from;
   const to = sp.to || range.to;
 
-  const [summary, occupiedRoomNights, dishes] = await Promise.all([
+  const [summary, occupiedRoomNights, dishes, breakfast] = await Promise.all([
     getCostCentersSummaryForPeriod(from, to),
     getOccupiedRoomNightsForPeriod(from, to),
     getDishCostsForPeriod(from, to),
+    getBreakfastCostForPeriod(from, to),
   ]);
-  const breakfast = await getBreakfastCostForPeriod(from, to, summary);
 
   const hospedagemTotal = hospedagemTotalIncludingBreakfast(summary.centerTotals);
   const costPerOccupiedNight = occupiedRoomNights > 0 ? hospedagemTotal / occupiedRoomNights : null;
@@ -135,31 +135,54 @@ export default async function CustosPage({ searchParams }: { searchParams: Promi
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-heading text-lg">
-            Café da manhã · {breakfast.guestNights} hóspede(s)-noite ·{" "}
-            {breakfast.costPerGuest !== null ? `${fmt(breakfast.costPerGuest)} por hóspede` : "sem hóspede no período"}
-          </CardTitle>
+          <CardTitle className="font-heading text-lg">Café da manhã · {breakfast.guestsServed} café(s) servido(s)</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            {breakfast.guestNights} hóspede(s)-noite no período (informativo). O custo por café usa &quot;cafés
+            servidos&quot;, editável pra baixo em cada dia (ver &quot;Mesas do café&quot;). Este total pode divergir
+            do card &quot;Café da manhã&quot; acima: aqui é o ingrediente realmente consumido (perecível = comprado
+            no período; não perecível = baixado e valorizado pelo custo médio); lá é o dinheiro gasto no período.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-xs text-muted-foreground">Custo de insumos por café servido</p>
+              <p className="text-lg font-medium">
+                {breakfast.costPerGuestInsumos !== null ? fmt(breakfast.costPerGuestInsumos) : "—"}
+              </p>
+              <p className="text-xs text-muted-foreground">Total de insumos: {fmt(breakfast.insumosCost)}</p>
+            </div>
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-xs text-muted-foreground">Custo total por café servido</p>
+              <p className="text-lg font-medium">
+                {breakfast.costPerGuestTotal !== null ? fmt(breakfast.costPerGuestTotal) : "—"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Total do centro: {fmt(breakfast.totalCost)} (insumos + outros custos diretos)
+              </p>
+            </div>
+          </div>
           <div className="overflow-x-auto rounded-lg border border-border">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Item</TableHead>
-                  <TableHead>Gasto no período</TableHead>
+                  <TableHead>Como entrou</TableHead>
+                  <TableHead>Valor no período</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {breakfast.byItem.map((i) => (
                   <TableRow key={i.label}>
                     <TableCell>{i.label}</TableCell>
+                    <TableCell>{i.method === "comprado" ? "Comprado no período" : "Baixado (custo médio)"}</TableCell>
                     <TableCell>{fmt(i.total)}</TableCell>
                   </TableRow>
                 ))}
                 {breakfast.byItem.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={2} className="text-center text-muted-foreground">
-                      Nenhuma compra do centro &quot;Café da manhã&quot; vinculada a item de custo no período.
+                    <TableCell colSpan={3} className="text-center text-muted-foreground">
+                      Nenhum item de custo ligado ao centro &quot;Café da manhã&quot; no período.
                     </TableCell>
                   </TableRow>
                 )}

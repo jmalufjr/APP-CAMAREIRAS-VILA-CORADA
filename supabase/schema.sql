@@ -327,6 +327,11 @@ create table daily_breakfast_settings (
   notes text,
   eligible_suites_count int,
   commission_value_snapshot numeric(10,2) not null default 0,
+  -- "Cafés servidos" (Módulo Contábil Leva 5) — null = usa o total de
+  -- hóspedes hospedados calculado na hora; um valor aqui é sempre um
+  -- TETO que só pode ser reduzido, nunca aumentado (ver
+  -- setBreakfastGuestsServed).
+  guests_served int,
   updated_at timestamptz not null default now()
 );
 
@@ -1695,7 +1700,12 @@ create table inventory_items (
   -- Agrupamento pro relatório de custo do café da manhã (ex.: "Frutas e
   -- ovos" somados como 1 item só, por não termos controle fino de
   -- estoque sobre eles) — null = o item aparece com o próprio nome.
-  cost_report_group text
+  cost_report_group text,
+  -- "É perecível?" (Módulo Contábil Leva 5) — decide como o item entra
+  -- no custo do café da manhã: perecível = 100% do comprado no período;
+  -- não perecível = o que foi baixado manualmente, valorizado pelo custo
+  -- médio. Editável pelo admin, nunca uma lista fixa de nomes.
+  is_perishable boolean not null default false
 );
 
 -- ---------- PLANO DE CONTAS: centro → subcentro → item de custo ----------
