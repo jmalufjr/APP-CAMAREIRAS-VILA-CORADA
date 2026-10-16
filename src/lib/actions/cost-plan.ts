@@ -263,14 +263,43 @@ export interface CostItemOption {
   name: string;
   is_inventory: boolean;
   inventory_item_id: string | null;
+  // Unidade-base e conversões (só quando controla estoque) — o formulário
+  // de compra usa pra aceitar "caixa", "garrafa" etc. e converter.
+  unit: string | null;
+  conversions: { unit_name: string; factor: number }[];
+  shelf_life_days: number | null;
 }
 
 export async function getCostItemOptions(): Promise<CostItemOption[]> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("cost_items")
-    .select("id, name, is_inventory, inventory_item_id")
-    .eq("active", true)
-    .order("name");
-  return (data ?? []) as CostItemOption[];
+  const [{ data }, { data: convs }] = await Promise.all([
+    supabase
+      .from("cost_items")
+      .select("id, name, is_inventory, inventory_item_id, inventory_items(unit, shelf_life_days)")
+      .eq("active", true)
+      .order("name"),
+    supabase.from("inventory_item_unit_conversions").select("inventory_item_id, unit_name, factor"),
+  ]);
+  const convByInv = new Map<string, { unit_name: string; factor: number }[]>();
+  ((convs ?? []) as { inventory_item_id: string; unit_name: string; factor: number }[]).forEach((c) => {
+    const list = convByInv.get(c.inventory_item_id) ?? [];
+    list.push({ unit_name: c.unit_name, factor: Number(c.factor) });
+    convByInv.set(c.inventory_item_id, list);
+  });
+  type Raw = {
+    id: string;
+    name: string;
+    is_inventory: boolean;
+    inventory_item_id: string | null;
+    inventory_items: { unit: string; shelf_life_days: number | null } | null;
+  };
+  return ((data ?? []) as unknown as Raw[]).map((r) => ({
+    id: r.id,
+    name: r.name,
+    is_inventory: r.is_inventory,
+    inventory_item_id: r.inventory_item_id,
+    unit: r.inventory_items?.unit ?? null,
+    conversions: r.inventory_item_id ? (convByInv.get(r.inventory_item_id) ?? []) : [],
+    shelf_life_days: r.inventory_items?.shelf_life_days ?? null,
+  }));
 }

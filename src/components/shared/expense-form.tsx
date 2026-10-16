@@ -21,6 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { BarcodeScannerButton } from "@/components/shared/barcode-scanner";
 import { CameraCaptureButton } from "@/components/shared/camera-capture-button";
+import { unitOptions, unitFactor } from "@/lib/units";
+import { addDaysKey } from "@/lib/date";
 import { Sparkles, Trash2, Plus, X, FileText, FolderOpen, ChevronDown, ChevronUp } from "lucide-react";
 
 type LineType = "cost_item" | "new_cost_item" | "fixed_asset";
@@ -34,6 +36,11 @@ interface ItemRow {
   description: string;
   quantity: number;
   unit_cost: number;
+  // Unidade em que quantity/unit_cost foram digitados ("" = unidade-base
+  // do produto); convertidos pra base só na hora de salvar.
+  purchaseUnit: string;
+  // Validade do lote comprado (opcional, só produtos que controlam estoque).
+  expiryDate: string;
   // Desconto/frete/tributos (Módulo Contábil Leva 2) — campo colapsável,
   // só aparece quando a linha realmente tem algum desses valores.
   discount: number;
@@ -70,6 +77,8 @@ function emptyItem(): ItemRow {
     description: "",
     quantity: 1,
     unit_cost: 0,
+    purchaseUnit: "",
+    expiryDate: "",
     discount: 0,
     freight: 0,
     recoverableTax: 0,
@@ -150,8 +159,10 @@ export function ExpenseForm({
   const [items, setItems] = useState<ItemRow[]>(
     initial?.items.map((i) => ({
       description: i.description,
-      quantity: i.quantity,
-      unit_cost: i.unit_cost,
+      quantity: i.purchase_unit ? (i.purchase_quantity ?? i.quantity) : i.quantity,
+      unit_cost: i.purchase_unit ? (i.purchase_unit_cost ?? i.unit_cost) : i.unit_cost,
+      purchaseUnit: i.purchase_unit ?? "",
+      expiryDate: i.expiry_date ?? "",
       discount: i.discount,
       freight: i.freight_and_other_costs,
       recoverableTax: i.recoverable_tax,
@@ -278,6 +289,13 @@ export function ExpenseForm({
     toast.success("Código da nota lido — confira o link abaixo.");
   }
 
+  // Unidades aceitas numa linha (só quando o produto controla estoque).
+  function lineUnits(item: ItemRow) {
+    const opt = costItemOptions.find((c) => c.id === item.costItemId);
+    if (!opt || item.lineType !== "cost_item" || !opt.is_inventory || !opt.unit) return null;
+    return { base: opt.unit, options: unitOptions(opt.unit, opt.conversions), conversions: opt.conversions };
+  }
+
   function handleSubmit() {
     if (total <= 0) {
       toast.error("Informe o valor total (ou os itens) da despesa.");
@@ -355,10 +373,23 @@ export function ExpenseForm({
                 existing_fixed_asset_id: null,
               },
             ]
-          : items.map((i) => ({
+          : items.map((i) => {
+            const u = lineUnits(i);
+            const factor = u && i.purchaseUnit ? unitFactor(i.purchaseUnit, u.base, u.conversions) : 1;
+            const converted = !!u && !!i.purchaseUnit && factor !== 1;
+            return {
               description: i.description,
-              quantity: i.quantity,
-              unit_cost: i.unit_cost,
+              quantity: i.quantity * factor,
+              unit_cost: factor > 0 ? i.unit_cost / factor : i.unit_cost,
+              purchase_quantity: converted ? i.quantity : null,
+              purchase_unit: converted ? i.purchaseUnit : null,
+              purchase_unit_cost: converted ? i.unit_cost : null,
+              expiry_date: u
+                ? i.expiryDate ||
+                  (costItemOptions.find((c) => c.id === i.costItemId)?.shelf_life_days
+                    ? addDaysKey(date, costItemOptions.find((c) => c.id === i.costItemId)!.shelf_life_days!)
+                    : null)
+                : null,
               subtotal: lineSubtotal(i),
               discount: i.discount,
               freight_and_other_costs: i.freight,
@@ -387,7 +418,8 @@ export function ExpenseForm({
                     }
                   : null,
               existing_fixed_asset_id: i.existingFixedAssetId,
-            }));
+            };
+          });
 
       let preparedReceipt: { blob: Blob; filename: string } | null = null;
       if (receiptFile) {
@@ -623,6 +655,36 @@ export function ExpenseForm({
                   <Trash2 size={14} />
                 </Button>
               </div>
+              {(() => {
+                const u = lineUnits(item);
+                if (!u) return null;
+                return (
+                  <div className="grid grid-cols-2 gap-2">
+                    {u.options.length > 1 && (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Unidade de compra</Label>
+                        <Select value={item.purchaseUnit || u.base} onValueChange={(v) => v && updateItem(index, { purchaseUnit: v === u.base ? "" : v })}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {u.options.map((o) => (
+                              <SelectItem key={o.unit_name} value={o.unit_name}>
+                                {o.unit_name}
+                                {o.unit_name !== u.base ? ` (= ${o.factor} ${u.base})` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Validade do lote (opcional — se vazio e o produto tem prazo, é calculada)</Label>
+                      <Input type="date" value={item.expiryDate} onChange={(e) => updateItem(index, { expiryDate: e.target.value })} />
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Quantidade</Label>
@@ -635,7 +697,9 @@ export function ExpenseForm({
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Custo unitário (R$)</Label>
+                  <Label className="text-xs text-muted-foreground">
+                    Custo unitário (R$){item.purchaseUnit ? ` por ${item.purchaseUnit}` : ""}
+                  </Label>
                   <Input
                     type="number"
                     min={0}

@@ -727,6 +727,18 @@ export default function QuestoesRespostasPage() {
               <List
                 items={[
                   <>
+                    <strong>Produto</strong>: um item de custo que a pousada compra e usa de verdade
+                    (vinho, farinha, detergente). Tem tela própria — <strong>Módulo Contábil → Cadastro de
+                    produtos</strong> — onde você define nome, código, categoria, tipo, centros de custo,
+                    se controla estoque, a unidade (litro, quilo, unidade…), as conversões (ex.: 1 garrafa =
+                    0,75 L) e o prazo de validade. Na compra você escolhe a unidade em que comprou (caixa,
+                    garrafa…) e o sistema converte sozinho; na ficha técnica você pode escrever a receita em
+                    ml ou g mesmo que o estoque seja em litros ou quilos. O produto que já teve compra ou
+                    estoque nunca é apagado, só desativado. A tela <strong>Estoque → Validade dos
+                    produtos</strong> avisa os lotes vencidos ou perto de vencer (sai primeiro o que vence
+                    primeiro).
+                  </>,
+                  <>
                     <strong>Item de custo</strong>: é a etiqueta que diz o que foi comprado — “farinha de
                     trigo”, “detergente”, “salário das camareiras”, “conta de luz”. Cada item de custo
                     pertence a um ou mais <strong>centros de custo</strong> (a área grande da pousada:

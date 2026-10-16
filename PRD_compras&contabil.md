@@ -3029,36 +3029,63 @@ já esconde centros sem item de estoque ligado, então este não polui a
 tela). Só os textos de "Questões e Respostas" que diziam "4 centros"
 foram atualizados.
 
-**Deliberadamente NÃO feito, aguardando decisão do proprietário**: o
-centro nasce **vazio**. Quais itens de custo hoje divididos entre
-Hospedagem/Café da manhã/Bar da piscina passam a ele (os claramente
-administrativos — contabilidade, financeiro, pró-labore, honorários da
-Stays/Invictos, impostos e taxas — e/ou os gastos compartilhados como
-luz, água e internet) muda os totais de cada centro nos relatórios, e
-os vínculos item→centro são lidos ao vivo, sem histórico de vigência:
-mover um item também re-atribui os períodos passados dele. Por isso a
-escolha é dele, não minha.
+**Decisão do proprietário (16/10/2026)**: só os itens claramente
+administrativos passam 100% pro novo centro — contabilidade, financeiro,
+pró-labore, honorários da Stays, honorários da Invictos, impostos e
+taxas (migration `075`). Luz, água e internet continuam onde estão. Os
+vínculos item→centro são lidos ao vivo, sem histórico de vigência: mover
+esses itens re-atribui também os períodos passados deles (ele aceitou).
 
-### 31.2 Cadastro de produtos (PRD seção 5.1) — não implementado nas 7 levas
+### 31.2 Cadastro de produtos (PRD seção 5.1) — implementado
 
-**Status honesto**: o documento original pede um **Cadastro de
-produtos** (seção 5.1, também o item "Cadastros" do menu da seção 4)
-com: código interno/SKU, nome, descrição, categoria, tipo (revenda,
-ingrediente de receita, material de consumo, material de limpeza,
-embalagem, outro), unidade-base, conversões de unidade (ex.: garrafa de
-750 ml = 0,75 L), controla estoque sim/não, centro de custo padrão,
-estoque mínimo, prazo de validade, custo médio atual e ativo/inativo —
-e "não excluir produtos com histórico; desativá-los". **Nenhuma das 7
-levas construiu essa tela, e a consulta de 15/10 nunca a mencionou** —
-omissão minha.
+**Causa**: o documento original pede um Cadastro de produtos (seção 5.1
+e item "Cadastros" do menu) e as 7 levas não o construíram — omissão
+minha, nunca uma decisão consultada.
 
-O que existe hoje cobre só parte dos campos, espalhado: nome, estoque
-mínimo/dias de folga, "é perecível?", custo médio (derivado, Leva 3) e o
-vínculo com centros (via item de custo) — mas sem tela de cadastro. Os
-únicos campos de `inventory_items` editáveis pela interface são dias de
-folga, "é perecível?" e os dois limites de quebra; todo item de estoque
-novo nasce com unidade fixa "un", sem nenhum lugar pra mudá-la; e
-"Plano de itens de custo" ainda permite **excluir** (apagar de vez) um
-item de custo mesmo com compras no histórico, contrariando a regra do
-PRD. Detalhes de desenho e decisões pendentes: ver a conversa de
-16/10/2026 — esta seção será completada quando o proprietário decidir.
+**Decisões do proprietário (16/10/2026)**:
+1. **Tela única** "Cadastro de produtos" (Módulo Contábil → Cadastro de
+   produtos) que edita juntos o item de custo e, se controla estoque, o
+   item de estoque ligado — sem uma terceira entidade.
+2. **Conversões de unidade valem de verdade**: na compra e na ficha
+   técnica.
+3. **Validade**: campo no produto + data de validade por compra +
+   alerta de vencimento próximo (o mais antigo sai primeiro).
+
+**Modelo** (migrations `076` e `077`):
+- `cost_items` ganhou `is_product`, `sku` (único quando preenchido),
+  `description`, `category_id` e `product_type` (revenda, ingrediente
+  de receita, material de consumo, material de limpeza, embalagem,
+  outro). Um gatilho garante "controla estoque ⇒ é produto". Itens que
+  já controlavam estoque viraram produtos; os demais (salário, luz,
+  honorários) continuam só no Plano de itens de custo, que passou a
+  mostrar produtos somente-leitura com link para o cadastro.
+- `product_categories` (tabela editável pelo admin), semeada com 7
+  categorias a partir dos nomes dos antigos subcentros (80 de 81 itens
+  classificados automaticamente).
+- Unidade-base e conversões (`inventory_item_unit_conversions`, ex.:
+  1 garrafa = 0,75 L). Pares métricos (L↔ml, kg↔g) são entendidos sem
+  cadastro. A unidade-base não muda depois que há histórico.
+- **Regra de ouro**: tudo que o sistema calcula (saldo, custo médio,
+  baixa pelo pedido, relatórios) continua na unidade-base. A unidade de
+  compra digitada (ex.: "caixa") e a unidade da receita (ex.: ml) são
+  convertidas na hora de salvar; o que foi digitado fica guardado só
+  para exibição (`expense_items.purchase_*`, `display_unit` da ficha).
+- Validade: `inventory_items.shelf_life_days` e `expiry_alert_days`;
+  `expense_items.expiry_date` (se em branco e o produto tem prazo, é
+  calculada: data da compra + prazo). Tela **Estoque → Validade dos
+  produtos** e aviso na página Estoque. Como o estoque não guarda lote
+  físico, o consumo é atribuído sempre ao lote que vence primeiro
+  (FIFO); o que foi comprado sem validade não gera alerta.
+- Produto com histórico (compras, estoque, ficha técnica) **não é
+  excluído**, só desativado — vale também para `deleteCostItem`.
+
+**Testes** (banco local, sessão real de admin): compra de 2×4 garrafas
+(0,75 L) → saldo 6 L, custo médio R$ 44,00/L, valor R$ 264,00; ficha
+técnica de 100 ml → gravada como 0,1 L e exibida como 100 ml; baixa de
+4 L → lote que vencia em 5 dias zerado (FIFO), lote de 90 dias fora do
+aviso; exclusão de produto com histórico recusada, sem histórico aceita;
+fixtures e lançamentos contábeis removidos. `tsc`, `eslint` e
+`npm run build` limpos.
+
+**Ainda não existe**: tela de gestão de fornecedores (hoje só se criam
+na hora da compra) — candidata ao item "Cadastros" do menu.

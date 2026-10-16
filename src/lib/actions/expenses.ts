@@ -33,6 +33,13 @@ export interface ExpenseItemInput {
   freight_and_other_costs: number;
   recoverable_tax: number;
   non_recoverable_tax: number;
+  // Unidade de compra digitada (ex.: "caixa"): quantity/unit_cost acima já
+  // vêm convertidos pra unidade-base do produto; estes 3 ficam só pra
+  // exibir/auditar o que foi digitado. expiry_date = validade do lote.
+  purchase_quantity?: number | null;
+  purchase_unit?: string | null;
+  purchase_unit_cost?: number | null;
+  expiry_date?: string | null;
   // Linha já ligada a um item de custo existente.
   cost_item_id: string | null;
   // Linha que cria um item de custo novo na hora (Plano de Contas) —
@@ -167,6 +174,10 @@ interface ResolvedExpenseRow {
   freight_and_other_costs: number;
   recoverable_tax: number;
   non_recoverable_tax: number;
+  purchase_quantity: number | null;
+  purchase_unit: string | null;
+  purchase_unit_cost: number | null;
+  expiry_date: string | null;
 }
 
 async function resolveExpenseItemsForInsert(
@@ -202,6 +213,10 @@ async function resolveExpenseItemsForInsert(
       freight_and_other_costs: i.freight_and_other_costs || 0,
       recoverable_tax: i.recoverable_tax || 0,
       non_recoverable_tax: i.non_recoverable_tax || 0,
+      purchase_quantity: i.purchase_quantity ?? null,
+      purchase_unit: i.purchase_unit ?? null,
+      purchase_unit_cost: i.purchase_unit_cost ?? null,
+      expiry_date: i.expiry_date || null,
     });
   }
   return { rows };
@@ -689,6 +704,10 @@ export interface ExpenseWithItems {
     cost_item_id: string | null;
     fixed_asset_id: string | null;
     fixed_asset_name: string | null;
+    purchase_quantity: number | null;
+    purchase_unit: string | null;
+    purchase_unit_cost: number | null;
+    expiry_date: string | null;
   }[];
 }
 
@@ -700,7 +719,7 @@ export async function getExpenseWithItems(id: string): Promise<ExpenseWithItems 
   const { data: items } = await supabase
     .from("expense_items")
     .select(
-      "description, quantity, unit_cost, subtotal, discount, freight_and_other_costs, recoverable_tax, non_recoverable_tax, cost_item_id, fixed_asset_id, fixed_assets(name)"
+      "description, quantity, unit_cost, subtotal, discount, freight_and_other_costs, recoverable_tax, non_recoverable_tax, cost_item_id, fixed_asset_id, purchase_quantity, purchase_unit, purchase_unit_cost, expiry_date, fixed_assets(name)"
     )
     .eq("expense_id", id)
     .order("created_at");
@@ -717,6 +736,10 @@ export async function getExpenseWithItems(id: string): Promise<ExpenseWithItems 
     cost_item_id: string | null;
     fixed_asset_id: string | null;
     fixed_assets: { name: string } | null;
+    purchase_quantity: number | null;
+    purchase_unit: string | null;
+    purchase_unit_cost: number | null;
+    expiry_date: string | null;
   };
 
   return {
@@ -744,6 +767,10 @@ export async function getExpenseWithItems(id: string): Promise<ExpenseWithItems 
       cost_item_id: i.cost_item_id,
       fixed_asset_id: i.fixed_asset_id,
       fixed_asset_name: i.fixed_assets?.name ?? null,
+      purchase_quantity: i.purchase_quantity === null ? null : Number(i.purchase_quantity),
+      purchase_unit: i.purchase_unit,
+      purchase_unit_cost: i.purchase_unit_cost === null ? null : Number(i.purchase_unit_cost),
+      expiry_date: i.expiry_date,
     })),
   };
 }
