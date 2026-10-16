@@ -13,110 +13,26 @@ import {
 } from "@/lib/actions/cost-plan";
 import type { CostItemWithLinks } from "@/lib/actions/cost-plan";
 import type { CostCenter, LedgerAccount } from "@/lib/types";
-import type { InventoryItemWithBalance } from "@/lib/actions/inventory-items";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
+import { PctLinksEditor, type LinkRow } from "@/components/shared/pct-links-editor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 
-interface LinkRow {
-  id: string;
-  pct: number;
-}
-
-function sumPct(links: LinkRow[]): number {
-  return links.reduce((s, l) => s + l.pct, 0);
-}
-
-// Editor de vínculos item de custo → centro de custo, com percentual —
-// os % precisam somar exatamente 100%.
-function PctLinksEditor({
-  options,
-  value,
-  onChange,
-}: {
-  options: { id: string; label: string }[];
-  value: LinkRow[];
-  onChange: (next: LinkRow[]) => void;
-}) {
-  function add() {
-    const used = new Set(value.map((v) => v.id));
-    const next = options.find((o) => !used.has(o.id)) ?? options[0];
-    if (!next) return;
-    onChange([...value, { id: next.id, pct: value.length === 0 ? 100 : 0 }]);
-  }
-  function update(index: number, patch: Partial<LinkRow>) {
-    onChange(value.map((v, i) => (i === index ? { ...v, ...patch } : v)));
-  }
-  function remove(index: number) {
-    onChange(value.filter((_, i) => i !== index));
-  }
-
-  const sum = sumPct(value);
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <Label className="text-xs text-muted-foreground">
-          Centros (% precisam somar 100% — soma atual: {sum}%)
-        </Label>
-        <Button type="button" variant="ghost" size="sm" onClick={add} disabled={value.length >= options.length}>
-          <Plus size={12} /> Centro
-        </Button>
-      </div>
-      {value.map((link, index) => (
-        <div key={index} className="flex items-center gap-2">
-          <Select value={link.id} onValueChange={(v) => v && update(index, { id: v })}>
-            <SelectTrigger className="flex-1">
-              <SelectValue placeholder="Selecione">
-                {(v: string) => options.find((o) => o.id === v)?.label ?? v}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {options.map((o) => (
-                <SelectItem key={o.id} value={o.id}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Input
-            type="number"
-            min={0}
-            max={100}
-            className="w-20"
-            value={link.pct}
-            onChange={(e) => update(index, { pct: Number(e.target.value) || 0 })}
-          />
-          <span className="text-xs text-muted-foreground">%</span>
-          <Button type="button" variant="ghost" size="icon-sm" onClick={() => remove(index)}>
-            <Trash2 size={12} />
-          </Button>
-        </div>
-      ))}
-      {value.length === 0 && <p className="text-xs text-muted-foreground">Nenhum centro vinculado ainda.</p>}
-    </div>
-  );
-}
-
 export function CostPlanPanel({
   items,
   centers,
-  inventoryItems,
   ledgerAccounts,
 }: {
   items: CostItemWithLinks[];
   centers: CostCenter[];
-  inventoryItems: InventoryItemWithBalance[];
   ledgerAccounts: LedgerAccount[];
 }) {
   const centerOptions = centers.map((c) => ({ id: c.id, label: c.name }));
-  const usedInventoryItemIds = new Set(items.filter((i) => i.inventory_item_id).map((i) => i.inventory_item_id as string));
-  const availableInventoryItems = inventoryItems.filter((i) => !usedInventoryItemIds.has(i.id));
   const ledgerAccountById = new Map(ledgerAccounts.map((a) => [a.code, a]));
 
   return (
@@ -124,7 +40,7 @@ export function CostPlanPanel({
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-heading text-lg">Itens de custo</h3>
-          <CostItemDialog centerOptions={centerOptions} availableInventoryItems={availableInventoryItems} ledgerAccounts={ledgerAccounts} />
+          <CostItemDialog centerOptions={centerOptions} ledgerAccounts={ledgerAccounts} />
         </div>
         <div className="space-y-2">
           {items.map((item) => (
@@ -133,7 +49,7 @@ export function CostPlanPanel({
                 <div>
                   <p className="font-medium text-sm">
                     {item.name}
-                    {item.is_inventory && <span className="ml-1.5 text-xs text-muted-foreground">(estoque)</span>}
+                    {item.is_product && <span className="ml-1.5 text-xs text-muted-foreground">(produto)</span>}
                     {!item.active && <span className="ml-1.5 text-xs text-muted-foreground">· Inativo</span>}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
@@ -148,15 +64,16 @@ export function CostPlanPanel({
                       : "Padrão automático"}
                   </p>
                 </div>
-                <div className="flex gap-1 shrink-0">
-                  <CostItemDialog
-                    item={item}
-                    centerOptions={centerOptions}
-                    availableInventoryItems={availableInventoryItems}
-                    ledgerAccounts={ledgerAccounts}
-                  />
-                  <DeleteButton action={() => deleteCostItem(item.id)} />
-                </div>
+                {item.is_product ? (
+                  <Link href="/contabil/produtos" className="shrink-0 text-xs text-primary hover:underline">
+                    Editar no Cadastro de produtos
+                  </Link>
+                ) : (
+                  <div className="flex gap-1 shrink-0">
+                    <CostItemDialog item={item} centerOptions={centerOptions} ledgerAccounts={ledgerAccounts} />
+                    <DeleteButton action={() => deleteCostItem(item.id)} />
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -223,12 +140,10 @@ function DeleteButton({ action }: { action: () => Promise<{ error?: string }> })
 function CostItemDialog({
   item,
   centerOptions,
-  availableInventoryItems,
   ledgerAccounts,
 }: {
   item?: CostItemWithLinks;
   centerOptions: { id: string; label: string }[];
-  availableInventoryItems: InventoryItemWithBalance[];
   ledgerAccounts: LedgerAccount[];
 }) {
   const [open, setOpen] = useState(false);
@@ -238,16 +153,8 @@ function CostItemDialog({
 
   const [name, setName] = useState(item?.name ?? "");
   const [active, setActive] = useState(item?.active ?? true);
-  const [isInventory, setIsInventory] = useState(item?.is_inventory ?? false);
-  const [inventoryItemId, setInventoryItemId] = useState("new");
-  const [newInventoryItemName, setNewInventoryItemName] = useState("");
   const [links, setLinks] = useState<LinkRow[]>(item?.centers.map((c) => ({ id: c.center_id, pct: c.alloc_pct })) ?? []);
   const [ledgerAccountCode, setLedgerAccountCode] = useState(item?.ledger_account_code ?? "auto");
-
-  // Só mostra o seletor de item de estoque quando ainda não existe
-  // nenhum vínculo — um já existente nunca é trocado por outro, só
-  // criado (ao marcar pela primeira vez) ou removido (ao desmarcar).
-  const hasExistingLink = !!item?.inventory_item_id;
 
   function handleSave() {
     if (!name.trim()) {
@@ -256,12 +163,10 @@ function CostItemDialog({
     }
     startTransition(async () => {
       const centerLinks = links.map((l) => ({ center_id: l.id, alloc_pct: l.pct }));
-      const newLinkInventoryItemId = isInventory && inventoryItemId !== "new" ? inventoryItemId : null;
-      const newLinkName = isInventory && inventoryItemId === "new" ? newInventoryItemName : null;
       const resolvedLedgerAccountCode = ledgerAccountCode === "auto" ? null : ledgerAccountCode;
       const result = isEdit
-        ? await updateCostItem(item.id, name, active, isInventory, newLinkInventoryItemId, newLinkName, centerLinks, resolvedLedgerAccountCode)
-        : await createCostItem(name, isInventory, newLinkInventoryItemId, newLinkName, centerLinks, resolvedLedgerAccountCode);
+        ? await updateCostItem(item.id, name, active, false, null, null, centerLinks, resolvedLedgerAccountCode)
+        : await createCostItem(name, false, null, null, centerLinks, resolvedLedgerAccountCode);
       if (result?.error) toast.error(result.error);
       else {
         toast.success("Item de custo salvo.");
@@ -300,46 +205,10 @@ function CostItemDialog({
               <Switch checked={active} onCheckedChange={setActive} /> Ativo
             </label>
           )}
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={isInventory} onCheckedChange={(c) => setIsInventory(c === true)} />
-            Representa um item de estoque
-          </label>
-          {isInventory && hasExistingLink && (
-            <p className="text-xs text-muted-foreground rounded-lg bg-muted/40 p-2">
-              Vinculado ao item de estoque <strong>{item?.inventory_item_name}</strong> — esse vínculo não muda
-              depois de criado. Desmarque a opção acima pra desvincular (o item de estoque em si, com saldo e
-              histórico, não é apagado).
-            </p>
-          )}
-          {isInventory && !hasExistingLink && (
-            <div className="space-y-1.5 rounded-lg bg-muted/40 p-2">
-              <Label className="text-xs text-muted-foreground">Item de estoque</Label>
-              <Select value={inventoryItemId} onValueChange={(v) => v && setInventoryItemId(v)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecione">
-                    {(v: string) =>
-                      v === "new" ? "Criar novo item de estoque" : availableInventoryItems.find((i) => i.id === v)?.name ?? v
-                    }
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="new">+ Criar novo item de estoque</SelectItem>
-                  {availableInventoryItems.map((i) => (
-                    <SelectItem key={i.id} value={i.id}>
-                      {i.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {inventoryItemId === "new" && (
-                <Input
-                  value={newInventoryItemName}
-                  onChange={(e) => setNewInventoryItemName(e.target.value)}
-                  placeholder={name || "Nome do novo item de estoque"}
-                />
-              )}
-            </div>
-          )}
+          <p className="text-xs text-muted-foreground">
+            Este cadastro é pra gastos que não são produtos (salário, luz, honorários). Produtos — com ou sem
+            estoque — são criados e editados em Módulo Contábil → Cadastro de produtos.
+          </p>
           <PctLinksEditor options={centerOptions} value={links} onChange={setLinks} />
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">

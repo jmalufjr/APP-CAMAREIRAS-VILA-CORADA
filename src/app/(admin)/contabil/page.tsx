@@ -13,6 +13,7 @@ import {
   Archive,
   Calculator,
   Download,
+  Package,
 } from "lucide-react";
 
 // Módulo Contábil — Levas 1/2/3/4/5 trouxeram o plano de contas contábil,
@@ -25,6 +26,7 @@ import {
 const menuItems = [
   { href: "/compras/nova", label: "Lançar Compra", icon: Plus },
   { href: "/compras/lista", label: "Lista de compras", icon: ShoppingBasket },
+  { href: "/contabil/produtos", label: "Cadastro de produtos", icon: Package },
   { href: "/compras", label: "Estoque", icon: ShoppingCart },
   { href: "/ativo-permanente", label: "Ativo Permanente", icon: Archive },
   { href: "/contabil/plano-de-contas", label: "Plano de contas", icon: FolderTree },

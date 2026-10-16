@@ -243,8 +243,13 @@ export async function updateCostItem(
   return { success: true };
 }
 
+// Item de custo com compras no histórico nunca é apagado (PRD 5.1:
+// "não excluir ... com histórico; desativá-los") — apagar deixaria as
+// linhas dessas compras sem classificação nenhuma.
 export async function deleteCostItem(id: string) {
   const supabase = await createClient();
+  const { count } = await supabase.from("expense_items").select("id", { count: "exact", head: true }).eq("cost_item_id", id);
+  if ((count ?? 0) > 0) return { error: "Este item tem compras no histórico. Desative-o em vez de excluir." };
   const { error } = await supabase.from("cost_items").delete().eq("id", id);
   if (error) return { error: error.message };
   revalidateAll();

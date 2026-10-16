@@ -343,9 +343,37 @@ export interface CostItem {
   // gasto deste item posta — null usa um padrão genérico (Módulo
   // Contábil Leva 2).
   ledger_account_code: string | null;
+  // Cadastro de produtos (PRD 5.1): produto = item de custo + item de
+  // estoque ligado, quando controla estoque.
+  is_product: boolean;
+  sku: string | null;
+  description: string | null;
+  category_id: string | null;
+  product_type: ProductType | null;
   active: boolean;
   position: number;
   created_at: string;
+}
+
+export type ProductType =
+  | "revenda"
+  | "ingrediente_receita"
+  | "material_consumo"
+  | "material_limpeza"
+  | "embalagem"
+  | "outro";
+
+export interface ProductCategory {
+  id: string;
+  name: string;
+  active: boolean;
+  position: number;
+  created_at: string;
+}
+
+export interface UnitConversion {
+  unit_name: string;
+  factor: number;
 }
 
 export interface CostItemCenterLink {
@@ -419,6 +447,8 @@ export interface InventoryItem {
   // manhã: perecível = 100% do comprado no período; não perecível = o
   // que foi baixado manualmente, valorizado pelo custo médio.
   is_perishable: boolean;
+  shelf_life_days: number | null;
+  expiry_alert_days: number;
 }
 
 // Ficha técnica: qual(is) produto(s) do cardápio (frigobar OU bar da

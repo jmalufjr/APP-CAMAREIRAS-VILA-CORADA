@@ -1109,17 +1109,15 @@ export default function QuestoesRespostasPage() {
               <List
                 items={[
                   <>
-                    <strong>Hospedagem</strong>: água, luz, internet, dedetização e impostos; amenities,
-                    papel higiênico, secador de cabelo; toalhas, lençóis, fronhas; salário das camareiras
-                    e dos funcionários de manutenção, encargos, cesta básica, plano de saúde, transporte;
-                    materiais de jardim, de piscina e de manutenção, ferramentas; honorários
-                    administrativos (Stays, contabilidade, financeiro, pró-labore); materiais de limpeza.
+                    <strong>Hospedagem</strong>: água, luz, internet e dedetização; amenities, papel
+                    higiênico, secador de cabelo; toalhas, lençóis, fronhas; salário das camareiras e dos
+                    funcionários de manutenção, encargos, cesta básica, plano de saúde, transporte;
+                    materiais de jardim, de piscina e de manutenção, ferramentas; materiais de limpeza.
                   </>,
                   <>
                     <strong>Café da manhã</strong>: água, luz e gás; frutas, ovos, café, pães, queijos,
                     legumes, verduras e temperos, entre muitos outros; salário e encargos da mão de obra
-                    própria desse centro; honorários administrativos e materiais de limpeza, também com
-                    cadastro próprio aqui.
+                    própria desse centro; materiais de limpeza, também com cadastro próprio aqui.
                   </>,
                   <>
                     <strong>Bar da piscina e Frigobar</strong>: estrutura parecida, cada um com seus
@@ -1127,10 +1125,11 @@ export default function QuestoesRespostasPage() {
                   </>,
                   <>
                     <strong>Administração e áreas comuns</strong>: o centro pros custos administrativos e
-                    gastos compartilhados que não dá pra atribuir diretamente a um dos outros quatro
-                    (honorários administrativos, contabilidade, pró-labore e similares, por exemplo). Ele
-                    nasce vazio — cabe ao admin escolher, no “Plano de itens de custo”, quais itens de
-                    custo passam a pertencer a ele (por inteiro ou dividindo com outro centro).
+                    gastos compartilhados que não dá pra atribuir diretamente a um dos outros quatro.
+                    Hoje guarda, por inteiro, contabilidade, financeiro, Stays, Invictos, outros
+                    honorários administrativos, pró-labore e impostos e taxas; luz, água e internet
+                    continuam repartidos entre os outros centros. O admin pode ligar qualquer outro item
+                    a ele (por inteiro ou dividindo com outro centro) no “Plano de itens de custo”.
                   </>,
                 ]}
               />

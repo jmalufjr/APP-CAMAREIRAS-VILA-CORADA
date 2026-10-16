@@ -1705,8 +1705,22 @@ create table inventory_items (
   -- no custo do café da manhã: perecível = 100% do comprado no período;
   -- não perecível = o que foi baixado manualmente, valorizado pelo custo
   -- médio. Editável pelo admin, nunca uma lista fixa de nomes.
-  is_perishable boolean not null default false
+  is_perishable boolean not null default false,
+  -- Validade (migration 077): prazo do produto em dias e quantos dias
+  -- antes do vencimento o sistema avisa.
+  shelf_life_days int check (shelf_life_days is null or shelf_life_days > 0),
+  expiry_alert_days int not null default 7 check (expiry_alert_days >= 0)
 );
+
+-- "1 garrafa = 0,75 (unidade-base do item)" — migration 077.
+create table inventory_item_unit_conversions (
+  id uuid primary key default uuid_generate_v4(),
+  inventory_item_id uuid not null references inventory_items(id) on delete cascade,
+  unit_name text not null,
+  factor numeric(14,6) not null check (factor > 0),
+  created_at timestamptz not null default now()
+);
+create unique index inventory_item_unit_conversions_uq on inventory_item_unit_conversions (inventory_item_id, lower(unit_name));
 
 -- ---------- PLANO DE CONTAS: centro → subcentro → item de custo ----------
 -- Substitui por completo o modelo antigo de "categoria de gasto"
@@ -1734,6 +1748,22 @@ create table cost_centers (
 -- já existente (cadastro separado, nunca a mesma linha — confirmado com
 -- o proprietário) — é esse vínculo que faz uma compra lançada nesse item
 -- de custo também dar entrada no saldo de estoque dele.
+-- Cadastro de produtos (PRD seção 5.1, migration 076): um produto É um
+-- item de custo (is_product) + o item de estoque ligado, quando controla
+-- estoque. product_type null = "não classificado".
+create type product_type as enum (
+  'revenda', 'ingrediente_receita', 'material_consumo', 'material_limpeza', 'embalagem', 'outro'
+);
+
+create table product_categories (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+create unique index product_categories_name_uq on product_categories (lower(name));
+
 create table cost_items (
   id uuid primary key default uuid_generate_v4(),
   name text not null,
@@ -1741,9 +1771,29 @@ create table cost_items (
   inventory_item_id uuid references inventory_items(id) on delete set null,
   active boolean not null default true,
   position int not null default 0,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  is_product boolean not null default false,
+  sku text,
+  description text,
+  category_id uuid references product_categories(id) on delete set null,
+  product_type product_type
 );
 create unique index cost_items_inventory_item_uq on cost_items (inventory_item_id) where inventory_item_id is not null;
+create unique index cost_items_sku_uq on cost_items (lower(sku)) where sku is not null;
+
+-- Item que controla estoque é sempre produto — garantido no banco.
+create or replace function cost_items_set_product_flag() returns trigger as $$
+begin
+  if new.is_inventory then
+    new.is_product := true;
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger cost_items_product_flag
+before insert or update on cost_items
+for each row execute function cost_items_set_product_flag();
 
 -- Um item de custo pode pertencer a mais de 1 centro (ex.: "água" em
 -- Hospedagem, Café da manhã e Bar da piscina ao mesmo tempo) — o rateio
@@ -1936,6 +1986,9 @@ create table inventory_item_recipes (
   poolbar_item_id uuid references poolbar_items(id) on delete cascade,
   portions_count numeric(10,3) not null default 1 check (portions_count > 0),
   amount_per_portion numeric(12,4) not null default 0 check (amount_per_portion >= 0),
+  -- Unidade em que a quantidade foi digitada (só exibição; o valor acima
+  -- é sempre na unidade-base) — migration 077.
+  display_unit text,
   created_at timestamptz not null default now(),
   check (
     (minibar_item_id is not null and poolbar_item_id is null) or
@@ -2063,7 +2116,13 @@ create table expense_items (
   fixed_asset_id uuid references fixed_assets(id) on delete set null,
   description text not null,
   quantity numeric(12,3) not null default 1 check (quantity > 0),
-  unit_cost numeric(12,2) not null default 0 check (unit_cost >= 0),
+  unit_cost numeric(14,6) not null default 0 check (unit_cost >= 0),
+  -- O que o usuário digitou (ex.: 24 garrafas a R$18) — informativo;
+  -- quantity/unit_cost acima ficam sempre na unidade-base (migration 077).
+  purchase_quantity numeric(12,3),
+  purchase_unit text,
+  purchase_unit_cost numeric(14,6),
+  expiry_date date,
   subtotal numeric(12,2) not null default 0 check (subtotal >= 0),
   -- Desconto/frete/tributos (Módulo Contábil Leva 2) — guardados só
   -- pra transparência/auditoria; `subtotal` acima já vem calculado
@@ -2234,6 +2293,8 @@ alter table fixed_asset_catalog_items enable row level security;
 alter table fixed_assets enable row level security;
 alter table cost_centers enable row level security;
 alter table cost_items enable row level security;
+alter table product_categories enable row level security;
+alter table inventory_item_unit_conversions enable row level security;
 alter table cost_item_centers enable row level security;
 alter table ledger_accounts enable row level security;
 alter table ledger_entries enable row level security;
@@ -2263,6 +2324,12 @@ create policy "cost_items_select_authenticated" on cost_items for select using (
 create policy "cost_items_insert_admin_manutencao" on cost_items for insert with check (is_admin() or is_manutencao());
 create policy "cost_items_admin_update" on cost_items for update using (is_admin());
 create policy "cost_items_admin_delete" on cost_items for delete using (is_admin());
+
+create policy "product_categories_select_authenticated" on product_categories for select using (auth.uid() is not null);
+create policy "product_categories_admin_write" on product_categories for all using (is_admin()) with check (is_admin());
+
+create policy "unit_conv_select_authenticated" on inventory_item_unit_conversions for select using (auth.uid() is not null);
+create policy "unit_conv_admin_write" on inventory_item_unit_conversions for all using (is_admin()) with check (is_admin());
 
 create policy "cost_item_centers_select_authenticated" on cost_item_centers for select using (auth.uid() is not null);
 create policy "cost_item_centers_admin_write" on cost_item_centers for all using (is_admin()) with check (is_admin());
@@ -2703,6 +2770,41 @@ join (
   select item_name, center_name, row_number() over (partition by item_name order by center_name) as rn
   from (select distinct item_name, center_name from raw_items) t
 ) rn on rn.item_name = ri.item_name and rn.center_name = ri.center_name;
+
+-- Categorias de produto iniciais = nomes dos antigos subcentros que
+-- classificavam itens de estoque (migration 076); cada item de estoque
+-- recebe a do primeiro subcentro em que aparecia.
+insert into product_categories (name, position) values
+  ('Alimentos', 1), ('Bebidas', 2), ('Materiais de limpeza', 3), ('Materiais das suítes', 4),
+  ('Enxoval de cama e banho', 5), ('Materiais de Piscina', 6), ('Materiais de Manutenção', 7);
+
+update cost_items ci
+set category_id = pc.id
+from (select distinct on (item_name) item_name, subcenter_name from raw_items where is_inventory order by item_name, ctid) r
+join product_categories pc on lower(pc.name) = lower(r.subcenter_name)
+where lower(ci.name) = lower(r.item_name) and ci.is_product;
+
+-- Itens claramente ADMINISTRATIVOS passam 100% pro 5º centro
+-- ("Administração e áreas comuns") — decisão do proprietário em
+-- 16/10/2026 (migration 075). Luz, água, internet e demais itens
+-- compartilhados ficam como estão.
+delete from cost_item_centers
+where cost_item_id in (
+  select id from cost_items
+  where name in (
+    'Contabilidade (Simone Perla)', 'Financeiro (Márcia)', 'Stays (CMS)',
+    'Invictos (Comercial e Atendimento)', 'outras honorários administrativos', 'pró-labore', 'impostos e taxas'
+  )
+);
+insert into cost_item_centers (cost_item_id, center_id, alloc_pct)
+select ci.id, cc.id, 100
+from cost_items ci
+cross join cost_centers cc
+where cc.name = 'Administração e áreas comuns'
+  and ci.name in (
+    'Contabilidade (Simone Perla)', 'Financeiro (Márcia)', 'Stays (CMS)',
+    'Invictos (Comercial e Atendimento)', 'outras honorários administrativos', 'pró-labore', 'impostos e taxas'
+  );
 
 -- Categorias e catálogo de ativo permanente iniciais.
 insert into asset_categories (name, position) values
