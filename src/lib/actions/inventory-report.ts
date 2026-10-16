@@ -16,6 +16,11 @@ export interface InventoryStockReportRow {
   category_name: string;
   purchased_this_month: number;
   balance: number;
+  // Custo médio ponderado móvel e valor total em estoque (Módulo
+  // Contábil Leva 3) — derivados de inventory_balances, nunca
+  // materializados à parte.
+  avg_cost: number;
+  stock_value: number;
   estimated_days_remaining: number | null;
   needs_purchase: boolean;
 }
@@ -28,7 +33,7 @@ export async function getInventoryStockReport(): Promise<InventoryStockReportRow
   const supabase = await createClient();
   const monthStart = monthStartKey();
 
-  const [{ data: items }, { data: costItemLinks }, { data: suggestions }, { data: monthExpenseItems }, needingPurchase] =
+  const [{ data: items }, { data: costItemLinks }, { data: suggestions }, { data: balances }, { data: monthExpenseItems }, needingPurchase] =
     await Promise.all([
       supabase.from("inventory_items").select("id, name, unit, active").eq("active", true),
       supabase
@@ -37,6 +42,7 @@ export async function getInventoryStockReport(): Promise<InventoryStockReportRow
         .eq("is_inventory", true)
         .not("inventory_item_id", "is", null),
       supabase.from("inventory_purchase_suggestions").select("inventory_item_id, balance, weekly_consumption"),
+      supabase.from("inventory_balances").select("inventory_item_id, value, avg_cost"),
       supabase
         .from("expense_items")
         .select("quantity, cost_items(inventory_item_id), expenses!inner(date)")
@@ -47,11 +53,13 @@ export async function getInventoryStockReport(): Promise<InventoryStockReportRow
 
   type ItemRaw = { id: string; name: string; unit: string };
   type SuggestionRaw = { inventory_item_id: string; balance: number; weekly_consumption: number };
+  type BalanceRaw = { inventory_item_id: string; value: number; avg_cost: number };
   type ExpenseItemRaw = { quantity: number; cost_items: { inventory_item_id: string | null } | null };
   type CostItemLinkRaw = {
     inventory_item_id: string;
     cost_item_centers: { cost_centers: { name: string } | null }[];
   };
+  const valueMap = new Map(((balances ?? []) as BalanceRaw[]).map((b) => [b.inventory_item_id, b]));
 
   const categoryNamesByItem = new Map<string, string[]>();
   ((costItemLinks ?? []) as unknown as CostItemLinkRaw[]).forEach((r) => {
@@ -75,6 +83,7 @@ export async function getInventoryStockReport(): Promise<InventoryStockReportRow
   return ((items ?? []) as unknown as ItemRaw[])
     .map((item) => {
       const s = suggestionMap.get(item.id);
+      const v = valueMap.get(item.id);
       const dailyConsumption = s ? s.weekly_consumption / 7 : 0;
       const categoryNames = categoryNamesByItem.get(item.id) ?? [];
       return {
@@ -84,6 +93,8 @@ export async function getInventoryStockReport(): Promise<InventoryStockReportRow
         category_name: categoryNames.length > 0 ? categoryNames.join(" / ") : "—",
         purchased_this_month: purchasedThisMonth.get(item.id) ?? 0,
         balance: s?.balance ?? 0,
+        avg_cost: v ? Number(v.avg_cost) : 0,
+        stock_value: v ? Number(v.value) : 0,
         estimated_days_remaining: dailyConsumption > 0 ? Math.floor((s?.balance ?? 0) / dailyConsumption) : null,
         needs_purchase: needsPurchaseSet.has(item.id),
       };

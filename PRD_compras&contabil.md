@@ -2431,3 +2431,124 @@ nenhuma exportação pro sistema financeiro existe ainda (Leva 7).
   linhas fabricadas (despesas, itens, lançamentos, fornecedor) removidas
   do banco local depois; `cost_items.ledger_account_code` da água
   revertido pra `null`.
+
+## 25. Módulo Contábil — Leva 3: estoque com saldo em R$ (custo médio ponderado móvel)
+
+Terceira leva da implementação completa aprovada em 15/10/2026 (seção
+22.3), pós Leva 2 (seção 24), sem pausa pra aprovação entre levas.
+
+### 25.1 O problema e a decisão de design
+
+Até aqui, `inventory_movements` só guardava quantidade — nunca havia
+nenhum valor monetário de estoque, nem guardado nem calculado. A seção
+6.7 do PRD Contábil pede "custo médio ponderado móvel" como método
+padrão: a cada compra, o custo médio do item se recalcula pela proporção
+entre o que já tinha em estoque e o que entrou; saídas (baixa manual,
+baixa automática, ajuste de contagem) **não** mudam o custo médio, só o
+reduzem/aumentam na mesma proporção.
+
+**Decisão deliberada, para nunca haver desvio (drift)**: em vez de um
+campo `avg_cost` em `inventory_items` atualizado por código a cada
+movimento (risco real de um call site futuro esquecer de atualizá-lo —
+já aconteceu antes neste projeto, ver "Convenções e decisões
+importantes" do CLAUDE.md), **cada movimento grava seu próprio
+`unit_cost`/`total_value`** no momento em que é inserido, e o "custo
+médio atual"/"valor total em estoque" de um item são sempre **derivados
+por soma dos movimentos** — nunca uma coluna própria. Mesma filosofia já
+usada por `inventory_balances.balance` pra quantidade, agora estendida
+pra dinheiro.
+
+### 25.2 Como funciona
+
+Duas colunas novas em `inventory_movements` (migration
+`071_estoque_valorizacao.sql`): `unit_cost` (custo por unidade, 6 casas
+decimais — só informativo/auditoria, nunca usado em soma) e
+`total_value` (valor em R$ daquele movimento específico, assinado pelo
+mesmo sinal da quantidade). Preenchidas sozinhas por um trigger `before
+insert` (`compute_inventory_movement_value`, `security definer`, mesmo
+padrão de toda trigger deste schema) que roda pra **todo** insert em
+`inventory_movements`, não importa de onde venha:
+
+- **Compra** (`movement_type = 'compra'`): usa o custo líquido já
+  calculado na despesa (`expense_items.subtotal` — já com desconto/
+  frete/tributo não recuperável aplicados, Módulo Contábil Leva 2), não
+  o `unit_cost` bruto da nota. `total_value = subtotal` exatamente (sem
+  recalcular via multiplicação, pra nunca divergir do valor já
+  reconhecido no lançamento contábil da despesa); `unit_cost =
+  subtotal ÷ quantidade`, só pra exibição.
+- **Qualquer outro tipo** (baixa manual, baixa automática de consumo,
+  ajuste de contagem): usa o custo médio vigente **antes** deste
+  movimento — numa trigger `before insert`, consultar a própria tabela
+  reflete exatamente o estado "antes", já que esta linha ainda não foi
+  gravada. `total_value = quantidade × custo médio anterior` (quantidade
+  já assinada, então uma saída naturalmente produz um valor negativo).
+
+`inventory_balances` (view já existente desde sempre, usada por todo
+código que lê saldo) ganhou 2 colunas novas, **sem quebrar nenhum select
+existente**: `value` (soma de `total_value`) e `avg_cost` (`value ÷
+balance`, 0 quando não há saldo). Nenhum outro código precisou mudar pra
+continuar funcionando — a extensão é aditiva.
+
+**Backfill do dado real já existente**: um bloco `DO` na própria
+migration processa os movimentos já gravados, por item, em ORDEM
+CRONOLÓGICA (a mesma lógica do trigger, só que iterando com variáveis
+`v_balance`/`v_value` indo pra frente no tempo) — nunca em lote sem
+ordem, já que o custo médio de um movimento depende do que veio antes
+dele. Nenhum dado real foi zerado ou perdido.
+
+### 25.3 O que NÃO mudou nesta leva
+
+O MOMENTO em que o estoque desce continua sendo o pagamento da conta
+(não a venda/comanda — isso é a Leva 4); a fórmula do café da manhã
+continua a antiga (Leva 5); a contagem física continua agrupada por
+centro inteiro (a convenção de agrupar por "nome de subcentro" tinha
+caído com a remoção de subcentros na Leva 1, e tinha ficado marcada como
+"a repensar na Leva 3" — repensada e decidida: **não** há necessidade de
+mudar o agrupamento por causa da valorização monetária em si; o
+agrupamento por centro inteiro, já em vigor desde a Leva 1, continua
+suficiente).
+
+### 25.4 Onde o valor aparece
+
+Dois lugares, ambos admin-only, sem nenhuma tela nova (a tela de
+relatórios dedicada é a Leva 6):
+
+- **"Itens de estoque e ciclo de compras"** (`/compras/itens`): cada
+  item ganhou "Custo médio: R$ X · Valor em estoque: R$ Y" ao lado do
+  saldo já existente; um "Valor total em estoque: R$ Z" no topo da tela.
+- **Resumo Executivo → Estoque** (`/dashboard/estoque`): a tabela já
+  existente ganhou 2 colunas (Custo médio, Valor em estoque) + uma linha
+  de rodapé com o valor total.
+
+Telas que camareira/manutenção também usam (baixa de estoque, pedidos de
+compra) **não** ganharam exibição de valor — decisão deliberada de não
+expor dado financeiro a papéis que não precisam dele, mesmo o dado já
+estando disponível no servidor (consistente com o resto do projeto, ex.:
+"camareira nunca vê o PDF" do recibo financeiro).
+
+### 25.5 Testado
+
+- `npm run build`/`npm run lint` limpos.
+- Migration `071` aplicada com sucesso no Postgres local via Docker —
+  conferido o backfill do único movimento real já existente (compra de
+  ovos, 5 unidades, R$80 no total): `unit_cost` virou 16.00, `total_value`
+  80.00, e `inventory_balances` passou a mostrar `value=80.00`,
+  `avg_cost=16.00` — batendo exatamente com a conta manual.
+- Fluxo completo via rota de API temporária (`/api/test-leva3`, removida
+  depois), com sessão autenticada real, exercitando uma sequência mista
+  de movimentos sobre um item de teste isolado (criado e apagado
+  depois, sem tocar em nenhum dado real): compra de 10 un a R$5 (unit_
+  cost=5, total_value=50) → baixa manual de 4 (unit_cost=5, o custo
+  médio antes, total_value=-20; custo médio depois continua 5, como
+  esperado — saída nunca muda a média) → compra de 10 un a R$8 (unit_
+  cost=8, total_value=80; custo médio depois vira 110÷16=6,875) → baixa
+  manual de 6 (unit_cost=6,875, total_value=-41,25; custo médio depois
+  continua 6,875) → ajuste de contagem de +2 (contagem física achou 12,
+  2 a mais do que o esperado; unit_cost=6,875, total_value=13,75). Saldo
+  final: 12 unidades, valor R$82,50, custo médio R$6,875 — todos os 5
+  movimentos bateram exatamente com o cálculo manual esperado antes do
+  teste. Telas `/compras/itens` e `/dashboard/estoque` conferidas via
+  sessão autenticada real mostrando os valores corretos do item real
+  (ovos: "Saldo: 5 un · Custo médio: R$ 16.00 · Valor em estoque: R$
+  80.00"). Fixture de teste (item de custo, item de estoque, 2 despesas,
+  sessão de contagem) removida do banco local depois.

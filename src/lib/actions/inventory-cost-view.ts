@@ -14,6 +14,11 @@ export interface InventoryItemWithCostPlan {
   unit: string;
   coverage_days: number;
   balance: number;
+  // Custo médio ponderado móvel e valor total em estoque (Módulo
+  // Contábil Leva 3) — sempre derivados da view `inventory_balances`
+  // (soma dos movimentos), nunca um número guardado à parte.
+  avg_cost: number;
+  stock_value: number;
   reorder_point: number;
   center_names: string[];
 }
@@ -22,11 +27,12 @@ export async function getInventoryItemsWithCostPlan(): Promise<InventoryItemWith
   const supabase = await createClient();
   const [{ data: items }, { data: balances }, { data: links }] = await Promise.all([
     supabase.from("inventory_items").select("id, name, unit, coverage_days, reorder_point").eq("active", true),
-    supabase.from("inventory_balances").select("inventory_item_id, balance"),
+    supabase.from("inventory_balances").select("inventory_item_id, balance, value, avg_cost"),
     supabase.from("cost_items").select("inventory_item_id, cost_item_centers(cost_centers(name))").eq("is_inventory", true),
   ]);
 
-  const balanceMap = new Map((balances ?? []).map((b) => [b.inventory_item_id, Number(b.balance)]));
+  type BalanceRaw = { inventory_item_id: string; balance: number; value: number; avg_cost: number };
+  const balanceMap = new Map(((balances ?? []) as BalanceRaw[]).map((b) => [b.inventory_item_id, b]));
 
   type LinkRaw = { inventory_item_id: string; cost_item_centers: { cost_centers: { name: string } | null }[] };
   const centersByItem = new Map<string, string[]>();
@@ -41,14 +47,19 @@ export async function getInventoryItemsWithCostPlan(): Promise<InventoryItemWith
   return (
     (items ?? []) as { id: string; name: string; unit: string; coverage_days: number; reorder_point: number }[]
   )
-    .map((i) => ({
-      inventory_item_id: i.id,
-      name: i.name,
-      unit: i.unit,
-      coverage_days: i.coverage_days,
-      reorder_point: Number(i.reorder_point),
-      balance: balanceMap.get(i.id) ?? 0,
-      center_names: centersByItem.get(i.id) ?? [],
-    }))
+    .map((i) => {
+      const b = balanceMap.get(i.id);
+      return {
+        inventory_item_id: i.id,
+        name: i.name,
+        unit: i.unit,
+        coverage_days: i.coverage_days,
+        reorder_point: Number(i.reorder_point),
+        balance: b ? Number(b.balance) : 0,
+        avg_cost: b ? Number(b.avg_cost) : 0,
+        stock_value: b ? Number(b.value) : 0,
+        center_names: centersByItem.get(i.id) ?? [],
+      };
+    })
     .sort((a, b) => (a.center_names[0] ?? "").localeCompare(b.center_names[0] ?? "") || a.name.localeCompare(b.name));
 }

@@ -19,9 +19,11 @@ export function InventoryItemsPanel({ items }: { items: InventoryItemWithCostPla
     list.push(i);
     grouped.set(key, list);
   });
+  const totalValue = items.reduce((sum, i) => sum + i.stock_value, 0);
 
   return (
     <div className="space-y-6">
+      <p className="text-sm font-medium">Valor total em estoque: R$ {totalValue.toFixed(2)}</p>
       {Array.from(grouped.entries()).map(([center, groupItems]) => (
         <div key={center} className="space-y-2">
           <h3 className="font-heading text-lg">{center}</h3>
@@ -52,7 +54,8 @@ function ItemRow({ item }: { item: InventoryItemWithCostPlan }) {
       <div>
         <p className="text-sm font-medium">{item.name}</p>
         <p className="text-xs text-muted-foreground">
-          {item.center_names.join(" / ") || "—"} · Saldo: {item.balance} {item.unit}
+          {item.center_names.join(" / ") || "—"} · Saldo: {item.balance} {item.unit} · Custo médio: R${" "}
+          {item.avg_cost.toFixed(2)} · Valor em estoque: R$ {item.stock_value.toFixed(2)}
           {item.reorder_point > 0 ? ` · Ponto de reposição manual: ${item.reorder_point} ${item.unit}` : ""}
         </p>
       </div>

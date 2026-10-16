@@ -2058,11 +2058,19 @@ create table inventory_count_lines (
 );
 
 -- ---------- INVENTORY MOVEMENTS (todo evento que muda o saldo — nunca apagado) ----------
+-- unit_cost/total_value (Módulo Contábil Leva 3): custo médio ponderado
+-- móvel e valor monetário de CADA movimento, gravados sozinhos por um
+-- trigger `before insert` (ver compute_inventory_movement_value abaixo)
+-- — nunca calculados/gravados pelo código da aplicação, pra nenhum call
+-- site (baixa manual, baixa automática, ajuste de contagem, compra)
+-- poder esquecer de fazer isso.
 create table inventory_movements (
   id uuid primary key default uuid_generate_v4(),
   inventory_item_id uuid not null references inventory_items(id) on delete cascade,
   movement_type inventory_movement_type not null,
   quantity numeric(12,3) not null,
+  unit_cost numeric(14,6) not null default 0,
+  total_value numeric(12,2) not null default 0,
   reference_expense_item_id uuid references expense_items(id) on delete cascade,
   reference_room_bill_id uuid references room_bills(id) on delete set null,
   reference_count_line_id uuid references inventory_count_lines(id) on delete set null,
@@ -2071,9 +2079,54 @@ create table inventory_movements (
   created_at timestamptz not null default now()
 );
 
+-- Pra uma COMPRA: usa o custo líquido já calculado na despesa (subtotal,
+-- já com desconto/frete/tributo não recuperável aplicados — Módulo
+-- Contábil Leva 2). Pra qualquer outro tipo de movimento (baixa manual,
+-- baixa automática de consumo, ajuste de contagem): usa o custo médio
+-- vigente ANTES deste movimento — numa trigger `before insert`, consultar
+-- a própria tabela reflete exatamente o estado "antes", já que esta linha
+-- ainda não foi gravada. `security definer` (mesmo padrão de toda trigger
+-- deste schema).
+create or replace function compute_inventory_movement_value() returns trigger as $$
+declare
+  v_subtotal numeric;
+  v_exp_qty numeric;
+  v_avg_cost numeric;
+begin
+  if new.movement_type = 'compra' then
+    select subtotal, quantity into v_subtotal, v_exp_qty
+    from expense_items where id = new.reference_expense_item_id;
+
+    new.total_value := coalesce(v_subtotal, 0);
+    new.unit_cost := case when coalesce(v_exp_qty, 0) > 0 then round(v_subtotal / v_exp_qty, 6) else 0 end;
+  else
+    select coalesce(sum(total_value), 0) / nullif(sum(quantity), 0)
+    into v_avg_cost
+    from inventory_movements
+    where inventory_item_id = new.inventory_item_id;
+
+    new.unit_cost := coalesce(v_avg_cost, 0);
+    new.total_value := round(new.quantity * coalesce(v_avg_cost, 0), 2);
+  end if;
+
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create trigger inventory_movements_compute_value
+before insert on inventory_movements
+for each row execute function compute_inventory_movement_value();
+
+-- `value`/`avg_cost`: sempre derivados por soma dos movimentos (mesma
+-- filosofia já usada pra `balance`), nunca materializados à parte —
+-- elimina qualquer risco de desvio entre um valor guardado e a soma real.
 create view inventory_balances
 with (security_invoker = true) as
-select inventory_item_id, coalesce(sum(quantity), 0) as balance
+select
+  inventory_item_id,
+  coalesce(sum(quantity), 0) as balance,
+  coalesce(sum(total_value), 0) as value,
+  case when coalesce(sum(quantity), 0) > 0 then sum(total_value) / sum(quantity) else 0 end as avg_cost
 from inventory_movements
 group by inventory_item_id;
 
