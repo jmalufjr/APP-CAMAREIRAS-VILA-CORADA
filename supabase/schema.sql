@@ -1230,6 +1230,17 @@ begin
     end if;
   end loop;
 
+  -- Baixa de estoque no momento do pedido (Módulo Contábil Leva 4) — via
+  -- ficha técnica, mesma soma por ingrediente de sempre.
+  insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
+  select r.inventory_item_id, 'baixa_consumo_hospede',
+    -sum(bci.quantity * r.portions_count * r.amount_per_portion), v_bill_id,
+    'Baixa automática ao registrar a comanda'
+  from bar_comanda_items bci
+  join inventory_item_recipes r on r.poolbar_item_id = bci.poolbar_item_id
+  where bci.comanda_id = v_comanda_id and bci.quantity > 0
+  group by r.inventory_item_id;
+
   return v_comanda_id;
 end;
 $$ language plpgsql security definer;
@@ -1301,6 +1312,17 @@ begin
       last_action_at = now()
   where id = p_comanda_id;
 
+  -- Estorna o estoque dos itens ANTIGOS (já baixado quando a comanda foi
+  -- lançada/editada da última vez) antes de substituí-los.
+  insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
+  select r.inventory_item_id, 'baixa_consumo_hospede',
+    sum(bci.quantity * r.portions_count * r.amount_per_portion), v_old_bill_id,
+    'Estorno de estoque — comanda editada'
+  from bar_comanda_items bci
+  join inventory_item_recipes r on r.poolbar_item_id = bci.poolbar_item_id
+  where bci.comanda_id = p_comanda_id and bci.quantity > 0
+  group by r.inventory_item_id;
+
   delete from bar_comanda_items where comanda_id = p_comanda_id;
 
   for v_item in select * from jsonb_array_elements(p_items)
@@ -1311,25 +1333,44 @@ begin
       from poolbar_items pi where pi.id = (v_item->>'item_id')::uuid;
     end if;
   end loop;
+
+  -- Baixa o estoque dos itens NOVOS.
+  insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
+  select r.inventory_item_id, 'baixa_consumo_hospede',
+    -sum(bci.quantity * r.portions_count * r.amount_per_portion), v_new_bill_id,
+    'Baixa automática ao editar a comanda'
+  from bar_comanda_items bci
+  join inventory_item_recipes r on r.poolbar_item_id = bci.poolbar_item_id
+  where bci.comanda_id = p_comanda_id and bci.quantity > 0
+  group by r.inventory_item_id;
 end;
 $$ language plpgsql security definer;
 
-create or replace function cancel_comanda(p_comanda_id uuid)
+-- p_ingredients_recovered: desde o Módulo Contábil Leva 4, deixou de ser
+-- opcional perguntar isso ao cancelar — o estoque já foi baixado no
+-- momento do pedido, então cancelar precisa decidir explicitamente se ele
+-- volta (true, prato não chegou a ser preparado) ou fica baixado (false,
+-- já foi preparado/perdido). Só restaura na primeira vez que a comanda é
+-- de fato cancelada (uma chamada redundante numa já cancelada não
+-- restaura de novo).
+create or replace function cancel_comanda(p_comanda_id uuid, p_ingredients_recovered boolean)
 returns void as $$
 declare
+  v_bill_id uuid;
   v_bill_status room_bill_status;
+  v_old_status comanda_status;
 begin
   if not is_camareira() then
     raise exception 'not authorized';
   end if;
 
-  select b.status into v_bill_status
+  select c.bill_id, c.status, b.status into v_bill_id, v_old_status, v_bill_status
   from bar_comandas c
   join room_bills b on b.id = c.bill_id
   where c.id = p_comanda_id
   for update of c;
 
-  if v_bill_status is null then
+  if v_bill_id is null then
     raise exception 'Comanda não encontrada.';
   end if;
   if v_bill_status not in ('aberta', 'reaberta') then
@@ -1339,6 +1380,17 @@ begin
   update bar_comandas
   set status = 'cancelada', last_action_by = auth.uid(), last_action_at = now()
   where id = p_comanda_id and status <> 'cancelada';
+
+  if v_old_status <> 'cancelada' and p_ingredients_recovered then
+    insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
+    select r.inventory_item_id, 'baixa_consumo_hospede',
+      sum(bci.quantity * r.portions_count * r.amount_per_portion), v_bill_id,
+      'Estorno de estoque — comanda cancelada (ingredientes recuperados)'
+    from bar_comanda_items bci
+    join inventory_item_recipes r on r.poolbar_item_id = bci.poolbar_item_id
+    where bci.comanda_id = p_comanda_id and bci.quantity > 0
+    group by r.inventory_item_id;
+  end if;
 end;
 $$ language plpgsql security definer;
 
@@ -2298,38 +2350,62 @@ create trigger expense_items_create_movement
 after insert on expense_items
 for each row execute function create_movement_from_expense_item();
 
--- Baixa automática de estoque ao pagar uma conta de frigobar/bar — via
--- ficha técnica (inventory_item_recipes), que substitui o vínculo
--- 1-pra-1 original: soma por TODOS os produtos do cardápio ligados a cada
--- ingrediente, multiplicando pela quantidade consumida e por
--- portions_per_order — é o que permite um ingrediente (ex.: macaxeira)
--- ser compartilhado entre vários pratos sem duplicar cadastro.
-create or replace function deduct_inventory_on_bill_payment() returns trigger as $$
+-- Frigobar: baixa/estorno atômico no momento do LANÇAMENTO (Módulo
+-- Contábil Leva 4 — substitui a antiga baixa no momento do pagamento).
+-- Ler a quantidade antiga, calcular o delta e gravar a nova precisam
+-- acontecer juntos, sem brecha pra condição de corrida (duas chamadas
+-- concorrentes lendo a mesma quantidade "antiga" ao mesmo tempo).
+create or replace function set_minibar_consumption(p_bill_id uuid, p_minibar_item_id uuid, p_quantity int)
+returns void as $$
+declare
+  v_bill_status room_bill_status;
+  v_price numeric;
+  v_old_quantity int;
+  v_new_quantity int;
+  v_delta int;
 begin
-  if new.status = 'paga' and (old.status is null or old.status is distinct from 'paga') then
-    insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
-    select r.inventory_item_id, 'baixa_consumo_hospede', -(mbi.quantity * r.portions_count * r.amount_per_portion), new.id,
-      'Baixa automática ao pagar a conta (frigobar)'
-    from room_bill_minibar_items mbi
-    join inventory_item_recipes r on r.minibar_item_id = mbi.minibar_item_id
-    where mbi.bill_id = new.id and mbi.quantity > 0;
-
-    insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
-    select r.inventory_item_id, 'baixa_consumo_hospede', -sum(bci.quantity * r.portions_count * r.amount_per_portion), new.id,
-      'Baixa automática ao pagar a conta (bar da piscina)'
-    from bar_comanda_items bci
-    join bar_comandas bc on bc.id = bci.comanda_id
-    join inventory_item_recipes r on r.poolbar_item_id = bci.poolbar_item_id
-    where bc.bill_id = new.id and bc.status <> 'cancelada' and bci.quantity > 0
-    group by r.inventory_item_id;
+  if not (is_camareira() or is_admin()) then
+    raise exception 'not authorized';
   end if;
-  return new;
+
+  select status into v_bill_status from room_bills where id = p_bill_id for update;
+  if v_bill_status is null then
+    raise exception 'Conta não encontrada.';
+  end if;
+  if v_bill_status = 'fechada' then
+    raise exception 'A conta desta suíte está fechada. Não é possível registrar consumo.';
+  end if;
+
+  select price into v_price from minibar_items where id = p_minibar_item_id;
+  if v_price is null then
+    raise exception 'Item de frigobar não encontrado.';
+  end if;
+
+  select quantity into v_old_quantity
+  from room_bill_minibar_items
+  where bill_id = p_bill_id and minibar_item_id = p_minibar_item_id
+  for update;
+  v_old_quantity := coalesce(v_old_quantity, 0);
+  v_new_quantity := greatest(0, p_quantity);
+
+  insert into room_bill_minibar_items (bill_id, minibar_item_id, quantity, price_snapshot, updated_at)
+  values (p_bill_id, p_minibar_item_id, v_new_quantity, v_price, now())
+  on conflict (bill_id, minibar_item_id)
+  do update set quantity = excluded.quantity, price_snapshot = excluded.price_snapshot, updated_at = excluded.updated_at;
+
+  v_delta := v_new_quantity - v_old_quantity;
+  if v_delta <> 0 then
+    insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
+    select r.inventory_item_id, 'baixa_consumo_hospede', -(v_delta * r.portions_count * r.amount_per_portion), p_bill_id,
+      case when v_delta > 0
+        then 'Baixa automática ao lançar consumo de frigobar'
+        else 'Estorno de estoque — frigobar reduzido'
+      end
+    from inventory_item_recipes r
+    where r.minibar_item_id = p_minibar_item_id;
+  end if;
 end;
 $$ language plpgsql security definer;
-
-create trigger room_bills_deduct_inventory
-after update on room_bills
-for each row execute function deduct_inventory_on_bill_payment();
 
 -- Fechar uma contagem física: grava ajustes só onde há diferença de
 -- verdade, marca a sessão como concluída.

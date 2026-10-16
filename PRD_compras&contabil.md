@@ -2552,3 +2552,108 @@ estando disponível no servidor (consistente com o resto do projeto, ex.:
   (ovos: "Saldo: 5 un · Custo médio: R$ 16.00 · Valor em estoque: R$
   80.00"). Fixture de teste (item de custo, item de estoque, 2 despesas,
   sessão de contagem) removida do banco local depois.
+
+## 26. Módulo Contábil — Leva 4: estoque desce no momento do pedido, não mais só no pagamento
+
+Quarta leva da implementação completa aprovada em 15/10/2026 (seção
+22.3, decisão/item 4), pós Leva 3 (seção 25), sem pausa pra aprovação
+entre levas.
+
+### 26.1 A mudança de comportamento
+
+Até aqui, o estoque de frigobar/bar da piscina só descia quando a conta
+do quarto era marcada como PAGA (`deduct_inventory_on_bill_payment`,
+disparada por um `after update on room_bills`) — às vezes dias depois
+do consumo de verdade. O documento original (PRD Contábil, seção 6.6)
+mostra o lançamento contábil da venda acontecendo no momento da venda,
+não do pagamento; essa leva alinha o estoque com essa mesma lógica.
+Decisão confirmada explicitamente com o proprietário como mudança de
+comportamento num sistema em produção (seção 22.3 item 4).
+
+**Consequência direta, também já antecipada na decisão**: a pergunta
+"os ingredientes foram recuperados ou perdidos?" ao cancelar uma
+comanda deixou de ser cosmética — como o estoque já foi baixado no
+momento do pedido (não mais só no pagamento), cancelar sem decidir isso
+deixaria o estoque permanentemente errado num dos dois sentidos.
+
+### 26.2 Onde cada baixa/estorno acontece agora
+
+- **Comanda nova** (`submit_comanda`): baixa o estoque de cada
+  ingrediente (via `inventory_item_recipes`, mesma soma por ingrediente
+  de sempre — um ingrediente pode alimentar vários produtos do cardápio)
+  logo depois de inserir os itens do pedido.
+- **Comanda editada** (`edit_comanda`): primeiro ESTORNA o estoque dos
+  itens ANTIGOS (já baixado quando a comanda foi lançada/editada da
+  última vez), só depois substitui os itens e baixa de novo pelos itens
+  NOVOS — o efeito líquido é sempre o delta, mesmo quando a edição troca
+  de quarto no meio do caminho (o estorno usa a conta de ORIGEM, a baixa
+  usa a de DESTINO).
+- **Comanda cancelada** (`cancel_comanda`, agora com o parâmetro
+  `p_ingredients_recovered boolean`, obrigatório): se `true`, estorna o
+  estoque de volta; se `false`, mantém baixado. Uma chamada redundante
+  numa comanda já cancelada nunca restaura de novo (checado via o status
+  ANTES do update, não depois).
+- **Frigobar** (`set_minibar_consumption`, função nova — substitui o
+  upsert direto que existia em `setMinibarConsumption`): lê a quantidade
+  ANTIGA, calcula o delta contra a NOVA informada, grava a nova
+  quantidade, e baixa/estorna o estoque pelo delta — tudo atômico (um
+  `select ... for update` na linha da conta e na linha do item evita
+  condição de corrida entre duas chamadas concorrentes). Como a
+  quantidade de frigobar sempre foi um valor ABSOLUTO (nunca um delta —
+  ver Parte 08/25), e pode legitimamente DIMINUIR (reabertura "zerar e
+  lançar tudo novamente", Parte 25), um delta negativo devolve estoque
+  automaticamente, sem nenhum campo/pergunta nova pro frigobar (diferente
+  da comanda, aqui não existe "cancelamento" — só ajuste de quantidade).
+
+Todas as 4 funções continuam `security definer`, mesmo padrão já
+estabelecido — a baixa/estorno nunca passa por uma policy de RLS direta
+em `inventory_movements` (que não tem, e não ganhou, nenhuma policy de
+insert pra `baixa_consumo_hospede`; só essas funções podem gravar esse
+tipo de movimento, exatamente como já era antes desta leva).
+
+### 26.3 Remoção do mecanismo antigo e migração de dados reais
+
+`deduct_inventory_on_bill_payment`/o trigger `room_bills_deduct_inventory`
+foram apagados por completo (migration
+`072_estoque_baixa_no_pedido.sql`). **Antes** de apagá-los, a mesma
+migration rodou um catch-up único: para toda conta AINDA NÃO PAGA (as
+únicas que o mecanismo antigo ainda não tinha processado), baixa de uma
+vez só o consumo de frigobar/comanda já lançado antes da mudança — sem
+isso, esse consumo nunca seria baixado (o mecanismo antigo foi removido,
+e o novo só vale pra lançamentos a partir de agora). Contas já `paga`
+não entram no catch-up — já foram corretamente baixadas no pagamento,
+sob o mecanismo antigo, e catch-up-las de novo duplicaria a baixa.
+Testado contra o banco real (local): nenhuma conta aberta tinha
+frigobar pendente; havia 1 comanda ativa numa conta aberta, mas o
+produto dela ("Caipifruta Cachaça") não tinha ficha técnica cadastrada
+— o catch-up corretamente não encontrou nada pra baixar (mesma lacuna
+que já existiria sob o mecanismo antigo; não é um bug desta leva).
+
+### 26.4 Testado
+
+- `npm run build`/`npm run lint` limpos.
+- Migration `072` aplicada com sucesso no Postgres local via Docker —
+  confirmado que os dados reais pré-existentes (1 movimento de compra,
+  as 2 comandas já existentes, as 4 linhas de frigobar de uma conta já
+  paga) ficaram intactos depois do catch-up + remoção do trigger antigo.
+- Fluxo completo via rota de API temporária (`/api/test-leva4`, removida
+  depois), com sessão autenticada real como a conta de teste
+  "Teste 01 camareira" (senha redefinida localmente via a API admin do
+  GoTrue só para este teste) — necessário porque `submit_comanda`/
+  `edit_comanda`/`cancel_comanda` exigem `is_camareira()`, então testar
+  como admin falha com "not authorized" de propósito (não é bug, é a
+  regra de sempre). Ingrediente/item de frigobar/item de bar fabricados
+  com ficha técnica conhecida (1 frigobar = 2 unidades do ingrediente; 1
+  drink = 3 unidades), sobre uma suíte real já existente, sequência
+  completa: frigobar lançado em 5 (saldo -10) → reduzido pra 2 (saldo -4,
+  restaurando 6) → comanda de 3 drinks (saldo -13) → editada pra 1 no
+  mesmo quarto (saldo -7, estornando 9 e baixando 3) → editada de novo
+  trocando de quarto pra 4 (saldo -16, estornando 3 e baixando 12) →
+  cancelada SEM recuperar (saldo continua -16) → nova comanda de 2
+  drinks (saldo -22) → cancelada COM recuperar (saldo volta -16) →
+  cancelada de novo (redundante, com recuperar=true outra vez — saldo
+  continua -16, confirmando que não restaura 2 vezes). Todos os 9
+  movimentos gerados bateram exatamente com o valor calculado à mão
+  antes do teste. Fixtures (ingrediente, item de frigobar, item de bar,
+  fichas técnicas, comandas, movimentos) removidas do banco local
+  depois.

@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 // Chave só do lado do cliente, combinando suíte + qual conta — necessária
 // porque uma suíte com Saída com Chegada em andamento aparece 2 vezes na
@@ -60,6 +61,7 @@ export function ComandaForm({
     initialRoomId ? optionKey(initialRoomId, initialGuestSlot ?? "unica") : ""
   );
   const [quantities, setQuantities] = useState<Record<string, number>>(initialQuantities ?? {});
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
 
   const selectedRoom = rooms.find((r) => optionKey(r.room_id, r.guestSlot) === selectedKey);
   const roomIdCounts = new Map<string, number>();
@@ -115,14 +117,19 @@ export function ComandaForm({
     });
   }
 
-  function handleCancelComanda() {
+  // Os ingredientes já baixados do estoque ao lançar esta comanda (Módulo
+  // Contábil Leva 4 — o estoque desce no momento do pedido, não mais só
+  // no pagamento) voltam ou não pro estoque dependendo da resposta: um
+  // prato pronto que foi jogado fora não pode ser "recuperado" de volta.
+  function handleCancelComanda(ingredientsRecovered: boolean) {
     if (!comandaId || isLocked) return;
     startTransition(async () => {
-      const result = await cancelComanda(comandaId);
+      const result = await cancelComanda(comandaId, ingredientsRecovered);
       if (result?.error) {
         toast.error(result.error);
         return;
       }
+      setCancelDialogOpen(false);
       toast.success("Comanda cancelada.");
       router.push("/comanda");
       router.refresh();
@@ -200,12 +207,33 @@ export function ComandaForm({
             {mode === "create" ? "Enviar pedido" : "Salvar e reenviar"}
           </Button>
           {mode === "edit" && (
-            <Button variant="destructive" disabled={isPending || isLocked} onClick={handleCancelComanda}>
+            <Button variant="destructive" disabled={isPending || isLocked} onClick={() => setCancelDialogOpen(true)}>
               Cancelar comanda
             </Button>
           )}
         </div>
       </div>
+
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Os ingredientes foram recuperados ou perdidos?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            O estoque já foi baixado ao lançar este pedido. Se o prato/produto não chegou a ser preparado (ou pôde
+            ser guardado de volta), escolha &quot;Recuperados&quot; para devolver ao estoque. Se foi preparado/
+            perdido, escolha &quot;Perdidos&quot; — o estoque continua baixado.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" disabled={isPending} onClick={() => handleCancelComanda(false)}>
+              Perdidos
+            </Button>
+            <Button disabled={isPending} onClick={() => handleCancelComanda(true)}>
+              Recuperados
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

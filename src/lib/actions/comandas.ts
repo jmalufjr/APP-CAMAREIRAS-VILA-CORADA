@@ -62,9 +62,17 @@ export async function editComanda(
   return { success: true };
 }
 
-export async function cancelComanda(comandaId: string) {
+// ingredientsRecovered (Módulo Contábil Leva 4): o estoque já foi
+// baixado no momento do pedido (não mais só no pagamento) — ao cancelar,
+// a pergunta "os ingredientes foram recuperados ou perdidos?" deixou de
+// ser opcional (PRD_compras&contabil.md seção 22.3 item 4). true devolve
+// ao estoque; false mantém a baixa (prato já preparado/perdido).
+export async function cancelComanda(comandaId: string, ingredientsRecovered: boolean) {
   const supabase = await createClient();
-  const { error } = await supabase.rpc("cancel_comanda", { p_comanda_id: comandaId });
+  const { error } = await supabase.rpc("cancel_comanda", {
+    p_comanda_id: comandaId,
+    p_ingredients_recovered: ingredientsRecovered,
+  });
   if (error) return { error: error.message };
 
   revalidateComandaPaths();

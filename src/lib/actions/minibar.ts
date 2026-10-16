@@ -60,6 +60,13 @@ export async function deleteMinibarItem(id: string) {
 
 // ---------- Camareira/admin: registrar consumo de frigobar na conta corrente do quarto ----------
 
+// Desde o Módulo Contábil Leva 4, o estoque desce (ou volta, se a
+// quantidade for reduzida) no momento em que esta quantidade é
+// registrada — não mais só quando a conta é paga. A resolução do delta
+// (nova quantidade − antiga) e a baixa/estorno de estoque acontecem
+// atomicamente dentro de `set_minibar_consumption` (security definer),
+// nunca aqui no cliente — evita condição de corrida entre ler a
+// quantidade antiga e gravar a nova.
 export async function setMinibarConsumption(
   roomId: string,
   itemId: string,
@@ -69,23 +76,12 @@ export async function setMinibarConsumption(
   const supabase = await createClient();
 
   const bill = await getOrCreateCurrentBill(supabase, roomId, guestSlot);
-  if (bill.status === "fechada") {
-    return { error: "A conta desta suíte está fechada. Não é possível registrar consumo." };
-  }
 
-  const { data: item } = await supabase.from("minibar_items").select("price").eq("id", itemId).single();
-  if (!item) return { error: "Item de frigobar não encontrado." };
-
-  const { error } = await supabase.from("room_bill_minibar_items").upsert(
-    {
-      bill_id: bill.id,
-      minibar_item_id: itemId,
-      quantity: Math.max(0, Math.floor(quantity)),
-      price_snapshot: item.price,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "bill_id,minibar_item_id" }
-  );
+  const { error } = await supabase.rpc("set_minibar_consumption", {
+    p_bill_id: bill.id,
+    p_minibar_item_id: itemId,
+    p_quantity: Math.max(0, Math.floor(quantity)),
+  });
 
   if (error) return { error: error.message };
   revalidatePath("/tarefas");
