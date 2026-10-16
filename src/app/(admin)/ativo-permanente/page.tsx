@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import { PageHeader } from "@/components/shared/page-header";
+import { BackLink } from "@/components/shared/back-link";
 import { getFixedAssets } from "@/lib/actions/fixed-assets";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,7 @@ export default async function AtivoPermanentePage() {
 
   return (
     <div className="space-y-6">
+      <BackLink href="/contabil" />
       <PageHeader
         title="Ativo Permanente"
         subtitle={`Bens que não se consomem (TVs, móveis, equipamentos etc.) — ${active.length} item(ns) registrado(s) · valor total R$ ${totalValue.toFixed(2)}`}

@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/shared/page-header";
+import { BackLink } from "@/components/shared/back-link";
 import { ExpenseForm } from "@/components/shared/expense-form";
 import { getCostItemOptions, getCostCenters } from "@/lib/actions/cost-plan";
 import { getAssetCategories, getFixedAssetCatalogItems } from "@/lib/actions/fixed-assets";
@@ -15,6 +16,7 @@ export default async function NovaDespesaPage() {
 
   return (
     <div className="space-y-6">
+      <BackLink href="/contabil" />
       <PageHeader title="Lançar compras e despesas" subtitle="Tire uma foto, escolha um arquivo (foto ou PDF) ou preencha manualmente." />
       <ExpenseForm
         costItemOptions={costItemOptions}

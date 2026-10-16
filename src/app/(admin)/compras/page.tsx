@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
+import { BackLink } from "@/components/shared/back-link";
 import { getPurchaseList } from "@/lib/actions/purchase-list";
 import { getSubcenterGroupCountStatus } from "@/lib/actions/inventory-counts";
 import { Package, ClipboardList, PackageMinus, ChevronRight, AlertTriangle, UtensilsCrossed } from "lucide-react";
@@ -17,6 +18,7 @@ export default async function ComprasPage() {
 
   return (
     <div className="space-y-6">
+      <BackLink href="/contabil" />
       <PageHeader title="Estoque" subtitle="Controle de estoque da pousada — itens, categorias e contagem física." />
 
       <div className="flex flex-wrap gap-2">

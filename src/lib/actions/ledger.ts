@@ -67,6 +67,36 @@ export async function updateLedgerAccount(
   return { success: true };
 }
 
+// Saldo atual (até hoje) de Caixa e Banco (PRD seção 9.1, Módulo
+// Contábil Leva 6) — soma TODAS as linhas de TODOS os lançamentos
+// dessas 2 contas (confirmado e estornado misturados, nunca filtrado
+// por status): um lançamento estornado já tem, por definição, uma
+// linha espelhada que cancela o efeito da original — filtrar por
+// status quebraria essa simetria (excluiria só a original, contando a
+// reversão sozinha). Débito aumenta o saldo (contas de ativo), crédito
+// diminui.
+export interface CashAndBankBalances {
+  caixa: number;
+  banco: number;
+}
+
+export async function getCashAndBankBalances(): Promise<CashAndBankBalances> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("ledger_entry_lines")
+    .select("direction, amount, ledger_accounts!inner(code)")
+    .in("ledger_accounts.code", ["caixa", "banco"]);
+
+  type Raw = { direction: "debito" | "credito"; amount: number; ledger_accounts: { code: string } };
+  const balances: CashAndBankBalances = { caixa: 0, banco: 0 };
+  ((data ?? []) as unknown as Raw[]).forEach((l) => {
+    const signedAmount = l.direction === "debito" ? Number(l.amount) : -Number(l.amount);
+    if (l.ledger_accounts.code === "caixa") balances.caixa += signedAmount;
+    else if (l.ledger_accounts.code === "banco") balances.banco += signedAmount;
+  });
+  return balances;
+}
+
 // ---------- Lançamentos (partidas dobradas) ----------
 
 export interface LedgerEntryLineInput {

@@ -8,6 +8,7 @@ import {
   getOccupiedRoomNightsForPeriod,
   getBreakfastCostForPeriod,
   getDishCostsForPeriod,
+  getBarFrigobarCmvForPeriod,
 } from "@/lib/actions/cost-accounting";
 import { hospedagemTotalIncludingBreakfast } from "@/lib/cost-accounting";
 import { toDateKey, nowInBrazil } from "@/lib/date";
@@ -28,11 +29,12 @@ export default async function CustosPage({ searchParams }: { searchParams: Promi
   const from = sp.from || range.from;
   const to = sp.to || range.to;
 
-  const [summary, occupiedRoomNights, dishes, breakfast] = await Promise.all([
+  const [summary, occupiedRoomNights, dishes, breakfast, barFrigobarCmv] = await Promise.all([
     getCostCentersSummaryForPeriod(from, to),
     getOccupiedRoomNightsForPeriod(from, to),
     getDishCostsForPeriod(from, to),
     getBreakfastCostForPeriod(from, to),
+    getBarFrigobarCmvForPeriod(from, to),
   ]);
 
   const hospedagemTotal = hospedagemTotalIncludingBreakfast(summary.centerTotals);
@@ -216,6 +218,38 @@ export default async function CustosPage({ searchParams }: { searchParams: Promi
                 ))}
               </TableBody>
             </Table>
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-lg">CMV e margem bruta · Bar da piscina + Frigobar</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Receita pela data em que a conta foi paga; CMV (custo da mercadoria vendida) pela data do pedido/
+            lançamento de consumo — os dois podem cair em dias diferentes pra uma mesma venda (regime de caixa ×
+            regime de competência), não é um erro. Bar e frigobar somados juntos, sem separar por canal.
+          </p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-xs text-muted-foreground">Receita bruta</p>
+              <p className="text-lg font-medium">{fmt(barFrigobarCmv.revenue)}</p>
+            </div>
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-xs text-muted-foreground">CMV</p>
+              <p className="text-lg font-medium">{fmt(barFrigobarCmv.cmv)}</p>
+            </div>
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-xs text-muted-foreground">Margem bruta</p>
+              <p className="text-lg font-medium">{fmt(barFrigobarCmv.grossMargin)}</p>
+            </div>
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-xs text-muted-foreground">Margem bruta %</p>
+              <p className="text-lg font-medium">
+                {barFrigobarCmv.grossMarginPct !== null ? `${barFrigobarCmv.grossMarginPct.toFixed(1)}%` : "—"}
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { weightedAverageUnitCost, computeDishCost } from "@/lib/cost-accounting";
 import { startOfDayBrasiliaUtc, nextDayBrasiliaUtcBoundary } from "@/lib/date";
+import { getPoolbarConsumptionForPeriod } from "@/lib/actions/poolbar";
+import { getMinibarConsumptionForPeriod } from "@/lib/actions/minibar";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -391,6 +393,50 @@ export async function getBreakfastCostForPeriod(from: string, to: string): Promi
     costPerGuestInsumos: guestsServed > 0 ? insumosCost / guestsServed : null,
     costPerGuestTotal: guestsServed > 0 ? totalCost / guestsServed : null,
     byItem: Array.from(byLabel.values()).sort((a, b) => b.total - a.total),
+  };
+}
+
+export interface BarFrigobarCmvSummary {
+  revenue: number;
+  cmv: number;
+  grossMargin: number;
+  grossMarginPct: number | null;
+}
+
+// CMV e margem bruta de bar da piscina + frigobar juntos (PRD seção 9.1/
+// 9.3, Módulo Contábil Leva 6) — receita pela data em que a conta foi
+// PAGA (mesma base já usada pelos relatórios de consumo existentes);
+// CMV pela soma de `inventory_movements.total_value` dos movimentos
+// `baixa_consumo_hospede` no período, pela data do LANÇAMENTO/pedido
+// (Módulo Contábil Leva 4 — o estoque desce no pedido, não no
+// pagamento). As duas datas podem divergir pra uma mesma venda (pedido
+// num dia, pagamento dias depois) — mesma divergência já esperada entre
+// regime de caixa e regime de competência, não é um erro de cálculo.
+// Simplificação deliberada: soma bar + frigobar juntos, sem separar por
+// canal — os movimentos de estoque não guardam de qual dos dois vieram,
+// só o quarto/conta de origem.
+export async function getBarFrigobarCmvForPeriod(from: string, to: string): Promise<BarFrigobarCmvSummary> {
+  const supabase = await createClient();
+  const [poolbar, minibar, { data: movements }] = await Promise.all([
+    getPoolbarConsumptionForPeriod(from, to),
+    getMinibarConsumptionForPeriod(from, to),
+    supabase
+      .from("inventory_movements")
+      .select("total_value")
+      .eq("movement_type", "baixa_consumo_hospede")
+      .gte("created_at", startOfDayBrasiliaUtc(from))
+      .lt("created_at", nextDayBrasiliaUtcBoundary(to)),
+  ]);
+
+  const revenue = poolbar.total + minibar.total;
+  const cmv = -((movements ?? []).reduce((sum, m) => sum + Number(m.total_value), 0));
+  const grossMargin = revenue - cmv;
+
+  return {
+    revenue,
+    cmv,
+    grossMargin,
+    grossMarginPct: revenue > 0 ? (grossMargin / revenue) * 100 : null,
   };
 }
 

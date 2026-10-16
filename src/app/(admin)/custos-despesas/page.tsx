@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
+import { BackLink } from "@/components/shared/back-link";
 import { Calculator, FileBarChart, ChevronRight } from "lucide-react";
 
 const menuItems = [
@@ -10,6 +11,7 @@ const menuItems = [
 export default function CustosDespesasPage() {
   return (
     <div className="space-y-6">
+      <BackLink href="/contabil" />
       <PageHeader
         title="Custos e Despesas"
         subtitle="Custo da hospedagem, do café da manhã e dos pratos/produtos servidos, e o demonstrativo de todas as despesas por centro de custo. A categorização em si (Plano de Contas) é gerida em Listas."

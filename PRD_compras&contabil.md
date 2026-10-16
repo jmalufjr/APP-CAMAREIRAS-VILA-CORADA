@@ -2773,3 +2773,102 @@ rateio geral) — fora do escopo desta leva.
   período que inclui o dia de hoje de verdade. Fixtures (2 itens de
   custo, 2 itens de estoque, 2 despesas, 1 baixa manual, o override de
   cafés servidos) removidas do banco local depois.
+
+## 28. Módulo Contábil — Leva 6: menu consolidado + relatórios
+
+Sexta leva da implementação completa aprovada em 15/10/2026 (seção
+22.3, itens 11/13), pós Leva 5 (seção 27), sem pausa pra aprovação
+entre levas.
+
+### 28.1 Menu consolidado (decisão 22.3 item 11)
+
+Os 5 itens que viviam soltos no menu principal do admin — Lançar
+Compra (`/compras/nova`), Lista de compras (`/compras/lista`), Estoque
+(`/compras`), Ativo Permanente (`/ativo-permanente`) e Custos e
+Despesas (`/custos-despesas`) — saíram de lá (`app-sidebar.tsx`) e
+passaram a existir só dentro do menu **"Módulo Contábil"**,
+junto dos 3 que já estavam lá desde as Levas 1/2 (Plano de contas,
+Livro de lançamentos, Pagamentos e recebimentos). Cada uma dessas 5
+telas (e a tela "Lançar compras e despesas" dentro de "Estoque") ganhou
+um `<BackLink href="/contabil">`, já que deixaram de ser destinos
+diretos do menu principal. Nenhuma rota mudou de endereço — só de onde
+é alcançável — e o controle de acesso (admin-only) já estava certo
+desde antes, sem precisar de nenhuma mudança em `middleware.ts`.
+
+**Fora de escopo, de propósito**: a tela "Plano de itens de custo"
+(centro de custo → item de custo, dentro de "Listas") **não** se mudou
+pra cá — é um cadastro diferente (classificação por ÁREA da pousada),
+já documentado como não devendo ser confundido com o Plano de Contas
+CONTÁBIL (classificação por TIPO de movimento) — a decisão 22.3 item 11
+só nomeia os 5 itens acima.
+
+### 28.2 Relatórios novos (decisão 22.3 item 1, PRD seção 9)
+
+Dois relatórios pedidos pelo documento original e ainda não cobertos
+por nenhuma leva anterior:
+
+- **Saldo de caixa e bancos** (PRD seção 9.1): 2 cards no topo do hub
+  "Módulo Contábil", lendo direto do livro de lançamentos —
+  `getCashAndBankBalances` soma TODAS as linhas (confirmado e
+  estornado misturados, nunca filtrado por status: um lançamento
+  estornado já tem uma linha espelhada que cancela o original;
+  filtrar por status quebraria essa simetria) das contas "caixa"/
+  "banco", débito soma e crédito subtrai (contas de ativo). Sempre o
+  saldo ATUAL (até agora), não filtrado por período.
+- **CMV e margem bruta — Bar da piscina + Frigobar** (PRD seção 9.1/
+  9.3): novo card na tela "Custos", com receita bruta (soma dos
+  relatórios de consumo já existentes, pela data de PAGAMENTO), CMV
+  (soma de `inventory_movements.total_value` dos movimentos
+  `baixa_consumo_hospede` no período, pela data do PEDIDO/lançamento —
+  Módulo Contábil Leva 4), margem bruta e margem bruta %.
+  **Simplificação deliberada, documentada na própria tela**: bar e
+  frigobar somados juntos, sem separar por canal (os movimentos de
+  estoque não guardam de qual dos dois vieram) — e as duas datas-base
+  (pagamento × pedido) podem divergir pra uma mesma venda, mesma
+  divergência já aceita entre regime de caixa e regime de competência,
+  não um erro de cálculo.
+
+### 28.3 Questões e Respostas: perguntas 13/14/15 reescritas por completo
+
+As perguntas sobre Compras, Estoques e Custos (`/questoes-respostas`)
+tinham sido escritas **antes mesmo da Leva 1** deste módulo (ainda
+descreviam a camada de subcentro, já removida) — ficaram
+progressivamente mais desatualizadas a cada leva desde então, sem
+nenhuma revisão. Reescritas nesta leva pra refletir tudo: sem
+subcentro (direto item→centro); fornecedores como cadastro de
+verdade; forma de pagamento separada hóspede×fornecedor, com "a
+prazo" e a tela "Pagamentos e recebimentos"; desconto/frete/tributos
+por item; estoque com valor em R$ (custo médio ponderado móvel);
+baixa de estoque no momento do PEDIDO (não mais do pagamento), com a
+pergunta "recuperou ou perdeu" ao cancelar uma comanda; contagem
+física agrupada por centro inteiro (não mais por nome de subcentro);
+"é perecível?" e "cafés servidos" na fórmula do café da manhã; e todo
+menu relocado pra dentro de "Módulo Contábil". Lição já registrada
+desde a Parte 18 do app principal, reforçada aqui: conteúdo escrito à
+mão fica desatualizado silenciosamente — vale revisar a cada parte que
+muda algo que ele descreve, em vez de deixar acumular várias levas de
+atraso.
+
+### 28.4 Testado
+
+- `npm run build`/`npm run lint` limpos em múltiplas rodadas.
+- Sessão autenticada real (login local + cookie `sb-127-auth-token`):
+  `/contabil` confirmado mostrando "Saldo em caixa"/"Saldo em banco" e
+  os 8 itens do menu (os 5 relocados + os 3 já existentes);
+  `/custos-despesas/custos` confirmado mostrando o novo card "CMV e
+  margem bruta"; `/dashboard` (Resumo Executivo, que inclui a barra
+  lateral) confirmado SEM nenhum dos 5 itens antigos no menu principal
+  do admin, com "Módulo Contábil" presente.
+- **Limpeza corretiva, não um bug desta leva**: ao preparar esse teste,
+  encontrados 7 lançamentos contábeis órfãos no banco local — resíduo
+  de despesas de teste das Levas 3 e 5 que foram apagadas (`expenses`)
+  sem que o lançamento contábil automático correspondente
+  (`ledger_entries`/`ledger_entry_lines`, gerado sozinho desde a Leva
+  2) fosse removido junto. Como a view de saldo de caixa/banco desta
+  leva soma TODO lançamento sem filtrar por origem, esses órfãos
+  inflariam o saldo mostrado. Removidos diretamente (nenhum dado real
+  afetado — todo o Módulo Contábil é novo nesta branch, ainda não
+  mesclada). **Lição registrada pra testes futuros**: a
+  partir da Leva 2, apagar uma despesa de teste fabricada também
+  precisa apagar o lançamento contábil automático dela — nunca só a
+  despesa/itens/movimentos de estoque.

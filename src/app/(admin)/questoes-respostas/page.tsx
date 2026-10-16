@@ -639,19 +639,32 @@ export default function QuestoesRespostasPage() {
               <P>
                 “Compra” e “despesa” são, aqui dentro, a mesma coisa: qualquer dinheiro que a pousada
                 gasta, seja um saco de farinha ou a visita de um encanador. Tudo isso é lançado numa
-                única tela, chamada <strong>“Lançar compras e despesas”</strong> — ela está no menu
-                principal “Compras” (pro administrador) e também no menu do funcionário de manutenção
-                (os dois podem lançar). A camareira não lança compra nenhuma: ela só avisa quando algo
-                está acabando e dá baixa manual num item (ver pergunta 14).
+                única tela, chamada <strong>“Lançar compras e despesas”</strong> — dentro do menu{" "}
+                <strong>“Módulo Contábil”</strong> (pro administrador) e também no menu do funcionário de
+                manutenção (os dois podem lançar). A camareira não lança compra nenhuma: ela só avisa
+                quando algo está acabando e dá baixa manual num item (ver pergunta 14).
               </P>
 
               <SubHeading>Como uma compra é registrada, campo por campo</SubHeading>
               <List
                 items={[
                   <>
-                    <strong>Data</strong>, <strong>fornecedor</strong> (opcional) e{" "}
-                    <strong>forma de pagamento</strong> (Pix, cartão de crédito, cartão de débito,
-                    transferência bancária, dinheiro ou boleto).
+                    <strong>Data</strong>, <strong>data de competência</strong> (quando o gasto conta pra
+                    fins contábeis — em branco, usa a mesma data) e <strong>número do documento</strong>{" "}
+                    (nota/cupom, opcional).
+                  </>,
+                  <>
+                    <strong>Fornecedor</strong> — um cadastro de verdade agora (nome, CPF/CNPJ, contato),
+                    não mais um texto livre: escolha um já cadastrado ou crie um novo ali mesmo, sem sair
+                    da tela.
+                  </>,
+                  <>
+                    <strong>Forma de pagamento</strong>: Banco/Pix, Dinheiro, Cartão corporativo ou{" "}
+                    <strong>A prazo</strong> — essa última não é bem uma “forma de pagamento”, é avisar
+                    que ainda não foi pago; escolhendo-a, aparece um campo de vencimento, e a despesa vai
+                    pra tela “Pagamentos e recebimentos” até alguém confirmar o pagamento de verdade (ver
+                    mais abaixo). Essa lista é diferente da forma de pagamento que o hóspede usa pra pagar
+                    a própria conta de consumo — são dois conceitos separados no aplicativo.
                   </>,
                   <>
                     <strong>Link ou código da nota fiscal</strong> (opcional) — pode digitar, ou apontar a
@@ -666,19 +679,45 @@ export default function QuestoesRespostasPage() {
                   </>,
                   <>
                     Com a foto/PDF anexado, o botão <strong>“Ler nota com IA”</strong> faz a inteligência
-                    artificial ler a nota sozinha e já preencher fornecedor, data, forma de pagamento e os
-                    itens comprados — sempre vale conferir os dados antes de salvar, já que a leitura
-                    pode errar, principalmente em notas manuscritas ou mal fotografadas.
+                    artificial ler a nota sozinha e já preencher fornecedor, data, número do documento,
+                    forma de pagamento e os itens comprados — sempre vale conferir os dados antes de
+                    salvar, já que a leitura pode errar, principalmente em notas manuscritas ou mal
+                    fotografadas.
                   </>,
                   <>
                     <strong>Itens da compra</strong> (opcional): se a nota tiver vários produtos diferentes
                     (uma compra de supermercado, por exemplo), cada um vira uma linha, com descrição,
-                    quantidade e custo unitário. Se a despesa não tiver “itens” de verdade (uma conta de
-                    luz, o honorário de um contador), não é preciso cadastrar nenhuma linha — só o valor
-                    total.
+                    quantidade e custo unitário — e, se abrir o campo “Desconto, frete e tributos” de uma
+                    linha, também desconto (reduz o custo), frete/outros custos e tributo não recuperável
+                    (os dois aumentam o custo), e tributo recuperável (só registrado, nunca muda o custo —
+                    é um crédito a recuperar depois, não uma despesa de verdade). Se a despesa não tiver
+                    “itens” de verdade (uma conta de luz, o honorário de um contador), não é preciso
+                    cadastrar nenhuma linha — só o valor total.
                   </>,
                 ]}
               />
+              <P>
+                O sistema avisa (sem bloquear) se já existir outra despesa igual — mesmo fornecedor,
+                número do documento, data e valor —, caso de nota lançada duas vezes por engano.
+              </P>
+
+              <SubHeading>Fornecedores</SubHeading>
+              <P>
+                Cadastro próprio, reaproveitado tanto por compras/despesas quanto por ativo permanente —
+                ao criar o módulo, os nomes de fornecedor já digitados em compras antigas foram
+                automaticamente agrupados num cadastro só (juntando nomes iguais, mesmo escritos com
+                maiúscula/minúscula diferente), sem perder a referência histórica.
+              </P>
+
+              <SubHeading>Compra a prazo e a tela “Pagamentos e recebimentos”</SubHeading>
+              <P>
+                Uma despesa lançada como <strong>“A prazo”</strong> fica pendente até alguém confirmar o
+                pagamento de verdade, na tela <strong>“Pagamentos e recebimentos”</strong> (menu “Módulo
+                Contábil”) — lista todas as despesas pendentes, ordenadas pelo vencimento, com um botão
+                “Registrar pagamento” que pede a forma final (Banco/Pix, Dinheiro ou Cartão corporativo).
+                Uma despesa lançada em qualquer outra forma de pagamento já nasce paga, sem passar por
+                essa tela.
+              </P>
 
               <SubHeading>Pra onde cada linha (ou o valor total) é classificada</SubHeading>
               <P>
@@ -689,20 +728,15 @@ export default function QuestoesRespostasPage() {
                 items={[
                   <>
                     <strong>Item de custo</strong>: é a etiqueta que diz o que foi comprado — “farinha de
-                    trigo”, “detergente”, “salário das camareiras”, “conta de luz”. Essas etiquetas moram
-                    numa estrutura de 3 níveis chamada <strong>Plano de Contas</strong>: cada item de
-                    custo pertence a um ou mais <strong>subcentros</strong> (uma categoria menor, como
-                    “Alimentos” ou “Materiais de limpeza”), e cada subcentro pertence a um ou mais{" "}
-                    <strong>centros de custo</strong> (a área grande da pousada: Hospedagem, Café da
-                    manhã, Bar da piscina ou Frigobar). Quando um item/subcentro pertence a mais de um
-                    subcentro/centro, o valor é repartido entre eles por um percentual (que sempre precisa
-                    somar 100%). Esse cadastro completo fica na tela{" "}
-                    <strong>“Plano de Contas”</strong> (menu “Listas” → “Plano de Contas” →{" "}
-                    <strong>“Plano de itens de custo”</strong>), com 3 listas editáveis — itens de custo,
-                    subcentros e centros. Ao lançar a compra, você escolhe um item de custo já existente,
-                    ou cria um novo ali mesmo, sem precisar ir até “Listas” — nesse momento você também
-                    diz se esse item novo “representa um item de estoque” (pergunta 14) e a quais
-                    subcentros ele pertence.
+                    trigo”, “detergente”, “salário das camareiras”, “conta de luz”. Cada item de custo
+                    pertence a um ou mais <strong>centros de custo</strong> (a área grande da pousada:
+                    Hospedagem, Café da manhã, Bar da piscina ou Frigobar) — quando pertence a mais de um,
+                    o valor é repartido entre eles por um percentual (que sempre precisa somar 100%). Esse
+                    cadastro completo fica na tela <strong>“Plano de itens de custo”</strong> (menu
+                    “Listas” → “Plano de Contas”), com 2 listas editáveis — itens de custo e centros. Ao
+                    lançar a compra, você escolhe um item de custo já existente, ou cria um novo ali
+                    mesmo, sem precisar ir até “Listas” — nesse momento você também diz se esse item novo
+                    “representa um item de estoque” (pergunta 14) e a quais centros ele pertence.
                   </>,
                   <>
                     <strong>Ativo permanente</strong>: bens que não se consomem (geladeira, televisão,
@@ -711,16 +745,16 @@ export default function QuestoesRespostasPage() {
                     opcionalmente um item já catalogado (ex.: “Liquidificador”), marca, modelo, garantia e
                     o local onde vai ficar guardado. Categorias e catálogo são geridos em{" "}
                     <strong>“Plano de Contas” → “Plano de itens de ativo permanente”</strong>; cada bem
-                    comprado nasce sozinho, já com esses dados, na tela <strong>“Ativo Permanente”</strong>{" "}
-                    (menu principal), organizada por categoria.
+                    comprado nasce sozinho, já com esses dados, na tela{" "}
+                    <strong>“Ativo Permanente”</strong> (menu “Módulo Contábil”), organizada por categoria.
                   </>,
                 ]}
               />
 
               <SubHeading>A tela “Lista de compras”</SubHeading>
               <P>
-                Essa tela (menu “Compras”) junta dois sinais diferentes de “isso precisa ser comprado”,
-                item por item:
+                Essa tela (menu “Módulo Contábil”) junta dois sinais diferentes de “isso precisa ser
+                comprado”, item por item:
               </P>
               <List
                 items={[
@@ -749,12 +783,12 @@ export default function QuestoesRespostasPage() {
                 items={[
                   <>
                     <strong>Estoque</strong>: toda compra de um item marcado “representa estoque” entra
-                    sozinha no saldo dele — visível na tela “Itens de estoque e ciclo de compras”, sem
-                    nenhum lançamento separado (pergunta 14).
+                    sozinha no saldo e no valor em R$ dele — visível na tela “Itens de estoque e ciclo de
+                    compras”, sem nenhum lançamento separado (pergunta 14).
                   </>,
                   <>
                     <strong>Custos</strong>: toda compra/despesa (menos ativo permanente) alimenta as
-                    telas “Custos” e “Demonstrativo de Despesas” (menu “Custos e Despesas”), que somam os
+                    telas “Custos” e “Demonstrativo de Despesas” (menu “Módulo Contábil”), que somam os
                     valores conforme a classificação escolhida no lançamento (pergunta 15).
                   </>,
                   <>
@@ -767,30 +801,39 @@ export default function QuestoesRespostasPage() {
                     “Contagem de estoque” (pergunta 14).
                   </>,
                   <>
-                    <strong>Ficha técnica do bar da piscina</strong>: quando um item de custo representa
-                    estoque e é ingrediente de algum petisco/drink (ficha técnica cadastrada em “Ficha
-                    técnica de petiscos e drinks”, menu Compras), comprar esse ingrediente sobe o estoque
-                    dele, e vender o petisco/drink numa comanda desce o estoque sozinho, sem nenhuma baixa
-                    manual (pergunta 14 tem o detalhe completo).
+                    <strong>Ficha técnica do bar da piscina e do frigobar</strong>: quando um item de
+                    custo representa estoque e é ingrediente de algum petisco/drink/item de frigobar
+                    (ficha técnica cadastrada em “Ficha técnica de petiscos e drinks”, menu “Módulo
+                    Contábil”), comprar esse ingrediente sobe o estoque dele, e pedir o produto numa
+                    comanda (ou lançar o frigobar) desce o estoque sozinho, já no momento do pedido —
+                    pergunta 14 tem o detalhe completo.
+                  </>,
+                  <>
+                    <strong>Lançamento contábil automático</strong>: por trás de toda compra/despesa, o
+                    sistema já gera sozinho o registro contábil formal (débito/crédito) — ninguém
+                    operacional precisa entender isso; é só pro contador, na tela “Livro de lançamentos”
+                    (menu “Módulo Contábil”).
                   </>,
                   <>
                     <strong>Histórico</strong>: toda compra/despesa lançada aparece na tela “Histórico”,
                     seção “Compras e despesas no período” — com total por centro de custo, total por
-                    fornecedor, a lista completa (com opção de editar ou excluir uma despesa já lançada) e
-                    exportação em planilha.
+                    fornecedor, a lista completa (com forma de pagamento, status pago/pendente, opção de
+                    editar ou excluir uma despesa já lançada) e exportação em planilha.
                   </>,
                   <>
                     <strong>Resumo Executivo</strong>: a tela “Estoque” (dentro do menu do Resumo
                     Executivo) mostra os 20 itens mais comprados no mês e desde sempre (por valor), além
-                    do saldo e da previsão de dias restantes de cada item de estoque.
+                    do saldo, do custo médio, do valor em R$ e da previsão de dias restantes de cada item
+                    de estoque.
                   </>,
                 ]}
               />
               <P>
                 <strong>Quem pode fazer o quê:</strong> admin e funcionário de manutenção lançam compras
                 em “Lançar compras e despesas”; camareira e funcionário de manutenção registram pedidos
-                de compra e dão baixa de estoque; as telas de relatório (Custos, Demonstrativo,
-                Histórico, Plano de Contas) são só do admin.
+                de compra e dão baixa de estoque; as telas de relatório e o restante do Módulo Contábil
+                (Custos, Demonstrativo, Histórico, Plano de Contas, Pagamentos e recebimentos, Livro de
+                lançamentos) são só do admin.
               </P>
             </div>
           </AccordionPanel>
@@ -812,34 +855,30 @@ export default function QuestoesRespostasPage() {
 
               <SubHeading>Quais mercadorias e produtos são classificados como estoque</SubHeading>
               <P>
-                Dentro do Plano de Contas (tela “Plano de Contas” → “Plano de itens de custo”, menu
-                Listas), cada item de custo tem uma marcação chamada “representa estoque”. Só os itens
-                marcados assim têm saldo controlado e entram nas telas de estoque — os demais (salário,
-                conta de luz, honorários de contabilidade, serviços em geral) são só uma despesa, sem
-                quantidade nenhuma pra acompanhar.
-              </P>
-              <P>
-                Isso também vale pra comida: dentro de “Alimentos” do Café da manhã, por exemplo, itens
-                como <strong>café</strong>, <strong>farinha de trigo</strong>, <strong>manteiga</strong>,{" "}
-                <strong>queijos</strong> e <strong>linguiças</strong> são controlados como estoque — mas{" "}
-                <strong>frutas</strong>, <strong>ovos</strong>, <strong>legumes</strong>,{" "}
-                <strong>verduras</strong> e <strong>temperos</strong>, mesmo sendo produtos físicos
-                comprados o tempo todo, não são, por serem itens muito variáveis e perecíveis, sem
-                sentido prático em controlar “quantos restam” com precisão. Essa escolha é feita item por
-                item, no momento em que o item de custo é criado (dentro da própria tela “Lançar compras
-                e despesas”, ou direto no Plano de Contas) — e pode ser revista a qualquer momento.
+                Dentro do Plano de Contas (tela “Plano de itens de custo”, menu Listas), cada item de
+                custo tem uma marcação chamada “representa estoque”. Só os itens marcados assim têm
+                saldo controlado e entram nas telas de estoque — os demais (salário, conta de luz,
+                honorários de contabilidade, serviços em geral) são só uma despesa, sem quantidade
+                nenhuma pra acompanhar. Essa escolha é feita item por item, no momento em que o item de
+                custo é criado (dentro da própria tela “Lançar compras e despesas”, ou direto no Plano de
+                Contas) — e pode ser revista a qualquer momento.
               </P>
 
-              <SubHeading>Onde fica registrado o estoque</SubHeading>
+              <SubHeading>Onde fica registrado o estoque — e o valor em R$ dele</SubHeading>
               <P>
                 Nenhum número de saldo fica guardado fixo em lugar nenhum. O saldo de qualquer item de
                 estoque é sempre <strong>calculado na hora</strong>, somando todo o histórico de
                 “movimentos” dele desde que foi cadastrado — entradas e saídas, misturadas em ordem
-                cronológica. Você vê esse saldo atual, item por item, na tela{" "}
-                <strong>“Itens de estoque e ciclo de compras”</strong> (menu “Compras”), junto do
-                centro/subcentro a que o item pertence (vindo do Plano de Contas) e da unidade de medida
-                dele (un, kg, L etc.). Essa tela é só leitura quanto à identidade do item — o único campo
-                editável ali é a quantidade de “dias de folga” (explicada mais abaixo).
+                cronológica. Desde que o estoque passou a valer em dinheiro (não só em quantidade), cada
+                movimento também carrega seu próprio valor: uma <strong>compra</strong> grava o custo
+                real pago; qualquer <strong>saída</strong> (baixa, venda, ajuste) grava o{" "}
+                <strong>custo médio</strong> vigente naquele momento, sem alterá-lo — só uma compra nova
+                recalcula o custo médio, misturando o que já tinha com o que acabou de entrar. Você vê
+                saldo, custo médio e valor total em estoque, item por item, na tela{" "}
+                <strong>“Itens de estoque e ciclo de compras”</strong> (menu “Módulo Contábil”), junto do
+                centro a que o item pertence (vindo do Plano de Contas) e da unidade de medida dele (un,
+                kg, L etc.). Essa tela é só leitura quanto à identidade/valor do item — os únicos campos
+                editáveis ali são “dias de folga” (explicado mais abaixo) e “é perecível?” (pergunta 15).
               </P>
 
               <SubHeading>Os 4 tipos de movimento que alteram o saldo</SubHeading>
@@ -859,11 +898,16 @@ export default function QuestoesRespostasPage() {
                   </>,
                   <>
                     <strong>Consumo automático do hóspede</strong>: quando um petisco ou drink do bar da
-                    piscina é vendido (numa comanda) e tem uma “ficha técnica” cadastrada — quais
-                    ingredientes ele usa, e em que quantidade, na tela “Ficha técnica de petiscos e
-                    drinks” (menu Compras) — o estoque de cada ingrediente usado desce sozinho, no
-                    momento em que a conta daquela suíte é paga. Nenhuma camareira precisa dar baixa
-                    manual nesses ingredientes.
+                    piscina é pedido (numa comanda) ou uma quantidade de frigobar é lançada, e o produto
+                    tem uma “ficha técnica” cadastrada — quais ingredientes ele usa, e em que quantidade,
+                    na tela “Ficha técnica de petiscos e drinks” (menu “Módulo Contábil”) — o estoque de
+                    cada ingrediente usado desce sozinho, <strong>já no momento do pedido/lançamento</strong>{" "}
+                    (não mais só quando a conta é paga, como era antes). Editar uma comanda devolve o
+                    estoque dos itens antigos e baixa de novo pelos novos; cancelar uma comanda sempre
+                    pergunta se os ingredientes foram <strong>recuperados</strong> (voltam ao estoque) ou{" "}
+                    <strong>perdidos</strong> (o prato já foi preparado/descartado, o estoque continua
+                    baixado) — nenhuma camareira precisa dar baixa manual nesses ingredientes em nenhum
+                    dos casos.
                   </>,
                   <>
                     <strong>Ajuste de contagem física</strong>: ao fechar uma contagem (explicada abaixo),
@@ -894,36 +938,30 @@ export default function QuestoesRespostasPage() {
               <P>
                 É o processo de comparar, de tempos em tempos, o que o sistema calcula que deveria ter em
                 estoque (o “saldo teórico”) com o que realmente existe, contando os produtos físicos de
-                verdade — tela <strong>“Contagem de estoque”</strong> (menu Compras).
+                verdade — tela <strong>“Contagem de estoque”</strong> (menu “Módulo Contábil”).
               </P>
               <P>
                 <strong>Quais produtos se sujeitam a ela:</strong> só os itens de estoque ativos (os
                 marcados “representa estoque” no Plano de Contas), sempre organizados por{" "}
-                <strong>grupo</strong> — um grupo reúne todos os subcentros do Plano de Contas que têm o{" "}
-                <strong>mesmo nome</strong>, mesmo pertencendo a centros diferentes. Por exemplo: existe
-                um subcentro “Alimentos” dentro de “Café da manhã” e outro subcentro “Alimentos” dentro
-                de “Bar da piscina” — são dois cadastros diferentes no Plano de Contas, mas uma única
-                contagem de “Alimentos” já junta os itens dos dois de uma vez, numa visita só, sem
-                precisar contar o mesmo tipo de produto duas vezes em dois lugares separados. Também é
-                possível contar “todos os itens” de uma vez, sem separar por grupo.
+                <strong>centro de custo inteiro</strong> (Hospedagem, Café da manhã, Bar da piscina ou
+                Frigobar) — ou é possível contar “todos os itens” de uma vez, sem separar por centro.
               </P>
               <P>
                 <strong>Como é feito:</strong> na tela “Contagem de estoque”, clique em “Iniciar
-                contagem” (de um grupo específico, ou de tudo) — isso abre uma sessão nova mostrando,
-                lado a lado, cada item do grupo com o saldo que o sistema calcula naquele momento
+                contagem” (de um centro específico, ou de tudo) — isso abre uma sessão nova mostrando,
+                lado a lado, cada item do centro com o saldo que o sistema calcula naquele momento
                 (“teórico”). Conte os produtos de verdade (na despensa, no almoxarifado, etc.) e digite,
-                item por item, a quantidade contada. Quando todos os itens do grupo estiverem
-                preenchidos, clique em “Fechar contagem e ajustar estoque”: o sistema grava um ajuste pra
-                cada item que ficou diferente (pra mais ou pra menos) e a contagem passa a valer como
-                histórico — não dá mais pra editar os números depois disso.
+                item por item, a quantidade contada. Quando todos os itens estiverem preenchidos, clique
+                em “Fechar contagem e ajustar estoque”: o sistema grava um ajuste pra cada item que ficou
+                diferente (pra mais ou pra menos) e a contagem passa a valer como histórico — não dá mais
+                pra editar os números depois disso.
               </P>
               <P>
-                <strong>Quando é feito:</strong> não existe uma data automática fixa. Cada grupo de
-                subcentro pode ter uma “frequência de contagem” configurada, em dias (na própria tela
-                “Contagem de estoque”) — se configurada, a tela avisa com destaque vermelho quando já
-                passou da hora de contar aquele grupo de novo. Sem frequência configurada pra um grupo,
-                nenhum aviso aparece pra ele, mas a contagem continua podendo ser feita a qualquer
-                momento, por iniciativa própria.
+                <strong>Quando é feito:</strong> não existe uma data automática fixa. Cada centro pode
+                ter uma “frequência de contagem” configurada, em dias (na própria tela “Contagem de
+                estoque”) — se configurada, a tela avisa com destaque vermelho quando já passou da hora
+                de contar aquele centro de novo. Sem frequência configurada, nenhum aviso aparece, mas a
+                contagem continua podendo ser feita a qualquer momento, por iniciativa própria.
               </P>
 
               <SubHeading>Quebra de estoque</SubHeading>
@@ -965,26 +1003,26 @@ export default function QuestoesRespostasPage() {
                 informação, organizada e somada de um jeito que responde perguntas como “quanto custou
                 hospedar um hóspede” ou “quanto custou servir o café da manhã”. Essas contas já prontas
                 ficam nas telas <strong>“Custos”</strong> e <strong>“Demonstrativo de Despesas”</strong>{" "}
-                (menu principal “Custos e Despesas”).
+                (menu “Módulo Contábil” → “Custos e Despesas”).
               </P>
 
               <SubHeading>Como o valor de cada despesa chega até o custo de um centro</SubHeading>
               <P>
                 Toda despesa (menos ativo permanente, ver mais abaixo) é ligada, no momento em que é
                 lançada, a um <strong>item de custo</strong>. Cada item de custo pertence a um ou mais{" "}
-                <strong>subcentros</strong>, e cada subcentro pertence a um ou mais{" "}
                 <strong>centros de custo</strong> (hoje a pousada tem 4: Hospedagem, Café da manhã, Bar
-                da piscina e Frigobar) — tudo isso cadastrado na tela “Plano de Contas” (pergunta 13). O
-                sistema soma, automaticamente, o valor de cada despesa espalhado por toda essa cadeia de
-                percentuais — é essa soma final, por centro, que aparece nos cards da tela “Custos”.
+                da piscina e Frigobar) — tudo isso cadastrado na tela “Plano de itens de custo” (pergunta
+                13). O sistema soma, automaticamente, o valor de cada despesa espalhado pelos centros a
+                que o item pertence, pelo percentual configurado — é essa soma final, por centro, que
+                aparece nos cards da tela “Custos”.
               </P>
               <P>
                 <strong>Exemplo prático:</strong> a conta de água da pousada serve tanto os quartos
                 quanto a cozinha do café da manhã. No Plano de Contas, o item de custo “água” pode estar
-                ligado ao subcentro “Gerais” de Hospedagem e também ao subcentro “Gerais” de Café da
-                manhã, cada um com uma porcentagem (por exemplo, metade pra cada) — é essa divisão que
-                garante que uma única conta de água apareça, com o pedaço certo, no custo de cada parte
-                da pousada, em vez de inflar um centro só ou de ter que lançar a mesma conta duas vezes.
+                ligado ao centro Hospedagem e também ao centro Café da manhã, cada um com uma
+                porcentagem (por exemplo, metade pra cada) — é essa divisão que garante que uma única
+                conta de água apareça, com o pedaço certo, no custo de cada parte da pousada, em vez de
+                inflar um centro só ou de ter que lançar a mesma conta duas vezes.
               </P>
 
               <SubHeading>O que a tela “Custos” mostra</SubHeading>
@@ -992,11 +1030,12 @@ export default function QuestoesRespostasPage() {
                 items={[
                   <>
                     <strong>Um card por centro de custo</strong>, com o total gasto nele no período
-                    escolhido, mais um card extra, <strong>“Hospedagem (+ café da manhã)”</strong>, que
-                    soma os dois juntos — porque o café da manhã vem incluído na diária (o hóspede não
-                    paga por ele separadamente), então o custo real de hospedar alguém por uma noite
-                    precisa somar os dois. O card “Café da manhã” sozinho continua mostrando o mesmo
-                    valor do café, à parte, só como referência.
+                    escolhido (pelo regime de caixa — tudo que foi comprado/gasto no período), mais um
+                    card extra, <strong>“Hospedagem (+ café da manhã)”</strong>, que soma os dois juntos —
+                    porque o café da manhã vem incluído na diária (o hóspede não paga por ele
+                    separadamente), então o custo real de hospedar alguém por uma noite precisa somar os
+                    dois. O card “Café da manhã” sozinho continua mostrando o mesmo valor do café, à
+                    parte, só como referência.
                   </>,
                   <>
                     <strong>Custo médio por diária ocupada</strong>: o total de “Hospedagem (+ café da
@@ -1006,25 +1045,34 @@ export default function QuestoesRespostasPage() {
                   <>
                     <strong>Rateio dos custos, por item de custo</strong>: uma tabela detalhada mostrando,
                     item por item, quanto foi gasto no total e como esse valor foi dividido entre cada
-                    subcentro/centro — útil pra confirmar que a divisão configurada no Plano de Contas
-                    está correta.
+                    centro — útil pra confirmar que a divisão configurada no Plano de Contas está
+                    correta.
                   </>,
                   <>
-                    <strong>Café da manhã, em detalhe</strong>: quanto foi gasto em cada item desse centro
-                    no período, a quantidade de hóspedes-noite (vinda da tela “Mesas do café”) e o custo
-                    médio por hóspede (total do centro ÷ hóspedes-noite). Alguns itens podem aparecer já
-                    agrupados sob um rótulo só (por exemplo, “Frutas e ovos” juntos) quando não há
-                    controle fino de quantidade sobre eles — ver pergunta 14 sobre quais itens entram ou
-                    não no controle de estoque.
+                    <strong>Café da manhã, em detalhe</strong> (card próprio, cálculo mais fino): quanto
+                    cada item custou no período e a razão por <strong>café servido</strong> — um número
+                    por dia, que nasce igual ao total de hóspedes hospedados e só pode ser reduzido (nunca
+                    aumentado), editável em “Mesas do café”, pra quando algum hóspede não tomar café. Cada
+                    item de estoque ligado ao centro entra de um jeito diferente, dependendo de ser
+                    marcado <strong>“é perecível?”</strong> (pergunta 14): um item <strong>perecível</strong>{" "}
+                    (frutas, ovos — exemplos, não uma lista fixa) conta pelo que foi{" "}
+                    <strong>comprado</strong> no período; um item <strong>não perecível</strong>{" "}
+                    (requeijão, manteiga, farinhas — também exemplos) conta pelo que foi{" "}
+                    <strong>baixado manualmente</strong> no período, multiplicado pelo custo médio do
+                    item — já que dá pra guardar e consumir aos poucos, ao contrário de um perecível. São
+                    mostradas duas razões: “custo de insumos por café” (só os ingredientes) e “custo total
+                    por café” (ingredientes + outros gastos do centro, como gás). Esse card pode mostrar um
+                    valor ligeiramente diferente do card “Café da manhã” lá em cima — normal, não é erro:
+                    aquele mede dinheiro gasto no período; este mede o ingrediente realmente consumido.
                   </>,
                   <>
                     <strong>Custo médio por prato/produto servido</strong>: para cada petisco/drink do bar
                     da piscina e cada item do frigobar que tenha uma “ficha técnica” cadastrada (tela
                     “Ficha técnica de petiscos e drinks”, pergunta 13), o sistema calcula quanto custou 1
-                    porção dele — multiplicando a quantidade de cada ingrediente pelo preço médio pago por
-                    esse ingrediente nas compras daquele mesmo período (nunca um preço fixo digitado à
-                    mão, sempre a média real do que foi pago). Um produto sem ficha técnica cadastrada
-                    aparece como “sem receita cadastrada”.
+                    porção dele — multiplicando a quantidade de cada ingrediente pelo custo médio desse
+                    ingrediente no período (nunca um preço fixo digitado à mão, sempre a média real do
+                    que foi pago/baixado). Um produto sem ficha técnica cadastrada aparece como “sem
+                    receita cadastrada”.
                   </>,
                 ]}
               />
@@ -1047,27 +1095,26 @@ export default function QuestoesRespostasPage() {
 
               <SubHeading>Quais são os principais itens de custo</SubHeading>
               <P>
-                Toda essa lista — centros, subcentros e itens de custo — fica sempre visível e editável
-                na tela “Plano de Contas” (Listas → Plano de Contas → Plano de itens de custo), e pode
-                crescer: ao lançar uma despesa nova, o admin pode criar um item de custo na hora, se
-                nenhum dos já existentes encaixar. Alguns exemplos reais já cadastrados, pra dar uma
-                ideia do tamanho e da variedade:
+                Toda essa lista — centros e itens de custo — fica sempre visível e editável na tela
+                “Plano de itens de custo” (Listas → Plano de Contas), e pode crescer: ao lançar uma
+                despesa nova, o admin pode criar um item de custo na hora, se nenhum dos já existentes
+                encaixar. Alguns exemplos reais já cadastrados, pra dar uma ideia do tamanho e da
+                variedade:
               </P>
               <List
                 items={[
                   <>
-                    <strong>Hospedagem</strong>: água, luz, internet, dedetização e impostos (Gerais);
-                    amenities, papel higiênico, secador de cabelo (Materiais das suítes); toalhas,
-                    lençóis, fronhas (Enxoval de cama e banho); salário das camareiras e dos funcionários
-                    de manutenção, encargos, cesta básica, plano de saúde, transporte (Mão de obra);
+                    <strong>Hospedagem</strong>: água, luz, internet, dedetização e impostos; amenities,
+                    papel higiênico, secador de cabelo; toalhas, lençóis, fronhas; salário das camareiras
+                    e dos funcionários de manutenção, encargos, cesta básica, plano de saúde, transporte;
                     materiais de jardim, de piscina e de manutenção, ferramentas; honorários
                     administrativos (Stays, contabilidade, financeiro, pró-labore); materiais de limpeza.
                   </>,
                   <>
-                    <strong>Café da manhã</strong>: água, luz e gás (Gerais); frutas, ovos, café, pães,
-                    queijos, legumes, verduras e temperos, entre muitos outros (Alimentos); salário e
-                    encargos da mão de obra própria desse centro; honorários administrativos e materiais
-                    de limpeza, também com cadastro próprio aqui.
+                    <strong>Café da manhã</strong>: água, luz e gás; frutas, ovos, café, pães, queijos,
+                    legumes, verduras e temperos, entre muitos outros; salário e encargos da mão de obra
+                    própria desse centro; honorários administrativos e materiais de limpeza, também com
+                    cadastro próprio aqui.
                   </>,
                   <>
                     <strong>Bar da piscina e Frigobar</strong>: estrutura parecida, cada um com seus
@@ -1075,6 +1122,17 @@ export default function QuestoesRespostasPage() {
                   </>,
                 ]}
               />
+
+              <SubHeading>O Módulo Contábil, em 1 parágrafo</SubHeading>
+              <P>
+                Além de tudo isso, existe um registro contábil formal por trás de cada compra/despesa
+                (débito e crédito, automático) — é a base técnica que um contador usaria, acessível em{" "}
+                <strong>“Módulo Contábil” → “Plano de contas”</strong> (as contas tipo Ativo/Passivo/
+                Receita/Custo/Despesa, diferente do Plano de Contas de centros de custo explicado acima) e{" "}
+                <strong>“Livro de lançamentos”</strong>. Ninguém que só opera o dia a dia (lançar compra,
+                dar baixa, contar estoque) precisa entender essa parte — ela existe pronta, por baixo,
+                sem exigir nenhuma decisão extra de quem usa as telas de todo dia.
+              </P>
             </div>
           </AccordionPanel>
         </AccordionItem>
