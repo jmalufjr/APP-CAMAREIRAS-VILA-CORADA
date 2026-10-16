@@ -2993,3 +2993,72 @@ Levas 2, 4 e 5 (ver seções 24.3, 26 e 27.4 respectivamente), sempre
 durante o próprio teste da leva em que foi introduzido — nenhum deixado
 para trás. Esta branch ainda precisa ser revisada e mesclada em `main`
 pelo proprietário antes de qualquer coisa aqui chegar à produção.
+
+> **Correção posterior**: o proprietário apontou, depois da entrega,
+> que o resumo acima não era inteiramente fiel — pontos do documento
+> original ficaram sem implementar. Cada um está registrado, um por um,
+> na seção 31 abaixo, à medida que é tratado.
+
+## 31. Correções de aderência ao PRD (pós-Leva 7)
+
+Depois da entrega das 7 levas, o proprietário (16/10/2026) apontou que
+alguns pontos do documento original (seção 22.1) não tinham sido
+cumpridos. Esta seção registra cada um, na ordem em que foi tratado —
+com a causa (quase sempre uma omissão minha, não uma decisão
+consultada), o que mudou e o que ainda depende de decisão dele.
+
+### 31.1 Quinto centro de custo obrigatório — "Administração e áreas comuns"
+
+**O que o PRD pede** (seção 2.1 do documento original): cinco centros
+obrigatórios, que não podem ser fundidos nos relatórios — Hospedagem,
+Café da manhã, Bar da piscina, Frigobar e **Administração e áreas
+comuns** ("custos administrativos e gastos compartilhados não
+atribuíveis diretamente a um dos quatro centros anteriores"). A
+implementação tinha só os quatro primeiros (herdados do Plano de
+Contas da Parte 21) — o quinto simplesmente passou despercebido nas
+7 levas, nunca foi uma decisão consultada.
+
+**O que mudou**: migration `074_centro_administracao_areas_comuns.sql`
+(idempotente — `cost_centers.name` é único), espelhada no seed do
+`schema.sql` pra instalações novas. O centro aparece sozinho em
+"Plano de itens de custo" (Listas → Plano de Contas), no seletor de
+centros ao criar/editar um item de custo e ao lançar uma compra com
+item novo, e nos relatórios assim que tiver gasto. Nenhum código
+precisou mudar: tudo que lê centros é dinâmico (a contagem de estoque
+já esconde centros sem item de estoque ligado, então este não polui a
+tela). Só os textos de "Questões e Respostas" que diziam "4 centros"
+foram atualizados.
+
+**Deliberadamente NÃO feito, aguardando decisão do proprietário**: o
+centro nasce **vazio**. Quais itens de custo hoje divididos entre
+Hospedagem/Café da manhã/Bar da piscina passam a ele (os claramente
+administrativos — contabilidade, financeiro, pró-labore, honorários da
+Stays/Invictos, impostos e taxas — e/ou os gastos compartilhados como
+luz, água e internet) muda os totais de cada centro nos relatórios, e
+os vínculos item→centro são lidos ao vivo, sem histórico de vigência:
+mover um item também re-atribui os períodos passados dele. Por isso a
+escolha é dele, não minha.
+
+### 31.2 Cadastro de produtos (PRD seção 5.1) — não implementado nas 7 levas
+
+**Status honesto**: o documento original pede um **Cadastro de
+produtos** (seção 5.1, também o item "Cadastros" do menu da seção 4)
+com: código interno/SKU, nome, descrição, categoria, tipo (revenda,
+ingrediente de receita, material de consumo, material de limpeza,
+embalagem, outro), unidade-base, conversões de unidade (ex.: garrafa de
+750 ml = 0,75 L), controla estoque sim/não, centro de custo padrão,
+estoque mínimo, prazo de validade, custo médio atual e ativo/inativo —
+e "não excluir produtos com histórico; desativá-los". **Nenhuma das 7
+levas construiu essa tela, e a consulta de 15/10 nunca a mencionou** —
+omissão minha.
+
+O que existe hoje cobre só parte dos campos, espalhado: nome, estoque
+mínimo/dias de folga, "é perecível?", custo médio (derivado, Leva 3) e o
+vínculo com centros (via item de custo) — mas sem tela de cadastro. Os
+únicos campos de `inventory_items` editáveis pela interface são dias de
+folga, "é perecível?" e os dois limites de quebra; todo item de estoque
+novo nasce com unidade fixa "un", sem nenhum lugar pra mudá-la; e
+"Plano de itens de custo" ainda permite **excluir** (apagar de vez) um
+item de custo mesmo com compras no histórico, contrariando a regra do
+PRD. Detalhes de desenho e decisões pendentes: ver a conversa de
+16/10/2026 — esta seção será completada quando o proprietário decidir.

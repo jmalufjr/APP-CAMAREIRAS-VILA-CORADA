@@ -2662,6 +2662,14 @@ insert into cost_centers (name, position)
 select name, row_number() over ()
 from (select distinct center_name as name from raw_items) t;
 
+-- 5º centro obrigatório (PRD_compras&contabil.md, seção 22.1, item 2.1):
+-- custos administrativos e gastos compartilhados não atribuíveis
+-- diretamente a um dos quatro centros acima. Nasce sem nenhum item de
+-- custo ligado — quem liga é o admin, em "Plano de itens de custo".
+insert into cost_centers (name, position)
+values ('Administração e áreas comuns', (select coalesce(max(position), 0) + 1 from cost_centers))
+on conflict (name) do nothing;
+
 create temp table item_map (item_name text, cost_item_id uuid);
 do $$
 declare r record; v_item_id uuid; v_inv_id uuid;

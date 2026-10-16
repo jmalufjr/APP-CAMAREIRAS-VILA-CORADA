@@ -730,7 +730,8 @@ export default function QuestoesRespostasPage() {
                     <strong>Item de custo</strong>: é a etiqueta que diz o que foi comprado — “farinha de
                     trigo”, “detergente”, “salário das camareiras”, “conta de luz”. Cada item de custo
                     pertence a um ou mais <strong>centros de custo</strong> (a área grande da pousada:
-                    Hospedagem, Café da manhã, Bar da piscina ou Frigobar) — quando pertence a mais de um,
+                    Hospedagem, Café da manhã, Bar da piscina, Frigobar ou Administração e áreas comuns)
+                    — quando pertence a mais de um,
                     o valor é repartido entre eles por um percentual (que sempre precisa somar 100%). Esse
                     cadastro completo fica na tela <strong>“Plano de itens de custo”</strong> (menu
                     “Listas” → “Plano de Contas”), com 2 listas editáveis — itens de custo e centros. Ao
@@ -943,8 +944,10 @@ export default function QuestoesRespostasPage() {
               <P>
                 <strong>Quais produtos se sujeitam a ela:</strong> só os itens de estoque ativos (os
                 marcados “representa estoque” no Plano de Contas), sempre organizados por{" "}
-                <strong>centro de custo inteiro</strong> (Hospedagem, Café da manhã, Bar da piscina ou
-                Frigobar) — ou é possível contar “todos os itens” de uma vez, sem separar por centro.
+                <strong>centro de custo inteiro</strong> (Hospedagem, Café da manhã, Bar da piscina,
+                Frigobar ou Administração e áreas comuns — este último só aparece se tiver algum item de
+                estoque ligado a ele) — ou é possível contar “todos os itens” de uma vez, sem separar por
+                centro.
               </P>
               <P>
                 <strong>Como é feito:</strong> na tela “Contagem de estoque”, clique em “Iniciar
@@ -1010,9 +1013,11 @@ export default function QuestoesRespostasPage() {
               <P>
                 Toda despesa (menos ativo permanente, ver mais abaixo) é ligada, no momento em que é
                 lançada, a um <strong>item de custo</strong>. Cada item de custo pertence a um ou mais{" "}
-                <strong>centros de custo</strong> (hoje a pousada tem 4: Hospedagem, Café da manhã, Bar
-                da piscina e Frigobar) — tudo isso cadastrado na tela “Plano de itens de custo” (pergunta
-                13). O sistema soma, automaticamente, o valor de cada despesa espalhado pelos centros a
+                <strong>centros de custo</strong> (hoje a pousada tem 5: Hospedagem, Café da manhã, Bar
+                da piscina, Frigobar e Administração e áreas comuns — este último pra custos
+                administrativos e gastos compartilhados que não dá pra atribuir diretamente a um dos
+                outros quatro) — tudo isso cadastrado na tela “Plano de itens de custo” (pergunta 13).
+                O sistema soma, automaticamente, o valor de cada despesa espalhado pelos centros a
                 que o item pertence, pelo percentual configurado — é essa soma final, por centro, que
                 aparece nos cards da tela “Custos”.
               </P>
@@ -1119,6 +1124,13 @@ export default function QuestoesRespostasPage() {
                   <>
                     <strong>Bar da piscina e Frigobar</strong>: estrutura parecida, cada um com seus
                     próprios itens de bebida/petisco e materiais específicos.
+                  </>,
+                  <>
+                    <strong>Administração e áreas comuns</strong>: o centro pros custos administrativos e
+                    gastos compartilhados que não dá pra atribuir diretamente a um dos outros quatro
+                    (honorários administrativos, contabilidade, pró-labore e similares, por exemplo). Ele
+                    nasce vazio — cabe ao admin escolher, no “Plano de itens de custo”, quais itens de
+                    custo passam a pertencer a ele (por inteiro ou dividindo com outro centro).
                   </>,
                 ]}
               />
