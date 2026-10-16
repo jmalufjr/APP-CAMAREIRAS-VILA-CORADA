@@ -7,20 +7,10 @@ import { toast } from "sonner";
 import type { ExpenseListRow } from "@/lib/actions/expenses";
 import { deleteExpense } from "@/lib/actions/expenses";
 import { SUPPLIER_PAYMENT_METHOD_LABELS } from "@/lib/payment-method";
+import { downloadCsv } from "@/lib/csv-export";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Download, FileText, Trash2, Pencil } from "lucide-react";
-
-function downloadCsv(filename: string, rows: (string | number)[][]) {
-  const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 export function ComprasHistoryTable({
   rows,

@@ -12,6 +12,7 @@ import {
   ShoppingCart,
   Archive,
   Calculator,
+  Download,
 } from "lucide-react";
 
 // Módulo Contábil — Levas 1/2/3/4/5 trouxeram o plano de contas contábil,
@@ -30,6 +31,7 @@ const menuItems = [
   { href: "/custos-despesas", label: "Custos e Despesas", icon: Calculator },
   { href: "/contabil/lancamentos", label: "Livro de lançamentos", icon: BookOpen },
   { href: "/contabil/pagamentos", label: "Pagamentos e recebimentos", icon: CircleDollarSign },
+  { href: "/contabil/exportacoes", label: "Exportações para o sistema financeiro", icon: Download },
 ];
 
 function fmt(v: number): string {

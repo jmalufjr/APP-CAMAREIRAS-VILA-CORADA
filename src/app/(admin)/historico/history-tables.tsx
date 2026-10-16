@@ -17,6 +17,7 @@ import { durationMinutes, formatMinutesPt, effectiveServiceStart, todayKey } fro
 import type { ChecklistType } from "@/lib/types";
 import type { CamareiraBarCommissionRow } from "@/lib/actions/comandas";
 import { Download } from "lucide-react";
+import { downloadCsv } from "@/lib/csv-export";
 
 // Uma linha por dia (vem de daily_breakfast_settings, gravada a cada
 // sincronização com a Stays): quantas suítes eram elegíveis pro café da
@@ -73,17 +74,6 @@ const emptyDayStats = (): DayStats => ({
   ocorrencias: 0,
   ocorrenciasResolvidas: 0,
 });
-
-function downloadCsv(filename: string, rows: (string | number)[][]) {
-  const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 export function HistoryTables({
   eligibility,

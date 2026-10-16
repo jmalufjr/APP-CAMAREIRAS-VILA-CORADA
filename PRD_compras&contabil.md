@@ -2872,3 +2872,124 @@ atraso.
   partir da Leva 2, apagar uma despesa de teste fabricada também
   precisa apagar o lançamento contábil automático dela — nunca só a
   despesa/itens/movimentos de estoque.
+
+## 29. Módulo Contábil — Leva 7 (final): exportações para o sistema financeiro
+
+Sétima e última leva da implementação completa aprovada em 15/10/2026
+(seção 22.3, item 13), pós Leva 6 (seção 28). Com esta leva, as 7 levas
+combinadas com o proprietário estão todas implementadas, testadas e
+documentadas.
+
+### 29.1 Escopo (decisão 22.3 item 13)
+
+Só a parte de **arquivo** (CSV) da integração com o sistema financeiro
+— nunca uma API de verdade entre os dois sistemas, que fica de fora até
+o sistema financeiro passar por mudanças próprias e os dois lados
+decidirem juntos o que será consumido. Nova tela
+**"Exportações para o sistema financeiro"** (`/contabil/exportacoes`,
+último item do menu "Módulo Contábil"), com um filtro de período
+(mesmo `<DateRangeFilter>` já usado em "Custos") e 7 cards, cada um com
+seu próprio botão "Baixar CSV" — um por categoria de dado pedida pelo
+documento original (seção 8.2):
+
+1. Receitas de bar e frigobar (por item e canal).
+2. Recebimentos por forma de pagamento.
+3. Custos por centro de custo.
+4. Despesas por item de custo (mais detalhado que o 3, por centro).
+5. Saldo de estoque e valores (sempre o saldo ATUAL — "saldo" não é
+   uma soma de período, é um retrato de agora).
+6. CMV e margem bruta — Bar e Frigobar.
+7. Custo do café da manhã por hóspede.
+
+**"XLSX" do documento original, satisfeito via CSV**: decisão
+deliberada de não introduzir nenhuma biblioteca nova pra gerar um
+`.xlsx` binário de verdade — um CSV com BOM UTF-8 já abre perfeitamente
+no Excel, que é o que "XLSX" realmente pedia na prática. Evita uma
+dependência nova pra um ganho marginal.
+
+**Metadados de conciliação/auditoria** (último bullet da seção 8.2):
+toda exportação começa com 4 linhas fixas — período, moeda (BRL), fuso
+horário (America/Sao_Paulo) e data/hora de geração — antes do
+cabeçalho de colunas de cada arquivo, via o novo helper
+`csvMetadataHeader` (`src/lib/csv-export.ts`).
+
+### 29.2 Consolidação do helper de CSV
+
+`downloadCsv` (baixar um CSV gerado no navegador, sem rota de
+servidor) já existia, duplicada em 3 arquivos (`compras-history-
+table.tsx`, `history-tables.tsx`, `top-categories-table.tsx`) — extraída
+pra `src/lib/csv-export.ts` (junto do novo `csvMetadataHeader`) e
+reaproveitada pelos 3, sem nenhuma mudança de comportamento.
+
+### 29.3 Peças novas por trás dos cards
+
+- **Recebimentos por forma de pagamento** (`getReceiptsByPaymentMethodForPeriod`,
+  `room-bills.ts`): mesma lógica de totais já usada por
+  `getRecentlyPaidRoomBills` (reconstrói o total de cada conta a partir
+  das linhas de frigobar/comanda — nunca um total persistido), só que
+  com um intervalo de datas flexível em vez de "últimos N dias", já
+  agregada por forma de pagamento.
+- **CMV e margem bruta** (`getBarFrigobarCmvForPeriod`, Leva 6, seção
+  28.2) e **custo do café da manhã** (`getBreakfastCostForPeriod`,
+  Leva 5) — reaproveitados como já estavam, sem nenhuma mudança.
+- **Saldo de estoque** (`getInventoryStockReport`, Leva 3/5) e
+  **custos por centro/despesas por item** (`getCostCentersSummaryForPeriod`)
+  — idem, reaproveitados sem mudança.
+
+### 29.4 Testado
+
+- `npm run build`/`npm run lint` limpos.
+- Sessão autenticada real (login local + cookie `sb-127-auth-token`):
+  tela `/contabil/exportacoes?from=2026-09-01&to=2026-09-30` (período
+  escolhido de propósito por conter a única conta paga real do banco
+  local) confirmada mostrando os 7 cards corretamente, sem erro:
+  "Receitas de bar e frigobar" mostrando R$133,00 (soma exata dos itens
+  de frigobar + comanda da conta real: R$7+R$6+R$30+R$90) — valor
+  deliberadamente SEM a taxa de serviço de 10%, já que isso é receita
+  de item vendido, não recebimento de caixa; "Recebimentos por forma de
+  pagamento" mostrando 1 forma de pagamento (a conta real foi paga antes
+  da Parte 41 do app principal exigir essa forma, então aparece como
+  "—", corretamente) com o total JÁ incluindo a taxa de serviço
+  (R$145,00 = R$133,00 + 10% sobre os R$120,00 de comanda) —
+  confirmando a distinção proposital entre "receita" (sem taxa) e
+  "recebimento" (com taxa, é o que o caixa de fato recebeu). Demais
+  cards (custos por centro, despesas por item, estoque, CMV, café da
+  manhã) confirmados exibindo contagens/valores plausíveis a partir dos
+  dados reais do período, sem nenhum erro de aplicação.
+- Checado, antes de fechar esta leva, que nenhum resíduo de teste
+  ficou no banco local de nenhuma leva anterior (`ledger_entries`,
+  `inventory_items`, `cost_items`, notas de `expenses` com "teste") —
+  todos zerados, confirmando a lição da Leva 6 (apagar o lançamento
+  contábil junto da despesa de teste) foi aplicada corretamente em
+  todos os testes desta leva.
+
+## 30. Resumo final das 7 levas
+
+Com a Leva 7, a implementação completa do Módulo Contábil aprovada em
+15/10/2026 está concluída:
+
+1. **Plano de contas contábil + partidas dobradas** — fundação do motor
+   de débito/crédito, sem mexer nas telas existentes.
+2. **Compras/despesas reformuladas + fornecedores + contas a pagar** —
+   lançamento contábil automático por trás de toda compra/despesa.
+3. **Estoque com saldo em R$** — custo médio ponderado móvel, derivado
+   dos movimentos, nunca um valor à parte que possa desviar.
+4. **Estoque desce no pedido, não no pagamento** — comanda/frigobar
+   baixam na hora; cancelar pergunta se recuperou ou perdeu.
+5. **Fórmula de custo do café da manhã** — perecível × não perecível,
+   "cafés servidos" como denominador correto.
+6. **Menu consolidado + relatórios** — tudo dentro de "Módulo Contábil";
+   saldo de caixa/banco e CMV/margem de bar+frigobar, novos.
+7. **Exportações CSV pro sistema financeiro** — 7 categorias de dados,
+   com metadados de conciliação; API de verdade fica pra depois.
+
+Nenhuma leva pulou teste: cada uma foi exercitada via sessão
+autenticada real (ou rota de API temporária, sempre removida depois)
+contra o banco local via Docker, com fixtures fabricadas e limpas ao
+final — nunca contra dados reais de produção, já que este módulo
+inteiro vive na branch `feature/compras`, ainda não mesclada em `main`
+nem implantada. Um bug real foi encontrado e corrigido em cada uma das
+Levas 2, 4 e 5 (ver seções 24.3, 26 e 27.4 respectivamente), sempre
+durante o próprio teste da leva em que foi introduzido — nenhum deixado
+para trás. Esta branch ainda precisa ser revisada e mesclada em `main`
+pelo proprietário antes de qualquer coisa aqui chegar à produção.
