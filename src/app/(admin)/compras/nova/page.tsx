@@ -4,6 +4,8 @@ import { ExpenseForm } from "@/components/shared/expense-form";
 import { getCostItemOptions, getCostCenters } from "@/lib/actions/cost-plan";
 import { getAssetCategories, getFixedAssetCatalogItems } from "@/lib/actions/fixed-assets";
 import { getSupplierOptions } from "@/lib/actions/suppliers";
+import { getProductCategories, getNonProductCostItems } from "@/lib/actions/products";
+import { getLedgerAccounts } from "@/lib/actions/ledger";
 
 export default async function NovaDespesaPage() {
   const [costItemOptions, costCenters, assetCategories, assetCatalogItems, supplierOptions] = await Promise.all([
@@ -13,6 +15,9 @@ export default async function NovaDespesaPage() {
     getFixedAssetCatalogItems(),
     getSupplierOptions(),
   ]);
+
+  const [categories, ledgerAccounts, candidates] = await Promise.all([getProductCategories(), getLedgerAccounts(), getNonProductCostItems()]);
+  const catalog = { categories: categories.filter((c) => c.active), ledgerAccounts, candidates };
 
   return (
     <div className="space-y-6">
@@ -24,6 +29,7 @@ export default async function NovaDespesaPage() {
         assetCategories={assetCategories.filter((c) => c.active)}
         assetCatalogItems={assetCatalogItems}
         supplierOptions={supplierOptions}
+        catalog={catalog}
       />
     </div>
   );

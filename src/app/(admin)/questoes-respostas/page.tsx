@@ -1183,9 +1183,10 @@ export default function QuestoesRespostasPage() {
                     vai direto pro centro Café da manhã e o item não entra no estoque.
                   </>,
                   <>
-                    <strong>Despesa</strong>: lançada na categoria escolhida, dividida entre os centros de
-                    custo pelo rateio da categoria — ou por um rateio próprio, marcado na hora do
-                    lançamento.
+                    <strong>Despesa</strong>: lançada numa categoria do Cadastro de despesas e dividida
+                    entre os centros de custo pelo rateio predefinido nesse cadastro. Rateio e conta do
+                    plano de contas só existem nos cadastros (de produtos e de despesas) — nunca se
+                    digitam na hora de lançar a compra ou a despesa.
                   </>,
                   <>
                     <strong>Consumo de bar ou frigobar</strong>: ao pedir, o estoque baixa e o custo vai pro
@@ -1210,8 +1211,12 @@ export default function QuestoesRespostasPage() {
                 Diário (todos os fatos em ordem de data), Livro Razão (lançamentos de cada conta com
                 saldo corrente) e Livro caixa e bancos (entradas e saídas de dinheiro e de banco, com
                 filtros). Todos têm seletor de período e exportam para CSV, XLSX, RTF e PDF. Todo
-                produto e toda despesa precisa estar ligado a uma conta do plano de contas — isso é
-                escolhido (e pode ser mudado) no Cadastro de produtos e no Cadastro de despesas.
+                produto e toda despesa precisa estar ligado a uma conta do plano de contas e a um rateio
+                entre centros de custo — isso é escolhido (e pode ser mudado) só no Cadastro de produtos
+                e no Cadastro de despesas. Ao lançar uma compra ou despesa (ou ao ler uma nota fiscal com
+                a IA), cada item só pode ser enquadrado num produto/despesa já cadastrado; produtos e
+                despesas novos só o administrador cadastra — inclusive durante o lançamento, pelo botão
+                “Cadastrar novo produto/despesa”, que abre o mesmo cadastro completo.
               </P>
             </div>
           </AccordionPanel>

@@ -32,7 +32,12 @@ export function ProductDialog({
   centers,
   ledgerAccounts,
   candidates,
+  onSaved,
+  triggerLabel,
 }: {
+  // Chamado com o id do item de custo do produto recém-criado/salvo.
+  onSaved?: (costItemId: string) => void;
+  triggerLabel?: string;
   product?: ProductRow;
   categories: ProductCategory[];
   centers: CostCenter[];
@@ -106,6 +111,8 @@ export function ProductDialog({
       if (result?.error) toast.error(result.error);
       else {
         toast.success("Produto salvo.");
+        const savedId = (result as { id?: string }).id ?? product?.id;
+        if (savedId && onSaved) onSaved(savedId);
         setOpen(false);
         router.refresh();
       }
@@ -134,8 +141,8 @@ export function ProductDialog({
               <Pencil size={14} />
             </Button>
           ) : (
-            <Button size="sm">
-              <Plus size={14} /> Novo produto
+            <Button size="sm" type="button" variant={triggerLabel ? "outline" : "default"}>
+              <Plus size={14} /> {triggerLabel ?? "Novo produto"}
             </Button>
           )
         }

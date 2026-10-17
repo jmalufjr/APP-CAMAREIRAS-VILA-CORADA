@@ -243,6 +243,18 @@ export async function updateCostItem(
   return { success: true };
 }
 
+// Rateio de um produto/despesa entre os centros de custo — a ÚNICA fonte de
+// rateio do sistema (cadastro de produtos e de despesas, e o Demonstrativo de
+// Custos, editam este mesmo dado). Vale daqui pra frente: lançamentos já feitos
+// ficam como foram contabilizados.
+export async function updateCostItemCenterLinks(costItemId: string, centerLinks: { center_id: string; alloc_pct: number }[]) {
+  const supabase = await createClient();
+  const result = await setItemCenterLinks(supabase, costItemId, centerLinks);
+  if (result.error) return { error: result.error };
+  revalidateAll();
+  return { success: true };
+}
+
 // Item de custo com compras no histórico nunca é apagado (PRD 5.1:
 // "não excluir ... com histórico; desativá-los") — apagar deixaria as
 // linhas dessas compras sem classificação nenhuma.
@@ -262,6 +274,7 @@ export interface CostItemOption {
   id: string;
   name: string;
   is_inventory: boolean;
+  is_product: boolean;
   inventory_item_id: string | null;
   // Unidade-base e conversões (só quando controla estoque) — o formulário
   // de compra usa pra aceitar "caixa", "garrafa" etc. e converter.
@@ -277,7 +290,7 @@ export async function getCostItemOptions(): Promise<CostItemOption[]> {
   const [{ data }, { data: convs }, { data: links }] = await Promise.all([
     supabase
       .from("cost_items")
-      .select("id, name, is_inventory, inventory_item_id, inventory_items(unit, shelf_life_days)")
+      .select("id, name, is_inventory, is_product, inventory_item_id, inventory_items(unit, shelf_life_days)")
       .eq("active", true)
       .order("name"),
     supabase.from("inventory_item_unit_conversions").select("inventory_item_id, unit_name, factor"),
@@ -299,6 +312,7 @@ export async function getCostItemOptions(): Promise<CostItemOption[]> {
     id: string;
     name: string;
     is_inventory: boolean;
+    is_product: boolean;
     inventory_item_id: string | null;
     inventory_items: { unit: string; shelf_life_days: number | null } | null;
   };
@@ -306,6 +320,7 @@ export async function getCostItemOptions(): Promise<CostItemOption[]> {
     id: r.id,
     name: r.name,
     is_inventory: r.is_inventory,
+    is_product: r.is_product,
     inventory_item_id: r.inventory_item_id,
     unit: r.inventory_items?.unit ?? null,
     conversions: r.inventory_item_id ? (convByInv.get(r.inventory_item_id) ?? []) : [],

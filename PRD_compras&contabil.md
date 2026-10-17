@@ -3174,8 +3174,8 @@ dobradas). Isso foi corrigido na migration `078`.
   caixa, banco ou fornecedor. Linha marcada **"Para o café da manhã"**
   (`expense_items.for_breakfast`): Dr Custo do café da manhã (centro Café
   da manhã) direto e a linha **não** entra no estoque.
-- Despesa: Dr conta da despesa rateada nos centros; rateio próprio por
-  lançamento em `expense_items.center_split` (soma 100%).
+- Despesa: Dr conta da despesa rateada nos centros pelo rateio do cadastro
+  (ver 31.6 — fonte única).
 - Consumo de bar/frigobar: Dr CMV / Cr estoque no momento do pedido,
   centro = onde foi consumido (`inventory_movements.consumption_center_id`,
   carimbado pelas funções de comanda/frigobar). Ao **fechar** a conta:
@@ -3222,3 +3222,33 @@ fechada → reaberta → fechada → paga (receita, serviço, estorno e
 recebimento no banco) — todas as partidas bateram e a soma de débitos
 menos créditos do livro deu zero. As quatro exportações geraram arquivos
 válidos (CSV com BOM, XLSX/PK, RTF, PDF). Fixtures removidas.
+
+### 31.6 Fonte única de rateio, cadastros como única origem e Custos pelo livro (17/10/2026)
+
+Decisões do proprietário:
+1. **Uma só fonte de rateio** (`cost_item_centers`): o rateio por lançamento
+   criado na 31.5 foi **removido** (migration `080` apaga
+   `expense_items.center_split`). Rateio e conta do plano de contas são
+   definidos **só** nos cadastros de produtos e de despesas. Perdas e
+   ajustes de inventário (sem destino explícito) também seguem esse rateio
+   (antes usavam só o centro principal). O Demonstrativo de Custos mostra
+   o rateio cadastrado ao lado dos valores e permite editá-lo (lápis) — é o
+   mesmo dado dos cadastros; a edição vale para os próximos lançamentos.
+   Verificado: os 164 itens existentes mantêm o rateio (soma 100%).
+2. **Lançamento nunca cria cadastro ad hoc**: o tipo de linha "criar novo
+   item de custo" (com centros e % digitados) foi eliminado; o servidor
+   recusa linha sem produto/despesa existente. O admin pode abrir o
+   cadastro completo de produto ou de despesa de dentro do lançamento
+   (botões "Cadastrar novo produto/despesa"); manutenção só escolhe o que
+   existe. A leitura de nota por IA só enquadra cada item num produto já
+   cadastrado (ou deixa sem correspondência — nunca inventa).
+3. **Demonstrativo de Custos lido do livro contábil**: centros, rateio por
+   item, café da manhã e CMV/margem do bar+frigobar agora somam as linhas do
+   livro (mesma base dos balancetes), então os dois sempre batem. O custo de
+   um produto de estoque aparece quando é consumido (o centro vem de onde foi
+   consumido), não na compra.
+
+Testes (local, sessão real de admin): linha sem produto recusada; compra de
+estoque (Dr estoque 1.05); luz R$ 100 rateada 25/25/25/25 pelo cadastro; perda
+de 2 un do açúcar (cadastro 50% bar / 50% café) → R$ 5 em cada centro;
+Demonstrativo de Custos e balancete abrindo com os dados. Fixtures removidas.

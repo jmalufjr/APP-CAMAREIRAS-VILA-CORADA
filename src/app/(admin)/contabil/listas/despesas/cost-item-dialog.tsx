@@ -20,7 +20,11 @@ export function CostItemDialog({
   item,
   centerOptions,
   ledgerAccounts,
+  onSaved,
+  triggerLabel,
 }: {
+  onSaved?: (costItemId: string) => void;
+  triggerLabel?: string;
   item?: CostItemWithLinks;
   centerOptions: { id: string; label: string }[];
   ledgerAccounts: LedgerAccount[];
@@ -53,6 +57,8 @@ export function CostItemDialog({
       if (result?.error) toast.error(result.error);
       else {
         toast.success("Item de custo salvo.");
+        const savedId = (result as { id?: string }).id ?? item?.id;
+        if (savedId && onSaved) onSaved(savedId);
         setOpen(false);
         router.refresh();
       }
@@ -68,8 +74,8 @@ export function CostItemDialog({
               <Pencil size={14} />
             </Button>
           ) : (
-            <Button size="sm">
-              <Plus size={14} /> Novo item de custo
+            <Button size="sm" type="button" variant={triggerLabel ? "outline" : "default"}>
+              <Plus size={14} /> {triggerLabel ?? "Novo item de custo"}
             </Button>
           )
         }

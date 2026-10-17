@@ -2,7 +2,6 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
-import { getInventoryItems } from "@/lib/actions/inventory-items";
 
 export interface ParsedReceiptItem {
   description: string;
@@ -14,7 +13,7 @@ export interface ParsedReceiptItem {
   // — null quando não achou nenhuma correspondência confiável. Nunca
   // decide por conta própria: só sugere, a tela sempre mostra como uma
   // caixa selecionável que o admin pode aceitar ou trocar.
-  matched_inventory_item_id: string | null;
+  matched_cost_item_id: string | null;
 }
 
 export interface ParsedReceipt {
@@ -64,15 +63,17 @@ Regras:
 - "nfce_url": o link (geralmente abaixo de um QR code) ou o código de
   acesso da NFC-e/nota fiscal, se estiver impresso no documento. null se
   não houver.
-- "matched_catalog_index": veja a lista numerada de itens já cadastrados
-  no fim desta instrução. Pra cada item comprado, se a descrição
-  corresponder ao MESMO produto de algum item dessa lista — mesmo que a
+- "matched_catalog_index": veja a lista numerada de PRODUTOS do cadastro
+  no fim desta instrução. Você NUNCA cria produto novo nem categoria nova:
+  cada item comprado só pode ser enquadrado num produto dessa lista. Se a
+  descrição corresponder ao MESMO produto de algum item dessa lista — mesmo que a
   descrição na nota seja diferente (marca, abreviação, variação de
   escrita; ex.: "água mineral s/gás Indaiá 500ml" é o mesmo produto que
   "Água mineral sem gás" já cadastrado) — devolva o número daquele item.
   Só devolva um número quando tiver confiança real de que é o MESMO
-  produto; na dúvida, devolva null (prefira deixar sem correspondência a
-  arriscar juntar dois produtos diferentes).
+  produto; na dúvida, ou se o item não existir na lista, devolva null (a
+  pessoa escolhe o produto depois, ou o admin o cadastra — prefira deixar
+  sem correspondência a arriscar juntar dois produtos diferentes).
 - Nunca invente valores que não conseguir ler com confiança — prefira
   null a um palpite errado.`;
 
@@ -108,9 +109,15 @@ export async function parseReceiptWithAI(formData: FormData): Promise<{ error: s
   // Catálogo numerado pro modelo devolver só um índice (token curto,
   // menos sujeito a erro de transcrição do que pedir pra ele ecoar um
   // UUID de volta) — convertido pro id real depois da resposta.
-  const catalog = await getInventoryItems(true);
+  const { data: catalogData } = await supabase
+    .from("cost_items")
+    .select("id, name")
+    .eq("is_product", true)
+    .eq("active", true)
+    .order("name");
+  const catalog = (catalogData ?? []) as { id: string; name: string }[];
   const catalogList = catalog.map((item, idx) => `${idx + 1}. ${item.name}`).join("\n");
-  const systemPrompt = `${BASE_SYSTEM_PROMPT}\n\nItens já cadastrados no estoque (pra "matched_catalog_index" — o número da linha, ou null):\n${catalogList || "(nenhum item cadastrado ainda)"}`;
+  const systemPrompt = `${BASE_SYSTEM_PROMPT}\n\nProdutos do Cadastro de produtos (pra "matched_catalog_index" — o número da linha, ou null):\n${catalogList || "(nenhum produto cadastrado ainda)"}`;
 
   try {
     const client = new Anthropic({ apiKey });
@@ -161,7 +168,7 @@ export async function parseReceiptWithAI(formData: FormData): Promise<{ error: s
         quantity: i.quantity,
         unit_cost: i.unit_cost,
         subtotal: i.subtotal,
-        matched_inventory_item_id: matched?.id ?? null,
+        matched_cost_item_id: matched?.id ?? null,
       };
     });
 

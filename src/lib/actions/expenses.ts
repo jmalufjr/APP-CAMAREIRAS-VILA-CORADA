@@ -43,19 +43,8 @@ export interface ExpenseItemInput {
   // Compra destinada ao café da manhã: custo reconhecido na compra (centro
   // Café da manhã) e a linha NÃO entra no estoque.
   for_breakfast?: boolean;
-  // Rateio próprio desta linha de despesa entre centros de custo
-  // (substitui o padrão do item de custo): soma sempre 100%.
-  center_split?: { center_id: string; alloc_pct: number }[] | null;
   // Linha já ligada a um item de custo existente.
   cost_item_id: string | null;
-  // Linha que cria um item de custo novo na hora (Plano de Contas) —
-  // ver resolveOrCreateCostItemId.
-  new_cost_item?: {
-    name: string;
-    is_inventory: boolean;
-    inventory_item_id: string | null;
-    center_links: { center_id: string; alloc_pct: number }[];
-  } | null;
   // Linha de ativo permanente — cria 1 bem novo (cada compra é uma
   // unidade física própria, nunca reaproveita um bem já existente).
   new_fixed_asset?: {
@@ -73,58 +62,21 @@ export interface ExpenseItemInput {
   existing_fixed_asset_id?: string | null;
 }
 
-// Resolve o item de custo de uma linha: usa o vinculado (se houver) ou
-// cria um novo (se pedido), incluindo o item de estoque por trás dele
-// quando representa estoque. Pra nunca duplicar um item de estoque já
-// existente por causa de maiúscula/minúscula, confere por nome exato
-// antes de criar (ver PRD_compras.md seção 16.6).
-async function resolveOrCreateCostItemId(
+// Toda linha de compra/despesa precisa apontar para um item JÁ cadastrado
+// (Cadastro de produtos ou de despesas). Quem cria produto/despesa novos é só o
+// admin, nos cadastros — nunca na hora do lançamento, e nunca com rateio ou
+// conta digitados aqui (esses dados vêm sempre do cadastro).
+async function requireExistingCostItemId(
   supabase: Awaited<ReturnType<typeof createClient>>,
   item: ExpenseItemInput
 ): Promise<{ id: string | null; error?: string }> {
-  if (item.cost_item_id) return { id: item.cost_item_id };
-  if (!item.new_cost_item) return { id: null };
-
-  const name = item.new_cost_item.name.trim() || item.description.trim();
-  if (!name) return { id: null };
-
-  let inventoryItemId: string | null = null;
-  if (item.new_cost_item.is_inventory) {
-    if (item.new_cost_item.inventory_item_id) {
-      inventoryItemId = item.new_cost_item.inventory_item_id;
-    } else {
-      const { data: existing } = await supabase.from("inventory_items").select("id").ilike("name", name).maybeSingle();
-      if (existing) {
-        inventoryItemId = existing.id as string;
-      } else {
-        const { data: created, error } = await supabase.from("inventory_items").insert({ name, unit: "un" }).select("id").single();
-        if (error || !created) return { id: null, error: error?.message ?? "Erro ao criar item de estoque." };
-        inventoryItemId = created.id as string;
-      }
-    }
+  if (!item.cost_item_id) {
+    return { id: null, error: `Escolha, no cadastro, o produto ou a despesa da linha "${item.description}".` };
   }
-
-  const links = item.new_cost_item.center_links.filter((l) => l.center_id);
-  if (links.length > 0) {
-    const sum = links.reduce((s, l) => s + l.alloc_pct, 0);
-    if (sum !== 100) return { id: null, error: `Os percentuais dos centros do novo item de custo precisam somar 100% (soma atual: ${sum}%).` };
-  }
-
-  const { data: createdItem, error: itemError } = await supabase
-    .from("cost_items")
-    .insert({ name, is_inventory: item.new_cost_item.is_inventory, inventory_item_id: inventoryItemId })
-    .select("id")
-    .single();
-  if (itemError || !createdItem) return { id: null, error: itemError?.message ?? "Erro ao criar item de custo." };
-
-  if (links.length > 0) {
-    const { error: linkError } = await supabase
-      .from("cost_item_centers")
-      .insert(links.map((l) => ({ cost_item_id: createdItem.id, center_id: l.center_id, alloc_pct: l.alloc_pct })));
-    if (linkError) return { id: null, error: linkError.message };
-  }
-
-  return { id: createdItem.id as string };
+  const { data } = await supabase.from("cost_items").select("id, active").eq("id", item.cost_item_id).maybeSingle();
+  if (!data) return { id: null, error: `O item escolhido para "${item.description}" não existe no cadastro.` };
+  if (!data.active) return { id: null, error: `O item escolhido para "${item.description}" está desativado no cadastro.` };
+  return { id: data.id as string };
 }
 
 // Resolve o bem de ativo permanente de uma linha: atualiza o já
@@ -185,7 +137,6 @@ interface ResolvedExpenseRow {
   purchase_unit_cost: number | null;
   expiry_date: string | null;
   for_breakfast: boolean;
-  center_split: { center_id: string; alloc_pct: number }[] | null;
 }
 
 async function resolveExpenseItemsForInsert(
@@ -205,7 +156,7 @@ async function resolveExpenseItemsForInsert(
       if (resolved.error) return { error: resolved.error };
       fixedAssetId = resolved.id;
     } else {
-      const resolved = await resolveOrCreateCostItemId(supabase, i);
+      const resolved = await requireExistingCostItemId(supabase, i);
       if (resolved.error) return { error: resolved.error };
       costItemId = resolved.id;
     }
@@ -226,7 +177,6 @@ async function resolveExpenseItemsForInsert(
       purchase_unit_cost: i.purchase_unit_cost ?? null,
       expiry_date: i.expiry_date || null,
       for_breakfast: !!i.for_breakfast && !i.existing_fixed_asset_id && !i.new_fixed_asset,
-      center_split: i.center_split && i.center_split.length > 0 ? i.center_split : null,
     });
   }
   return { rows };
@@ -311,13 +261,10 @@ async function postExpenseLedgerEntry(
       continue;
     }
 
-    let links: { center_id: string | null; alloc_pct: number }[];
-    if (row.center_split && row.center_split.length > 0) {
-      links = row.center_split;
-    } else {
-      const { data: centerLinks } = await supabase.from("cost_item_centers").select("center_id, alloc_pct").eq("cost_item_id", row.cost_item_id);
-      links = centerLinks && centerLinks.length > 0 ? centerLinks : [{ center_id: null, alloc_pct: 100 }];
-    }
+    // Rateio: UMA fonte só — os centros/percentuais do item de custo.
+    const { data: centerLinks } = await supabase.from("cost_item_centers").select("center_id, alloc_pct").eq("cost_item_id", row.cost_item_id);
+    const links: { center_id: string | null; alloc_pct: number }[] =
+      centerLinks && centerLinks.length > 0 ? centerLinks : [{ center_id: null, alloc_pct: 100 }];
     links.forEach((link) => {
       debitLines.push({
         account_code: accountCode,
@@ -745,7 +692,6 @@ export interface ExpenseWithItems {
     purchase_unit_cost: number | null;
     expiry_date: string | null;
     for_breakfast: boolean;
-    center_split: { center_id: string; alloc_pct: number }[] | null;
   }[];
 }
 
@@ -757,7 +703,7 @@ export async function getExpenseWithItems(id: string): Promise<ExpenseWithItems 
   const { data: items } = await supabase
     .from("expense_items")
     .select(
-      "description, quantity, unit_cost, subtotal, discount, freight_and_other_costs, recoverable_tax, non_recoverable_tax, cost_item_id, fixed_asset_id, purchase_quantity, purchase_unit, purchase_unit_cost, expiry_date, for_breakfast, center_split, fixed_assets(name)"
+      "description, quantity, unit_cost, subtotal, discount, freight_and_other_costs, recoverable_tax, non_recoverable_tax, cost_item_id, fixed_asset_id, purchase_quantity, purchase_unit, purchase_unit_cost, expiry_date, for_breakfast, fixed_assets(name)"
     )
     .eq("expense_id", id)
     .order("created_at");
@@ -779,7 +725,6 @@ export async function getExpenseWithItems(id: string): Promise<ExpenseWithItems 
     purchase_unit_cost: number | null;
     expiry_date: string | null;
     for_breakfast: boolean;
-    center_split: { center_id: string; alloc_pct: number }[] | null;
   };
 
   return {
@@ -812,7 +757,6 @@ export async function getExpenseWithItems(id: string): Promise<ExpenseWithItems 
       purchase_unit_cost: i.purchase_unit_cost === null ? null : Number(i.purchase_unit_cost),
       expiry_date: i.expiry_date,
       for_breakfast: !!i.for_breakfast,
-      center_split: i.center_split ?? null,
     })),
   };
 }

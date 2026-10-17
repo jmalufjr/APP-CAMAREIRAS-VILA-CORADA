@@ -6,6 +6,8 @@ import { getExpenseWithItems } from "@/lib/actions/expenses";
 import { getCostItemOptions, getCostCenters } from "@/lib/actions/cost-plan";
 import { getAssetCategories, getFixedAssetCatalogItems } from "@/lib/actions/fixed-assets";
 import { getSupplierOptions } from "@/lib/actions/suppliers";
+import { getProductCategories, getNonProductCostItems } from "@/lib/actions/products";
+import { getLedgerAccounts } from "@/lib/actions/ledger";
 
 export default async function EditarDespesaPage({ params }: { params: Promise<{ expenseId: string }> }) {
   const { expenseId } = await params;
@@ -30,11 +32,14 @@ export default async function EditarDespesaPage({ params }: { params: Promise<{ 
     (expense.items.length === 1 &&
       !only.fixed_asset_id &&
       !!only.cost_item_id &&
-      !optionById.get(only.cost_item_id)?.is_inventory &&
+      !optionById.get(only.cost_item_id)?.is_product &&
       only.discount === 0 &&
       only.freight_and_other_costs === 0 &&
       only.recoverable_tax === 0 &&
       only.non_recoverable_tax === 0);
+
+  const [categories, ledgerAccounts, candidates] = await Promise.all([getProductCategories(), getLedgerAccounts(), getNonProductCostItems()]);
+  const catalog = { categories: categories.filter((c) => c.active), ledgerAccounts, candidates };
 
   return (
     <div className="space-y-6">
@@ -50,6 +55,7 @@ export default async function EditarDespesaPage({ params }: { params: Promise<{ 
         assetCategories={assetCategories.filter((c) => c.active)}
         assetCatalogItems={assetCatalogItems}
         supplierOptions={supplierOptions}
+        catalog={catalog}
       />
     </div>
   );

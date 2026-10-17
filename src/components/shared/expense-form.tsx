@@ -10,7 +10,9 @@ import { createSupplier } from "@/lib/actions/suppliers";
 import type { SupplierOption } from "@/lib/actions/suppliers";
 import { parseReceiptWithAI } from "@/lib/actions/receipt-ai";
 import { compressImageForUpload } from "@/lib/image-compression";
-import type { AssetCategory, CostCenter, FixedAssetCatalogItem } from "@/lib/types";
+import type { AssetCategory, CostCenter, FixedAssetCatalogItem, LedgerAccount, ProductCategory } from "@/lib/types";
+import { ProductDialog } from "@/app/(admin)/contabil/listas/produtos/product-dialog";
+import { CostItemDialog } from "@/app/(admin)/contabil/listas/despesas/cost-item-dialog";
 import { SUPPLIER_PAYMENT_METHOD_OPTIONS } from "@/lib/payment-method";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,15 +25,9 @@ import { BarcodeScannerButton } from "@/components/shared/barcode-scanner";
 import { CameraCaptureButton } from "@/components/shared/camera-capture-button";
 import { unitOptions, unitFactor } from "@/lib/units";
 import { addDaysKey } from "@/lib/date";
-import { PctLinksEditor, type LinkRow } from "@/components/shared/pct-links-editor";
 import { Sparkles, Trash2, Plus, X, FileText, FolderOpen, ChevronDown, ChevronUp } from "lucide-react";
 
-type LineType = "cost_item" | "new_cost_item" | "fixed_asset";
-
-interface CenterLinkRow {
-  center_id: string;
-  alloc_pct: number;
-}
+type LineType = "cost_item" | "fixed_asset";
 
 interface ItemRow {
   description: string;
@@ -54,10 +50,6 @@ interface ItemRow {
   lineType: LineType;
   // target = "cost_item"
   costItemId: string;
-  // target = "new_cost_item"
-  newItemName: string;
-  newItemIsInventory: boolean;
-  newItemCenterLinks: CenterLinkRow[];
   // target = "fixed_asset" (bem novo)
   assetCategoryId: string;
   assetCatalogItemId: string; // "none" ou id
@@ -90,9 +82,6 @@ function emptyItem(): ItemRow {
     showAdjustments: false,
     lineType: "cost_item",
     costItemId: "",
-    newItemName: "",
-    newItemIsInventory: false,
-    newItemCenterLinks: [],
     assetCategoryId: "",
     assetCatalogItemId: "none",
     assetBrand: "",
@@ -132,6 +121,7 @@ export function ExpenseForm({
   supplierOptions,
   kind = "compra",
   copyOptions = [],
+  catalog = null,
   mode = "create",
   expenseId,
   initial,
@@ -146,6 +136,13 @@ export function ExpenseForm({
   kind?: "compra" | "despesa";
   // Despesas recentes que dá pra copiar (recorrentes) — só kind="despesa".
   copyOptions?: { id: string; label: string }[];
+  // Só o admin recebe isto: permite abrir o cadastro de produto/despesa
+  // dentro do lançamento. Quem não recebe só pode escolher o que já existe.
+  catalog?: {
+    categories: ProductCategory[];
+    ledgerAccounts: LedgerAccount[];
+    candidates: { id: string; name: string; centers: { center_id: string; center_name: string; alloc_pct: number }[] }[];
+  } | null;
   mode?: "create" | "edit";
   expenseId?: string;
   initial?: ExpenseWithItems;
@@ -168,10 +165,6 @@ export function ExpenseForm({
     initial && (initial.items.length === 0 || isDespesa) ? String(initial.total_amount) : ""
   );
   const [manualTotalCostItemId, setManualTotalCostItemId] = useState(isDespesa ? (initial?.items[0]?.cost_item_id ?? "") : "");
-  const [splitOn, setSplitOn] = useState(isDespesa && !!initial?.items[0]?.center_split);
-  const [splitLinks, setSplitLinks] = useState<LinkRow[]>(
-    isDespesa && initial?.items[0]?.center_split ? initial.items[0].center_split.map((c) => ({ id: c.center_id, pct: c.alloc_pct })) : []
-  );
   const [despesaDescription, setDespesaDescription] = useState(isDespesa ? (initial?.items[0]?.description ?? "") : "");
   const [items, setItems] = useState<ItemRow[]>(
     isDespesa ? [] :
@@ -189,9 +182,6 @@ export function ExpenseForm({
       showAdjustments: i.discount > 0 || i.freight_and_other_costs > 0 || i.recoverable_tax > 0 || i.non_recoverable_tax > 0,
       lineType: i.fixed_asset_id ? "fixed_asset" : "cost_item",
       costItemId: i.cost_item_id ?? "",
-      newItemName: "",
-      newItemIsInventory: false,
-      newItemCenterLinks: [],
       assetCategoryId: "",
       assetCatalogItemId: "none",
       assetBrand: "",
@@ -211,10 +201,6 @@ export function ExpenseForm({
 
   const itemsTotal = items.reduce((sum, i) => sum + lineSubtotal(i), 0);
   const total = !isDespesa && items.length > 0 ? itemsTotal : Number(manualTotal || 0);
-
-  function centerLabel(id: string): string {
-    return costCenters.find((c) => c.id === id)?.name ?? id;
-  }
 
   function handlePickReceipt(file: File | null) {
     if (receiptPreview) URL.revokeObjectURL(receiptPreview);
@@ -265,10 +251,9 @@ export function ExpenseForm({
           row.description = i.description;
           row.quantity = i.quantity;
           row.unit_cost = i.unit_cost;
-          if (i.matched_inventory_item_id) {
-            const matchedCostItem = costItemOptions.find((c) => c.inventory_item_id === i.matched_inventory_item_id);
-            if (matchedCostItem) row.costItemId = matchedCostItem.id;
-          }
+          // A IA só enquadra em produto JÁ cadastrado; sem correspondência, a linha fica
+          // sem produto e a pessoa escolhe (ou o admin cadastra).
+          if (i.matched_cost_item_id) row.costItemId = i.matched_cost_item_id;
           return row;
         })
       );
@@ -288,24 +273,6 @@ export function ExpenseForm({
 
   function removeItem(index: number) {
     setItems((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function addCenterLink(index: number) {
-    const current = items[index].newItemCenterLinks;
-    const firstOption = costCenters[0]?.id ?? "";
-    updateItem(index, { newItemCenterLinks: [...current, { center_id: firstOption, alloc_pct: current.length === 0 ? 100 : 0 }] });
-  }
-
-  function updateCenterLink(index: number, linkIndex: number, patch: Partial<CenterLinkRow>) {
-    const current = items[index].newItemCenterLinks;
-    updateItem(index, {
-      newItemCenterLinks: current.map((l, i) => (i === linkIndex ? { ...l, ...patch } : l)),
-    });
-  }
-
-  function removeCenterLink(index: number, linkIndex: number) {
-    const current = items[index].newItemCenterLinks;
-    updateItem(index, { newItemCenterLinks: current.filter((_, i) => i !== linkIndex) });
   }
 
   // Despesa recorrente: copia os campos de uma despesa anterior (data nova,
@@ -359,30 +326,8 @@ export function ExpenseForm({
         toast.error("Selecione o item de custo de cada linha (ou escolha 'Criar novo item de custo'/'Ativo permanente').");
         return;
       }
-      if (i.lineType === "new_cost_item") {
-        if (!i.newItemName.trim()) {
-          toast.error("Informe o nome do novo item de custo.");
-          return;
-        }
-        if (i.newItemCenterLinks.length === 0) {
-          toast.error("Ligue o novo item de custo a pelo menos 1 centro de custo.");
-          return;
-        }
-        const sum = i.newItemCenterLinks.reduce((s, l) => s + l.alloc_pct, 0);
-        if (sum !== 100) {
-          toast.error(`Os percentuais dos centros do novo item de custo precisam somar 100% (soma atual: ${sum}%).`);
-          return;
-        }
-      }
       if (i.lineType === "fixed_asset" && !i.assetCategoryId) {
         toast.error("Selecione a categoria do ativo permanente.");
-        return;
-      }
-    }
-    if (isDespesa && splitOn) {
-      const sum = splitLinks.reduce((s, l) => s + l.pct, 0);
-      if (splitLinks.length === 0 || sum !== 100) {
-        toast.error(`O rateio entre centros de custo precisa somar 100% (soma atual: ${sum}%).`);
         return;
       }
     }
@@ -423,8 +368,6 @@ export function ExpenseForm({
                 recoverable_tax: 0,
                 non_recoverable_tax: 0,
                 cost_item_id: manualTotalCostItemId,
-                center_split: splitOn ? splitLinks.map((l) => ({ center_id: l.id, alloc_pct: l.pct })) : null,
-                new_cost_item: null,
                 new_fixed_asset: null,
                 existing_fixed_asset_id: null,
               },
@@ -453,15 +396,6 @@ export function ExpenseForm({
               recoverable_tax: i.recoverableTax,
               non_recoverable_tax: i.nonRecoverableTax,
               cost_item_id: i.existingFixedAssetId ? null : i.lineType === "cost_item" ? i.costItemId : null,
-              new_cost_item:
-                !i.existingFixedAssetId && i.lineType === "new_cost_item"
-                  ? {
-                      name: i.newItemName,
-                      is_inventory: i.newItemIsInventory,
-                      inventory_item_id: null,
-                      center_links: i.newItemCenterLinks,
-                    }
-                  : null,
               new_fixed_asset:
                 !i.existingFixedAssetId && i.lineType === "fixed_asset"
                   ? {
@@ -718,7 +652,7 @@ export function ExpenseForm({
                 </SelectTrigger>
                 <SelectContent>
                   {costItemOptions
-                    .filter((c) => !c.is_inventory)
+                    .filter((c) => !c.is_product)
                     .map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.name}
@@ -726,41 +660,28 @@ export function ExpenseForm({
                     ))}
                 </SelectContent>
               </Select>
+              {catalog && (
+                <CostItemDialog
+                  triggerLabel="Cadastrar nova despesa"
+                  centerOptions={costCenters.map((c) => ({ id: c.id, label: c.name }))}
+                  ledgerAccounts={catalog.ledgerAccounts}
+                  onSaved={(id) => {
+                    setManualTotalCostItemId(id);
+                    router.refresh();
+                  }}
+                />
+              )}
               {(() => {
                 const opt = costItemOptions.find((c) => c.id === manualTotalCostItemId);
                 if (!opt || opt.centers.length === 0) return null;
                 return (
                   <p className="text-xs text-muted-foreground">
-                    Centros de custo (rateio): {opt.centers.map((c) => `${c.name} ${c.pct}%`).join(" · ")}. Pra mudar a
-                    divisão, ajuste o item em Módulo Contábil → Cadastro de despesas.
+                    Rateio entre centros de custo (cadastro da categoria): {opt.centers.map((c) => `${c.name} ${c.pct}%`).join(" · ")}. Pra mudar a
+                    divisão, ajuste o item em Módulo Contábil → Listas contábeis → Cadastro de despesas.
                   </p>
                 );
               })()}
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={splitOn}
-                onCheckedChange={(c) => {
-                  const on = c === true;
-                  setSplitOn(on);
-                  if (on && splitLinks.length === 0) {
-                    const opt = costItemOptions.find((x) => x.id === manualTotalCostItemId);
-                    const initialLinks = (opt?.centers ?? [])
-                      .map((c2) => ({ id: costCenters.find((cc) => cc.name === c2.name)?.id ?? "", pct: c2.pct }))
-                      .filter((l) => l.id);
-                    setSplitLinks(initialLinks.length > 0 ? initialLinks : []);
-                  }
-                }}
-              />
-              Ratear esta despesa de outro jeito entre os centros de custo
-            </label>
-            {splitOn && (
-              <PctLinksEditor
-                options={costCenters.map((c) => ({ id: c.id, label: c.name }))}
-                value={splitLinks}
-                onChange={setSplitLinks}
-              />
-            )}
             <div className="space-y-1.5">
               <Label>Descrição</Label>
               <Input value={despesaDescription} onChange={(e) => setDespesaDescription(e.target.value)} placeholder="Ex.: conta de luz de outubro" />
@@ -937,97 +858,52 @@ export function ExpenseForm({
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Selecione">
                           {(v: string) =>
-                            v === "cost_item"
-                              ? "Item de custo existente"
-                              : v === "new_cost_item"
-                                ? "Criar novo item de custo"
-                                : "Ativo permanente (bem novo)"
+                            v === "cost_item" ? "Produto do cadastro" : "Ativo permanente (bem novo)"
                           }
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="cost_item">Item de custo existente</SelectItem>
-                        <SelectItem value="new_cost_item">+ Criar novo item de custo</SelectItem>
+                        <SelectItem value="cost_item">Produto do cadastro</SelectItem>
                         <SelectItem value="fixed_asset">Ativo permanente (bem novo)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   {item.lineType === "cost_item" && (
-                    <Select value={item.costItemId} onValueChange={(v) => v && updateItem(index, { costItemId: v })}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Selecione o item de custo">
-                          {(v: string) => costItemOptions.find((c) => c.id === v)?.name ?? v}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {costItemOptions.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-
-                  {item.lineType === "new_cost_item" && (
-                    <div className="space-y-2 rounded-lg bg-muted/40 p-2">
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Nome do novo item de custo</Label>
-                        <Input
-                          value={item.newItemName}
-                          onChange={(e) => updateItem(index, { newItemName: e.target.value })}
-                          placeholder={item.description || "Nome do item"}
+                    <div className="space-y-2">
+                      <Select value={item.costItemId} onValueChange={(v) => v && updateItem(index, { costItemId: v })}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Selecione o produto cadastrado">
+                            {(v: string) => costItemOptions.find((c) => c.id === v)?.name ?? v}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {costItemOptions
+                            .filter((c) => c.is_product || c.id === item.costItemId)
+                            .map((c) => (
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      {catalog ? (
+                        <ProductDialog
+                          triggerLabel="Cadastrar novo produto"
+                          categories={catalog.categories}
+                          centers={costCenters}
+                          ledgerAccounts={catalog.ledgerAccounts}
+                          candidates={catalog.candidates}
+                          onSaved={(id) => {
+                            updateItem(index, { costItemId: id });
+                            router.refresh();
+                          }}
                         />
-                      </div>
-                      <label className="flex items-center gap-1.5 text-sm">
-                        <Checkbox
-                          checked={item.newItemIsInventory}
-                          onCheckedChange={(checked) => updateItem(index, { newItemIsInventory: checked === true })}
-                        />
-                        Representa um item de estoque (cria/liga um item no catálogo de estoque)
-                      </label>
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-xs text-muted-foreground">Centros de custo (os % precisam somar 100%)</Label>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => addCenterLink(index)}>
-                            <Plus size={12} /> Centro
-                          </Button>
-                        </div>
-                        {item.newItemCenterLinks.map((link, linkIndex) => (
-                          <div key={linkIndex} className="flex items-center gap-2">
-                            <Select
-                              value={link.center_id}
-                              onValueChange={(v) => v && updateCenterLink(index, linkIndex, { center_id: v })}
-                            >
-                              <SelectTrigger className="flex-1">
-                                <SelectValue placeholder="Centro de custo">
-                                  {(v: string) => centerLabel(v)}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                {costCenters.map((c) => (
-                                  <SelectItem key={c.id} value={c.id}>
-                                    {centerLabel(c.id)}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Input
-                              type="number"
-                              min={0}
-                              max={100}
-                              className="w-20"
-                              value={link.alloc_pct}
-                              onChange={(e) => updateCenterLink(index, linkIndex, { alloc_pct: Number(e.target.value) || 0 })}
-                            />
-                            <span className="text-xs text-muted-foreground">%</span>
-                            <Button type="button" variant="ghost" size="icon-sm" onClick={() => removeCenterLink(index, linkIndex)}>
-                              <Trash2 size={12} />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Produto não está na lista? Peça ao administrador para cadastrá-lo.
+                        </p>
+                      )}
                     </div>
                   )}
 

@@ -4,6 +4,8 @@ import { ExpenseForm } from "@/components/shared/expense-form";
 import { getCostItemOptions, getCostCenters } from "@/lib/actions/cost-plan";
 import { getAssetCategories, getFixedAssetCatalogItems } from "@/lib/actions/fixed-assets";
 import { getSupplierOptions } from "@/lib/actions/suppliers";
+import { getProductCategories, getNonProductCostItems } from "@/lib/actions/products";
+import { getLedgerAccounts } from "@/lib/actions/ledger";
 import { getExpenses } from "@/lib/actions/expenses";
 import { daysAgoKey, todayKey } from "@/lib/date";
 
@@ -22,6 +24,9 @@ export default async function NovaDespesaPage() {
     label: `${e.date.split("-").reverse().join("/")} · ${e.category_name} · R$ ${e.total_amount.toFixed(2)}`,
   }));
 
+  const [categories, ledgerAccounts, candidates] = await Promise.all([getProductCategories(), getLedgerAccounts(), getNonProductCostItems()]);
+  const catalog = { categories: categories.filter((c) => c.active), ledgerAccounts, candidates };
+
   return (
     <div className="space-y-6">
       <BackLink href="/contabil" />
@@ -37,6 +42,7 @@ export default async function NovaDespesaPage() {
         assetCategories={assetCategories.filter((c) => c.active)}
         assetCatalogItems={assetCatalogItems}
         supplierOptions={supplierOptions}
+        catalog={catalog}
       />
     </div>
   );
