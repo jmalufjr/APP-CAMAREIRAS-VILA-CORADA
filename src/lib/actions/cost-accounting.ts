@@ -446,60 +446,38 @@ export interface DemonstrativoMonthRow {
   total: number;
 }
 
-// Demonstrativo de Despesas: gasto por CENTRO de custo, mês a mês — nunca
-// persiste nada, só lê a categorização atual de cada item a cada
-// carregamento, por isso reagrupa sozinho quando o Plano de Contas é
-// editado.
+// Demonstrativo de Despesas: despesas (contas do grupo "Despesa" do plano de
+// contas) por CENTRO de custo, mês a mês — lido direto do livro de
+// lançamentos, então já respeita o rateio de cada lançamento, estornos
+// (que se anulam) e todos os fatos automáticos.
 export async function getExpenseDemonstrativoForPeriod(from: string, to: string): Promise<DemonstrativoMonthRow[]> {
   const supabase = await createClient();
-  const { data: rows } = await supabase
-    .from("expense_items")
-    .select("cost_item_id, fixed_asset_id, subtotal, expenses!inner(date)")
-    .gte("expenses.date", from)
-    .lte("expenses.date", to);
+  const { data } = await supabase
+    .from("ledger_entry_lines")
+    .select("amount, direction, cost_centers(name), ledger_accounts!inner(account_group), ledger_entries!inner(entry_date)")
+    .eq("ledger_accounts.account_group", "despesa")
+    .gte("ledger_entries.entry_date", from)
+    .lte("ledger_entries.entry_date", to);
 
-  type Raw = { cost_item_id: string | null; fixed_asset_id: string | null; subtotal: number; expenses: { date: string } };
-  const itemRows = (rows ?? []) as unknown as Raw[];
-  const costItemIds = [...new Set(itemRows.filter((r) => r.cost_item_id).map((r) => r.cost_item_id as string))];
-
-  const { data: itemLinks } = costItemIds.length
-    ? await supabase.from("cost_item_centers").select("cost_item_id, center_id, alloc_pct, cost_centers(name)").in("cost_item_id", costItemIds)
-    : { data: [] };
-
-  type LinkRaw = { cost_item_id: string; center_id: string; alloc_pct: number; cost_centers: { name: string } | null };
-  const linksByItem = new Map<string, LinkRaw[]>();
-  ((itemLinks ?? []) as unknown as LinkRaw[]).forEach((l) => {
-    const list = linksByItem.get(l.cost_item_id) ?? [];
-    list.push(l);
-    linksByItem.set(l.cost_item_id, list);
-  });
-
-  const totals = new Map<string, number>(); // key = `${month}__${center_name}`
-  itemRows.forEach((r) => {
-    const month = r.expenses.date.slice(0, 7);
-    if (r.fixed_asset_id) return; // ativo permanente nunca é custo do período
-    if (!r.cost_item_id) {
-      const key = `${month}__Sem categoria`;
-      totals.set(key, (totals.get(key) ?? 0) + Number(r.subtotal));
-      return;
-    }
-    const itemLinksForRow = linksByItem.get(r.cost_item_id) ?? [];
-    if (itemLinksForRow.length === 0) {
-      const key = `${month}__Sem categoria`;
-      totals.set(key, (totals.get(key) ?? 0) + Number(r.subtotal));
-      return;
-    }
-    itemLinksForRow.forEach((il) => {
-      const amountAtCenter = Number(r.subtotal) * (il.alloc_pct / 100);
-      const key = `${month}__${il.cost_centers?.name ?? "—"}`;
-      totals.set(key, (totals.get(key) ?? 0) + amountAtCenter);
-    });
+  type Raw = {
+    amount: number;
+    direction: "debito" | "credito";
+    cost_centers: { name: string } | null;
+    ledger_entries: { entry_date: string };
+  };
+  const totals = new Map<string, number>();
+  ((data ?? []) as unknown as Raw[]).forEach((r) => {
+    const month = r.ledger_entries.entry_date.slice(0, 7);
+    const key = `${month}__${r.cost_centers?.name ?? "Sem centro de custo"}`;
+    const signed = (r.direction === "debito" ? 1 : -1) * Number(r.amount);
+    totals.set(key, (totals.get(key) ?? 0) + signed);
   });
 
   return Array.from(totals.entries())
+    .filter(([, total]) => Math.abs(total) > 0.004)
     .map(([key, total]) => {
       const [month, center_name] = key.split("__");
-      return { month, center_name, total };
+      return { month, center_name, total: Math.round(total * 100) / 100 };
     })
-    .sort((a, b) => (a.month === b.month ? a.center_name.localeCompare(b.center_name) : b.month.localeCompare(a.month)));
+    .sort((x, y) => (x.month === y.month ? x.center_name.localeCompare(y.center_name) : y.month.localeCompare(x.month)));
 }

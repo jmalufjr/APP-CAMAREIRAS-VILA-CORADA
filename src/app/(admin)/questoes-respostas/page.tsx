@@ -815,7 +815,7 @@ export default function QuestoesRespostasPage() {
                   <>
                     <strong>Inventário (contagem física)</strong>: o saldo que nasce das compras (e das
                     baixas) é exatamente o número comparado contra a contagem física de verdade, na tela
-                    “Contagem de estoque” (pergunta 14).
+                    “Inventário” (pergunta 14).
                   </>,
                   <>
                     <strong>Ficha técnica do bar da piscina e do frigobar</strong>: quando um item de
@@ -828,7 +828,7 @@ export default function QuestoesRespostasPage() {
                   <>
                     <strong>Lançamento contábil automático</strong>: por trás de toda compra/despesa, o
                     sistema já gera sozinho o registro contábil formal (débito/crédito) — ninguém
-                    operacional precisa entender isso; é só pro contador, na tela “Livro de lançamentos”
+                    operacional precisa entender isso; é só pro contador, na tela “Livro Diário”
                     (menu “Módulo Contábil”).
                   </>,
                   <>
@@ -955,7 +955,7 @@ export default function QuestoesRespostasPage() {
               <P>
                 É o processo de comparar, de tempos em tempos, o que o sistema calcula que deveria ter em
                 estoque (o “saldo teórico”) com o que realmente existe, contando os produtos físicos de
-                verdade — tela <strong>“Contagem de estoque”</strong> (menu “Módulo Contábil”).
+                verdade — tela <strong>“Inventário”</strong> (menu “Módulo Contábil”).
               </P>
               <P>
                 <strong>Quais produtos se sujeitam a ela:</strong> só os itens de estoque ativos (os
@@ -966,7 +966,7 @@ export default function QuestoesRespostasPage() {
                 centro.
               </P>
               <P>
-                <strong>Como é feito:</strong> na tela “Contagem de estoque”, clique em “Iniciar
+                <strong>Como é feito:</strong> na tela “Inventário”, clique em “Iniciar
                 contagem” (de um centro específico, ou de tudo) — isso abre uma sessão nova mostrando,
                 lado a lado, cada item do centro com o saldo que o sistema calcula naquele momento
                 (“teórico”). Conte os produtos de verdade (na despensa, no almoxarifado, etc.) e digite,
@@ -1022,7 +1022,7 @@ export default function QuestoesRespostasPage() {
                 informação, organizada e somada de um jeito que responde perguntas como “quanto custou
                 hospedar um hóspede” ou “quanto custou servir o café da manhã”. Essas contas já prontas
                 ficam nas telas <strong>“Custos”</strong> e <strong>“Demonstrativo de Despesas”</strong>{" "}
-                (menu “Módulo Contábil” → “Custos e Despesas”).
+                (menu “Módulo Contábil” → “Demonstrativos e Relatórios” → “Demonstrativo de Custos”).
               </P>
 
               <SubHeading>Como o valor de cada despesa chega até o custo de um centro</SubHeading>
@@ -1154,11 +1154,64 @@ export default function QuestoesRespostasPage() {
               <P>
                 Além de tudo isso, existe um registro contábil formal por trás de cada compra/despesa
                 (débito e crédito, automático) — é a base técnica que um contador usaria, acessível em{" "}
-                <strong>“Módulo Contábil” → “Plano de contas”</strong> (as contas tipo Ativo/Passivo/
+                <strong>“Módulo Contábil” → “Listas contábeis” → “Plano de contas e centros de custo”</strong> (as contas tipo Ativo/Passivo/
                 Receita/Custo/Despesa, diferente do Plano de Contas de centros de custo explicado acima) e{" "}
-                <strong>“Livro de lançamentos”</strong>. Ninguém que só opera o dia a dia (lançar compra,
+                <strong>“Livro Diário”</strong>. Ninguém que só opera o dia a dia (lançar compra,
                 dar baixa, contar estoque) precisa entender essa parte — ela existe pronta, por baixo,
                 sem exigir nenhuma decisão extra de quem usa as telas de todo dia.
+              </P>
+            </div>
+          </AccordionPanel>
+        </AccordionItem>
+
+        {/* 16. Lançamentos automáticos e relatórios contábeis */}
+        <AccordionItem value="lancamentos-automaticos">
+          <AccordionTrigger>
+            <span className="text-left">16. O sistema faz os lançamentos contábeis sozinho? Quais relatórios existem?</span>
+          </AccordionTrigger>
+          <AccordionPanel>
+            <div className="space-y-3">
+              <P>
+                Sim. Cada fato do dia a dia gera, sozinho, um lançamento de débito e crédito (sempre
+                equilibrado) — ninguém precisa digitar nada contábil:
+              </P>
+              <List
+                items={[
+                  <>
+                    <strong>Compra</strong>: o produto entra no estoque centralizado (conta de estoque do
+                    produto). Se a linha estiver marcada <strong>“Para o café da manhã”</strong>, o custo
+                    vai direto pro centro Café da manhã e o item não entra no estoque.
+                  </>,
+                  <>
+                    <strong>Despesa</strong>: lançada na categoria escolhida, dividida entre os centros de
+                    custo pelo rateio da categoria — ou por um rateio próprio, marcado na hora do
+                    lançamento.
+                  </>,
+                  <>
+                    <strong>Consumo de bar ou frigobar</strong>: ao pedir, o estoque baixa e o custo vai pro
+                    centro onde o item foi consumido (Bar da piscina ou Frigobar). Ao fechar a conta da
+                    suíte nasce a receita (e a taxa de serviço); ao reabrir, essa receita é estornada; ao
+                    pagar, entra o dinheiro no caixa (dinheiro) ou no banco (PIX, cartão, transferência).
+                  </>,
+                  <>
+                    <strong>Baixa manual de estoque</strong>: quem dá a baixa diz pra onde foi (café da
+                    manhã, hospedagem, bar, frigobar, administração ou perda/quebra) e o custo vai pra lá.
+                  </>,
+                  <>
+                    <strong>Inventário</strong>: ao concluir a contagem, a diferença (falta ou sobra) vira
+                    ajuste em “Perdas e desperdícios de estoque”.
+                  </>,
+                ]}
+              />
+              <P>
+                Os relatórios ficam em <strong>Módulo Contábil → Demonstrativos e Relatórios</strong>:
+                Demonstrativo de despesas, Demonstrativo de Custos, Balancete analítico (saldo de cada
+                conta detalhado por produto e despesa), Balancete sintético (saldo de cada conta), Livro
+                Diário (todos os fatos em ordem de data), Livro Razão (lançamentos de cada conta com
+                saldo corrente) e Livro caixa e bancos (entradas e saídas de dinheiro e de banco, com
+                filtros). Todos têm seletor de período e exportam para CSV, XLSX, RTF e PDF. Todo
+                produto e toda despesa precisa estar ligado a uma conta do plano de contas — isso é
+                escolhido (e pode ser mudado) no Cadastro de produtos e no Cadastro de despesas.
               </P>
             </div>
           </AccordionPanel>

@@ -212,6 +212,7 @@ export interface ProductInput {
 
 function validate(input: ProductInput): string | null {
   if (!input.name.trim()) return "Informe o nome do produto.";
+  if (!input.ledgerAccountCode) return "Escolha a conta do plano de contas deste produto.";
   if (input.centerLinks.length === 0) return "Ligue o produto a pelo menos 1 centro de custo.";
   const sum = input.centerLinks.reduce((s, l) => s + l.alloc_pct, 0);
   if (sum !== 100) return `Os percentuais dos centros precisam somar 100% (soma atual: ${sum}%).`;

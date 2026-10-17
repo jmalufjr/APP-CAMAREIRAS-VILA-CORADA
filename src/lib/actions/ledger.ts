@@ -102,6 +102,8 @@ export async function getCashAndBankBalances(): Promise<CashAndBankBalances> {
 export interface LedgerEntryLineInput {
   account_code: string;
   cost_center_id: string | null;
+  // Produto/despesa de origem — alimenta o balancete analítico.
+  cost_item_id?: string | null;
   direction: "debito" | "credito";
   amount: number;
 }

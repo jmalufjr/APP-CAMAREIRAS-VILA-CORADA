@@ -4,13 +4,11 @@ import { BackLink } from "@/components/shared/back-link";
 import { getPurchaseList } from "@/lib/actions/purchase-list";
 import { getSubcenterGroupCountStatus } from "@/lib/actions/inventory-counts";
 import { getExpiringLots } from "@/lib/actions/expiry";
-import { ClipboardList, PackageMinus, ChevronRight, AlertTriangle, UtensilsCrossed, CalendarClock } from "lucide-react";
+import { ClipboardList, PackageMinus, ChevronRight, AlertTriangle } from "lucide-react";
 
 const menuItems = [
   { href: "/compras/baixa", label: "Baixa de estoque", icon: PackageMinus },
-  { href: "/compras/pratos", label: "Ficha técnica de petiscos e drinks", icon: UtensilsCrossed },
-  { href: "/compras/contagem", label: "Contagem de estoque", icon: ClipboardList },
-  { href: "/compras/validade", label: "Validade dos produtos", icon: CalendarClock },
+  { href: "/compras/inventario", label: "Inventário", icon: ClipboardList },
 ];
 
 export default async function ComprasPage() {
@@ -49,7 +47,7 @@ export default async function ComprasPage() {
         )}
         {dueCategories.length > 0 && (
           <Link
-            href="/compras/contagem"
+            href="/compras/inventario"
             className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive hover:bg-destructive/15 transition-colors w-fit"
           >
             <AlertTriangle size={16} />

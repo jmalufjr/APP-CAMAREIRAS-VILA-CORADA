@@ -174,7 +174,7 @@ export default async function HistoricoPage({
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-heading text-lg">Histórico de contagem de estoque</CardTitle>
+          <CardTitle className="font-heading text-lg">Histórico de inventário</CardTitle>
         </CardHeader>
         <CardContent>
           <InventoryShrinkageTable rows={inventoryShrinkageHistory} />

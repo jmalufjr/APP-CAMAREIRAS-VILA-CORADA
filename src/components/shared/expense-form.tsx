@@ -23,6 +23,7 @@ import { BarcodeScannerButton } from "@/components/shared/barcode-scanner";
 import { CameraCaptureButton } from "@/components/shared/camera-capture-button";
 import { unitOptions, unitFactor } from "@/lib/units";
 import { addDaysKey } from "@/lib/date";
+import { PctLinksEditor, type LinkRow } from "@/components/shared/pct-links-editor";
 import { Sparkles, Trash2, Plus, X, FileText, FolderOpen, ChevronDown, ChevronUp } from "lucide-react";
 
 type LineType = "cost_item" | "new_cost_item" | "fixed_asset";
@@ -41,6 +42,8 @@ interface ItemRow {
   purchaseUnit: string;
   // Validade do lote comprado (opcional, só produtos que controlam estoque).
   expiryDate: string;
+  // Compra destinada ao café da manhã (custo na compra, sem estoque).
+  forBreakfast: boolean;
   // Desconto/frete/tributos (Módulo Contábil Leva 2) — campo colapsável,
   // só aparece quando a linha realmente tem algum desses valores.
   discount: number;
@@ -79,6 +82,7 @@ function emptyItem(): ItemRow {
     unit_cost: 0,
     purchaseUnit: "",
     expiryDate: "",
+    forBreakfast: false,
     discount: 0,
     freight: 0,
     recoverableTax: 0,
@@ -164,6 +168,10 @@ export function ExpenseForm({
     initial && (initial.items.length === 0 || isDespesa) ? String(initial.total_amount) : ""
   );
   const [manualTotalCostItemId, setManualTotalCostItemId] = useState(isDespesa ? (initial?.items[0]?.cost_item_id ?? "") : "");
+  const [splitOn, setSplitOn] = useState(isDespesa && !!initial?.items[0]?.center_split);
+  const [splitLinks, setSplitLinks] = useState<LinkRow[]>(
+    isDespesa && initial?.items[0]?.center_split ? initial.items[0].center_split.map((c) => ({ id: c.center_id, pct: c.alloc_pct })) : []
+  );
   const [despesaDescription, setDespesaDescription] = useState(isDespesa ? (initial?.items[0]?.description ?? "") : "");
   const [items, setItems] = useState<ItemRow[]>(
     isDespesa ? [] :
@@ -173,6 +181,7 @@ export function ExpenseForm({
       unit_cost: i.purchase_unit ? (i.purchase_unit_cost ?? i.unit_cost) : i.unit_cost,
       purchaseUnit: i.purchase_unit ?? "",
       expiryDate: i.expiry_date ?? "",
+      forBreakfast: i.for_breakfast,
       discount: i.discount,
       freight: i.freight_and_other_costs,
       recoverableTax: i.recoverable_tax,
@@ -370,6 +379,13 @@ export function ExpenseForm({
         return;
       }
     }
+    if (isDespesa && splitOn) {
+      const sum = splitLinks.reduce((s, l) => s + l.pct, 0);
+      if (splitLinks.length === 0 || sum !== 100) {
+        toast.error(`O rateio entre centros de custo precisa somar 100% (soma atual: ${sum}%).`);
+        return;
+      }
+    }
     if (isDespesa && !manualTotalCostItemId) {
       toast.error("Selecione a categoria da despesa.");
       return;
@@ -407,6 +423,7 @@ export function ExpenseForm({
                 recoverable_tax: 0,
                 non_recoverable_tax: 0,
                 cost_item_id: manualTotalCostItemId,
+                center_split: splitOn ? splitLinks.map((l) => ({ center_id: l.id, alloc_pct: l.pct })) : null,
                 new_cost_item: null,
                 new_fixed_asset: null,
                 existing_fixed_asset_id: null,
@@ -423,6 +440,7 @@ export function ExpenseForm({
               purchase_quantity: converted ? i.quantity : null,
               purchase_unit: converted ? i.purchaseUnit : null,
               purchase_unit_cost: converted ? i.unit_cost : null,
+              for_breakfast: i.forBreakfast,
               expiry_date: u
                 ? i.expiryDate ||
                   (costItemOptions.find((c) => c.id === i.costItemId)?.shelf_life_days
@@ -719,6 +737,30 @@ export function ExpenseForm({
                 );
               })()}
             </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={splitOn}
+                onCheckedChange={(c) => {
+                  const on = c === true;
+                  setSplitOn(on);
+                  if (on && splitLinks.length === 0) {
+                    const opt = costItemOptions.find((x) => x.id === manualTotalCostItemId);
+                    const initialLinks = (opt?.centers ?? [])
+                      .map((c2) => ({ id: costCenters.find((cc) => cc.name === c2.name)?.id ?? "", pct: c2.pct }))
+                      .filter((l) => l.id);
+                    setSplitLinks(initialLinks.length > 0 ? initialLinks : []);
+                  }
+                }}
+              />
+              Ratear esta despesa de outro jeito entre os centros de custo
+            </label>
+            {splitOn && (
+              <PctLinksEditor
+                options={costCenters.map((c) => ({ id: c.id, label: c.name }))}
+                value={splitLinks}
+                onChange={setSplitLinks}
+              />
+            )}
             <div className="space-y-1.5">
               <Label>Descrição</Label>
               <Input value={despesaDescription} onChange={(e) => setDespesaDescription(e.target.value)} placeholder="Ex.: conta de luz de outubro" />
@@ -871,6 +913,13 @@ export function ExpenseForm({
                     (não muda o subtotal) — representa crédito a recuperar depois, não um custo.
                   </p>
                 </div>
+              )}
+
+              {!item.existingFixedAssetId && item.lineType !== "fixed_asset" && (
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={item.forBreakfast} onCheckedChange={(c) => updateItem(index, { forBreakfast: c === true })} />
+                  Para o café da manhã (custo vai direto pro centro Café da manhã e não entra no estoque)
+                </label>
               )}
 
               {item.existingFixedAssetId ? (

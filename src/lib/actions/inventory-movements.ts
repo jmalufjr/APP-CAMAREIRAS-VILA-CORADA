@@ -14,8 +14,13 @@ function revalidateAll() {
 // manutenção ou admin), sempre em nome de quem está logado (ver RLS
 // "inv_mov_insert_baixa_manual"). Quantidade sempre positiva aqui; o sinal
 // negativo (saída) é aplicado na gravação.
-export async function registerStockWithdrawal(inventoryItemId: string, quantity: number, notes?: string) {
+//
+// `destination` diz pra onde o item foi (vira o centro de custo do
+// lançamento contábil automático): o nome de um centro de custo, ou
+// "perda" pra perda/quebra/desperdício.
+export async function registerStockWithdrawal(inventoryItemId: string, quantity: number, destination: string, notes?: string) {
   if (quantity <= 0) return { error: "Informe uma quantidade maior que zero." };
+  if (!destination) return { error: "Informe o destino da baixa." };
 
   const supabase = await createClient();
   const {
@@ -23,12 +28,21 @@ export async function registerStockWithdrawal(inventoryItemId: string, quantity:
   } = await supabase.auth.getUser();
   if (!user) return { error: "Não autenticado." };
 
+  const isLoss = destination === "perda";
+  let centerId: string | null = null;
+  if (!isLoss) {
+    const { data: center } = await supabase.from("cost_centers").select("id").eq("name", destination).maybeSingle();
+    centerId = center?.id ?? null;
+  }
+
   const { error } = await supabase.from("inventory_movements").insert({
     inventory_item_id: inventoryItemId,
     movement_type: "baixa_manual",
     quantity: -quantity,
     created_by: user.id,
     notes: notes || null,
+    consumption_center_id: centerId,
+    is_loss: isLoss,
   });
 
   if (error) return { error: error.message };

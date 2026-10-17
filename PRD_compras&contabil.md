@@ -3144,3 +3144,81 @@ Pedido do proprietário:
 (salário, luz, honorários…) saíram do Cadastro de produtos e ganharam a
 tela própria **Cadastro de despesas** (`/contabil/despesas`), logo abaixo
 de "Cadastro de produtos" no Módulo Contábil.
+
+### 31.5 Menus do Módulo Contábil, motor de lançamentos e relatórios (17/10/2026)
+
+**Verificação honesta pedida pelo proprietário**: antes desta leva, só
+**compra/despesa** gerava lançamento contábil automático. Consumo de
+bar/frigobar, café da manhã, baixa manual e ajuste de inventário **não
+geravam** (estoque e conta de consumo já existiam, mas sem partidas
+dobradas). Isso foi corrigido na migration `078`.
+
+**Menus** (rotas movidas, nenhum dado mexido):
+- Hub do Módulo Contábil: Lançar Compra, Lançar Despesa, Lista de
+  compras, *Produtos com data de validade próximo ao vencimento*, Estoque,
+  Ativo Permanente, Pagamentos e recebimentos, *Demonstrativos e
+  Relatórios*, *Listas contábeis*, Exportações.
+- **Listas contábeis** (`/contabil/listas`): Cadastro de produtos,
+  Cadastro de despesas, Plano de contas e centros de custo, Plano de itens
+  de ativo permanente, Ficha técnica de petiscos e drinks.
+- **Demonstrativos e Relatórios** (`/contabil/demonstrativos`):
+  Demonstrativo de despesas, Demonstrativo de Custos, Balancete analítico,
+  Balancete sintético, Livro Diário, Livro Razão, Livro caixa e bancos. O
+  menu "Custos e Despesas" foi apagado. "Contagem de estoque" virou
+  **Inventário** (`/compras/inventario`).
+
+**Motor de lançamentos (tudo por gatilho no banco)**:
+- `ledger_entry_lines.cost_item_id`: cada linha sabe de qual produto ou
+  despesa veio (base do balancete analítico).
+- Compra: Dr conta de estoque do produto (centralizado, sem centro) / Cr
+  caixa, banco ou fornecedor. Linha marcada **"Para o café da manhã"**
+  (`expense_items.for_breakfast`): Dr Custo do café da manhã (centro Café
+  da manhã) direto e a linha **não** entra no estoque.
+- Despesa: Dr conta da despesa rateada nos centros; rateio próprio por
+  lançamento em `expense_items.center_split` (soma 100%).
+- Consumo de bar/frigobar: Dr CMV / Cr estoque no momento do pedido,
+  centro = onde foi consumido (`inventory_movements.consumption_center_id`,
+  carimbado pelas funções de comanda/frigobar). Ao **fechar** a conta:
+  Dr Consumos a liquidar / Cr receitas (petiscos, bebidas, drinks,
+  frigobar) + taxa de serviço 10% em "Salários/encargos a pagar"; ao
+  **reabrir**, estorna; ao **pagar**, Dr caixa (dinheiro) ou banco /
+  Cr Consumos a liquidar.
+- Baixa manual: agora pergunta **pra onde foi** (centro de custo ou
+  perda/quebra); Dr conta de custo do destino / Cr estoque.
+- Inventário concluído: falta → Dr Perdas / Cr estoque; sobra, o inverso.
+- Cada linha do plano de contas dos produtos/despesas é **obrigatória e
+  editável** (Cadastro de produtos e Cadastro de despesas).
+
+**Cadastro de despesas reformulado** (migration `079`): os 95 itens que
+estavam lá foram revisados — 19 ficaram como despesas de verdade (luz,
+água, gás, internet, salários, honorários, impostos, etc., cada um ligado
+a uma conta); 12 ferramentas (alicates, chaves, martelos, trenas, serrinha,
+escada, medidores, outras ferramentas) viraram **itens do catálogo do ativo
+permanente** (categoria "Ferramentas e utensílios duráveis"); os demais
+(materiais de manutenção/jardinagem como adubo, alimentos do café,
+descartáveis, louças, limpeza) viraram **produtos** com estoque
+centralizado e conta de estoque.
+
+**Relatórios**: lidos direto do livro (nunca persistem), todos com seletor
+de período e exportação **CSV, XLSX, RTF e PDF** (`src/lib/report-export.tsx`,
+`exportReport`). Balancetes têm periodicidade diária/mensal/anual e saldo
+acumulado na natureza da conta. Livro caixa e bancos: filtros de período,
+caixa/banco, texto da descrição e faixa de valor; o saldo é sempre o saldo
+real da conta.
+
+**Limitações conhecidas**: (1) o "Demonstrativo de Custos" ainda usa a
+cascata antiga (regime de caixa pelo % do item de custo), não o livro — pode
+divergir do balancete; o "Demonstrativo de despesas" já é lido do livro.
+(2) Lançamentos feitos antes desta leva não têm `cost_item_id` nem
+lançamentos de consumo/baixa retroativos (o módulo ainda não está em
+produção). (3) O balancete analítico mostra o item só onde o lançamento
+tem item (compras, despesas, baixas, consumos, inventário).
+
+**Testes** (banco local, sessão real de admin): compra de estoque, compra
+para o café (sem movimento de estoque), despesa com rateio 60/40, baixa
+manual para o café e como perda, consumo de frigobar e bar (centros
+certos), ajuste de inventário (falta e sobra), conta de bar+frigobar
+fechada → reaberta → fechada → paga (receita, serviço, estorno e
+recebimento no banco) — todas as partidas bateram e a soma de débitos
+menos créditos do livro deu zero. As quatro exportações geraram arquivos
+válidos (CSV com BOM, XLSX/PK, RTF, PDF). Fixtures removidas.

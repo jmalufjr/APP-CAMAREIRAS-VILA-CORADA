@@ -9,9 +9,21 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QuantityStepper } from "@/components/shared/quantity-stepper";
 import { BarcodeScannerButton } from "@/components/shared/barcode-scanner";
 import { Search } from "lucide-react";
+
+// Destinos possíveis de uma baixa (vira o centro de custo do lançamento
+// contábil automático) — "perda" vai pra Perdas e desperdícios.
+const WITHDRAWAL_DESTINATIONS = [
+  { value: "Hospedagem", label: "Hospedagem (suítes, limpeza, manutenção)" },
+  { value: "Café da manhã", label: "Café da manhã" },
+  { value: "Bar de piscina", label: "Bar da piscina" },
+  { value: "Frigobar", label: "Frigobar" },
+  { value: "Administração e áreas comuns", label: "Administração e áreas comuns" },
+  { value: "perda", label: "Perda, quebra ou desperdício" },
+];
 
 // Tela de "dar baixa" num item de estoque — usada pela camareira, pelo
 // funcionário de manutenção e pelo admin (único ponto em comum entre os
@@ -23,6 +35,7 @@ export function StockWithdrawalPanel({ items }: { items: InventoryItemWithBalanc
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<InventoryItemWithBalance | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [destination, setDestination] = useState("Hospedagem");
 
   const filtered = search.trim()
     ? items.filter((i) => i.name.toLowerCase().includes(search.trim().toLowerCase()))
@@ -41,7 +54,7 @@ export function StockWithdrawalPanel({ items }: { items: InventoryItemWithBalanc
   function handleConfirm() {
     if (!selected) return;
     startTransition(async () => {
-      const result = await registerStockWithdrawal(selected.id, quantity);
+      const result = await registerStockWithdrawal(selected.id, quantity, destination);
       if (result?.error) toast.error(result.error);
       else {
         toast.success(`Baixa de ${quantity} ${selected.unit} de "${selected.name}" registrada.`);
@@ -65,6 +78,21 @@ export function StockWithdrawalPanel({ items }: { items: InventoryItemWithBalanc
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm text-muted-foreground">Quantidade a dar baixa ({selected.unit})</span>
             <QuantityStepper value={quantity} onChange={setQuantity} disabled={isPending} min={1} />
+          </div>
+          <div className="space-y-1.5">
+            <span className="text-sm text-muted-foreground">Pra onde foi?</span>
+            <Select value={destination} onValueChange={(v) => v && setDestination(v)}>
+              <SelectTrigger className="w-full">
+                <SelectValue>{(v: string) => WITHDRAWAL_DESTINATIONS.find((d) => d.value === v)?.label ?? v}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {WITHDRAWAL_DESTINATIONS.map((d) => (
+                  <SelectItem key={d.value} value={d.value}>
+                    {d.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button onClick={handleConfirm} disabled={isPending}>

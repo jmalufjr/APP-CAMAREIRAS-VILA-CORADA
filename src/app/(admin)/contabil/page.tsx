@@ -3,19 +3,17 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCashAndBankBalances } from "@/lib/actions/ledger";
 import {
-  BookOpen,
-  FolderTree,
   ChevronRight,
   CircleDollarSign,
   Plus,
   ShoppingBasket,
   ShoppingCart,
   Archive,
-  Calculator,
   Download,
-  Package,
-  Boxes,
   Receipt,
+  CalendarClock,
+  FileBarChart,
+  ListChecks,
 } from "lucide-react";
 
 // Módulo Contábil — Levas 1/2/3/4/5 trouxeram o plano de contas contábil,
@@ -29,15 +27,12 @@ const menuItems = [
   { href: "/compras/nova", label: "Lançar Compra", icon: Plus },
   { href: "/despesas/nova", label: "Lançar Despesa", icon: Receipt },
   { href: "/compras/lista", label: "Lista de compras", icon: ShoppingBasket },
-  { href: "/contabil/produtos", label: "Cadastro de produtos", icon: Package },
-  { href: "/contabil/despesas", label: "Cadastro de despesas", icon: Receipt },
+  { href: "/compras/validade", label: "Produtos com data de validade próximo ao vencimento", icon: CalendarClock },
   { href: "/compras", label: "Estoque", icon: ShoppingCart },
   { href: "/ativo-permanente", label: "Ativo Permanente", icon: Archive },
-  { href: "/contabil/plano-de-contas", label: "Plano de contas e centros de custos", icon: FolderTree },
-  { href: "/contabil/plano-ativo-permanente", label: "Plano de itens de ativo permanente", icon: Boxes },
-  { href: "/custos-despesas", label: "Custos e Despesas", icon: Calculator },
-  { href: "/contabil/lancamentos", label: "Livro de lançamentos", icon: BookOpen },
   { href: "/contabil/pagamentos", label: "Pagamentos e recebimentos", icon: CircleDollarSign },
+  { href: "/contabil/demonstrativos", label: "Demonstrativos e Relatórios", icon: FileBarChart },
+  { href: "/contabil/listas", label: "Listas contábeis", icon: ListChecks },
   { href: "/contabil/exportacoes", label: "Exportações para o sistema financeiro", icon: Download },
 ];
 

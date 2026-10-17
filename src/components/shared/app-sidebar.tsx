@@ -62,7 +62,7 @@ const adminNav: NavItem[] = [
     href: "/contabil",
     label: "Módulo Contábil",
     icon: BookOpen,
-    matchPrefixes: ["/contabil", "/compras", "/despesas", "/custos-despesas", "/ativo-permanente"],
+    matchPrefixes: ["/contabil", "/compras", "/despesas", "/ativo-permanente"],
   },
   { href: "/usuarios", label: "Usuários", icon: Users },
   { href: "/questoes-respostas", label: "Questões e Respostas", icon: HelpCircle },

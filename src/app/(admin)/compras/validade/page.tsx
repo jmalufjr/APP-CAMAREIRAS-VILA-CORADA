@@ -12,9 +12,9 @@ export default async function ValidadePage() {
 
   return (
     <div className="space-y-6">
-      <BackLink href="/compras" />
+      <BackLink href="/contabil" />
       <PageHeader
-        title="Validade dos produtos"
+        title="Produtos com data de validade próximo ao vencimento"
         subtitle="Compras com data de validade que ainda têm saldo e já venceram ou estão perto de vencer. O estoque considera que sai primeiro o que vence primeiro."
       />
       <div className="space-y-2">

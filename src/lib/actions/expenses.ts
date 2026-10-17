@@ -40,6 +40,12 @@ export interface ExpenseItemInput {
   purchase_unit?: string | null;
   purchase_unit_cost?: number | null;
   expiry_date?: string | null;
+  // Compra destinada ao café da manhã: custo reconhecido na compra (centro
+  // Café da manhã) e a linha NÃO entra no estoque.
+  for_breakfast?: boolean;
+  // Rateio próprio desta linha de despesa entre centros de custo
+  // (substitui o padrão do item de custo): soma sempre 100%.
+  center_split?: { center_id: string; alloc_pct: number }[] | null;
   // Linha já ligada a um item de custo existente.
   cost_item_id: string | null;
   // Linha que cria um item de custo novo na hora (Plano de Contas) —
@@ -178,6 +184,8 @@ interface ResolvedExpenseRow {
   purchase_unit: string | null;
   purchase_unit_cost: number | null;
   expiry_date: string | null;
+  for_breakfast: boolean;
+  center_split: { center_id: string; alloc_pct: number }[] | null;
 }
 
 async function resolveExpenseItemsForInsert(
@@ -217,9 +225,24 @@ async function resolveExpenseItemsForInsert(
       purchase_unit: i.purchase_unit ?? null,
       purchase_unit_cost: i.purchase_unit_cost ?? null,
       expiry_date: i.expiry_date || null,
+      for_breakfast: !!i.for_breakfast && !i.existing_fixed_asset_id && !i.new_fixed_asset,
+      center_split: i.center_split && i.center_split.length > 0 ? i.center_split : null,
     });
   }
   return { rows };
+}
+
+// Histórico legível do lançamento no Livro Diário: tipo, itens, documento e observação.
+function ledgerDescription(
+  f: { document_number: string | null; notes: string | null },
+  rows: { description: string; fixed_asset_id: string | null; for_breakfast: boolean }[]
+): string {
+  const kind = rows.some((r) => r.fixed_asset_id) ? "Compra de ativo" : "Compra/despesa";
+  const items = rows.map((r) => r.description).filter(Boolean).slice(0, 4).join(", ");
+  const extra = rows.length > 4 ? ` e mais ${rows.length - 4}` : "";
+  return [kind + (items ? ` — ${items}${extra}` : ""), f.document_number ? `doc. ${f.document_number}` : "", f.notes?.trim() ?? ""]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function round2(v: number): number {
@@ -275,18 +298,31 @@ async function postExpenseLedgerEntry(
     }
     if (!row.cost_item_id) continue;
 
-    const { accountCode, requiresCostCenter } = await resolveLedgerAccountForCostItem(supabase, row.cost_item_id);
-    if (!requiresCostCenter) {
-      debitLines.push({ account_code: accountCode, cost_center_id: null, direction: "debito", amount: row.subtotal });
+    // Compra pro café da manhã: custo na hora, centro "Café da manhã", sem estoque.
+    if (row.for_breakfast) {
+      const { data: cafe } = await supabase.from("cost_centers").select("id").eq("name", "Café da manhã").maybeSingle();
+      debitLines.push({ account_code: "custo-cafe-manha", cost_center_id: cafe?.id ?? null, cost_item_id: row.cost_item_id, direction: "debito", amount: row.subtotal });
       continue;
     }
 
-    const { data: centerLinks } = await supabase.from("cost_item_centers").select("center_id, alloc_pct").eq("cost_item_id", row.cost_item_id);
-    const links = centerLinks && centerLinks.length > 0 ? centerLinks : [{ center_id: null, alloc_pct: 100 }];
+    const { accountCode, requiresCostCenter } = await resolveLedgerAccountForCostItem(supabase, row.cost_item_id);
+    if (!requiresCostCenter) {
+      debitLines.push({ account_code: accountCode, cost_center_id: null, cost_item_id: row.cost_item_id, direction: "debito", amount: row.subtotal });
+      continue;
+    }
+
+    let links: { center_id: string | null; alloc_pct: number }[];
+    if (row.center_split && row.center_split.length > 0) {
+      links = row.center_split;
+    } else {
+      const { data: centerLinks } = await supabase.from("cost_item_centers").select("center_id, alloc_pct").eq("cost_item_id", row.cost_item_id);
+      links = centerLinks && centerLinks.length > 0 ? centerLinks : [{ center_id: null, alloc_pct: 100 }];
+    }
     links.forEach((link) => {
       debitLines.push({
         account_code: accountCode,
         cost_center_id: link.center_id,
+        cost_item_id: row.cost_item_id,
         direction: "debito",
         amount: round2(row.subtotal * (Number(link.alloc_pct) / 100)),
       });
@@ -461,7 +497,7 @@ export async function createExpense(formData: FormData) {
   const ledgerResult = await postExpenseLedgerEntry(
     supabase,
     expense.id,
-    f.notes?.trim() || `Despesa de ${f.date}`,
+    ledgerDescription(f, resolvedRows),
     f.competence_date,
     f.date,
     payment_status,
@@ -592,7 +628,7 @@ export async function updateExpense(id: string, formData: FormData) {
   const ledgerResult = await postExpenseLedgerEntry(
     supabase,
     id,
-    f.notes?.trim() || `Despesa de ${f.date}`,
+    ledgerDescription(f, resolvedRows),
     f.competence_date,
     f.date,
     ledgerPaymentStatus,
@@ -708,6 +744,8 @@ export interface ExpenseWithItems {
     purchase_unit: string | null;
     purchase_unit_cost: number | null;
     expiry_date: string | null;
+    for_breakfast: boolean;
+    center_split: { center_id: string; alloc_pct: number }[] | null;
   }[];
 }
 
@@ -719,7 +757,7 @@ export async function getExpenseWithItems(id: string): Promise<ExpenseWithItems 
   const { data: items } = await supabase
     .from("expense_items")
     .select(
-      "description, quantity, unit_cost, subtotal, discount, freight_and_other_costs, recoverable_tax, non_recoverable_tax, cost_item_id, fixed_asset_id, purchase_quantity, purchase_unit, purchase_unit_cost, expiry_date, fixed_assets(name)"
+      "description, quantity, unit_cost, subtotal, discount, freight_and_other_costs, recoverable_tax, non_recoverable_tax, cost_item_id, fixed_asset_id, purchase_quantity, purchase_unit, purchase_unit_cost, expiry_date, for_breakfast, center_split, fixed_assets(name)"
     )
     .eq("expense_id", id)
     .order("created_at");
@@ -740,6 +778,8 @@ export async function getExpenseWithItems(id: string): Promise<ExpenseWithItems 
     purchase_unit: string | null;
     purchase_unit_cost: number | null;
     expiry_date: string | null;
+    for_breakfast: boolean;
+    center_split: { center_id: string; alloc_pct: number }[] | null;
   };
 
   return {
@@ -771,6 +811,8 @@ export async function getExpenseWithItems(id: string): Promise<ExpenseWithItems 
       purchase_unit: i.purchase_unit,
       purchase_unit_cost: i.purchase_unit_cost === null ? null : Number(i.purchase_unit_cost),
       expiry_date: i.expiry_date,
+      for_breakfast: !!i.for_breakfast,
+      center_split: i.center_split ?? null,
     })),
   };
 }
