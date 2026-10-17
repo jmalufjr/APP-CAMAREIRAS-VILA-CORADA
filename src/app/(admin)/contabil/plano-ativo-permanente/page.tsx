@@ -8,7 +8,7 @@ export default async function PlanoDeItensDeAtivoPermanentePage() {
 
   return (
     <div className="space-y-6">
-      <BackLink href="/checklists/plano-de-contas" />
+      <BackLink href="/contabil" />
       <PageHeader
         title="Plano de itens de ativo permanente"
         subtitle="Categorias (ex.: Máquinas) e o catálogo de tipos de bem dentro de cada uma (ex.: Liquidificador) — usado ao lançar a compra de um bem novo."

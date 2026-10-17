@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/shared/back-link";
 import { createClient } from "@/lib/supabase/server";
 import type { Room, Profile, DailyRoomTask } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
@@ -23,6 +24,7 @@ export default async function PlanejamentoPage({
 
   return (
     <div className="space-y-6">
+      <BackLink href="/operacional" />
       <PageHeader
         title="Planejamento diário"
         subtitle={`Defina o tipo de trabalho de cada suíte para ${formatDatePt(date)}. As camareiras escolhem, no próprio app, qual suíte vão realizar.`}

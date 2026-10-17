@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/shared/back-link";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
@@ -13,7 +14,6 @@ import {
   Coffee,
   Wine,
   Martini,
-  FolderTree,
   ChevronRight,
 } from "lucide-react";
 
@@ -29,12 +29,12 @@ const menuItems = [
   { href: "/checklists/frigobar", label: "Consumo de Frigobar", icon: Wine },
   { href: "/checklists/poolbar", label: "Bar da Piscina", icon: Martini },
   { href: "/checklists/mesas", label: "Layout & mesas", icon: Coffee },
-  { href: "/checklists/plano-de-contas", label: "Plano de Contas", icon: FolderTree },
 ];
 
 export default function ChecklistsPage() {
   return (
     <div className="space-y-6">
+      <BackLink href="/operacional" />
       <PageHeader title="Listas" subtitle="Escolha o que deseja gerenciar." />
       <nav className="max-w-md space-y-1.5">
         {menuItems.map((item) => (

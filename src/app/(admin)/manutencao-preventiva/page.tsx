@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/shared/back-link";
 import { PageHeader } from "@/components/shared/page-header";
 import { WeekMaintenanceTable } from "@/components/shared/week-maintenance-table";
 import { getMaintenanceRangeRows, getWeeklyPlanningSummary } from "@/lib/actions/maintenance";
@@ -24,6 +25,7 @@ export default async function AdminManutencaoPreventivaPage({
 
   return (
     <div className="space-y-8">
+      <BackLink href="/operacional" />
       <PageHeader
         title="Manutenção Preventiva"
         subtitle="Trabalhos de manutenção preventiva por categoria e item."

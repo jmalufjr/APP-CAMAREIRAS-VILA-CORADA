@@ -4,11 +4,10 @@ import { BackLink } from "@/components/shared/back-link";
 import { getPurchaseList } from "@/lib/actions/purchase-list";
 import { getSubcenterGroupCountStatus } from "@/lib/actions/inventory-counts";
 import { getExpiringLots } from "@/lib/actions/expiry";
-import { Package, ClipboardList, PackageMinus, ChevronRight, AlertTriangle, UtensilsCrossed, CalendarClock } from "lucide-react";
+import { ClipboardList, PackageMinus, ChevronRight, AlertTriangle, UtensilsCrossed, CalendarClock } from "lucide-react";
 
 const menuItems = [
   { href: "/compras/baixa", label: "Baixa de estoque", icon: PackageMinus },
-  { href: "/compras/itens", label: "Itens de estoque e ciclo de compras", icon: Package },
   { href: "/compras/pratos", label: "Ficha técnica de petiscos e drinks", icon: UtensilsCrossed },
   { href: "/compras/contagem", label: "Contagem de estoque", icon: ClipboardList },
   { href: "/compras/validade", label: "Validade dos produtos", icon: CalendarClock },

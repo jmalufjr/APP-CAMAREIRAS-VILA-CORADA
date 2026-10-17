@@ -71,6 +71,7 @@ export interface ProductRow {
   unit: string;
   barcode: string | null;
   reorder_point: number;
+  coverage_days: number;
   shelf_life_days: number | null;
   expiry_alert_days: number;
   is_perishable: boolean;
@@ -115,6 +116,7 @@ export async function getProducts(): Promise<ProductRow[]> {
       unit: string;
       barcode: string | null;
       reorder_point: number;
+      coverage_days: number;
       shelf_life_days: number | null;
       expiry_alert_days: number;
       is_perishable: boolean;
@@ -155,6 +157,7 @@ export async function getProducts(): Promise<ProductRow[]> {
       unit: inv?.unit ?? "un",
       barcode: inv?.barcode ?? null,
       reorder_point: Number(inv?.reorder_point ?? 0),
+      coverage_days: inv?.coverage_days ?? 7,
       shelf_life_days: inv?.shelf_life_days ?? null,
       expiry_alert_days: inv?.expiry_alert_days ?? 7,
       is_perishable: inv?.is_perishable ?? false,
@@ -199,6 +202,7 @@ export interface ProductInput {
   barcode: string | null;
   conversions: UnitConversion[];
   reorderPoint: number;
+  coverageDays: number;
   shelfLifeDays: number | null;
   expiryAlertDays: number;
   isPerishable: boolean;
@@ -219,6 +223,7 @@ function validate(input: ProductInput): string | null {
       if (seen.has(c.unit_name.trim().toLowerCase())) return `A unidade "${c.unit_name}" está repetida (ou igual à unidade-base).`;
       seen.add(c.unit_name.trim().toLowerCase());
     }
+    if (!(input.coverageDays >= 1)) return "Os dias de folga precisam ser pelo menos 1.";
     if (input.shelfLifeDays !== null && input.shelfLifeDays <= 0) return "O prazo de validade precisa ser maior que zero (ou fica em branco).";
   }
   return null;
@@ -256,6 +261,7 @@ function stockColumns(input: ProductInput) {
     unit: input.unit.trim(),
     barcode: input.barcode?.trim() || null,
     reorder_point: input.reorderPoint,
+    coverage_days: input.coverageDays,
     shelf_life_days: input.shelfLifeDays,
     expiry_alert_days: input.expiryAlertDays,
     is_perishable: input.isPerishable,

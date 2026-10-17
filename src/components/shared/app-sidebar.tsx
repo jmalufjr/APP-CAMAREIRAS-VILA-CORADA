@@ -14,9 +14,7 @@ import {
   Coffee,
   ClipboardList,
   Users,
-  History,
   LogOut,
-  ClipboardCheck,
   Menu,
   CalendarClock,
   Wrench,
@@ -37,19 +35,36 @@ interface NavItem {
   // Uso diário mais frequente no fluxo de trabalho do admin — recebe um
   // leve realce visual no menu para se destacar dos demais itens.
   frequent?: boolean;
+  // Rotas que também marcam este item como ativo (o item é um módulo que
+  // agrupa várias telas, cada uma com seu próprio caminho).
+  matchPrefixes?: string[];
 }
 
 const adminNav: NavItem[] = [
-  { href: "/dashboard", label: "Resumo executivo", icon: LayoutDashboard },
-  { href: "/planejamento", label: "Planejamento diário", icon: ClipboardCheck, frequent: true },
-  { href: "/chegadas-saidas/gerenciar", label: "Chegadas & saídas", icon: CalendarClock, frequent: true },
-  { href: "/mesas/gerenciar", label: "Mesas do café", icon: Coffee, frequent: true },
-  { href: "/frigobar", label: "Consumo de Bar e Frigobar", icon: Wine, frequent: true },
-  { href: "/contabil", label: "Módulo Contábil", icon: BookOpen },
-  { href: "/checklists", label: "Listas", icon: ClipboardList },
-  { href: "/manutencao-preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
+  {
+    href: "/operacional",
+    label: "Módulo operacional",
+    icon: LayoutDashboard,
+    matchPrefixes: [
+      "/operacional",
+      "/dashboard",
+      "/planejamento",
+      "/chegadas-saidas",
+      "/mesas",
+      "/frigobar",
+      "/checklists",
+      "/manutencao-preventiva",
+      "/historico",
+      "/ocorrencias",
+    ],
+  },
+  {
+    href: "/contabil",
+    label: "Módulo Contábil",
+    icon: BookOpen,
+    matchPrefixes: ["/contabil", "/compras", "/despesas", "/custos-despesas", "/ativo-permanente"],
+  },
   { href: "/usuarios", label: "Usuários", icon: Users },
-  { href: "/historico", label: "Histórico", icon: History },
   { href: "/questoes-respostas", label: "Questões e Respostas", icon: HelpCircle },
 ];
 
@@ -105,7 +120,9 @@ function SidebarContent({
           const moreSpecificItemMatches = items.some(
             (other) => other.href !== item.href && other.href.startsWith(item.href + "/") && matches(other.href)
           );
-          const active = matches(item.href) && !moreSpecificItemMatches;
+          const active = item.matchPrefixes
+            ? item.matchPrefixes.some(matches)
+            : matches(item.href) && !moreSpecificItemMatches;
           return (
             <Link
               key={item.href}

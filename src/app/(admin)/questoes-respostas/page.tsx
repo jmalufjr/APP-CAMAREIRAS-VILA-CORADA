@@ -61,7 +61,7 @@ export default function QuestoesRespostasPage() {
 
               <SubHeading>O botão “Sincronização Stays Total”</SubHeading>
               <P>
-                No Resumo Executivo, logo abaixo dos 5 cards de consulta rápida, existe um botão manual
+                No Resumo operacional, logo abaixo dos 5 cards de consulta rápida, existe um botão manual
                 que sincroniza as três telas de uma vez, para os casos em que você não quer esperar a
                 próxima atualização automática ou precisa corrigir algo agora (até a Parte 34 esse botão
                 existia separado em cada uma das três telas — foi unificado aqui porque sempre teve
@@ -303,7 +303,7 @@ export default function QuestoesRespostasPage() {
               </P>
               <P>
                 Ao ser paga, a conta gera automaticamente um recibo em PDF e tenta enviá-lo por e-mail
-                para o endereço cadastrado em “Cadastrar e-mail de envio” (menu do Resumo Executivo,
+                para o endereço cadastrado em “Cadastrar e-mail de envio” (menu do Resumo operacional,
                 pergunta 9 — sem precisar mexer em nada técnico). Se o envio falhar por algum motivo,
                 você vê um aviso na tela e pode reenviar manualmente. O hóspede pode pagar via PIX
                 direto por uma tela que a camareira abre, mostrando um QR code fixo da pousada.
@@ -388,10 +388,10 @@ export default function QuestoesRespostasPage() {
           </AccordionPanel>
         </AccordionItem>
 
-        {/* 9. Resumo executivo */}
+        {/* 9. Resumo operacional */}
         <AccordionItem value="dashboard">
           <AccordionTrigger>
-            <span className="font-heading text-base">9. O que a tela “Resumo executivo” me mostra?</span>
+            <span className="font-heading text-base">9. O que a tela “Resumo operacional” me mostra?</span>
           </AccordionTrigger>
           <AccordionPanel>
             <div className="space-y-3">
@@ -455,7 +455,7 @@ export default function QuestoesRespostasPage() {
           <AccordionPanel>
             <div className="space-y-3">
               <P>
-                Essa tela (menu do Resumo Executivo, “Suítes vagas e limpas, disponíveis para alugar”)
+                Essa tela (menu do Resumo operacional, “Suítes vagas e limpas, disponíveis para alugar”)
                 mostra duas listas — <strong>suítes limpas</strong> e <strong>suítes sujas</strong> —
                 com todas as suítes que não têm hóspede previsto pra ficar hospedado hoje à noite. É
                 sempre calculada na hora, sem nenhum horário de corte: se uma suíte “disponível” receber
@@ -518,7 +518,7 @@ export default function QuestoesRespostasPage() {
           <AccordionPanel>
             <div className="space-y-3">
               <P>
-                A tela “Comissões das camareiras” (menu do Resumo Executivo) mostra as{" "}
+                A tela “Comissões das camareiras” (menu do Resumo operacional) mostra as{" "}
                 <strong>duas comissões diferentes</strong> que a equipe recebe, uma embaixo da outra:
                 a comissão de 10% do bar por camareira, e a comissão de serviços nas suítes e no café.
                 As duas usam o mesmo conceito de <strong>“último período fechado”</strong>, explicado
@@ -748,8 +748,9 @@ export default function QuestoesRespostasPage() {
                     Hospedagem, Café da manhã, Bar da piscina, Frigobar ou Administração e áreas comuns)
                     — quando pertence a mais de um,
                     o valor é repartido entre eles por um percentual (que sempre precisa somar 100%). Esse
-                    cadastro completo fica na tela <strong>“Plano de itens de custo”</strong> (menu
-                    “Listas” → “Plano de Contas”), com 2 listas editáveis — itens de custo e centros. Ao
+                    cadastro completo fica na tela <strong>“Cadastro de produtos”</strong> (menu
+                    “Módulo Contábil”) para produtos e itens de custo, e em <strong>“Plano de contas e
+                    centros de custos”</strong> para os centros. Ao
                     lançar a compra, você escolhe um item de custo já existente, ou cria um novo ali
                     mesmo, sem precisar ir até “Listas” — nesse momento você também diz se esse item novo
                     “representa um item de estoque” (pergunta 14) e a quais centros ele pertence.
@@ -760,7 +761,7 @@ export default function QuestoesRespostasPage() {
                     escolhe a categoria do bem (Máquinas, Aparelhos, Metais e louças de banho),
                     opcionalmente um item já catalogado (ex.: “Liquidificador”), marca, modelo, garantia e
                     o local onde vai ficar guardado. Categorias e catálogo são geridos em{" "}
-                    <strong>“Plano de Contas” → “Plano de itens de ativo permanente”</strong>; cada bem
+                    <strong>Módulo Contábil → “Plano de itens de ativo permanente”</strong>; cada bem
                     comprado nasce sozinho, já com esses dados, na tela{" "}
                     <strong>“Ativo Permanente”</strong> (menu “Módulo Contábil”), organizada por categoria.
                   </>,
@@ -778,7 +779,7 @@ export default function QuestoesRespostasPage() {
                     <strong>Sugestão calculada pelo sistema</strong>: baseada em quanto o item costuma ser
                     consumido e na quantidade de “dias de folga” configurada pra ele (quantos dias de
                     estoque a pousada quer sempre ter de reserva — editável, item por item, na tela
-                    “Itens de estoque e ciclo de compras”, ver pergunta 14). Se o admin sabe que não
+                    “Cadastro de produtos”, ver pergunta 14). Se o admin sabe que não
                     precisa comprar aquilo agora, pode “dispensar” essa sugestão — ela só reaparece se o
                     saldo daquele item mudar de novo (uma compra nova ou mais consumo). As dispensas
                     ativas aparecem numa seção própria, com um botão “Reativar”.
@@ -837,7 +838,7 @@ export default function QuestoesRespostasPage() {
                     editar ou excluir uma despesa já lançada) e exportação em planilha.
                   </>,
                   <>
-                    <strong>Resumo Executivo</strong>: a tela “Estoque” (dentro do menu do Resumo
+                    <strong>Resumo operacional</strong>: a tela “Estoque” (dentro do menu do Resumo
                     Executivo) mostra os 20 itens mais comprados no mês e desde sempre (por valor), além
                     do saldo, do custo médio, do valor em R$ e da previsão de dias restantes de cada item
                     de estoque.
@@ -871,7 +872,7 @@ export default function QuestoesRespostasPage() {
 
               <SubHeading>Quais mercadorias e produtos são classificados como estoque</SubHeading>
               <P>
-                Dentro do Plano de Contas (tela “Plano de itens de custo”, menu Listas), cada item de
+                Dentro do Cadastro de produtos (menu Módulo Contábil), cada item de
                 custo tem uma marcação chamada “representa estoque”. Só os itens marcados assim têm
                 saldo controlado e entram nas telas de estoque — os demais (salário, conta de luz,
                 honorários de contabilidade, serviços em geral) são só uma despesa, sem quantidade
@@ -891,7 +892,7 @@ export default function QuestoesRespostasPage() {
                 <strong>custo médio</strong> vigente naquele momento, sem alterá-lo — só uma compra nova
                 recalcula o custo médio, misturando o que já tinha com o que acabou de entrar. Você vê
                 saldo, custo médio e valor total em estoque, item por item, na tela{" "}
-                <strong>“Itens de estoque e ciclo de compras”</strong> (menu “Módulo Contábil”), junto do
+                <strong>“Cadastro de produtos”</strong> (menu “Módulo Contábil”), junto do
                 centro a que o item pertence (vindo do Plano de Contas) e da unidade de medida dele (un,
                 kg, L etc.). Essa tela é só leitura quanto à identidade/valor do item — os únicos campos
                 editáveis ali são “dias de folga” (explicado mais abaixo) e “é perecível?” (pergunta 15).
@@ -942,7 +943,7 @@ export default function QuestoesRespostasPage() {
               <P>
                 Cada item de estoque tem uma quantidade de <strong>“dias de folga”</strong> — quantos
                 dias de estoque a pousada quer sempre ter de reserva pra esse item — editável a qualquer
-                momento na tela “Itens de estoque e ciclo de compras”, com um seletor de mais/menos. A
+                momento na tela “Cadastro de produtos”, com um seletor de mais/menos. A
                 partir disso, o sistema calcula sozinho o <strong>ponto de reposição</strong> do item
                 (quanto ele deveria ter em estoque pra nunca faltar), multiplicando quanto o item costuma
                 ser consumido por semana pelos dias de folga configurados. Esse ponto de reposição
@@ -990,7 +991,7 @@ export default function QuestoesRespostasPage() {
                 percentual é comparado com um limite próprio de cada item — a “quebra máxima admitida”,
                 editável na própria tela de contagem com um seletor de mais/menos, em passos de 1%.
                 Sempre que uma contagem fecha com quebra acima desse limite, o item passa a aparecer na
-                tela <strong>“Quebra de Estoque”</strong> (menu do Resumo Executivo), como um alerta pra
+                tela <strong>“Quebra de Estoque”</strong> (menu do Resumo operacional), como um alerta pra
                 investigar o motivo (furto, erro de lançamento, perda por vencimento, etc.), ordenado do
                 desvio mais grave pro menos grave.
               </P>
@@ -1031,7 +1032,7 @@ export default function QuestoesRespostasPage() {
                 <strong>centros de custo</strong> (hoje a pousada tem 5: Hospedagem, Café da manhã, Bar
                 da piscina, Frigobar e Administração e áreas comuns — este último pra custos
                 administrativos e gastos compartilhados que não dá pra atribuir diretamente a um dos
-                outros quatro) — tudo isso cadastrado na tela “Plano de itens de custo” (pergunta 13).
+                outros quatro) — tudo isso cadastrado na tela “Cadastro de produtos” (pergunta 13).
                 O sistema soma, automaticamente, o valor de cada despesa espalhado pelos centros a
                 que o item pertence, pelo percentual configurado — é essa soma final, por centro, que
                 aparece nos cards da tela “Custos”.
@@ -1116,7 +1117,7 @@ export default function QuestoesRespostasPage() {
               <SubHeading>Quais são os principais itens de custo</SubHeading>
               <P>
                 Toda essa lista — centros e itens de custo — fica sempre visível e editável na tela
-                “Plano de itens de custo” (Listas → Plano de Contas), e pode crescer: ao lançar uma
+                “Cadastro de produtos” e “Plano de contas e centros de custos” (Módulo Contábil), e pode crescer: ao lançar uma
                 despesa nova, o admin pode criar um item de custo na hora, se nenhum dos já existentes
                 encaixar. Alguns exemplos reais já cadastrados, pra dar uma ideia do tamanho e da
                 variedade:
@@ -1144,7 +1145,7 @@ export default function QuestoesRespostasPage() {
                     Hoje guarda, por inteiro, contabilidade, financeiro, Stays, Invictos, outros
                     honorários administrativos, pró-labore e impostos e taxas; luz, água e internet
                     continuam repartidos entre os outros centros. O admin pode ligar qualquer outro item
-                    a ele (por inteiro ou dividindo com outro centro) no “Plano de itens de custo”.
+                    a ele (por inteiro ou dividindo com outro centro) no “Cadastro de produtos”.
                   </>,
                 ]}
               />

@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/shared/back-link";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/shared/page-header";
 import { HistoryFilters } from "./history-filters";
@@ -119,6 +120,7 @@ export default async function HistoricoPage({
 
   return (
     <div className="space-y-6">
+      <BackLink href="/operacional" />
       <PageHeader title="Histórico" subtitle="Dados diários, mensais e anuais consolidados." />
       <HistoryFilters from={from} to={to} />
       <HistoryTables

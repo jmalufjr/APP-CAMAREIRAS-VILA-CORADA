@@ -714,7 +714,7 @@ export function ExpenseForm({
                 return (
                   <p className="text-xs text-muted-foreground">
                     Centros de custo (rateio): {opt.centers.map((c) => `${c.name} ${c.pct}%`).join(" · ")}. Pra mudar a
-                    divisão, ajuste o item em Listas → Plano de Contas.
+                    divisão, ajuste o item em Módulo Contábil → Cadastro de produtos.
                   </p>
                 );
               })()}

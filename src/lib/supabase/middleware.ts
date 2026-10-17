@@ -86,6 +86,7 @@ export async function updateSession(request: NextRequest) {
       "/ocorrencias",
       "/manutencao-preventiva",
       "/questoes-respostas",
+      "/operacional",
       "/compras",
       "/despesas",
       "/ativo-permanente",

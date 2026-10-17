@@ -14,6 +14,7 @@ import {
   Calculator,
   Download,
   Package,
+  Boxes,
   Receipt,
 } from "lucide-react";
 
@@ -31,7 +32,8 @@ const menuItems = [
   { href: "/contabil/produtos", label: "Cadastro de produtos", icon: Package },
   { href: "/compras", label: "Estoque", icon: ShoppingCart },
   { href: "/ativo-permanente", label: "Ativo Permanente", icon: Archive },
-  { href: "/contabil/plano-de-contas", label: "Plano de contas", icon: FolderTree },
+  { href: "/contabil/plano-de-contas", label: "Plano de contas e centros de custos", icon: FolderTree },
+  { href: "/contabil/plano-ativo-permanente", label: "Plano de itens de ativo permanente", icon: Boxes },
   { href: "/custos-despesas", label: "Custos e Despesas", icon: Calculator },
   { href: "/contabil/lancamentos", label: "Livro de lançamentos", icon: BookOpen },
   { href: "/contabil/pagamentos", label: "Pagamentos e recebimentos", icon: CircleDollarSign },

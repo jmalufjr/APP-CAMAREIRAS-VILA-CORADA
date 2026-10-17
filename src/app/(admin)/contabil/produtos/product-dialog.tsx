@@ -57,6 +57,7 @@ export function ProductDialog({
   const [unit, setUnit] = useState(product?.unit ?? "un");
   const [barcode, setBarcode] = useState(product?.barcode ?? "");
   const [reorderPoint, setReorderPoint] = useState(String(product?.reorder_point ?? 0));
+  const [coverageDays, setCoverageDays] = useState(String(product?.coverage_days ?? 7));
   const [isPerishable, setIsPerishable] = useState(product?.is_perishable ?? false);
   const [shelfLife, setShelfLife] = useState(product?.shelf_life_days ? String(product.shelf_life_days) : "");
   const [alertDays, setAlertDays] = useState(String(product?.expiry_alert_days ?? 7));
@@ -95,6 +96,7 @@ export function ProductDialog({
         barcode: barcode || null,
         conversions: convs,
         reorderPoint: Number(reorderPoint.replace(",", ".")) || 0,
+        coverageDays: Number(coverageDays) || 0,
         shelfLifeDays: shelfLife.trim() ? Number(shelfLife) : null,
         expiryAlertDays: Number(alertDays) || 0,
         isPerishable,
@@ -244,6 +246,10 @@ export function ProductDialog({
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">Estoque mínimo</Label>
                   <Input type="number" min={0} step="0.001" value={reorderPoint} onChange={(e) => setReorderPoint(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Dias de folga (ciclo de compras)</Label>
+                  <Input type="number" min={1} value={coverageDays} onChange={(e) => setCoverageDays(e.target.value)} />
                 </div>
               </div>
 

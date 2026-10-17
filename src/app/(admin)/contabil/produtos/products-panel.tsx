@@ -16,7 +16,9 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2 } from "lucide-react";
+import type { CostItemWithLinks } from "@/lib/actions/cost-plan";
 import { ProductDialog } from "./product-dialog";
+import { NonProductCostItems } from "./cost-item-dialog";
 
 interface Candidate {
   id: string;
@@ -30,7 +32,9 @@ export function ProductsPanel({
   centers,
   ledgerAccounts,
   candidates,
+  nonProductItems,
 }: {
+  nonProductItems: CostItemWithLinks[];
   products: ProductRow[];
   categories: ProductCategory[];
   centers: CostCenter[];
@@ -78,6 +82,9 @@ export function ProductsPanel({
             <Switch checked={showInactive} onCheckedChange={setShowInactive} /> Mostrar inativos
           </label>
         </div>
+        <p className="text-sm font-medium">
+          Valor total em estoque: R$ {products.reduce((sum, p) => sum + p.stock_value, 0).toFixed(2)}
+        </p>
         <div className="space-y-2">
           {filtered.map((p) => (
             <div key={p.id} className="rounded-lg border border-border bg-card p-3">
@@ -96,7 +103,7 @@ export function ProductsPanel({
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {p.controls_stock
-                      ? `Estoque: ${p.balance} ${p.unit}${p.shelf_life_days ? ` · validade ${p.shelf_life_days} dia(s)` : ""}`
+                      ? `Saldo: ${p.balance} ${p.unit} · custo médio R$ ${p.avg_cost.toFixed(2)} · valor R$ ${p.stock_value.toFixed(2)} · folga ${p.coverage_days} dia(s)${p.is_perishable ? " · perecível" : ""}${p.reorder_point > 0 ? ` · mínimo ${p.reorder_point} ${p.unit}` : ""}${p.shelf_life_days ? ` · validade ${p.shelf_life_days} dia(s)` : ""}`
                       : "Não controla estoque"}
                   </p>
                 </div>
@@ -109,6 +116,8 @@ export function ProductsPanel({
           {filtered.length === 0 && <p className="text-center text-muted-foreground py-6 text-sm">Nenhum produto encontrado.</p>}
         </div>
       </section>
+
+      <NonProductCostItems items={nonProductItems} centers={centers} ledgerAccounts={ledgerAccounts} />
 
       <CategoriesSection categories={categories} />
     </div>

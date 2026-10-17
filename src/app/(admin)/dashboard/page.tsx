@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/shared/back-link";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/shared/page-header";
@@ -91,8 +92,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      <BackLink href="/operacional" />
       <PageHeader
-        title="Resumo executivo"
+        title="Resumo operacional"
         subtitle={`Resumo de hoje, ${formatDatePt(today)}`}
         action={<ThemeToggle />}
       />

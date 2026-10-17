@@ -3118,3 +3118,24 @@ itens de menu próprios no Módulo Contábil:
 Nada muda no banco nem na contabilização (mesma `createExpense`,
 mesmos lançamentos). Ainda não existe rateio *por lançamento* diferente
 do rateio da categoria — se quiser, é a próxima evolução.
+
+### 31.4 Reorganização de menus (17/10/2026)
+
+Pedido do proprietário:
+- **Cadastro de produtos** passou a ser a única tela de produtos:
+  absorveu "Itens de estoque e ciclo de compras" (saldo, custo médio,
+  valor, dias de folga, perecível, mínimo) e "Plano de itens de custo".
+  Os itens de custo que não são produto (salário, luz, honorários…)
+  ficaram numa seção própria da mesma tela. As telas antigas foram
+  removidas (`/compras/itens`, `/checklists/plano-de-contas/*`).
+- **Centros de custo** foram para o final de "Plano de contas e centros
+  de custos" (`/contabil/plano-de-contas`).
+- **Plano de itens de ativo permanente** foi para o Módulo Contábil
+  (`/contabil/plano-ativo-permanente`); o menu "Plano de Contas" de
+  Listas deixou de existir.
+- Novo **Módulo operacional** (`/operacional`) no menu do admin, com:
+  Resumo operacional (ex-Resumo executivo), Planejamento diário,
+  Chegadas & saídas, Mesas do café, Consumo de Bar e Frigobar, Listas,
+  Manutenção Preventiva e Histórico. O menu lateral do admin ficou com
+  Módulo operacional, Módulo Contábil, Usuários e Questões e Respostas.
+  As rotas das telas não mudaram.
