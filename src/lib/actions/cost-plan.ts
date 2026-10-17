@@ -268,18 +268,27 @@ export interface CostItemOption {
   unit: string | null;
   conversions: { unit_name: string; factor: number }[];
   shelf_life_days: number | null;
+  // Como o item se divide entre centros de custo (mostrado na tela de despesa).
+  centers: { name: string; pct: number }[];
 }
 
 export async function getCostItemOptions(): Promise<CostItemOption[]> {
   const supabase = await createClient();
-  const [{ data }, { data: convs }] = await Promise.all([
+  const [{ data }, { data: convs }, { data: links }] = await Promise.all([
     supabase
       .from("cost_items")
       .select("id, name, is_inventory, inventory_item_id, inventory_items(unit, shelf_life_days)")
       .eq("active", true)
       .order("name"),
     supabase.from("inventory_item_unit_conversions").select("inventory_item_id, unit_name, factor"),
+    supabase.from("cost_item_centers").select("cost_item_id, alloc_pct, cost_centers(name)"),
   ]);
+  const centersByItem = new Map<string, { name: string; pct: number }[]>();
+  ((links ?? []) as unknown as { cost_item_id: string; alloc_pct: number; cost_centers: { name: string } | null }[]).forEach((l) => {
+    const list = centersByItem.get(l.cost_item_id) ?? [];
+    list.push({ name: l.cost_centers?.name ?? "—", pct: Number(l.alloc_pct) });
+    centersByItem.set(l.cost_item_id, list);
+  });
   const convByInv = new Map<string, { unit_name: string; factor: number }[]>();
   ((convs ?? []) as { inventory_item_id: string; unit_name: string; factor: number }[]).forEach((c) => {
     const list = convByInv.get(c.inventory_item_id) ?? [];
@@ -301,5 +310,6 @@ export async function getCostItemOptions(): Promise<CostItemOption[]> {
     unit: r.inventory_items?.unit ?? null,
     conversions: r.inventory_item_id ? (convByInv.get(r.inventory_item_id) ?? []) : [],
     shelf_life_days: r.inventory_items?.shelf_life_days ?? null,
+    centers: centersByItem.get(r.id) ?? [],
   }));
 }

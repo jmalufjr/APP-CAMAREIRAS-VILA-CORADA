@@ -14,6 +14,7 @@ import {
   Calculator,
   Download,
   Package,
+  Receipt,
 } from "lucide-react";
 
 // Módulo Contábil — Levas 1/2/3/4/5 trouxeram o plano de contas contábil,
@@ -25,6 +26,7 @@ import {
 // bancos" (PRD seção 9.1), lido direto do livro de lançamentos.
 const menuItems = [
   { href: "/compras/nova", label: "Lançar Compra", icon: Plus },
+  { href: "/despesas/nova", label: "Lançar Despesa", icon: Receipt },
   { href: "/compras/lista", label: "Lista de compras", icon: ShoppingBasket },
   { href: "/contabil/produtos", label: "Cadastro de produtos", icon: Package },
   { href: "/compras", label: "Estoque", icon: ShoppingCart },

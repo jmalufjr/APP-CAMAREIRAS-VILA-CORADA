@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { createExpense, updateExpense } from "@/lib/actions/expenses";
+import { createExpense, updateExpense, getExpenseWithItems } from "@/lib/actions/expenses";
 import type { ExpenseWithItems } from "@/lib/actions/expenses";
 import type { CostItemOption } from "@/lib/actions/cost-plan";
 import { createSupplier } from "@/lib/actions/suppliers";
@@ -126,6 +126,8 @@ export function ExpenseForm({
   assetCategories,
   assetCatalogItems,
   supplierOptions,
+  kind = "compra",
+  copyOptions = [],
   mode = "create",
   expenseId,
   initial,
@@ -135,6 +137,11 @@ export function ExpenseForm({
   assetCategories: AssetCategory[];
   assetCatalogItems: FixedAssetCatalogItem[];
   supplierOptions: SupplierOption[];
+  // "compra": itens de produto/estoque/ativo (PRD 4.1). "despesa": um
+  // gasto único numa categoria de custo, sem itens (PRD 4.2).
+  kind?: "compra" | "despesa";
+  // Despesas recentes que dá pra copiar (recorrentes) — só kind="despesa".
+  copyOptions?: { id: string; label: string }[];
   mode?: "create" | "edit";
   expenseId?: string;
   initial?: ExpenseWithItems;
@@ -152,11 +159,14 @@ export function ExpenseForm({
   const [dueDate, setDueDate] = useState(initial?.due_date ?? "");
   const [nfceUrl, setNfceUrl] = useState(initial?.nfce_url ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const isDespesa = kind === "despesa";
   const [manualTotal, setManualTotal] = useState(
-    initial && initial.items.length === 0 ? String(initial.total_amount) : ""
+    initial && (initial.items.length === 0 || isDespesa) ? String(initial.total_amount) : ""
   );
-  const [manualTotalCostItemId, setManualTotalCostItemId] = useState("");
+  const [manualTotalCostItemId, setManualTotalCostItemId] = useState(isDespesa ? (initial?.items[0]?.cost_item_id ?? "") : "");
+  const [despesaDescription, setDespesaDescription] = useState(isDespesa ? (initial?.items[0]?.description ?? "") : "");
   const [items, setItems] = useState<ItemRow[]>(
+    isDespesa ? [] :
     initial?.items.map((i) => ({
       description: i.description,
       quantity: i.purchase_unit ? (i.purchase_quantity ?? i.quantity) : i.quantity,
@@ -182,7 +192,7 @@ export function ExpenseForm({
       assetNotes: "",
       existingFixedAssetId: i.fixed_asset_id,
       existingFixedAssetName: i.fixed_asset_name,
-    })) ?? []
+    })) ?? (mode === "create" ? [emptyItem()] : [])
   );
 
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
@@ -191,7 +201,7 @@ export function ExpenseForm({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const itemsTotal = items.reduce((sum, i) => sum + lineSubtotal(i), 0);
-  const total = items.length > 0 ? itemsTotal : Number(manualTotal || 0);
+  const total = !isDespesa && items.length > 0 ? itemsTotal : Number(manualTotal || 0);
 
   function centerLabel(id: string): string {
     return costCenters.find((c) => c.id === id)?.name ?? id;
@@ -234,7 +244,12 @@ export function ExpenseForm({
     if (data.document_number) setDocumentNumber(data.document_number);
     if (data.payment_method) setPaymentMethod(data.payment_method);
     if (data.nfce_url) setNfceUrl(data.nfce_url);
-    if (data.items.length > 0) {
+    if (isDespesa) {
+      const sum = data.items.reduce((t, i) => t + i.quantity * i.unit_cost, 0);
+      const value = data.total_amount || sum;
+      if (value) setManualTotal(String(value));
+      if (data.items[0]?.description) setDespesaDescription(data.items[0].description);
+    } else if (data.items.length > 0) {
       setItems(
         data.items.map((i) => {
           const row = emptyItem();
@@ -284,6 +299,22 @@ export function ExpenseForm({
     updateItem(index, { newItemCenterLinks: current.filter((_, i) => i !== linkIndex) });
   }
 
+  // Despesa recorrente: copia os campos de uma despesa anterior (data nova,
+  // sem pagamento automático — o pagamento continua sendo escolhido aqui).
+  async function handleCopy(id: string) {
+    const src = await getExpenseWithItems(id);
+    if (!src) {
+      toast.error("Não foi possível carregar a despesa escolhida.");
+      return;
+    }
+    setSupplierId(src.supplier_id ?? "");
+    setManualTotal(String(src.total_amount));
+    setManualTotalCostItemId(src.items[0]?.cost_item_id ?? "");
+    setDespesaDescription(src.items[0]?.description ?? "");
+    setNotes(src.notes ?? "");
+    toast.success("Dados copiados — ajuste valor e data se precisar.");
+  }
+
   function handleScanNfceQr(value: string) {
     setNfceUrl(value);
     toast.success("Código da nota lido — confira o link abaixo.");
@@ -298,7 +329,15 @@ export function ExpenseForm({
 
   function handleSubmit() {
     if (total <= 0) {
-      toast.error("Informe o valor total (ou os itens) da despesa.");
+      toast.error(isDespesa ? "Informe o valor da despesa." : "Informe os itens da compra.");
+      return;
+    }
+    if (isDespesa && !despesaDescription.trim()) {
+      toast.error("Informe a descrição da despesa.");
+      return;
+    }
+    if (!isDespesa && items.length === 0) {
+      toast.error("Inclua pelo menos 1 item na compra.");
       return;
     }
     if (items.some((i) => !i.description.trim())) {
@@ -331,8 +370,8 @@ export function ExpenseForm({
         return;
       }
     }
-    if (items.length === 0 && !manualTotalCostItemId) {
-      toast.error("Selecione o item de custo do valor total.");
+    if (isDespesa && !manualTotalCostItemId) {
+      toast.error("Selecione a categoria da despesa.");
       return;
     }
     if (paymentMethod === "a_prazo" && !dueDate.trim()) {
@@ -359,7 +398,7 @@ export function ExpenseForm({
         items.length === 0
           ? [
               {
-                description: notes.trim() || "Despesa sem item detalhado",
+                description: despesaDescription.trim() || notes.trim() || "Despesa sem item detalhado",
                 quantity: 1,
                 unit_cost: total,
                 subtotal: total,
@@ -456,9 +495,13 @@ export function ExpenseForm({
         return;
       }
       if (result && "photoError" in result && result.photoError) {
-        toast.error(`Despesa salva, mas houve erro ao enviar a foto: ${result.photoError}`);
+        toast.error(`${isDespesa ? "Despesa" : "Compra"} salva, mas houve erro ao enviar a foto: ${result.photoError}`);
       } else {
-        toast.success(mode === "edit" ? "Despesa atualizada." : "Despesa registrada.");
+        toast.success(
+          mode === "edit"
+            ? isDespesa ? "Despesa atualizada." : "Compra atualizada."
+            : isDespesa ? "Despesa registrada." : "Compra registrada."
+        );
       }
       router.back();
       router.refresh();
@@ -547,7 +590,7 @@ export function ExpenseForm({
               <p className="text-xs text-muted-foreground">Em branco, usa a mesma data acima.</p>
             </div>
             <div className="space-y-1.5">
-              <Label>Fornecedor (opcional)</Label>
+              <Label>{isDespesa ? "Fornecedor/prestador (opcional)" : "Fornecedor (opcional)"}</Label>
               <Select value={supplierId || "none"} onValueChange={(v) => setSupplierId(v === "none" ? "" : (v ?? ""))}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Nenhum">
@@ -626,21 +669,78 @@ export function ExpenseForm({
         </CardContent>
       </Card>
 
+      {isDespesa && (
+        <Card>
+          <CardContent className="space-y-3">
+            <h3 className="font-heading text-lg">Despesa</h3>
+            {copyOptions.length > 0 && mode === "create" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Despesa recorrente? Copiar uma anterior (opcional)</Label>
+                <Select onValueChange={(v) => typeof v === "string" && handleCopy(v)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Escolha uma despesa anterior" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {copyOptions.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label>Categoria (item de custo)</Label>
+              <Select value={manualTotalCostItemId} onValueChange={(v) => setManualTotalCostItemId(v ?? "")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecione a categoria">
+                    {(v: string) => costItemOptions.find((c) => c.id === v)?.name ?? v}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {costItemOptions
+                    .filter((c) => !c.is_inventory)
+                    .map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {(() => {
+                const opt = costItemOptions.find((c) => c.id === manualTotalCostItemId);
+                if (!opt || opt.centers.length === 0) return null;
+                return (
+                  <p className="text-xs text-muted-foreground">
+                    Centros de custo (rateio): {opt.centers.map((c) => `${c.name} ${c.pct}%`).join(" · ")}. Pra mudar a
+                    divisão, ajuste o item em Listas → Plano de Contas.
+                  </p>
+                );
+              })()}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Descrição</Label>
+              <Input value={despesaDescription} onChange={(e) => setDespesaDescription(e.target.value)} placeholder="Ex.: conta de luz de outubro" />
+            </div>
+            <div className="space-y-1.5 max-w-xs">
+              <Label>Valor (R$)</Label>
+              <Input type="number" min={0} step="0.01" value={manualTotal} onChange={(e) => setManualTotal(e.target.value)} />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!isDespesa && (
       <Card>
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-heading text-lg">Itens (opcional)</h3>
+            <h3 className="font-heading text-lg">Itens da compra</h3>
             <Button type="button" variant="outline" size="sm" onClick={addItemRow}>
               <Plus size={14} /> Adicionar item
             </Button>
           </div>
 
-          {items.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              Sem itens, informe só o valor total abaixo — útil pra despesas que não são compra de produtos (ex.: conta de
-              luz, honorários).
-            </p>
-          )}
 
           {items.map((item, index) => (
             <div key={index} className="space-y-2 rounded-lg border border-border p-3">
@@ -964,40 +1064,15 @@ export function ExpenseForm({
             </div>
           ))}
 
-          {items.length === 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md">
-              <div className="space-y-1.5">
-                <Label>Valor total (R$)</Label>
-                <Input type="number" min={0} step="0.01" value={manualTotal} onChange={(e) => setManualTotal(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Item de custo</Label>
-                <Select value={manualTotalCostItemId} onValueChange={(v) => setManualTotalCostItemId(v ?? "")}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecione o item de custo">
-                      {(v: string) => costItemOptions.find((c) => c.id === v)?.name ?? v}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {costItemOptions.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
-
           {items.length > 0 && (
             <p className="text-sm font-medium">Total: R$ {itemsTotal.toFixed(2)}</p>
           )}
         </CardContent>
       </Card>
+      )}
 
       <Button onClick={handleSubmit} disabled={isPending} size="lg" className="w-full sm:w-auto">
-        {isPending ? "Salvando..." : mode === "edit" ? "Salvar alterações" : "Salvar despesa"}
+        {isPending ? "Salvando..." : mode === "edit" ? "Salvar alterações" : isDespesa ? "Salvar despesa" : "Salvar compra"}
       </Button>
     </div>
   );

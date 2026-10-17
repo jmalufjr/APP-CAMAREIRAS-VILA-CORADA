@@ -20,11 +20,28 @@ export default async function EditarDespesaPage({ params }: { params: Promise<{ 
 
   if (!expense) notFound();
 
+  // Despesa = um gasto único numa categoria que não é produto/estoque, sem
+  // ajustes de linha e sem ativo permanente; qualquer outro lançamento
+  // (vários itens, produto, ativo, desconto/frete/tributo) edita-se como compra.
+  const optionById = new Map(costItemOptions.map((c) => [c.id, c]));
+  const only = expense.items[0];
+  const isDespesa =
+    expense.items.length === 0 ||
+    (expense.items.length === 1 &&
+      !only.fixed_asset_id &&
+      !!only.cost_item_id &&
+      !optionById.get(only.cost_item_id)?.is_inventory &&
+      only.discount === 0 &&
+      only.freight_and_other_costs === 0 &&
+      only.recoverable_tax === 0 &&
+      only.non_recoverable_tax === 0);
+
   return (
     <div className="space-y-6">
       <BackLink href="/historico" />
-      <PageHeader title="Editar despesa" subtitle="Corrija os dados já lançados — a entrada de estoque é refeita automaticamente." />
+      <PageHeader title={isDespesa ? "Editar despesa" : "Editar compra"} subtitle="Corrija os dados já lançados — a entrada de estoque, quando houver, é refeita automaticamente." />
       <ExpenseForm
+        kind={isDespesa ? "despesa" : "compra"}
         mode="edit"
         expenseId={expense.id}
         initial={expense}

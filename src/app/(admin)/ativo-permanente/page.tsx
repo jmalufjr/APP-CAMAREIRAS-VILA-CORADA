@@ -69,7 +69,7 @@ export default async function AtivoPermanentePage() {
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-muted-foreground">
                   Nenhum item registrado ainda — os bens são criados ao lançar uma compra de ativo permanente em
-                  &quot;Lançar compras e despesas&quot;.
+                  &quot;Lançar Compra&quot;.
                 </TableCell>
               </TableRow>
             )}

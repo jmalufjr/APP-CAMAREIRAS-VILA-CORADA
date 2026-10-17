@@ -637,11 +637,14 @@ export default function QuestoesRespostasPage() {
           <AccordionPanel>
             <div className="space-y-3">
               <P>
-                “Compra” e “despesa” são, aqui dentro, a mesma coisa: qualquer dinheiro que a pousada
-                gasta, seja um saco de farinha ou a visita de um encanador. Tudo isso é lançado numa
-                única tela, chamada <strong>“Lançar compras e despesas”</strong> — dentro do menu{" "}
-                <strong>“Módulo Contábil”</strong> (pro administrador) e também no menu do funcionário de
-                manutenção (os dois podem lançar). A camareira não lança compra nenhuma: ela só avisa
+                Todo dinheiro que a pousada gasta é lançado em uma de duas telas do menu{" "}
+                <strong>“Módulo Contábil”</strong>: <strong>“Lançar Compra”</strong> — quando se compra
+                produtos, itens de estoque ou bens (um saco de farinha, uma geladeira), com uma ou mais
+                linhas de item — e <strong>“Lançar Despesa”</strong> — um gasto único numa categoria, sem
+                itens (conta de luz, honorários, a visita de um encanador), com valor, descrição, a
+                divisão entre centros de custo da categoria e a opção de copiar uma despesa anterior
+                (pra gastos que se repetem todo mês; copiar não gera pagamento automático). O funcionário
+                de manutenção também lança compras, no menu dele. A camareira não lança compra nenhuma: ela só avisa
                 quando algo está acabando e dá baixa manual num item (ver pergunta 14).
               </P>
 
@@ -785,7 +788,7 @@ export default function QuestoesRespostasPage() {
                     cada um no próprio menu, uma tela <strong>“Pedidos de compra”</strong> onde avisam
                     “isso está acabando”, escolhendo o item e a quantidade. Na “Lista de compras”, você
                     vê a soma de todos os pedidos pendentes daquele item e quem pediu. Assim que alguém
-                    lança uma compra desse item em “Lançar compras e despesas”, todos os pedidos
+                    lança uma compra desse item em “Lançar Compra”, todos os pedidos
                     pendentes dele são resolvidos automaticamente — não é preciso marcar nada à parte.
                   </>,
                 ]}
@@ -843,7 +846,7 @@ export default function QuestoesRespostasPage() {
               />
               <P>
                 <strong>Quem pode fazer o quê:</strong> admin e funcionário de manutenção lançam compras
-                em “Lançar compras e despesas”; camareira e funcionário de manutenção registram pedidos
+                em “Lançar Compra”; camareira e funcionário de manutenção registram pedidos
                 de compra e dão baixa de estoque; as telas de relatório e o restante do Módulo Contábil
                 (Custos, Demonstrativo, Histórico, Plano de Contas, Pagamentos e recebimentos, Livro de
                 lançamentos) são só do admin.
@@ -873,7 +876,7 @@ export default function QuestoesRespostasPage() {
                 saldo controlado e entram nas telas de estoque — os demais (salário, conta de luz,
                 honorários de contabilidade, serviços em geral) são só uma despesa, sem quantidade
                 nenhuma pra acompanhar. Essa escolha é feita item por item, no momento em que o item de
-                custo é criado (dentro da própria tela “Lançar compras e despesas”, ou direto no Plano de
+                custo é criado (dentro da própria tela “Lançar Compra”, ou direto no Plano de
                 Contas) — e pode ser revista a qualquer momento.
               </P>
 
@@ -1014,7 +1017,7 @@ export default function QuestoesRespostasPage() {
             <div className="space-y-3">
               <P>
                 “Despesa” e “custo” não são exatamente a mesma coisa aqui dentro. A despesa é o dinheiro
-                gasto, registrado em “Lançar compras e despesas” (pergunta 13) — já o custo é essa mesma
+                gasto, registrado em “Lançar Compra” (pergunta 13) — já o custo é essa mesma
                 informação, organizada e somada de um jeito que responde perguntas como “quanto custou
                 hospedar um hóspede” ou “quanto custou servir o café da manhã”. Essas contas já prontas
                 ficam nas telas <strong>“Custos”</strong> e <strong>“Demonstrativo de Despesas”</strong>{" "}

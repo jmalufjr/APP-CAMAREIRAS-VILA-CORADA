@@ -17,7 +17,7 @@ export default async function NovaDespesaPage() {
   return (
     <div className="space-y-6">
       <BackLink href="/contabil" />
-      <PageHeader title="Lançar compras e despesas" subtitle="Tire uma foto, escolha um arquivo (foto ou PDF) ou preencha manualmente." />
+      <PageHeader title="Lançar Compra" subtitle="Compra de produtos, itens de estoque ou bens. Tire uma foto, escolha um arquivo (foto ou PDF) ou preencha manualmente. Pra gastos como luz ou honorários, use “Lançar Despesa”." />
       <ExpenseForm
         costItemOptions={costItemOptions}
         costCenters={costCenters}

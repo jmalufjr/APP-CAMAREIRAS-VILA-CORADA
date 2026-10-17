@@ -3089,3 +3089,32 @@ fixtures e lançamentos contábeis removidos. `tsc`, `eslint` e
 
 **Ainda não existe**: tela de gestão de fornecedores (hoje só se criam
 na hora da compra) — candidata ao item "Cadastros" do menu.
+
+### 31.3 Telas separadas: Compra e Despesa (PRD seções 4.1 e 4.2)
+
+**Causa**: o documento original pede duas telas — Compras (itens, produto,
+quantidade, unidade, estoque) e Despesas (categoria, centro, valor,
+rateio, copiar recorrente). As 7 levas entregaram uma tela só ("Lançar
+compras e despesas"), com a despesa como um "valor total" escondido
+quando não havia itens. Omissão minha.
+
+**O que mudou**: o mesmo formulário agora tem dois modos, com telas e
+itens de menu próprios no Módulo Contábil:
+- **Lançar Compra** (`/compras/nova`): só itens (produto/item de custo,
+  novo item ou ativo permanente), com unidade de compra e validade; pelo
+  menos 1 linha obrigatória. O funcionário de manutenção continua com a
+  dele (`/manutencao/compras`).
+- **Lançar Despesa** (`/despesas/nova`): categoria (só itens de custo
+  que não são estoque), descrição, valor, fornecedor/prestador opcional,
+  pagamento/vencimento, anexo e observações. Mostra a divisão da
+  categoria entre centros de custo (o rateio vem do Plano de itens de
+  custo; a soma é sempre 100%). **Copiar despesa anterior** preenche
+  categoria, descrição, valor e fornecedor de uma das 30 despesas
+  recentes, sem gerar pagamento.
+- Editar (`/historico/compras/[id]/editar`) escolhe o modo sozinho:
+  despesa só se for uma linha única, sem ajustes, em categoria que não é
+  estoque nem ativo; o resto edita-se como compra.
+
+Nada muda no banco nem na contabilização (mesma `createExpense`,
+mesmos lançamentos). Ainda não existe rateio *por lançamento* diferente
+do rateio da categoria — se quiser, é a próxima evolução.

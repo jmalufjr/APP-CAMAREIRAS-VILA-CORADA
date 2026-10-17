@@ -15,7 +15,7 @@ export default async function ManutencaoComprasPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Lançar compras e despesas" subtitle="Tire uma foto, escolha um arquivo (foto ou PDF) ou preencha manualmente." />
+      <PageHeader title="Lançar Compra" subtitle="Tire uma foto, escolha um arquivo (foto ou PDF) ou preencha manualmente." />
       <ExpenseForm
         costItemOptions={costItemOptions}
         costCenters={costCenters}
