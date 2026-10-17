@@ -3139,3 +3139,8 @@ Pedido do proprietário:
   Manutenção Preventiva e Histórico. O menu lateral do admin ficou com
   Módulo operacional, Módulo Contábil, Usuários e Questões e Respostas.
   As rotas das telas não mudaram.
+
+**Ajuste posterior (17/10/2026)**: os itens de custo que não são produto
+(salário, luz, honorários…) saíram do Cadastro de produtos e ganharam a
+tela própria **Cadastro de despesas** (`/contabil/despesas`), logo abaixo
+de "Cadastro de produtos" no Módulo Contábil.

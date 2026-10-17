@@ -30,6 +30,7 @@ const menuItems = [
   { href: "/despesas/nova", label: "Lançar Despesa", icon: Receipt },
   { href: "/compras/lista", label: "Lista de compras", icon: ShoppingBasket },
   { href: "/contabil/produtos", label: "Cadastro de produtos", icon: Package },
+  { href: "/contabil/despesas", label: "Cadastro de despesas", icon: Receipt },
   { href: "/compras", label: "Estoque", icon: ShoppingCart },
   { href: "/ativo-permanente", label: "Ativo Permanente", icon: Archive },
   { href: "/contabil/plano-de-contas", label: "Plano de contas e centros de custos", icon: FolderTree },

@@ -85,7 +85,7 @@ export function CostItemDialog({
             </label>
           )}
           <p className="text-xs text-muted-foreground">
-            Este cadastro é pra gastos que não são produtos (salário, luz, honorários). Produtos são cadastrados acima, em Cadastro de produtos.
+            Este cadastro é pra gastos que não são produtos (salário, luz, honorários). Produtos são cadastrados em Módulo Contábil → Cadastro de produtos.
           </p>
           <PctLinksEditor options={centerOptions} value={links} onChange={setLinks} />
           <div className="space-y-1.5">
@@ -136,7 +136,7 @@ export function NonProductCostItems({
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="font-heading text-lg">Itens de custo que não são produtos</h3>
+        <h3 className="font-heading text-lg">Despesas cadastradas</h3>
         <CostItemDialog centerOptions={centerOptions} ledgerAccounts={ledgerAccounts} />
       </div>
       <p className="text-xs text-muted-foreground">

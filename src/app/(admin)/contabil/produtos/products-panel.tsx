@@ -16,9 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2 } from "lucide-react";
-import type { CostItemWithLinks } from "@/lib/actions/cost-plan";
 import { ProductDialog } from "./product-dialog";
-import { NonProductCostItems } from "./cost-item-dialog";
 
 interface Candidate {
   id: string;
@@ -32,9 +30,7 @@ export function ProductsPanel({
   centers,
   ledgerAccounts,
   candidates,
-  nonProductItems,
 }: {
-  nonProductItems: CostItemWithLinks[];
   products: ProductRow[];
   categories: ProductCategory[];
   centers: CostCenter[];
@@ -116,8 +112,6 @@ export function ProductsPanel({
           {filtered.length === 0 && <p className="text-center text-muted-foreground py-6 text-sm">Nenhum produto encontrado.</p>}
         </div>
       </section>
-
-      <NonProductCostItems items={nonProductItems} centers={centers} ledgerAccounts={ledgerAccounts} />
 
       <CategoriesSection categories={categories} />
     </div>

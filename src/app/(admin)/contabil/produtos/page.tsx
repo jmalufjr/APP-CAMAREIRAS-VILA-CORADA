@@ -1,18 +1,17 @@
 import { PageHeader } from "@/components/shared/page-header";
 import { BackLink } from "@/components/shared/back-link";
 import { getProducts, getProductCategories, getNonProductCostItems } from "@/lib/actions/products";
-import { getCostCenters, getCostItems } from "@/lib/actions/cost-plan";
+import { getCostCenters } from "@/lib/actions/cost-plan";
 import { getLedgerAccounts } from "@/lib/actions/ledger";
 import { ProductsPanel } from "./products-panel";
 
 export default async function CadastroDeProdutosPage() {
-  const [products, categories, centers, ledgerAccounts, candidates, allCostItems] = await Promise.all([
+  const [products, categories, centers, ledgerAccounts, candidates] = await Promise.all([
     getProducts(),
     getProductCategories(),
     getCostCenters(),
     getLedgerAccounts(),
     getNonProductCostItems(),
-    getCostItems(),
   ]);
 
   return (
@@ -28,7 +27,6 @@ export default async function CadastroDeProdutosPage() {
         centers={centers}
         ledgerAccounts={ledgerAccounts}
         candidates={candidates}
-        nonProductItems={allCostItems.filter((i) => !i.is_product)}
       />
     </div>
   );
