@@ -8,9 +8,9 @@ export default async function DashboardQuebraEstoquePage() {
 
   return (
     <div className="space-y-6">
-      <BackLink href="/dashboard" />
+      <BackLink href="/compras" />
       <PageHeader
-        title="Quebra de Estoque"
+        title="Quebra de estoque"
         subtitle="Itens cuja última contagem física ficou com quebra de estoque acima da quebra máxima admitida — ordenado do desvio mais grave pro menos grave."
       />
       <InventoryShrinkageTable rows={rows} />

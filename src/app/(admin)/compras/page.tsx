@@ -4,11 +4,13 @@ import { BackLink } from "@/components/shared/back-link";
 import { getPurchaseList } from "@/lib/actions/purchase-list";
 import { getSubcenterGroupCountStatus } from "@/lib/actions/inventory-counts";
 import { getExpiringLots } from "@/lib/actions/expiry";
-import { ClipboardList, PackageMinus, ChevronRight, AlertTriangle } from "lucide-react";
+import { ClipboardList, PackageMinus, ChevronRight, AlertTriangle, ShoppingCart, TrendingDown } from "lucide-react";
 
 const menuItems = [
   { href: "/compras/baixa", label: "Baixa de estoque", icon: PackageMinus },
   { href: "/compras/inventario", label: "Inventário", icon: ClipboardList },
+  { href: "/compras/previsao-estoque", label: "Previsão de estoque", icon: ShoppingCart },
+  { href: "/compras/quebra-estoque", label: "Quebra de estoque", icon: TrendingDown },
 ];
 
 export default async function ComprasPage() {

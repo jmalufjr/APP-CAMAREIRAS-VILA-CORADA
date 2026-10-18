@@ -14,9 +14,9 @@ export default async function DashboardEstoquePage() {
 
   return (
     <div className="space-y-6">
-      <BackLink href="/dashboard" />
+      <BackLink href="/compras" />
       <PageHeader
-        title="Estoque"
+        title="Previsão de estoque"
         subtitle="Compras do mês, saldo e previsão de dias restantes, por item de estoque."
       />
 

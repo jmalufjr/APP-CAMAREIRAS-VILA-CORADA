@@ -991,7 +991,7 @@ export default function QuestoesRespostasPage() {
                 percentual é comparado com um limite próprio de cada item — a “quebra máxima admitida”,
                 editável na própria tela de contagem com um seletor de mais/menos, em passos de 1%.
                 Sempre que uma contagem fecha com quebra acima desse limite, o item passa a aparecer na
-                tela <strong>“Quebra de Estoque”</strong> (menu do Resumo operacional), como um alerta pra
+                tela <strong>“Quebra de estoque”</strong> (Módulo Contábil → Estoque), como um alerta pra
                 investigar o motivo (furto, erro de lançamento, perda por vencimento, etc.), ordenado do
                 desvio mais grave pro menos grave.
               </P>
