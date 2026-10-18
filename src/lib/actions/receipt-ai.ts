@@ -1,0 +1,192 @@
+"use server";
+
+import Anthropic from "@anthropic-ai/sdk";
+import { createClient } from "@/lib/supabase/server";
+
+export interface ParsedReceiptItem {
+  description: string;
+  quantity: number;
+  unit_cost: number;
+  subtotal: number;
+  // Item já cadastrado que a IA julgou corresponder a esta linha (ex.:
+  // "água mineral da marca Indaiá" → "Água mineral sem gás" já existente)
+  // — null quando não achou nenhuma correspondência confiável. Nunca
+  // decide por conta própria: só sugere, a tela sempre mostra como uma
+  // caixa selecionável que o admin pode aceitar ou trocar.
+  matched_cost_item_id: string | null;
+}
+
+export interface ParsedReceipt {
+  supplier_name: string | null;
+  // Um de SUPPLIER_PAYMENT_METHOD_OPTIONS (banco_pix/dinheiro/
+  // cartao_corporativo/a_prazo — Módulo Contábil Leva 2), ou null se não
+  // identificado.
+  payment_method: string | null;
+  date: string | null; // "YYYY-MM-DD", se legível na nota
+  document_number: string | null; // número da nota/cupom fiscal, se impresso
+  total_amount: number | null;
+  nfce_url: string | null; // link/código da nota fiscal, se impresso no documento
+  items: ParsedReceiptItem[];
+}
+
+const BASE_SYSTEM_PROMPT = `Você lê fotos ou PDFs de notas fiscais, cupons fiscais e comprovantes de
+pagamento de uma pousada brasileira e devolve SOMENTE um JSON (sem texto antes ou
+depois, sem bloco de código markdown) no formato:
+
+{
+  "supplier_name": string ou null,
+  "payment_method": um destes valores ou null: "banco_pix", "dinheiro", "cartao_corporativo", "a_prazo",
+  "date": "YYYY-MM-DD" ou null,
+  "document_number": string ou null,
+  "total_amount": número ou null,
+  "nfce_url": string ou null,
+  "items": [
+    { "description": string, "quantity": número, "unit_cost": número, "subtotal": número, "matched_catalog_index": número ou null }
+  ]
+}
+
+Regras:
+- Se a imagem tiver vários itens (cupom de mercado, por exemplo), liste
+  cada um separadamente em "items".
+- Se não der pra separar itens (ex.: um comprovante de maquininha de
+  cartão só com o valor total, ou uma conta de luz/água), devolva
+  "items" como lista vazia e preencha "total_amount".
+- "payment_method": é a forma como A POUSADA pagou o fornecedor (nunca
+  confundir com forma de pagamento de hóspede). "banco_pix" cobre PIX,
+  transferência bancária e boleto já pago; "dinheiro" é dinheiro em
+  espécie; "cartao_corporativo" cobre cartão de crédito ou débito da
+  empresa; "a_prazo" só quando o documento deixa claro que ainda NÃO foi
+  pago (ex.: boleto com vencimento futuro, nota "a prazo"). Se não houver
+  nenhuma indicação clara, devolva null — nunca invente.
+- "document_number": o número da nota fiscal/cupom/NFC-e impresso no
+  documento (não o link, só o número/código). null se não houver.
+- "nfce_url": o link (geralmente abaixo de um QR code) ou o código de
+  acesso da NFC-e/nota fiscal, se estiver impresso no documento. null se
+  não houver.
+- "matched_catalog_index": veja a lista numerada de PRODUTOS do cadastro
+  no fim desta instrução. Você NUNCA cria produto novo nem categoria nova:
+  cada item comprado só pode ser enquadrado num produto dessa lista. Se a
+  descrição corresponder ao MESMO produto de algum item dessa lista — mesmo que a
+  descrição na nota seja diferente (marca, abreviação, variação de
+  escrita; ex.: "água mineral s/gás Indaiá 500ml" é o mesmo produto que
+  "Água mineral sem gás" já cadastrado) — devolva o número daquele item.
+  Só devolva um número quando tiver confiança real de que é o MESMO
+  produto; na dúvida, ou se o item não existir na lista, devolva null (a
+  pessoa escolhe o produto depois, ou o admin o cadastra — prefira deixar
+  sem correspondência a arriscar juntar dois produtos diferentes).
+- Nunca invente valores que não conseguir ler com confiança — prefira
+  null a um palpite errado.`;
+
+// Lê a foto de uma nota/recibo e devolve os campos sugeridos pra revisão
+// humana — nunca salva nada sozinho (ver createExpense em expenses.ts,
+// chamada só depois que a pessoa confirma/corrige o que foi lido aqui).
+// "Melhor esforço": se a chave da API não estiver configurada ou a
+// chamada falhar, devolve um erro claro em vez de travar o lançamento —
+// a pessoa sempre pode preencher tudo manualmente.
+export async function parseReceiptWithAI(formData: FormData): Promise<{ error: string } | { success: true; data: ParsedReceipt }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Não autenticado." };
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return {
+      error:
+        "Leitura automática de nota não está configurada neste ambiente (falta ANTHROPIC_API_KEY). Preencha os campos manualmente.",
+    };
+  }
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: "Selecione uma foto ou um PDF da nota/recibo." };
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const base64 = buffer.toString("base64");
+  const mediaType = file.type || "image/jpeg";
+  const isPdf = mediaType === "application/pdf";
+
+  // Catálogo numerado pro modelo devolver só um índice (token curto,
+  // menos sujeito a erro de transcrição do que pedir pra ele ecoar um
+  // UUID de volta) — convertido pro id real depois da resposta.
+  const { data: catalogData } = await supabase
+    .from("cost_items")
+    .select("id, name")
+    .eq("is_product", true)
+    .eq("active", true)
+    .order("name");
+  const catalog = (catalogData ?? []) as { id: string; name: string }[];
+  const catalogList = catalog.map((item, idx) => `${idx + 1}. ${item.name}`).join("\n");
+  const systemPrompt = `${BASE_SYSTEM_PROMPT}\n\nProdutos do Cadastro de produtos (pra "matched_catalog_index" — o número da linha, ou null):\n${catalogList || "(nenhum produto cadastrado ainda)"}`;
+
+  try {
+    const client = new Anthropic({ apiKey });
+    const message = await client.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages: [
+        {
+          role: "user",
+          content: [
+            isPdf
+              ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
+              : {
+                  type: "image",
+                  source: { type: "base64", media_type: mediaType as "image/jpeg" | "image/png" | "image/webp", data: base64 },
+                },
+            { type: "text", text: "Leia esta nota/recibo/comprovante e devolva o JSON pedido." },
+          ],
+        },
+      ],
+    });
+
+    const textBlock = message.content.find((b) => b.type === "text");
+    if (!textBlock || textBlock.type !== "text") return { error: "A IA não devolveu nenhum texto legível." };
+
+    // Remove um eventual bloco de código markdown, caso o modelo insista
+    // em envolver o JSON com ```json apesar da instrução de não fazer isso.
+    const cleaned = textBlock.text.trim().replace(/^```(json)?/i, "").replace(/```$/, "").trim();
+    type RawItem = {
+      description: string;
+      quantity: number;
+      unit_cost: number;
+      subtotal: number;
+      matched_catalog_index: number | null;
+    };
+    const parsed = JSON.parse(cleaned) as Omit<ParsedReceipt, "items" | "nfce_url" | "document_number"> & {
+      nfce_url?: string | null;
+      document_number?: string | null;
+      items: RawItem[];
+    };
+
+    const items: ParsedReceiptItem[] = (Array.isArray(parsed.items) ? parsed.items : []).map((i) => {
+      const idx = i.matched_catalog_index;
+      const matched = idx !== null && idx !== undefined ? catalog[idx - 1] : undefined;
+      return {
+        description: i.description,
+        quantity: i.quantity,
+        unit_cost: i.unit_cost,
+        subtotal: i.subtotal,
+        matched_cost_item_id: matched?.id ?? null,
+      };
+    });
+
+    return {
+      success: true,
+      data: {
+        supplier_name: parsed.supplier_name ?? null,
+        payment_method: parsed.payment_method ?? null,
+        date: parsed.date ?? null,
+        document_number: parsed.document_number ?? null,
+        total_amount: parsed.total_amount ?? null,
+        nfce_url: parsed.nfce_url ?? null,
+        items,
+      },
+    };
+  } catch (e) {
+    return {
+      error: `Não foi possível ler a imagem automaticamente (${(e as Error).message}). Preencha os campos manualmente.`,
+    };
+  }
+}

@@ -9,7 +9,7 @@ import { renderCommissionStatementPdf } from "@/lib/commission-statement-pdf";
 // o demonstrativo do último período fechado relativo a hoje (fecha no dia
 // 25, não no fim do mês — ver closedPeriodRange) — não existe tela de
 // navegar por períodos anteriores, só o botão "Calcular comissão do
-// último período" em /dashboard/comissoes.
+// último período" em /operacional/comissoes.
 export async function GET() {
   const supabase = await createClient();
 
@@ -19,7 +19,7 @@ export async function GET() {
   if (!user) return new NextResponse("Não autorizado.", { status: 401 });
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "admin") return new NextResponse("Acesso restrito ao admin.", { status: 403 });
+  if (profile?.role !== "admin" && profile?.role !== "gerente_operacional") return new NextResponse("Acesso restrito.", { status: 403 });
 
   const demonstrativo = await getClosedPeriodDemonstrativo();
   if (!demonstrativo) {

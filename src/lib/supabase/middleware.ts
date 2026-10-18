@@ -65,6 +65,7 @@ export async function updateSession(request: NextRequest) {
       admin: "/dashboard",
       camareira: "/tarefas",
       manutencao: "/manutencao/ocorrencias",
+      gerente_operacional: "/operacional",
     };
 
     if (path === "/login") {
@@ -74,6 +75,31 @@ export async function updateSession(request: NextRequest) {
     }
 
     const matchesPrefix = (p: string) => path === p || path.startsWith(p + "/");
+
+    // Gerente operacional: só estas telas (o resto do app é do admin).
+    if (profile.role === "gerente_operacional") {
+      const exact = [
+        "/operacional",
+        "/operacional/comissoes",
+        "/dashboard",
+        "/contabil",
+        "/sincronizacao",
+        "/planejamento",
+        "/frigobar",
+        "/chegadas-saidas/gerenciar",
+        "/mesas/gerenciar",
+        "/compras/nova",
+        "/compras/validade",
+        "/compras/baixa",
+      ];
+      const prefixes = ["/dashboard/servicos-suites", "/dashboard/suites-disponiveis", "/dashboard/tarefas", "/compras/lista"];
+      if (!exact.includes(path) && !prefixes.some(matchesPrefix)) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/operacional";
+        return NextResponse.redirect(url);
+      }
+      return response;
+    }
 
     const adminOnlyPrefixes = [
       "/dashboard",
@@ -86,8 +112,15 @@ export async function updateSession(request: NextRequest) {
       "/ocorrencias",
       "/manutencao-preventiva",
       "/questoes-respostas",
+      "/operacional",
+      "/sincronizacao",
+      "/integracao",
+      "/compras",
+      "/despesas",
+      "/ativo-permanente",
+      "/contabil",
     ];
-    const camareiraOnlyPrefixes = ["/tarefas", "/bar-piscina", "/comanda"];
+    const camareiraOnlyPrefixes = ["/tarefas", "/bar-piscina", "/comanda", "/estoque", "/pedidos-compra"];
     const manutencaoOnlyPrefixes = ["/manutencao"];
 
     if (profile.role !== "admin" && adminOnlyPrefixes.some(matchesPrefix)) {

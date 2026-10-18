@@ -12,7 +12,7 @@ export default async function FrigobarItemsPage() {
     <div className="space-y-6">
       <BackLink href="/checklists" />
       <PageHeader
-        title="Consumo de Frigobar"
+        title="Cardápio de frigobar"
         subtitle="Gerencie os itens e preços do frigobar disponíveis para a camareira registrar."
       />
       <FrigobarItemsPanel items={(items ?? []) as MinibarItem[]} />

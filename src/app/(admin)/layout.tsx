@@ -4,11 +4,11 @@ import { redirect } from "next/navigation";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const profile = await getCurrentProfile();
-  if (profile.role !== "admin") redirect("/tarefas");
+  if (profile.role !== "admin" && profile.role !== "gerente_operacional") redirect("/tarefas");
 
   return (
     <div className="flex flex-col lg:flex-row min-h-screen bg-background">
-      <AppSidebar role="admin" userName={profile.name} />
+      <AppSidebar role={profile.role === "gerente_operacional" ? "gerente" : "admin"} userName={profile.name} />
       <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 max-w-7xl">{children}</main>
     </div>
   );

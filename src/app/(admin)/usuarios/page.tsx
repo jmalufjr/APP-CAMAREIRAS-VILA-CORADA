@@ -9,7 +9,7 @@ export default async function UsuariosPage() {
   const { data: users } = await supabase
     .from("profiles")
     .select("*")
-    .in("role", ["camareira", "manutencao"])
+    .in("role", ["camareira", "manutencao", "gerente_operacional"])
     .order("role", { ascending: true })
     .order("created_at", { ascending: true });
 
@@ -17,7 +17,7 @@ export default async function UsuariosPage() {
     <div className="space-y-6">
       <PageHeader
         title="Usuários"
-        subtitle="Cadastre camareiras e funcionários de manutenção, e gerencie o acesso ao sistema."
+        subtitle="Cadastre camareiras, funcionários de manutenção e gerentes operacionais, e gerencie o acesso ao sistema."
         action={<UserFormDialog />}
       />
       <UsersTable users={(users ?? []) as Profile[]} />

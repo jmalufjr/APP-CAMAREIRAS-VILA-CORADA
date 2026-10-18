@@ -1,12 +1,8 @@
+import { BackLink } from "@/components/shared/back-link";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
-import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import {
-  Sparkles,
-  RefreshCw,
-  DoorOpen,
-  LogOut,
-  LogIn,
+  ListChecks,
   Wrench,
   CalendarCheck2,
   BedDouble,
@@ -17,23 +13,20 @@ import {
 } from "lucide-react";
 
 const menuItems = [
-  { href: "/checklists/arrumacao", label: TASK_TYPE_LABELS.arrumacao, icon: Sparkles },
-  { href: "/checklists/troca", label: TASK_TYPE_LABELS.troca, icon: RefreshCw },
-  { href: "/checklists/preparacao", label: TASK_TYPE_LABELS.preparacao, icon: DoorOpen },
-  { href: "/checklists/somente_saida", label: TASK_TYPE_LABELS.somente_saida, icon: LogOut },
-  { href: "/checklists/somente_chegada", label: TASK_TYPE_LABELS.somente_chegada, icon: LogIn },
+  { href: "/checklists/servicos-suites", label: "Check lists de serviços nas suítes", icon: ListChecks },
   { href: "/checklists/ocorrencias", label: "Ocorrências Manutenção", icon: Wrench },
   { href: "/checklists/manutencao-preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
   { href: "/checklists/quartos", label: "Suítes", icon: BedDouble },
-  { href: "/checklists/frigobar", label: "Consumo de Frigobar", icon: Wine },
-  { href: "/checklists/poolbar", label: "Bar da Piscina", icon: Martini },
+  { href: "/checklists/frigobar", label: "Cardápio de frigobar", icon: Wine },
+  { href: "/checklists/poolbar", label: "Cardápio de bar da piscina", icon: Martini },
   { href: "/checklists/mesas", label: "Layout & mesas", icon: Coffee },
 ];
 
 export default function ChecklistsPage() {
   return (
     <div className="space-y-6">
-      <PageHeader title="Listas" subtitle="Escolha o que deseja gerenciar." />
+      <BackLink href="/operacional" />
+      <PageHeader title="Listas operacionais" subtitle="Escolha o que deseja gerenciar." />
       <nav className="max-w-md space-y-1.5">
         {menuItems.map((item) => (
           <Link

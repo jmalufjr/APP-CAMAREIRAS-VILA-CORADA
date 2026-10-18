@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "camareira" | "manutencao";
+export type UserRole = "admin" | "camareira" | "manutencao" | "gerente_operacional";
 export type ChecklistType = "arrumacao" | "preparacao" | "troca" | "somente_chegada" | "somente_saida";
 export type TaskStatus = "pendente" | "em_andamento" | "concluido" | "cancelado";
 export type TableShape = "round" | "rect" | "square";
@@ -6,7 +6,22 @@ export type OccurrenceStatus = "pendente" | "selecionada" | "resolvida";
 export type MaintenanceExecutionType = "nao_tecnico" | "tecnico";
 export type MaintenanceItemStatus = "pendente" | "selecionada";
 export type RoomBillStatus = "aberta" | "fechada" | "reaberta" | "paga";
-export type PaymentMethod = "pix" | "cartao_credito" | "cartao_debito" | "transferencia_bancaria" | "dinheiro";
+export type PaymentMethod =
+  | "pix"
+  | "cartao_credito"
+  | "cartao_debito"
+  | "transferencia_bancaria"
+  | "dinheiro"
+  | "boleto";
+// Forma de pagamento do lado FORNECEDOR (a pousada pagando uma compra/
+// despesa) — diferente de PaymentMethod acima, que é do lado HÓSPEDE
+// (pagando a própria conta de consumo). Ver PRD_compras&contabil.md
+// seção 22.3 item 12.
+export type SupplierPaymentMethod = "banco_pix" | "dinheiro" | "cartao_corporativo" | "a_prazo";
+export type ExpensePaymentStatus = "pago" | "pendente";
+export type InventoryMovementType = "compra" | "baixa_manual" | "baixa_consumo_hospede" | "ajuste_contagem";
+export type InventoryCountStatus = "em_andamento" | "concluida";
+export type PurchaseRequestStatus = "pendente" | "atendido" | "cancelado";
 // 'unica' cobre o dia normal (1 conta por suíte, como sempre foi); os
 // outros dois só existem num dia de Saída com Chegada em que a conta do
 // hóspede que sai ainda não foi paga quando o hóspede novo chega.
@@ -92,6 +107,10 @@ export interface DailyBreakfastRoomAssignment {
 export interface DailyBreakfastSettings {
   date: string;
   notes: string | null;
+  // "Cafés servidos" (Módulo Contábil Leva 5) — null = usa o total de
+  // hóspedes hospedados calculado; um valor aqui é um teto que só pode
+  // ser reduzido, nunca aumentado (ver setBreakfastGuestsServed).
+  guests_served: number | null;
   updated_at: string;
 }
 
@@ -292,6 +311,288 @@ export interface BarComandaItem {
   poolbar_item_id: string;
   quantity: number;
   price_snapshot: number;
+}
+
+// ---------- Compras, despesas e estoque (PRD_compras.md) ----------
+
+// Plano de Contas (Parte 21, subcentros removidos no Módulo Contábil
+// Leva 1 — PRD_compras&contabil.md seção 22.3 item 2): centro de custo
+// → item de custo, direto, com rateio percentual quando um item
+// pertence a mais de um centro. Substitui por completo o antigo modelo
+// de "categoria de gasto".
+export interface CostCenter {
+  id: string;
+  name: string;
+  // "Dias entre uma contagem física e outra" (aviso de contagem
+  // devida) — migrou do antigo subcentro direto pro centro.
+  count_frequency_days: number | null;
+  active: boolean;
+  position: number;
+  created_at: string;
+}
+
+// Item de custo: a conta mais analítica — pode ou não representar
+// estoque (is_inventory), ligado a um item de estoque já existente
+// quando representa (cadastro separado, nunca a mesma linha).
+export interface CostItem {
+  id: string;
+  name: string;
+  is_inventory: boolean;
+  inventory_item_id: string | null;
+  // Conta do plano de contas CONTÁBIL (ledger_accounts.code) que o
+  // gasto deste item posta — null usa um padrão genérico (Módulo
+  // Contábil Leva 2).
+  ledger_account_code: string | null;
+  // Cadastro de produtos (PRD 5.1): produto = item de custo + item de
+  // estoque ligado, quando controla estoque.
+  is_product: boolean;
+  sku: string | null;
+  description: string | null;
+  category_id: string | null;
+  product_type: ProductType | null;
+  active: boolean;
+  position: number;
+  created_at: string;
+}
+
+export type ProductType =
+  | "revenda"
+  | "ingrediente_receita"
+  | "material_consumo"
+  | "material_limpeza"
+  | "embalagem"
+  | "outro";
+
+export interface ProductCategory {
+  id: string;
+  name: string;
+  active: boolean;
+  position: number;
+  created_at: string;
+}
+
+export interface UnitConversion {
+  unit_name: string;
+  factor: number;
+}
+
+export interface CostItemCenterLink {
+  cost_item_id: string;
+  center_id: string;
+  alloc_pct: number;
+}
+
+// ---------- Módulo Contábil (PRD_compras&contabil.md): plano de contas
+// contábil + partidas dobradas — dimensão "que TIPO de movimento é
+// isso" (Ativo/Passivo/Receita/Custo/Despesa), nunca confundir com
+// centro de custo ("de qual PARTE da pousada é isso"), acima.
+export type LedgerAccountGroup = "ativo" | "passivo" | "receita" | "custo" | "despesa";
+export type LedgerEntryStatus = "confirmado" | "estornado";
+export type LedgerEntryDirection = "debito" | "credito";
+
+export interface LedgerAccount {
+  id: string;
+  code: string;
+  display_code: string | null;
+  name: string;
+  account_group: LedgerAccountGroup;
+  requires_cost_center: boolean;
+  active: boolean;
+  position: number;
+  created_at: string;
+}
+
+export interface LedgerEntry {
+  id: string;
+  entry_date: string;
+  document_date: string | null;
+  cash_date: string | null;
+  description: string;
+  origin: string;
+  source_type: string | null;
+  source_id: string | null;
+  status: LedgerEntryStatus;
+  reverses_entry_id: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface LedgerEntryLine {
+  id: string;
+  entry_id: string;
+  account_id: string;
+  cost_center_id: string | null;
+  direction: LedgerEntryDirection;
+  amount: number;
+  created_at: string;
+}
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  unit: string;
+  barcode: string | null;
+  reorder_point: number;
+  // "Dias de folga" — substitui o antigo grupo de giro (Parte 21): direto
+  // no item, sempre presente (padrão 7), editável.
+  coverage_days: number;
+  portion_weight_kg: number | null;
+  active: boolean;
+  position: number;
+  created_at: string;
+  quebra_maxima_admitida_pct: number;
+  indice_relativo_maximo_pct: number;
+  cost_report_group: string | null;
+  // Módulo Contábil Leva 5 — decide como o item entra no custo do café da
+  // manhã: perecível = 100% do comprado no período; não perecível = o
+  // que foi baixado manualmente, valorizado pelo custo médio.
+  is_perishable: boolean;
+  shelf_life_days: number | null;
+  expiry_alert_days: number;
+}
+
+// Ficha técnica: qual(is) produto(s) do cardápio (frigobar OU bar da
+// piscina, nunca os dois) consomem este ingrediente. Total consumido por
+// pedido = portions_count (quantas porções do ingrediente vão no prato) ×
+// amount_per_portion (quanto, na unidade própria do ingrediente, tem 1
+// porção) — ver PRD_compras.md seção 19.
+export interface InventoryItemRecipe {
+  id: string;
+  inventory_item_id: string;
+  minibar_item_id: string | null;
+  poolbar_item_id: string | null;
+  portions_count: number;
+  amount_per_portion: number;
+  created_at: string;
+}
+
+// Dispensa, pelo admin, da sugestão calculada de um item — só vale
+// enquanto o saldo do item não mudar de novo (ver PurchaseListRow).
+export interface InventorySuggestionDismissal {
+  inventory_item_id: string;
+  dismissed_balance: number;
+  dismissed_by: string | null;
+  dismissed_at: string;
+}
+
+export interface PurchaseRequest {
+  id: string;
+  inventory_item_id: string;
+  requested_qty: number;
+  notes: string | null;
+  status: PurchaseRequestStatus;
+  requested_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ---------- Ativo permanente (PRD_compras.md seção 8) ----------
+
+export interface AssetCategory {
+  id: string;
+  name: string;
+  active: boolean;
+  position: number;
+  created_at: string;
+}
+
+export interface FixedAsset {
+  id: string;
+  category_id: string;
+  catalog_item_id: string | null;
+  name: string;
+  brand: string | null;
+  model: string | null;
+  purchase_date: string | null;
+  purchase_value: number | null;
+  warranty_until: string | null;
+  supplier_id: string | null;
+  location: string | null;
+  notes: string | null;
+  active: boolean;
+  created_by: string | null;
+  created_at: string;
+}
+
+// Catálogo de "tipos" de ativo permanente (ex.: "Televisores") — só um
+// nome reaproveitável, sem saldo nem quantidade (ver "Plano de Contas",
+// PRD_compras.md seção 21).
+export interface FixedAssetCatalogItem {
+  id: string;
+  name: string;
+  category_id: string;
+  active: boolean;
+  position: number;
+  created_at: string;
+}
+
+// Fornecedor — cadastro de verdade (Módulo Contábil Leva 2), substitui
+// os antigos campos de texto livre `expenses.supplier_name`/
+// `fixed_assets.supplier_name`, que nem batiam entre si.
+export interface Supplier {
+  id: string;
+  name: string;
+  cpf_cnpj: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  active: boolean;
+  created_at: string;
+}
+
+export interface InventoryMovement {
+  id: string;
+  inventory_item_id: string;
+  movement_type: InventoryMovementType;
+  quantity: number;
+  reference_expense_item_id: string | null;
+  reference_room_bill_id: string | null;
+  reference_count_line_id: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface InventoryCountSession {
+  id: string;
+  count_group_name: string | null;
+  status: InventoryCountStatus;
+  created_by: string | null;
+  created_at: string;
+  closed_at: string | null;
+}
+
+export interface InventoryCountLine {
+  id: string;
+  session_id: string;
+  inventory_item_id: string;
+  theoretical_qty: number;
+  counted_qty: number | null;
+  quebra_pct: number | null;
+  quebra_12m_pct: number | null;
+  indice_relativo_pct: number | null;
+  created_at: string;
+}
+
+// Uma linha da view inventory_count_line_history — uma contagem FECHADA,
+// já com nome do item/categoria e a data da contagem anterior via LAG().
+export interface InventoryCountLineHistory {
+  id: string;
+  session_id: string;
+  inventory_item_id: string;
+  item_name: string;
+  unit: string;
+  category_name: string;
+  theoretical_qty: number;
+  counted_qty: number;
+  diferenca: number;
+  quebra_pct: number | null;
+  quebra_12m_pct: number | null;
+  indice_relativo_pct: number | null;
+  quebra_maxima_admitida_pct: number;
+  indice_relativo_maximo_pct: number;
+  closed_at: string;
+  previous_count_date: string | null;
 }
 
 // Minimal Database type placeholder so @supabase/ssr generics compile.

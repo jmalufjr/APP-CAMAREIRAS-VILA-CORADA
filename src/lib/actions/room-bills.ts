@@ -498,7 +498,7 @@ export async function updateAccountingEmail(email: string) {
     .update({ accounting_email: trimmed || null, updated_at: new Date().toISOString() })
     .eq("id", 1);
   if (error) return { error: error.message };
-  revalidatePath("/dashboard/email-envio");
+  revalidatePath("/integracao/email-envio");
   return { success: true };
 }
 
@@ -661,4 +661,58 @@ export async function getRecentlyPaidRoomBills(days = 7): Promise<RecentlyPaidBi
     receiptEmailSent: bill.receipt_email_sent,
     ...computeBillTotals(bill.id, mbRows, pbRows, bill.service_charge_waived),
   }));
+}
+
+export interface ReceiptsByPaymentMethodRow {
+  payment_method: PaymentMethod | null;
+  total: number;
+  count: number;
+}
+
+// Recebimentos de checkout por forma de pagamento, num período
+// arbitrário (PRD_compras&contabil.md seção 22.1 item 8.2, Módulo
+// Contábil Leva 7) — mesma lógica de totais de `getRecentlyPaidRoomBills`
+// (reconstruída a partir das linhas de frigobar/comanda, nunca um total
+// persistido), só que filtrada por `paid_at` num intervalo flexível em
+// vez de "últimos N dias", e já agregada por forma de pagamento.
+export async function getReceiptsByPaymentMethodForPeriod(from: string, to: string): Promise<ReceiptsByPaymentMethodRow[]> {
+  const supabase = await createClient();
+  const { data: bills } = await supabase
+    .from("room_bills")
+    .select("id, payment_method, service_charge_waived")
+    .eq("status", "paga")
+    .gte("paid_at", startOfDayBrasiliaUtc(from))
+    .lt("paid_at", nextDayBrasiliaUtcBoundary(to));
+
+  type PaidBillRow = { id: string; payment_method: PaymentMethod | null; service_charge_waived: boolean };
+  const billList = (bills ?? []) as unknown as PaidBillRow[];
+  if (billList.length === 0) return [];
+
+  const billIds = billList.map((b) => b.id);
+  const [{ data: minibarRows }, { data: poolbarRows }] = await Promise.all([
+    supabase
+      .from("room_bill_minibar_items")
+      .select("bill_id, minibar_item_id, quantity, price_snapshot, minibar_items(name)")
+      .in("bill_id", billIds)
+      .gt("quantity", 0),
+    supabase
+      .from("bar_comanda_items")
+      .select("quantity, price_snapshot, poolbar_item_id, poolbar_items(name), bar_comandas!inner(bill_id, status)")
+      .in("bar_comandas.bill_id", billIds)
+      .neq("bar_comandas.status", "cancelada")
+      .gt("quantity", 0),
+  ]);
+  const mbRows = (minibarRows ?? []) as unknown as MinibarRow[];
+  const pbRows = (poolbarRows ?? []) as unknown as PoolbarRow[];
+
+  const byMethod = new Map<string, ReceiptsByPaymentMethodRow>();
+  billList.forEach((bill) => {
+    const key = bill.payment_method ?? "—";
+    const { grandTotal } = computeBillTotals(bill.id, mbRows, pbRows, bill.service_charge_waived);
+    const entry = byMethod.get(key) ?? { payment_method: bill.payment_method, total: 0, count: 0 };
+    entry.total += grandTotal;
+    entry.count += 1;
+    byMethod.set(key, entry);
+  });
+  return Array.from(byMethod.values()).sort((a, b) => b.total - a.total);
 }

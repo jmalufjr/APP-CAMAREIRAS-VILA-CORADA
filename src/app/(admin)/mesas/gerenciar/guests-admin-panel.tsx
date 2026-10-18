@@ -3,12 +3,13 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import type { BreakfastTable, DailyBreakfastSettings, DailyBreakfastRoomAssignment, Room } from "@/lib/types";
-import { setBreakfastDayNotes } from "@/lib/actions/tables";
+import { setBreakfastDayNotes, setBreakfastGuestsServed } from "@/lib/actions/tables";
 import { computeTableSizeCounts } from "@/lib/stays/derive-breakfast";
 import { todayKey, tomorrowKey, formatDatePt } from "@/lib/date";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { QuantityStepper } from "@/components/shared/quantity-stepper";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TableLayoutCanvas, type TableRoomAssignment } from "@/components/shared/table-layout-canvas";
 import { TableNotesList } from "@/components/shared/table-notes-list";
@@ -175,10 +176,29 @@ function GuestCountEditor({
   const [dayNotes, setDayNotes] = useState(daySettings?.notes ?? "");
   const tableSizeCounts = computeTableSizeCounts(assignments, activeTables);
 
+  // "Cafés servidos" (Módulo Contábil Leva 5): nasce igual ao total de
+  // hóspedes hospedados (soma dos guest_count já alocados por mesa) e só
+  // pode ser reduzido — o teto é sempre esse total calculado, nunca o
+  // próprio valor editado.
+  const guestsServedCeiling = assignments.reduce((sum, a) => sum + a.guest_count, 0);
+  const [guestsServed, setGuestsServed] = useState(daySettings?.guests_served ?? guestsServedCeiling);
+
   function saveDayNotes(nextNotes: string) {
     startTransition(async () => {
       const result = await setBreakfastDayNotes(date, nextNotes);
       if (result?.error) toast.error(result.error);
+    });
+  }
+
+  function saveGuestsServed(next: number) {
+    const previous = guestsServed;
+    setGuestsServed(next);
+    startTransition(async () => {
+      const result = await setBreakfastGuestsServed(date, next);
+      if (result?.error) {
+        toast.error(result.error);
+        setGuestsServed(previous);
+      }
     });
   }
 
@@ -192,6 +212,17 @@ function GuestCountEditor({
         <p>Mesas de 2 hóspedes: {tableSizeCounts.tables2Guest}</p>
         <p>Mesas de 3 hóspedes: {tableSizeCounts.tables3Guest}</p>
         <p>Hóspedes na Mesa 07: {tableSizeCounts.guestsTable07}</p>
+      </div>
+
+      <div className="max-w-sm space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <Label className="text-sm">Cafés servidos (só pode reduzir)</Label>
+          <QuantityStepper value={guestsServed} min={0} max={guestsServedCeiling} onChange={saveGuestsServed} />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Nasce igual ao total de hóspedes hospedados ({guestsServedCeiling}) — reduza só se algum hóspede não tiver
+          tomado café.
+        </p>
       </div>
 
       <div className="max-w-sm space-y-1.5">

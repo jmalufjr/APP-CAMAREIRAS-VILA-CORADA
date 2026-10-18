@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireRole } from "@/lib/actions/authz";
 import { getStaysReservationsIncluding, getStaysClientName, type StaysReservationRaw } from "@/lib/stays/client";
 import { deriveWorkType, daysBetween } from "@/lib/stays/derive-planning";
 import { assignRoomsToTables, tableNumber, type RoomGuestCount } from "@/lib/stays/derive-breakfast";
@@ -791,6 +792,11 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
 // hóspedes, mesas), uma falha na Stays num deles não deve impedir as
 // outras duas de completarem.
 export async function syncStaysAll(options?: SyncOptions) {
+  const denied = await requireRole(["admin", "gerente_operacional"]);
+  if (denied) {
+    const e = { error: denied.error };
+    return { planning: e, arrivalsDepartures: e, breakfastTables: e };
+  }
   const planning = await syncStaysPlanning(options);
   const arrivalsDepartures = await syncStaysArrivalsDepartures(options);
   const breakfastTables = await syncStaysBreakfastTables(options);

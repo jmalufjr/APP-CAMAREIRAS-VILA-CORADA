@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/shared/back-link";
 import { createClient } from "@/lib/supabase/server";
 import type { BreakfastTable, DailyBreakfastSettings, Room } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
@@ -28,6 +29,7 @@ export default async function GerenciarMesasPage() {
 
   return (
     <div className="space-y-6">
+      <BackLink href="/operacional" />
       <PageHeader
         title="Mesas do café da manhã"
         subtitle="Edite a quantidade de hóspedes e as observações por mesa."

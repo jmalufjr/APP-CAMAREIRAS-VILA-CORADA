@@ -229,6 +229,36 @@ export async function setBreakfastDayNotes(date: string, notes: string) {
   return { success: true };
 }
 
+// "Cafés servidos" (Módulo Contábil Leva 5): nasce igual ao total de
+// hóspedes hospedados (soma de daily_breakfast_room_assignments.
+// guest_count) e só pode ser editado pra BAIXO — nunca pra cima, nem do
+// teto calculado, nem de um valor já reduzido antes. Guarda só o
+// override (null = "usa o teto calculado"), nunca o teto em si.
+export async function setBreakfastGuestsServed(date: string, value: number) {
+  if (value < 0 || !Number.isInteger(value)) return { error: "Informe um número válido." };
+  const supabase = await createClient();
+
+  const [{ data: assignments }, { data: current }] = await Promise.all([
+    supabase.from("daily_breakfast_room_assignments").select("guest_count").eq("date", date),
+    supabase.from("daily_breakfast_settings").select("guests_served").eq("date", date).maybeSingle(),
+  ]);
+  const ceiling = (assignments ?? []).reduce((sum, a) => sum + Number(a.guest_count), 0);
+  const currentEffective = current?.guests_served ?? ceiling;
+
+  if (value > currentEffective) {
+    return { error: `Só é possível reduzir o número de cafés servidos (máximo atual: ${currentEffective}).` };
+  }
+
+  const { error } = await supabase.from("daily_breakfast_settings").upsert(
+    { date, guests_served: value, updated_at: new Date().toISOString() },
+    { onConflict: "date" }
+  );
+  if (error) return { error: error.message };
+  revalidatePath("/mesas/gerenciar");
+  revalidatePath("/custos-despesas");
+  return { success: true };
+}
+
 export async function updateCommissionValue(value: number) {
   const supabase = await createClient();
   const { error } = await supabase

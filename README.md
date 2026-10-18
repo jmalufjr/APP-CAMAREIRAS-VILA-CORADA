@@ -152,6 +152,7 @@ copie o conteúdo por cima de `.env.local` temporariamente e desfaça depois.
    | `STAYS_CLIENT_ID` | ver seção 6.1 | Production, Preview, Development |
    | `STAYS_CLIENT_SECRET` | ver seção 6.1 | Production, Preview, Development |
    | `CRON_SECRET` | ver seção 7 | Production, Preview, Development |
+   | `ANTHROPIC_API_KEY` | (opcional) chave da Anthropic — habilita "Ler nota com IA" em Lançar Compra | Production, Preview, Development |
 
 4. Clique em **Deploy**. Cada push na branch `main` gera um novo deploy
    automaticamente depois disso.
@@ -159,6 +160,24 @@ copie o conteúdo por cima de `.env.local` temporariamente e desfaça depois.
    `https://app-camareiras-vila-corada.vercel.app`) e cole em
    **Supabase → Authentication → URL Configuration → Site URL**, para manter
    a configuração de autenticação consistente com o domínio de produção.
+
+### 5.1 Levar o Módulo Contábil para produção (e como voltar atrás)
+
+O Módulo Contábil (compras, despesas, estoque, plano de contas, partidas
+dobradas, balancetes, livros, exportações e o papel "Gerente operacional")
+precisa de 30 migrations do banco (053 a 082) **antes** de o código novo ir
+pro ar. Passo a passo, backup, ensaio feito e todas as formas de voltar
+atrás: **`PLANO_DEPLOY_PRODUCAO.md`**. Os SQLs prontos pra colar no SQL
+Editor de produção ficam em `supabase/producao/`:
+
+- `01-etapa-A-enums.sql` — roda primeiro, sozinho.
+- `02-etapa-B-migrations.sql` — tudo o resto, numa transação só.
+- `03-reverter-para-versao-anterior.sql` — só se precisar voltar o app
+  para a versão anterior.
+
+Ponto de retorno: tag `producao-antes-modulo-contabil`, branch
+`backup/main-antes-modulo-contabil` e o deploy
+`dpl_23hAXZ2HtazGYPtKefqDycbTRGnc` da Vercel (Promote to Production).
 
 ### Segurança das chaves
 
@@ -265,11 +284,18 @@ para `localFont` (next/font/local) apontando para os arquivos.
 
 - `supabase/schema.sql` / `supabase/seed.sql` — banco de dados (instalação
   nova); `supabase/migrations/` — alterações incrementais (produção já
-  existente).
-- `src/app/(admin)/` — páginas do admin: resumo executivo, planejamento
-  diário, chegadas & saídas, mesas do café, consumo de bar e frigobar,
-  listas (checklists/ocorrências/manutenção preventiva/quartos), usuários,
-  histórico, questões e respostas.
+  existente); `supabase/producao/` — SQL consolidado pra levar as
+  migrations 053–082 à produção e para reverter (ver `PLANO_DEPLOY_PRODUCAO.md`).
+- `src/app/(admin)/` — páginas do admin e do gerente operacional. Menu do
+  admin: **Módulo operacional** (resumo operacional, planejamento diário,
+  chegadas & saídas, mesas do café, consumo de bar e frigobar, comissões,
+  listas operacionais, manutenção preventiva, histórico), **Módulo
+  Contábil** (lançar compra/despesa, lista de compras, validade, estoque
+  com baixa/inventário/previsão/quebra, ativo permanente, pagamentos,
+  demonstrativos e relatórios, listas contábeis, exportações),
+  **Sincronização**, **Integração**, usuários, questões e respostas. O
+  **gerente operacional** vê só Módulo operacional (parte), Módulo
+  Contábil (compra/lista/validade/baixa) e Sincronização.
 - `src/app/(camareira)/` — páginas da camareira: minhas suítes (checklist),
   mesas do café, chegadas & saídas, comanda, consumo por suítes.
 - `src/app/manutencao/` — páginas do funcionário de manutenção.

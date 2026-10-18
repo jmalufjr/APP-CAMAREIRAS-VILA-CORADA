@@ -1,12 +1,14 @@
+import { BackLink } from "@/components/shared/back-link";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/actions/session";
 import { PageHeader } from "@/components/shared/page-header";
 import { todayKey, formatDatePt, nowInBrazil } from "@/lib/date";
 import { Card, CardContent } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { getBarCommissionByCamareira } from "@/lib/actions/comandas";
 import { getBreakfastCommissionPotForRange } from "@/lib/actions/breakfast-commission";
-import { SyncStaysAllButton } from "./sync-stays-all-button";
+import { getItemsNeedingPurchaseCount } from "@/lib/actions/purchase-list";
 import {
   BedDouble,
   Coffee,
@@ -18,8 +20,6 @@ import {
   History,
   ChevronRight,
   Key,
-  Mail,
-  KeyRound,
 } from "lucide-react";
 
 function monthRange() {
@@ -38,12 +38,32 @@ const menuItems = [
   },
   { href: "/dashboard/consumo-frigobar", label: "Consumo de frigobar", icon: Wine },
   { href: "/dashboard/consumo-bar", label: "Consumo de bar", icon: Martini },
-  { href: "/dashboard/comissoes", label: "Comissões das camareiras", icon: Percent },
-  { href: "/dashboard/email-envio", label: "Cadastrar e-mail de envio", icon: Mail },
-  { href: "/dashboard/api-tokens", label: "Chaves de acesso — API de consumos", icon: KeyRound },
 ];
 
 export default async function DashboardPage() {
+  const profile = await getCurrentProfile();
+  if (profile.role === "gerente_operacional") {
+    const gerenteItems = menuItems.filter((i) => i.href === "/dashboard/servicos-suites" || i.href === "/dashboard/suites-disponiveis");
+    return (
+      <div className="space-y-6">
+        <BackLink href="/operacional" />
+        <PageHeader title="Resumo operacional" subtitle={`Resumo de hoje, ${formatDatePt(todayKey())}`} />
+        <nav className="max-w-md space-y-1.5">
+          {gerenteItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <item.icon size={18} strokeWidth={1.75} className="text-muted-foreground" />
+              <span className="flex-1">{item.label}</span>
+              <ChevronRight size={16} className="text-muted-foreground" />
+            </Link>
+          ))}
+        </nav>
+      </div>
+    );
+  }
   const supabase = await createClient();
   const today = todayKey();
   const { start, end } = monthRange();
@@ -55,6 +75,7 @@ export default async function DashboardPage() {
     { count: occurrencesToday },
     barCommission,
     totalCommissionMonth,
+    itemsNeedingPurchaseCount,
   ] = await Promise.all([
     supabase.from("daily_room_tasks").select("status").eq("date", today),
     // Suítes elegíveis pro café da manhã hoje (independente de terem sido
@@ -73,6 +94,7 @@ export default async function DashboardPage() {
       .eq("daily_room_tasks.date", today),
     getBarCommissionByCamareira(),
     getBreakfastCommissionPotForRange(start, end),
+    getItemsNeedingPurchaseCount(),
   ]);
 
   const doneToday = (todayTasks ?? []).filter((t) => t.status === "concluido").length;
@@ -84,8 +106,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      <BackLink href="/operacional" />
       <PageHeader
-        title="Resumo executivo"
+        title="Resumo operacional"
         subtitle={`Resumo de hoje, ${formatDatePt(today)}`}
         action={<ThemeToggle />}
       />
@@ -118,7 +141,16 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <SyncStaysAllButton />
+      {itemsNeedingPurchaseCount > 0 && (
+        <Link
+          href="/compras/lista"
+          className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive hover:bg-destructive/15 transition-colors w-fit"
+        >
+          <AlertTriangle size={16} />
+          {itemsNeedingPurchaseCount} item(ns) precisam de compra
+          <ChevronRight size={14} />
+        </Link>
+      )}
 
       <nav className="max-w-md space-y-1.5">
         {menuItems.map((item) => (

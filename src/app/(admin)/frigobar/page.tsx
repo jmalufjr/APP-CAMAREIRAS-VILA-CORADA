@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/shared/back-link";
 import { PageHeader } from "@/components/shared/page-header";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { getRoomBillsOverview, getRecentlyPaidRoomBills } from "@/lib/actions/room-bills";
@@ -15,6 +16,7 @@ export default async function FrigobarPage() {
 
   return (
     <div className="space-y-6">
+      <BackLink href="/operacional" />
       <PageHeader
         title="Consumo de Bar e Frigobar"
         subtitle="Consulta de consumo de frigobar e do bar da piscina por suíte — fechar conta, reabrir e registrar pagamento agora são ações da camareira."

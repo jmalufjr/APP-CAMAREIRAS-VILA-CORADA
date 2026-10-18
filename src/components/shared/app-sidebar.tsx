@@ -14,9 +14,7 @@ import {
   Coffee,
   ClipboardList,
   Users,
-  History,
   LogOut,
-  ClipboardCheck,
   Menu,
   CalendarClock,
   Wrench,
@@ -24,6 +22,12 @@ import {
   Wine,
   Martini,
   HelpCircle,
+  ShoppingCart,
+  PackageMinus,
+  ShoppingBasket,
+  BookOpen,
+  RefreshCw,
+  Plug,
 } from "lucide-react";
 
 interface NavItem {
@@ -33,19 +37,45 @@ interface NavItem {
   // Uso diário mais frequente no fluxo de trabalho do admin — recebe um
   // leve realce visual no menu para se destacar dos demais itens.
   frequent?: boolean;
+  // Rotas que também marcam este item como ativo (o item é um módulo que
+  // agrupa várias telas, cada uma com seu próprio caminho).
+  matchPrefixes?: string[];
 }
 
 const adminNav: NavItem[] = [
-  { href: "/dashboard", label: "Resumo executivo", icon: LayoutDashboard },
-  { href: "/planejamento", label: "Planejamento diário", icon: ClipboardCheck, frequent: true },
-  { href: "/chegadas-saidas/gerenciar", label: "Chegadas & saídas", icon: CalendarClock, frequent: true },
-  { href: "/mesas/gerenciar", label: "Mesas do café", icon: Coffee, frequent: true },
-  { href: "/frigobar", label: "Consumo de Bar e Frigobar", icon: Wine, frequent: true },
-  { href: "/checklists", label: "Listas", icon: ClipboardList },
-  { href: "/manutencao-preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
+  {
+    href: "/operacional",
+    label: "Módulo operacional",
+    icon: LayoutDashboard,
+    matchPrefixes: [
+      "/operacional",
+      "/dashboard",
+      "/planejamento",
+      "/chegadas-saidas",
+      "/mesas",
+      "/frigobar",
+      "/checklists",
+      "/manutencao-preventiva",
+      "/historico",
+      "/ocorrencias",
+    ],
+  },
+  {
+    href: "/contabil",
+    label: "Módulo Contábil",
+    icon: BookOpen,
+    matchPrefixes: ["/contabil", "/compras", "/despesas", "/ativo-permanente"],
+  },
+  { href: "/sincronizacao", label: "Sincronização", icon: RefreshCw },
+  { href: "/integracao", label: "Integração", icon: Plug },
   { href: "/usuarios", label: "Usuários", icon: Users },
-  { href: "/historico", label: "Histórico", icon: History },
   { href: "/questoes-respostas", label: "Questões e Respostas", icon: HelpCircle },
+];
+
+const gerenteNav: NavItem[] = [
+  adminNav[0],
+  adminNav[1],
+  { href: "/sincronizacao", label: "Sincronização", icon: RefreshCw },
 ];
 
 const camareiraNav: NavItem[] = [
@@ -54,11 +84,16 @@ const camareiraNav: NavItem[] = [
   { href: "/chegadas-saidas", label: "Chegadas & saídas", icon: CalendarClock },
   { href: "/comanda", label: "Comandas de Bar da Piscina", icon: Martini },
   { href: "/bar-piscina", label: "Consumo total por suíte", icon: Wine },
+  { href: "/estoque", label: "Baixa de estoque", icon: PackageMinus },
+  { href: "/pedidos-compra", label: "Pedidos de compra", icon: ShoppingBasket },
 ];
 
 const manutencaoNav: NavItem[] = [
   { href: "/manutencao/ocorrencias", label: "Ocorrências de Manutenção", icon: Wrench },
   { href: "/manutencao/preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
+  { href: "/manutencao/estoque", label: "Baixa de estoque", icon: PackageMinus },
+  { href: "/manutencao/pedidos-compra", label: "Pedidos de compra", icon: ShoppingBasket },
+  { href: "/manutencao/compras", label: "Lançar Compra", icon: ShoppingCart },
 ];
 
 function SidebarContent({
@@ -66,12 +101,13 @@ function SidebarContent({
   userName,
   onNavigate,
 }: {
-  role: "admin" | "camareira" | "manutencao";
+  role: "admin" | "camareira" | "manutencao" | "gerente";
   userName: string;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const items = role === "admin" ? adminNav : role === "manutencao" ? manutencaoNav : camareiraNav;
+  const items =
+    role === "admin" ? adminNav : role === "gerente" ? gerenteNav : role === "manutencao" ? manutencaoNav : camareiraNav;
 
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
@@ -85,7 +121,19 @@ function SidebarContent({
 
       <nav className="flex-1 min-h-0 overflow-y-auto px-3 space-y-1">
         {items.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          const matches = (href: string) => pathname === href || pathname.startsWith(href + "/");
+          // Se outro item do mesmo menu tem um caminho mais específico que
+          // também bate (ex.: "/compras/nova" dentro de "/compras"), esse
+          // outro item "ganha" o realce — sem isso, "Estoque" (/compras)
+          // ficaria marcado como ativo também ao visitar "Lançar Compra"
+          // (/compras/nova), que é uma rota promovida ao menu principal
+          // mas que continua vivendo sob o mesmo prefixo de URL.
+          const moreSpecificItemMatches = items.some(
+            (other) => other.href !== item.href && other.href.startsWith(item.href + "/") && matches(other.href)
+          );
+          const active = item.matchPrefixes
+            ? item.matchPrefixes.some(matches)
+            : matches(item.href) && !moreSpecificItemMatches;
           return (
             <Link
               key={item.href}
@@ -131,7 +179,7 @@ export function AppSidebar({
   role,
   userName,
 }: {
-  role: "admin" | "camareira" | "manutencao";
+  role: "admin" | "camareira" | "manutencao" | "gerente";
   userName: string;
 }) {
   const [open, setOpen] = useState(false);

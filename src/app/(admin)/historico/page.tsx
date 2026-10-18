@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/shared/back-link";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/shared/page-header";
 import { HistoryFilters } from "./history-filters";
@@ -9,6 +10,12 @@ import { getMinibarConsumptionForPeriod } from "@/lib/actions/minibar";
 import { getPoolbarConsumptionForPeriod } from "@/lib/actions/poolbar";
 import { getBarCommissionByCamareiraForPeriod } from "@/lib/actions/comandas";
 import { getSuitesCafeCommissionForPeriod } from "@/lib/actions/commission";
+import { getExpenses, getExpenseSummaryBySupplier } from "@/lib/actions/expenses";
+import { getExpenseDemonstrativoForPeriod } from "@/lib/actions/cost-accounting";
+import { ComprasHistoryTable } from "@/components/shared/compras-history-table";
+import { ExpenseSummaryCards } from "@/components/shared/expense-summary-cards";
+import { InventoryShrinkageTable } from "@/components/shared/inventory-shrinkage-table";
+import { getInventoryCountHistoryForPeriod } from "@/lib/actions/inventory-counts";
 import { toDateKey, nowInBrazil } from "@/lib/date";
 import type { ChecklistType } from "@/lib/types";
 
@@ -54,6 +61,10 @@ export default async function HistoricoPage({
     poolbarSummary,
     barCommission,
     suitesCafeCommission,
+    expenseRows,
+    demonstrativoRows,
+    expenseBySupplier,
+    inventoryShrinkageHistory,
   ] = await Promise.all([
     // Comissão = quantidade de suítes elegíveis pro café da manhã por dia
     // (independente de terem sido de fato alocadas a uma mesa) × valor por
@@ -79,11 +90,21 @@ export default async function HistoricoPage({
     getPoolbarConsumptionForPeriod(from, to),
     getBarCommissionByCamareiraForPeriod(from, to),
     getSuitesCafeCommissionForPeriod(from, to),
+    getExpenses(from, to),
+    getExpenseDemonstrativoForPeriod(from, to),
+    getExpenseSummaryBySupplier(from, to),
+    getInventoryCountHistoryForPeriod(from, to),
   ]);
 
   const commissionRate = Number(commissionSettings?.value_per_table ?? 0);
 
   const taskRows = (tasks ?? []) as unknown as TaskWithOccurrences[];
+
+  const expenseByCenterMap = new Map<string, number>();
+  demonstrativoRows.forEach((r) => expenseByCenterMap.set(r.center_name, (expenseByCenterMap.get(r.center_name) ?? 0) + r.total));
+  const expenseByCenter = Array.from(expenseByCenterMap.entries())
+    .map(([center_name, total]) => ({ center_name, total }))
+    .sort((a, b) => b.total - a.total);
 
   const categoryTally = new Map<string, number>();
   taskRows.forEach((t) => {
@@ -99,6 +120,7 @@ export default async function HistoricoPage({
 
   return (
     <div className="space-y-6">
+      <BackLink href="/operacional" />
       <PageHeader title="Histórico" subtitle="Dados diários, mensais e anuais consolidados." />
       <HistoryFilters from={from} to={to} />
       <HistoryTables
@@ -141,6 +163,21 @@ export default async function HistoricoPage({
         </CardHeader>
         <CardContent>
           <MinibarSummaryTable items={poolbarSummary.items} total={poolbarSummary.total} />
+        </CardContent>
+      </Card>
+
+      <div className="space-y-3 pt-2">
+        <p className="font-heading text-xl text-primary">Compras e despesas no período</p>
+        <ExpenseSummaryCards byCenter={expenseByCenter} bySupplier={expenseBySupplier} />
+        <ComprasHistoryTable rows={expenseRows} canManage editBasePath="/historico/compras" />
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-lg">Histórico de inventário</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <InventoryShrinkageTable rows={inventoryShrinkageHistory} />
         </CardContent>
       </Card>
     </div>

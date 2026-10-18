@@ -7,7 +7,7 @@
 create extension if not exists "uuid-ossp";
 
 -- ---------- ENUMS ----------
-create type user_role as enum ('admin', 'camareira', 'manutencao');
+create type user_role as enum ('admin', 'camareira', 'manutencao', 'gerente_operacional');
 create type checklist_type as enum ('arrumacao', 'preparacao', 'troca', 'somente_chegada', 'somente_saida');
 create type task_status as enum ('pendente', 'em_andamento', 'concluido', 'cancelado');
 create type table_shape as enum ('round', 'rect', 'square');
@@ -22,13 +22,37 @@ create type payment_method as enum (
   'cartao_credito',
   'cartao_debito',
   'transferencia_bancaria',
-  'dinheiro'
+  'dinheiro',
+  'boleto'
 );
 -- 'unica' cobre o dia normal (1 conta por quarto, como sempre foi); os
 -- outros dois só existem num dia de Saída com Chegada em que a conta do
 -- hóspede que sai ainda não foi paga quando o hóspede novo chega.
 create type room_bill_guest_slot as enum ('unica', 'saida_hoje', 'chegada_hoje');
+-- Forma de pagamento do lado FORNECEDOR (a pousada pagando uma compra/
+-- despesa) — diferente de payment_method acima, que é do lado HÓSPEDE
+-- (pagando a própria conta de consumo). 'a_prazo' não é uma forma de
+-- pagamento de verdade, é a ausência dele por ora (ver expense_payment_status).
+-- Módulo Contábil Leva 2 — PRD_compras&contabil.md seção 22.3 item 12.
+create type supplier_payment_method as enum ('banco_pix', 'dinheiro', 'cartao_corporativo', 'a_prazo');
+create type expense_payment_status as enum ('pago', 'pendente');
 create type comanda_status as enum ('original', 'cancelada', 'editada');
+-- Módulo de compras/despesas/estoque (PRD_compras.md) — ver schema.sql
+-- mais abaixo, seção "COMPRAS, DESPESAS E ESTOQUE".
+create type inventory_movement_type as enum (
+  'compra',
+  'baixa_manual',
+  'baixa_consumo_hospede',
+  'ajuste_contagem'
+);
+create type inventory_count_status as enum ('em_andamento', 'concluida');
+create type purchase_request_status as enum ('pendente', 'atendido', 'cancelado');
+-- Módulo Contábil (PRD_compras&contabil.md): plano de contas contábil +
+-- partidas dobradas — dimensão "que TIPO de movimento é isso", nunca
+-- confundir com centro de custo ("de qual PARTE da pousada é isso").
+create type ledger_account_group as enum ('ativo', 'passivo', 'receita', 'custo', 'despesa');
+create type ledger_entry_status as enum ('confirmado', 'estornado');
+create type ledger_entry_direction as enum ('debito', 'credito');
 
 -- ---------- PROFILES ----------
 -- Espelha auth.users com dados de perfil e papel (admin | camareira)
@@ -303,6 +327,11 @@ create table daily_breakfast_settings (
   notes text,
   eligible_suites_count int,
   commission_value_snapshot numeric(10,2) not null default 0,
+  -- "Cafés servidos" (Módulo Contábil Leva 5) — null = usa o total de
+  -- hóspedes hospedados calculado na hora; um valor aqui é sempre um
+  -- TETO que só pode ser reduzido, nunca aumentado (ver
+  -- setBreakfastGuestsServed).
+  guests_served int,
   updated_at timestamptz not null default now()
 );
 
@@ -1206,6 +1235,17 @@ begin
     end if;
   end loop;
 
+  -- Baixa de estoque no momento do pedido (Módulo Contábil Leva 4) — via
+  -- ficha técnica, mesma soma por ingrediente de sempre.
+  insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
+  select r.inventory_item_id, 'baixa_consumo_hospede',
+    -sum(bci.quantity * r.portions_count * r.amount_per_portion), v_bill_id,
+    'Baixa automática ao registrar a comanda'
+  from bar_comanda_items bci
+  join inventory_item_recipes r on r.poolbar_item_id = bci.poolbar_item_id
+  where bci.comanda_id = v_comanda_id and bci.quantity > 0
+  group by r.inventory_item_id;
+
   return v_comanda_id;
 end;
 $$ language plpgsql security definer;
@@ -1277,6 +1317,17 @@ begin
       last_action_at = now()
   where id = p_comanda_id;
 
+  -- Estorna o estoque dos itens ANTIGOS (já baixado quando a comanda foi
+  -- lançada/editada da última vez) antes de substituí-los.
+  insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
+  select r.inventory_item_id, 'baixa_consumo_hospede',
+    sum(bci.quantity * r.portions_count * r.amount_per_portion), v_old_bill_id,
+    'Estorno de estoque — comanda editada'
+  from bar_comanda_items bci
+  join inventory_item_recipes r on r.poolbar_item_id = bci.poolbar_item_id
+  where bci.comanda_id = p_comanda_id and bci.quantity > 0
+  group by r.inventory_item_id;
+
   delete from bar_comanda_items where comanda_id = p_comanda_id;
 
   for v_item in select * from jsonb_array_elements(p_items)
@@ -1287,25 +1338,44 @@ begin
       from poolbar_items pi where pi.id = (v_item->>'item_id')::uuid;
     end if;
   end loop;
+
+  -- Baixa o estoque dos itens NOVOS.
+  insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
+  select r.inventory_item_id, 'baixa_consumo_hospede',
+    -sum(bci.quantity * r.portions_count * r.amount_per_portion), v_new_bill_id,
+    'Baixa automática ao editar a comanda'
+  from bar_comanda_items bci
+  join inventory_item_recipes r on r.poolbar_item_id = bci.poolbar_item_id
+  where bci.comanda_id = p_comanda_id and bci.quantity > 0
+  group by r.inventory_item_id;
 end;
 $$ language plpgsql security definer;
 
-create or replace function cancel_comanda(p_comanda_id uuid)
+-- p_ingredients_recovered: desde o Módulo Contábil Leva 4, deixou de ser
+-- opcional perguntar isso ao cancelar — o estoque já foi baixado no
+-- momento do pedido, então cancelar precisa decidir explicitamente se ele
+-- volta (true, prato não chegou a ser preparado) ou fica baixado (false,
+-- já foi preparado/perdido). Só restaura na primeira vez que a comanda é
+-- de fato cancelada (uma chamada redundante numa já cancelada não
+-- restaura de novo).
+create or replace function cancel_comanda(p_comanda_id uuid, p_ingredients_recovered boolean)
 returns void as $$
 declare
+  v_bill_id uuid;
   v_bill_status room_bill_status;
+  v_old_status comanda_status;
 begin
   if not is_camareira() then
     raise exception 'not authorized';
   end if;
 
-  select b.status into v_bill_status
+  select c.bill_id, c.status, b.status into v_bill_id, v_old_status, v_bill_status
   from bar_comandas c
   join room_bills b on b.id = c.bill_id
   where c.id = p_comanda_id
   for update of c;
 
-  if v_bill_status is null then
+  if v_bill_id is null then
     raise exception 'Comanda não encontrada.';
   end if;
   if v_bill_status not in ('aberta', 'reaberta') then
@@ -1315,6 +1385,17 @@ begin
   update bar_comandas
   set status = 'cancelada', last_action_by = auth.uid(), last_action_at = now()
   where id = p_comanda_id and status <> 'cancelada';
+
+  if v_old_status <> 'cancelada' and p_ingredients_recovered then
+    insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
+    select r.inventory_item_id, 'baixa_consumo_hospede',
+      sum(bci.quantity * r.portions_count * r.amount_per_portion), v_bill_id,
+      'Estorno de estoque — comanda cancelada (ingredientes recuperados)'
+    from bar_comanda_items bci
+    join inventory_item_recipes r on r.poolbar_item_id = bci.poolbar_item_id
+    where bci.comanda_id = p_comanda_id and bci.quantity > 0
+    group by r.inventory_item_id;
+  end if;
 end;
 $$ language plpgsql security definer;
 
@@ -1578,3 +1659,2181 @@ values (
   array['image/jpeg', 'image/png', 'image/webp']
 )
 on conflict (id) do nothing;
+
+-- ============================================================================
+-- COMPRAS, DESPESAS E ESTOQUE (PRD_compras.md)
+-- ============================================================================
+-- Resumo do modelo (ver PRD_compras.md pro raciocínio completo):
+-- - "Despesa" (expenses/expense_items) é o registro de TUDO que a pousada
+--   gasta, com ou sem relação a estoque.
+-- - "Estoque" (inventory_items/inventory_movements) é só a fatia das
+--   despesas que corresponde a itens consumíveis — e o saldo de cada item
+--   nunca é um número guardado à parte: é sempre a soma de todos os
+--   movimentos dele (mesmo princípio de "nunca sincronizar o que pode ser
+--   calculado na hora" já estabelecido neste projeto nas Partes 16/17).
+-- - Papéis: camareira só dá baixa de estoque; funcionário de manutenção dá
+--   baixa e também registra compras; admin faz tudo, incluindo cadastro de
+--   categorias/itens e contagem física periódica.
+
+-- ---------- INVENTORY ITEMS (catálogo de itens controláveis em estoque) ----------
+-- coverage_days ("dias de folga", ver "Itens de estoque e ciclo de
+-- compras", PRD_compras.md seção 21): substitui o antigo grupo de giro
+-- (tela/tabela excluídas) — direto no item, sempre presente (padrão 7),
+-- editável. portion_weight_kg: só pros itens controlados por "porção"
+-- (ex.: macaxeira, camarão, filé mignon) — peso médio de 1 porção em kg,
+-- usado só pra converter "porções necessárias" em "kg a comprar".
+create table inventory_items (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  unit text not null default 'un',
+  barcode text unique,
+  reorder_point numeric(12,3) not null default 0,
+  coverage_days int not null default 7 check (coverage_days > 0),
+  portion_weight_kg numeric(10,4),
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now(),
+  -- Quebra de estoque (ver seção "INVENTORY COUNT LINES" abaixo): limites
+  -- editáveis pelo admin, sempre positivos, com incrementos de 1%.
+  quebra_maxima_admitida_pct numeric(6,2) not null default 20 check (quebra_maxima_admitida_pct > 0),
+  indice_relativo_maximo_pct numeric(6,2) not null default 200 check (indice_relativo_maximo_pct > 0),
+  -- Agrupamento pro relatório de custo do café da manhã (ex.: "Frutas e
+  -- ovos" somados como 1 item só, por não termos controle fino de
+  -- estoque sobre eles) — null = o item aparece com o próprio nome.
+  cost_report_group text,
+  -- "É perecível?" (Módulo Contábil Leva 5) — decide como o item entra
+  -- no custo do café da manhã: perecível = 100% do comprado no período;
+  -- não perecível = o que foi baixado manualmente, valorizado pelo custo
+  -- médio. Editável pelo admin, nunca uma lista fixa de nomes.
+  is_perishable boolean not null default false,
+  -- Validade (migration 077): prazo do produto em dias e quantos dias
+  -- antes do vencimento o sistema avisa.
+  shelf_life_days int check (shelf_life_days is null or shelf_life_days > 0),
+  expiry_alert_days int not null default 7 check (expiry_alert_days >= 0)
+);
+
+-- "1 garrafa = 0,75 (unidade-base do item)" — migration 077.
+create table inventory_item_unit_conversions (
+  id uuid primary key default uuid_generate_v4(),
+  inventory_item_id uuid not null references inventory_items(id) on delete cascade,
+  unit_name text not null,
+  factor numeric(14,6) not null check (factor > 0),
+  created_at timestamptz not null default now()
+);
+create unique index inventory_item_unit_conversions_uq on inventory_item_unit_conversions (inventory_item_id, lower(unit_name));
+
+-- ---------- PLANO DE CONTAS: centro → subcentro → item de custo ----------
+-- Substitui por completo o modelo antigo de "categoria de gasto"
+-- (Partes 19/20) — ver PRD_compras.md seção 21. "Item de custo" é a
+-- conta mais analítica (toda compra/despesa se liga a um item de custo
+-- ou a um ativo permanente, nunca a um "centro"/"subcentro" direto —
+-- esses dois níveis são só classificação/organização, com rateio
+-- percentual em cada um).
+-- Centro de custo — item de custo liga direto aqui (sem subcentro no
+-- meio, removido no Módulo Contábil Leva 1, ver
+-- PRD_compras&contabil.md seção 22.3 item 2; até então havia uma camada
+-- de subcentro entre os dois). count_frequency_days: usado pro aviso de
+-- contagem física (cada centro é um grupo de contagem próprio).
+create table cost_centers (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null unique,
+  count_frequency_days int check (count_frequency_days is null or count_frequency_days > 0),
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- Itens de custo: a conta mais analítica — pode ou não representar
+-- estoque (is_inventory). Quando representa, liga a um item de estoque
+-- já existente (cadastro separado, nunca a mesma linha — confirmado com
+-- o proprietário) — é esse vínculo que faz uma compra lançada nesse item
+-- de custo também dar entrada no saldo de estoque dele.
+-- Cadastro de produtos (PRD seção 5.1, migration 076): um produto É um
+-- item de custo (is_product) + o item de estoque ligado, quando controla
+-- estoque. product_type null = "não classificado".
+create type product_type as enum (
+  'revenda', 'ingrediente_receita', 'material_consumo', 'material_limpeza', 'embalagem', 'outro'
+);
+
+create table product_categories (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+create unique index product_categories_name_uq on product_categories (lower(name));
+
+create table cost_items (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  is_inventory boolean not null default false,
+  inventory_item_id uuid references inventory_items(id) on delete set null,
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now(),
+  is_product boolean not null default false,
+  sku text,
+  description text,
+  category_id uuid references product_categories(id) on delete set null,
+  product_type product_type
+);
+create unique index cost_items_inventory_item_uq on cost_items (inventory_item_id) where inventory_item_id is not null;
+create unique index cost_items_sku_uq on cost_items (lower(sku)) where sku is not null;
+
+-- Item que controla estoque é sempre produto — garantido no banco.
+create or replace function cost_items_set_product_flag() returns trigger as $$
+begin
+  if new.is_inventory then
+    new.is_product := true;
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger cost_items_product_flag
+before insert or update on cost_items
+for each row execute function cost_items_set_product_flag();
+
+-- Um item de custo pode pertencer a mais de 1 centro (ex.: "água" em
+-- Hospedagem, Café da manhã e Bar da piscina ao mesmo tempo) — o rateio
+-- diz quanto do gasto daquele item vai pra cada centro em que aparece.
+create table cost_item_centers (
+  cost_item_id uuid not null references cost_items(id) on delete cascade,
+  center_id uuid not null references cost_centers(id) on delete cascade,
+  alloc_pct numeric(6,2) not null check (alloc_pct > 0 and alloc_pct <= 100),
+  primary key (cost_item_id, center_id)
+);
+
+-- ---------- MÓDULO CONTÁBIL: plano de contas contábil + partidas dobradas ----------
+-- Ver PRD_compras&contabil.md seção 22. `code` é o identificador estável
+-- usado pelo código do app (nunca editável depois de criado); `display_code`
+-- é só o "1.01" cosmético que aparece pro usuário no balancete/livro-razão.
+create table ledger_accounts (
+  id uuid primary key default uuid_generate_v4(),
+  code text not null unique,
+  display_code text,
+  name text not null,
+  account_group ledger_account_group not null,
+  requires_cost_center boolean not null default false,
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- Um "lançamento" é 1 evento econômico que gera 2+ linhas (débito/
+-- crédito). Nunca é apagado depois de confirmado — uma correção sempre
+-- nasce como um novo lançamento de estorno (reverses_entry_id).
+create table ledger_entries (
+  id uuid primary key default uuid_generate_v4(),
+  entry_date date not null,
+  document_date date,
+  cash_date date,
+  description text not null,
+  origin text not null,
+  source_type text,
+  source_id uuid,
+  status ledger_entry_status not null default 'confirmado',
+  reverses_entry_id uuid references ledger_entries(id) on delete set null,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index ledger_entries_source_idx on ledger_entries (source_type, source_id);
+create index ledger_entries_entry_date_idx on ledger_entries (entry_date);
+
+-- Uma linha = 1 débito OU 1 crédito, numa conta, com centro de custo
+-- opcional. A soma dos débitos de um lançamento sempre bate com a soma
+-- dos créditos — garantido por post_ledger_entry, nunca confiado a um
+-- INSERT direto.
+create table ledger_entry_lines (
+  id uuid primary key default uuid_generate_v4(),
+  entry_id uuid not null references ledger_entries(id) on delete cascade,
+  account_id uuid not null references ledger_accounts(id),
+  cost_center_id uuid references cost_centers(id),
+  direction ledger_entry_direction not null,
+  amount numeric(12,2) not null check (amount > 0),
+  created_at timestamptz not null default now()
+);
+create index ledger_entry_lines_entry_idx on ledger_entry_lines (entry_id);
+create index ledger_entry_lines_account_idx on ledger_entry_lines (account_id);
+
+-- Único jeito de criar um lançamento — nunca INSERT direto pelo client.
+-- Recebe as linhas como JSON e confere débitos=créditos (1 centavo de
+-- tolerância pra arredondamento) antes de gravar qualquer coisa.
+create or replace function post_ledger_entry(
+  p_entry_date date,
+  p_document_date date,
+  p_cash_date date,
+  p_description text,
+  p_origin text,
+  p_source_type text,
+  p_source_id uuid,
+  p_lines jsonb
+) returns uuid as $$
+declare
+  v_entry_id uuid;
+  v_total_debito numeric := 0;
+  v_total_credito numeric := 0;
+  v_line jsonb;
+  v_line_count int;
+begin
+  if auth.uid() is null then
+    raise exception 'not authorized';
+  end if;
+
+  select count(*) into v_line_count from jsonb_array_elements(p_lines);
+  if v_line_count < 2 then
+    raise exception 'Um lançamento precisa de pelo menos 2 linhas (1 débito e 1 crédito).';
+  end if;
+
+  for v_line in select * from jsonb_array_elements(p_lines) loop
+    if (v_line->>'direction') = 'debito' then
+      v_total_debito := v_total_debito + (v_line->>'amount')::numeric;
+    elsif (v_line->>'direction') = 'credito' then
+      v_total_credito := v_total_credito + (v_line->>'amount')::numeric;
+    else
+      raise exception 'direction inválida: %', v_line->>'direction';
+    end if;
+  end loop;
+
+  if abs(v_total_debito - v_total_credito) > 0.01 then
+    raise exception 'Lançamento desbalanceado: débitos % ≠ créditos %', v_total_debito, v_total_credito;
+  end if;
+
+  insert into ledger_entries (entry_date, document_date, cash_date, description, origin, source_type, source_id, created_by)
+  values (p_entry_date, p_document_date, p_cash_date, p_description, p_origin, p_source_type, p_source_id, auth.uid())
+  returning id into v_entry_id;
+
+  insert into ledger_entry_lines (entry_id, account_id, cost_center_id, direction, amount)
+  select
+    v_entry_id,
+    la.id,
+    nullif(elem->>'cost_center_id', '')::uuid,
+    (elem->>'direction')::ledger_entry_direction,
+    (elem->>'amount')::numeric
+  from jsonb_array_elements(p_lines) elem
+  join ledger_accounts la on la.code = (elem->>'account_code');
+
+  if (select count(*) from jsonb_array_elements(p_lines)) <> (select count(*) from ledger_entry_lines where entry_id = v_entry_id) then
+    raise exception 'Uma ou mais contas (account_code) não foram encontradas no plano de contas.';
+  end if;
+
+  return v_entry_id;
+end;
+$$ language plpgsql security definer;
+
+-- Estorna um lançamento confirmado: marca o original como 'estornado' e
+-- cria um novo lançamento espelhado (débito↔crédito invertidos),
+-- preservando o histórico dos dois.
+create or replace function reverse_ledger_entry(p_entry_id uuid, p_reason text) returns uuid as $$
+declare
+  v_new_entry_id uuid;
+  v_original ledger_entries%rowtype;
+begin
+  if auth.uid() is null then
+    raise exception 'not authorized';
+  end if;
+
+  select * into v_original from ledger_entries where id = p_entry_id;
+  if not found then
+    raise exception 'Lançamento não encontrado.';
+  end if;
+  if v_original.status = 'estornado' then
+    raise exception 'Este lançamento já foi estornado.';
+  end if;
+
+  insert into ledger_entries (entry_date, document_date, cash_date, description, origin, source_type, source_id, reverses_entry_id, created_by)
+  values (current_date, v_original.document_date, v_original.cash_date, coalesce(p_reason, 'Estorno de: ' || v_original.description), 'estorno', v_original.source_type, v_original.source_id, p_entry_id, auth.uid())
+  returning id into v_new_entry_id;
+
+  insert into ledger_entry_lines (entry_id, account_id, cost_center_id, direction, amount)
+  select
+    v_new_entry_id,
+    l.account_id,
+    l.cost_center_id,
+    (case when l.direction = 'debito' then 'credito' else 'debito' end)::ledger_entry_direction,
+    l.amount
+  from ledger_entry_lines l
+  where l.entry_id = p_entry_id;
+
+  update ledger_entries set status = 'estornado' where id = p_entry_id;
+
+  return v_new_entry_id;
+end;
+$$ language plpgsql security definer;
+
+-- Conta do plano de contas CONTÁBIL que o gasto de um item de custo
+-- posta nos lançamentos automáticos (Módulo Contábil Leva 2) — null
+-- usa um padrão genérico (estoque-outros se representa estoque,
+-- outras-despesas se não), sempre editável pelo admin em "Plano de
+-- itens de custo". Coluna separada (não inline em `create table
+-- cost_items` acima) porque `ledger_accounts` só existe a partir
+-- daqui.
+alter table cost_items add column ledger_account_code text references ledger_accounts(code);
+
+-- ---------- FICHA TÉCNICA (receita): ingrediente(s) por produto do cardápio ----------
+-- Um ingrediente pode alimentar vários produtos (frigobar OU bar da
+-- piscina, nunca os dois na mesma linha), e um produto pode consumir
+-- vários ingredientes. portions_count (quantas porções do ingrediente vão
+-- no prato) × amount_per_portion (quanto, na unidade própria do
+-- ingrediente — kg/L/un — tem 1 porção) = total consumido por pedido. O
+-- estoque e a lista de compras sempre mostram só o ingrediente, nunca a
+-- origem (frigobar/bar, qual prato) — ver PRD_compras.md.
+create table inventory_item_recipes (
+  id uuid primary key default uuid_generate_v4(),
+  inventory_item_id uuid not null references inventory_items(id) on delete cascade,
+  minibar_item_id uuid references minibar_items(id) on delete cascade,
+  poolbar_item_id uuid references poolbar_items(id) on delete cascade,
+  portions_count numeric(10,3) not null default 1 check (portions_count > 0),
+  amount_per_portion numeric(12,4) not null default 0 check (amount_per_portion >= 0),
+  -- Unidade em que a quantidade foi digitada (só exibição; o valor acima
+  -- é sempre na unidade-base) — migration 077.
+  display_unit text,
+  created_at timestamptz not null default now(),
+  check (
+    (minibar_item_id is not null and poolbar_item_id is null) or
+    (minibar_item_id is null and poolbar_item_id is not null)
+  )
+);
+create unique index inv_item_recipes_minibar_uq on inventory_item_recipes (inventory_item_id, minibar_item_id)
+  where minibar_item_id is not null;
+create unique index inv_item_recipes_poolbar_uq on inventory_item_recipes (inventory_item_id, poolbar_item_id)
+  where poolbar_item_id is not null;
+
+-- ---------- PEDIDOS DE COMPRA (sinal visual da camareira/manutenção) ----------
+-- Cada pedido é uma linha própria, nunca mesclada com outra — pedidos
+-- pendentes do mesmo item se somam na visão do admin. Quem pediu pode
+-- editar/cancelar só o próprio pedido, enquanto 'pendente'; o admin só
+-- cancela "o total" de um item (todas as linhas pendentes de uma vez) via
+-- cancel_purchase_requests_for_item.
+create table purchase_requests (
+  id uuid primary key default uuid_generate_v4(),
+  inventory_item_id uuid not null references inventory_items(id) on delete cascade,
+  requested_qty numeric(12,3) not null check (requested_qty > 0),
+  notes text,
+  status purchase_request_status not null default 'pendente',
+  requested_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- ---------- FORNECEDORES (Módulo Contábil Leva 2) ----------
+-- Cadastro de verdade — substitui os antigos campos de texto livre
+-- `expenses.supplier_name`/`fixed_assets.supplier_name`, que nem
+-- batiam entre si por causa de maiúscula/minúscula.
+create table suppliers (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  cpf_cnpj text,
+  email text,
+  phone text,
+  address text,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create unique index suppliers_name_uq on suppliers (lower(name));
+
+-- ---------- EXPENSES (despesas/compras — cabeçalho) ----------
+-- A despesa em si já carrega o estado "pago"/"pendente" — não existe
+-- uma tabela separada de "conta a pagar": a despesa É a obrigação
+-- enquanto pendente. "Pagar" só atualiza esta mesma linha (status/
+-- paid_at/forma) e gera o lançamento contábil de liquidação, sem
+-- reconhecer a despesa de novo (ver pay_expense em
+-- src/lib/actions/expenses.ts). competence_date é a data de
+-- competência contábil (pode diferir de `date`, a data do documento).
+create table expenses (
+  id uuid primary key default uuid_generate_v4(),
+  date date not null default current_date,
+  competence_date date not null default current_date,
+  document_number text,
+  supplier_id uuid references suppliers(id) on delete set null,
+  total_amount numeric(12,2) not null default 0 check (total_amount >= 0),
+  payment_method supplier_payment_method,
+  payment_status expense_payment_status not null default 'pago',
+  due_date date,
+  paid_at timestamptz,
+  receipt_storage_path text,
+  nfce_url text,
+  notes text,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+-- ---------- ATIVO PERMANENTE ----------
+-- Bens duráveis — nunca é um custo do período, só registro patrimonial.
+-- Categorias e o catálogo de "tipos" (fixed_asset_catalog_items) seguem
+-- o plano de contas de ativo permanente (PRD_compras.md seção 21).
+create table asset_categories (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null unique,
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- Catálogo de "tipos" de ativo permanente (ex.: "Televisores", "Bombas
+-- de piscina") — serve de sugestão de nome ao registrar um bem comprado
+-- de verdade; não tem saldo nem quantidade, é só uma lista de nomes
+-- reaproveitáveis, como o "item de custo" serve pra despesas.
+create table fixed_asset_catalog_items (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  category_id uuid not null references asset_categories(id),
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- Cada linha é 1 bem específico comprado (não um "tipo") — marca,
+-- modelo, valor, garantia e local são próprios daquela unidade.
+create table fixed_assets (
+  id uuid primary key default uuid_generate_v4(),
+  category_id uuid not null references asset_categories(id),
+  catalog_item_id uuid references fixed_asset_catalog_items(id) on delete set null,
+  name text not null,
+  brand text,
+  model text,
+  purchase_date date,
+  purchase_value numeric(12,2),
+  warranty_until date,
+  supplier_id uuid references suppliers(id) on delete set null,
+  location text,
+  notes text,
+  active boolean not null default true,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+-- ---------- EXPENSE ITEMS (linhas de uma despesa) ----------
+-- Toda linha aponta pra UM item de custo (compra ligada a estoque ou
+-- despesa pura) OU pra UM ativo permanente comprado — nunca os dois (ver
+-- PRD_compras.md seção 21; substitui inventory_item_id/category_id das
+-- Partes 19/20).
+create table expense_items (
+  id uuid primary key default uuid_generate_v4(),
+  expense_id uuid not null references expenses(id) on delete cascade,
+  cost_item_id uuid references cost_items(id) on delete set null,
+  fixed_asset_id uuid references fixed_assets(id) on delete set null,
+  description text not null,
+  quantity numeric(12,3) not null default 1 check (quantity > 0),
+  unit_cost numeric(14,6) not null default 0 check (unit_cost >= 0),
+  -- O que o usuário digitou (ex.: 24 garrafas a R$18) — informativo;
+  -- quantity/unit_cost acima ficam sempre na unidade-base (migration 077).
+  purchase_quantity numeric(12,3),
+  purchase_unit text,
+  purchase_unit_cost numeric(14,6),
+  expiry_date date,
+  subtotal numeric(12,2) not null default 0 check (subtotal >= 0),
+  -- Desconto/frete/tributos (Módulo Contábil Leva 2) — guardados só
+  -- pra transparência/auditoria; `subtotal` acima já vem calculado
+  -- pelo formulário como o custo líquido final (ver ExpenseItemInput
+  -- em src/lib/actions/expenses.ts). Tributo recuperável nunca compõe
+  -- o custo.
+  discount numeric(12,2) not null default 0 check (discount >= 0),
+  freight_and_other_costs numeric(12,2) not null default 0 check (freight_and_other_costs >= 0),
+  recoverable_tax numeric(12,2) not null default 0 check (recoverable_tax >= 0),
+  non_recoverable_tax numeric(12,2) not null default 0 check (non_recoverable_tax >= 0),
+  created_at timestamptz not null default now(),
+  constraint expense_items_one_target check (not (cost_item_id is not null and fixed_asset_id is not null))
+);
+
+-- ---------- INVENTORY COUNT SESSIONS (contagem física periódica) ----------
+-- count_group_name: contagem organizada por CENTRO de custo (até o
+-- Módulo Contábil Leva 1, era por nome de subcentro, agrupando vários
+-- centros de mesmo nome numa contagem só — decisão da Parte 21; a
+-- camada de subcentro foi removida, então o agrupamento passou a ser
+-- por centro inteiro). null = "todos os itens".
+create table inventory_count_sessions (
+  id uuid primary key default uuid_generate_v4(),
+  count_group_name text,
+  status inventory_count_status not null default 'em_andamento',
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  closed_at timestamptz
+);
+
+-- No máximo 1 sessão "em_andamento" por grupo (e 1 só pra "todos os
+-- itens", count_group_name null) — evita sessões duplicadas vazias por
+-- clique duplo/corrida (ver PRD_compras.md seção 17.8).
+create unique index inventory_count_sessions_one_open_per_group
+  on inventory_count_sessions (coalesce(count_group_name, ''))
+  where status = 'em_andamento';
+
+-- ---------- INVENTORY COUNT LINES (uma linha por item contado) ----------
+-- quebra_pct/quebra_12m_pct/indice_relativo_pct: calculados e gravados uma
+-- única vez, no momento em que a sessão é FECHADA — são fatos congelados
+-- sobre o que aconteceu naquela contagem (nunca recalculados depois, nem
+-- quando os limites do item mudam) — ver PRD_compras.md seção 18 e a
+-- migration 060 pro raciocínio completo.
+create table inventory_count_lines (
+  id uuid primary key default uuid_generate_v4(),
+  session_id uuid not null references inventory_count_sessions(id) on delete cascade,
+  inventory_item_id uuid not null references inventory_items(id) on delete cascade,
+  theoretical_qty numeric(12,3) not null,
+  counted_qty numeric(12,3),
+  quebra_pct numeric(8,2),
+  quebra_12m_pct numeric(8,2),
+  indice_relativo_pct numeric(8,2),
+  created_at timestamptz not null default now(),
+  unique (session_id, inventory_item_id)
+);
+
+-- ---------- INVENTORY MOVEMENTS (todo evento que muda o saldo — nunca apagado) ----------
+-- unit_cost/total_value (Módulo Contábil Leva 3): custo médio ponderado
+-- móvel e valor monetário de CADA movimento, gravados sozinhos por um
+-- trigger `before insert` (ver compute_inventory_movement_value abaixo)
+-- — nunca calculados/gravados pelo código da aplicação, pra nenhum call
+-- site (baixa manual, baixa automática, ajuste de contagem, compra)
+-- poder esquecer de fazer isso.
+create table inventory_movements (
+  id uuid primary key default uuid_generate_v4(),
+  inventory_item_id uuid not null references inventory_items(id) on delete cascade,
+  movement_type inventory_movement_type not null,
+  quantity numeric(12,3) not null,
+  unit_cost numeric(14,6) not null default 0,
+  total_value numeric(12,2) not null default 0,
+  reference_expense_item_id uuid references expense_items(id) on delete cascade,
+  reference_room_bill_id uuid references room_bills(id) on delete set null,
+  reference_count_line_id uuid references inventory_count_lines(id) on delete set null,
+  notes text,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+-- Pra uma COMPRA: usa o custo líquido já calculado na despesa (subtotal,
+-- já com desconto/frete/tributo não recuperável aplicados — Módulo
+-- Contábil Leva 2). Pra qualquer outro tipo de movimento (baixa manual,
+-- baixa automática de consumo, ajuste de contagem): usa o custo médio
+-- vigente ANTES deste movimento — numa trigger `before insert`, consultar
+-- a própria tabela reflete exatamente o estado "antes", já que esta linha
+-- ainda não foi gravada. `security definer` (mesmo padrão de toda trigger
+-- deste schema).
+create or replace function compute_inventory_movement_value() returns trigger as $$
+declare
+  v_subtotal numeric;
+  v_exp_qty numeric;
+  v_avg_cost numeric;
+begin
+  if new.movement_type = 'compra' then
+    select subtotal, quantity into v_subtotal, v_exp_qty
+    from expense_items where id = new.reference_expense_item_id;
+
+    new.total_value := coalesce(v_subtotal, 0);
+    new.unit_cost := case when coalesce(v_exp_qty, 0) > 0 then round(v_subtotal / v_exp_qty, 6) else 0 end;
+  else
+    select coalesce(sum(total_value), 0) / nullif(sum(quantity), 0)
+    into v_avg_cost
+    from inventory_movements
+    where inventory_item_id = new.inventory_item_id;
+
+    new.unit_cost := coalesce(v_avg_cost, 0);
+    new.total_value := round(new.quantity * coalesce(v_avg_cost, 0), 2);
+  end if;
+
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create trigger inventory_movements_compute_value
+before insert on inventory_movements
+for each row execute function compute_inventory_movement_value();
+
+-- `value`/`avg_cost`: sempre derivados por soma dos movimentos (mesma
+-- filosofia já usada pra `balance`), nunca materializados à parte —
+-- elimina qualquer risco de desvio entre um valor guardado e a soma real.
+create view inventory_balances
+with (security_invoker = true) as
+select
+  inventory_item_id,
+  coalesce(sum(quantity), 0) as balance,
+  coalesce(sum(total_value), 0) as value,
+  case when coalesce(sum(quantity), 0) > 0 then sum(total_value) / sum(quantity) else 0 end as avg_cost
+from inventory_movements
+group by inventory_item_id;
+
+-- Uma linha por contagem FECHADA, com nome/subcentro(s) do item, os
+-- limites ATUAIS do item (de propósito, não congelados — mudar o limite
+-- só afeta futuras decisões de outlier, nunca o que já foi calculado) e a
+-- data da contagem anterior do mesmo item via LAG() — evita recalcular
+-- isso em JavaScript em três lugares diferentes (tela de contagem,
+-- Histórico, Resumo Executivo).
+create view inventory_count_line_history
+with (security_invoker = true) as
+select
+  cl.id,
+  cl.session_id,
+  cl.inventory_item_id,
+  ii.name as item_name,
+  ii.unit,
+  coalesce(
+    (select string_agg(distinct cc.name, ' / ' order by cc.name)
+     from cost_items ci
+     join cost_item_centers cic on cic.cost_item_id = ci.id
+     join cost_centers cc on cc.id = cic.center_id
+     where ci.inventory_item_id = ii.id),
+    '—'
+  ) as category_name,
+  cl.theoretical_qty,
+  cl.counted_qty,
+  (cl.counted_qty - cl.theoretical_qty) as diferenca,
+  cl.quebra_pct,
+  cl.quebra_12m_pct,
+  cl.indice_relativo_pct,
+  ii.quebra_maxima_admitida_pct,
+  ii.indice_relativo_maximo_pct,
+  cs2.closed_at,
+  lag(cs2.closed_at) over (partition by cl.inventory_item_id order by cs2.closed_at) as previous_count_date
+from inventory_count_lines cl
+join inventory_count_sessions cs2 on cs2.id = cl.session_id
+join inventory_items ii on ii.id = cl.inventory_item_id
+where cs2.status = 'concluida' and cl.counted_qty is not null;
+
+alter table asset_categories enable row level security;
+alter table fixed_asset_catalog_items enable row level security;
+alter table fixed_assets enable row level security;
+alter table cost_centers enable row level security;
+alter table cost_items enable row level security;
+alter table product_categories enable row level security;
+alter table inventory_item_unit_conversions enable row level security;
+alter table cost_item_centers enable row level security;
+alter table ledger_accounts enable row level security;
+alter table ledger_entries enable row level security;
+alter table ledger_entry_lines enable row level security;
+alter table inventory_items enable row level security;
+alter table inventory_item_recipes enable row level security;
+alter table purchase_requests enable row level security;
+alter table suppliers enable row level security;
+alter table expenses enable row level security;
+alter table expense_items enable row level security;
+alter table inventory_count_sessions enable row level security;
+alter table inventory_count_lines enable row level security;
+alter table inventory_movements enable row level security;
+
+create policy "asset_categories_select_authenticated" on asset_categories for select using (auth.uid() is not null);
+create policy "asset_categories_admin_write" on asset_categories for all using (is_admin()) with check (is_admin());
+
+create policy "fixed_asset_catalog_items_select_authenticated" on fixed_asset_catalog_items for select using (auth.uid() is not null);
+create policy "fixed_asset_catalog_items_admin_write" on fixed_asset_catalog_items for all using (is_admin()) with check (is_admin());
+
+create policy "fixed_assets_admin_all" on fixed_assets for all using (is_admin()) with check (is_admin());
+
+create policy "cost_centers_select_authenticated" on cost_centers for select using (auth.uid() is not null);
+create policy "cost_centers_admin_write" on cost_centers for all using (is_admin()) with check (is_admin());
+
+create policy "cost_items_select_authenticated" on cost_items for select using (auth.uid() is not null);
+create policy "cost_items_insert_admin_manutencao" on cost_items for insert with check (is_admin() or is_manutencao());
+create policy "cost_items_admin_update" on cost_items for update using (is_admin());
+create policy "cost_items_admin_delete" on cost_items for delete using (is_admin());
+
+create policy "product_categories_select_authenticated" on product_categories for select using (auth.uid() is not null);
+create policy "product_categories_admin_write" on product_categories for all using (is_admin()) with check (is_admin());
+
+create policy "unit_conv_select_authenticated" on inventory_item_unit_conversions for select using (auth.uid() is not null);
+create policy "unit_conv_admin_write" on inventory_item_unit_conversions for all using (is_admin()) with check (is_admin());
+
+create policy "cost_item_centers_select_authenticated" on cost_item_centers for select using (auth.uid() is not null);
+create policy "cost_item_centers_admin_write" on cost_item_centers for all using (is_admin()) with check (is_admin());
+
+create policy "ledger_accounts_select_authenticated" on ledger_accounts for select using (auth.uid() is not null);
+create policy "ledger_accounts_admin_write" on ledger_accounts for all using (is_admin()) with check (is_admin());
+
+-- Ninguém grava direto em ledger_entries/ledger_entry_lines — sempre via
+-- post_ledger_entry/reverse_ledger_entry (security definer).
+create policy "ledger_entries_select_authenticated" on ledger_entries for select using (auth.uid() is not null);
+create policy "ledger_entry_lines_select_authenticated" on ledger_entry_lines for select using (auth.uid() is not null);
+
+create policy "inv_items_select_authenticated" on inventory_items for select using (auth.uid() is not null);
+create policy "inv_items_insert_admin_manutencao" on inventory_items for insert
+  with check (is_admin() or is_manutencao());
+create policy "inv_items_admin_update" on inventory_items for update using (is_admin());
+create policy "inv_items_admin_delete" on inventory_items for delete using (is_admin());
+
+create policy "inv_recipes_select_authenticated" on inventory_item_recipes
+  for select using (auth.uid() is not null);
+create policy "inv_recipes_admin_write" on inventory_item_recipes
+  for all using (is_admin()) with check (is_admin());
+
+create policy "purchase_req_select_own_or_admin" on purchase_requests
+  for select using (requested_by = auth.uid() or is_admin());
+create policy "purchase_req_insert_own" on purchase_requests
+  for insert with check (
+    requested_by = auth.uid() and (is_camareira() or is_manutencao() or is_admin())
+  );
+create policy "purchase_req_update_own_pending" on purchase_requests
+  for update using (requested_by = auth.uid() and status = 'pendente')
+  with check (requested_by = auth.uid());
+
+create policy "suppliers_select_authenticated" on suppliers for select using (auth.uid() is not null);
+create policy "suppliers_insert_admin_manutencao" on suppliers for insert with check (is_admin() or is_manutencao());
+create policy "suppliers_admin_update" on suppliers for update using (is_admin());
+create policy "suppliers_admin_delete" on suppliers for delete using (is_admin());
+
+create policy "expenses_select_admin_manutencao" on expenses for select
+  using (is_admin() or is_manutencao());
+create policy "expenses_insert_admin_manutencao" on expenses for insert
+  with check (is_admin() or is_manutencao());
+create policy "expenses_admin_update" on expenses for update using (is_admin());
+create policy "expenses_admin_delete" on expenses for delete using (is_admin());
+
+create policy "exp_items_select_admin_manutencao" on expense_items for select
+  using (is_admin() or is_manutencao());
+create policy "exp_items_insert_admin_manutencao" on expense_items for insert
+  with check (is_admin() or is_manutencao());
+create policy "exp_items_admin_delete" on expense_items for delete using (is_admin());
+
+create policy "count_sessions_admin_all" on inventory_count_sessions for all
+  using (is_admin()) with check (is_admin());
+create policy "count_lines_admin_all" on inventory_count_lines for all
+  using (is_admin()) with check (is_admin());
+
+create policy "inv_mov_select_authenticated" on inventory_movements for select using (auth.uid() is not null);
+create policy "inv_mov_insert_baixa_manual" on inventory_movements for insert
+  with check (
+    movement_type = 'baixa_manual'
+    and created_by = auth.uid()
+    and (is_camareira() or is_manutencao() or is_admin())
+  );
+create policy "inv_mov_admin_all" on inventory_movements for all using (is_admin()) with check (is_admin());
+
+-- Entrada de estoque automática ao lançar um item de compra — mesmo
+-- espírito do histórico de mudanças via trigger da Parte 44. Qualquer
+-- compra do item também resolve TODOS os pedidos de compra pendentes
+-- dele (status 'atendido'), independentemente da quantidade comprada ter
+-- sido suficiente ou não — o pedido da equipe é só um sinal visual, não
+-- uma meta a bater. A sugestão CALCULADA pelo sistema continua refletindo
+-- sozinha uma compra insuficiente, por nunca ser persistida (ver view
+-- inventory_purchase_suggestions mais abaixo).
+create or replace function create_movement_from_expense_item() returns trigger as $$
+begin
+  if new.inventory_item_id is not null then
+    insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_expense_item_id, created_by)
+    values (
+      new.inventory_item_id,
+      'compra',
+      new.quantity,
+      new.id,
+      (select created_by from expenses where id = new.expense_id)
+    );
+
+    update purchase_requests
+    set status = 'atendido', updated_at = now()
+    where inventory_item_id = new.inventory_item_id and status = 'pendente';
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create trigger expense_items_create_movement
+after insert on expense_items
+for each row execute function create_movement_from_expense_item();
+
+-- Frigobar: baixa/estorno atômico no momento do LANÇAMENTO (Módulo
+-- Contábil Leva 4 — substitui a antiga baixa no momento do pagamento).
+-- Ler a quantidade antiga, calcular o delta e gravar a nova precisam
+-- acontecer juntos, sem brecha pra condição de corrida (duas chamadas
+-- concorrentes lendo a mesma quantidade "antiga" ao mesmo tempo).
+create or replace function set_minibar_consumption(p_bill_id uuid, p_minibar_item_id uuid, p_quantity int)
+returns void as $$
+declare
+  v_bill_status room_bill_status;
+  v_price numeric;
+  v_old_quantity int;
+  v_new_quantity int;
+  v_delta int;
+begin
+  if not (is_camareira() or is_admin()) then
+    raise exception 'not authorized';
+  end if;
+
+  select status into v_bill_status from room_bills where id = p_bill_id for update;
+  if v_bill_status is null then
+    raise exception 'Conta não encontrada.';
+  end if;
+  if v_bill_status = 'fechada' then
+    raise exception 'A conta desta suíte está fechada. Não é possível registrar consumo.';
+  end if;
+
+  select price into v_price from minibar_items where id = p_minibar_item_id;
+  if v_price is null then
+    raise exception 'Item de frigobar não encontrado.';
+  end if;
+
+  select quantity into v_old_quantity
+  from room_bill_minibar_items
+  where bill_id = p_bill_id and minibar_item_id = p_minibar_item_id
+  for update;
+  v_old_quantity := coalesce(v_old_quantity, 0);
+  v_new_quantity := greatest(0, p_quantity);
+
+  insert into room_bill_minibar_items (bill_id, minibar_item_id, quantity, price_snapshot, updated_at)
+  values (p_bill_id, p_minibar_item_id, v_new_quantity, v_price, now())
+  on conflict (bill_id, minibar_item_id)
+  do update set quantity = excluded.quantity, price_snapshot = excluded.price_snapshot, updated_at = excluded.updated_at;
+
+  v_delta := v_new_quantity - v_old_quantity;
+  if v_delta <> 0 then
+    insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
+    select r.inventory_item_id, 'baixa_consumo_hospede', -(v_delta * r.portions_count * r.amount_per_portion), p_bill_id,
+      case when v_delta > 0
+        then 'Baixa automática ao lançar consumo de frigobar'
+        else 'Estorno de estoque — frigobar reduzido'
+      end
+    from inventory_item_recipes r
+    where r.minibar_item_id = p_minibar_item_id;
+  end if;
+end;
+$$ language plpgsql security definer;
+
+-- Fechar uma contagem física: grava ajustes só onde há diferença de
+-- verdade, marca a sessão como concluída.
+create or replace function close_inventory_count_session(p_session_id uuid) returns void as $$
+begin
+  if not is_admin() then
+    raise exception 'not authorized';
+  end if;
+
+  insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_count_line_id, created_by, notes)
+  select
+    l.inventory_item_id,
+    'ajuste_contagem',
+    l.counted_qty - l.theoretical_qty,
+    l.id,
+    auth.uid(),
+    'Ajuste de contagem física'
+  from inventory_count_lines l
+  where l.session_id = p_session_id
+    and l.counted_qty is not null
+    and l.counted_qty <> l.theoretical_qty;
+
+  update inventory_count_sessions
+  set status = 'concluida', closed_at = now()
+  where id = p_session_id and status = 'em_andamento';
+end;
+$$ language plpgsql security definer;
+
+-- Cancelamento em massa de pedidos de compra pelo admin (security definer
+-- porque mexe em linhas de outras pessoas, fora da policy "própria e
+-- pendente" de purchase_requests).
+create or replace function cancel_purchase_requests_for_item(p_inventory_item_id uuid) returns void as $$
+begin
+  if not is_admin() then
+    raise exception 'not authorized';
+  end if;
+  update purchase_requests
+  set status = 'cancelado', updated_at = now()
+  where inventory_item_id = p_inventory_item_id and status = 'pendente';
+end;
+$$ language plpgsql security definer;
+
+-- Giro semanal (consumo real dos últimos 60 dias, convertido pra "por
+-- semana" só pra legibilidade — o cálculo continua em dias por baixo).
+create view inventory_weekly_turnover
+with (security_invoker = true) as
+select inventory_item_id,
+  (coalesce(sum(-quantity), 0) / 60.0) * 7 as weekly_consumption
+from inventory_movements
+where movement_type in ('baixa_manual', 'baixa_consumo_hospede')
+  and created_at >= now() - interval '60 days'
+group by inventory_item_id;
+
+-- Ponto de reposição calculado = giro semanal ÷ 7 × dias de folga do
+-- próprio item (coverage_days, sempre presente desde a Parte 21 — antes
+-- vinha de um "grupo de giro" separado, e um item sem grupo ficava sem
+-- cálculo; isso não existe mais porque os itens perecíveis sem controle
+-- fino, que usavam esse "sem grupo" de propósito, agora nem chegam a ser
+-- item de estoque).
+create view inventory_purchase_suggestions
+with (security_invoker = true) as
+select
+  ii.id as inventory_item_id,
+  coalesce(ib.balance, 0) as balance,
+  coalesce(wt.weekly_consumption, 0) as weekly_consumption,
+  ii.coverage_days,
+  (coalesce(wt.weekly_consumption, 0) / 7.0) * ii.coverage_days as calculated_reorder_point,
+  ii.reorder_point as manual_reorder_point,
+  ii.portion_weight_kg
+from inventory_items ii
+left join inventory_balances ib on ib.inventory_item_id = ii.id
+left join inventory_weekly_turnover wt on wt.inventory_item_id = ii.id
+where ii.active;
+
+-- Dispensa da sugestão CALCULADA pelo admin (não a confunda com os
+-- pedidos visuais da equipe, que já tinham cancelamento desde o início).
+-- Como a sugestão nunca é persistida, dispensar guarda o saldo no momento
+-- da dispensa — ela só vale enquanto esse saldo não mudar de novo (ver
+-- getPurchaseList, que compara os dois na hora de ler).
+create table inventory_suggestion_dismissals (
+  inventory_item_id uuid primary key references inventory_items(id) on delete cascade,
+  dismissed_balance numeric(12,3) not null,
+  dismissed_by uuid references profiles(id) on delete set null,
+  dismissed_at timestamptz not null default now()
+);
+
+alter table inventory_suggestion_dismissals enable row level security;
+create policy "inv_suggestion_dismissals_admin_all" on inventory_suggestion_dismissals
+  for all using (is_admin()) with check (is_admin());
+
+-- Bucket privado pras fotos/PDFs de recibo/nota — mesmo padrão de
+-- "occurrence-photos" acima; aceita PDF além de foto, pra leitura de
+-- notas fiscais formais emitidas nesse formato.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'expense-receipts',
+  'expense-receipts',
+  false,
+  10485760,
+  array['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+)
+on conflict (id) do nothing;
+
+-- Plano de contas inicial (centro → subcentro → item de custo) — ver
+-- PRD_compras.md seção 21 pro plano completo com a fonte de cada linha.
+-- Rateio inicial sempre em partes iguais entre os subcentros de que cada
+-- item participa (resto de arredondamento pro primeiro, em ordem
+-- alfabética, garantindo soma exata de 100). Ver migration
+-- 065_plano_de_contas_seed.sql pra o texto completo e comentado desta
+-- mesma lógica — mantido idêntico aqui pra uma instalação nova nascer
+-- com o mesmo plano de contas que a nuvem/produção já têm.
+create temp table raw_items (item_name text, is_inventory boolean, subcenter_name text, center_name text);
+insert into raw_items (item_name, is_inventory, subcenter_name, center_name) values
+('água', false, 'Gerais', 'Hospedagem'), ('luz', false, 'Gerais', 'Hospedagem'), ('internet', false, 'Gerais', 'Hospedagem'),
+('dedetização', false, 'Gerais', 'Hospedagem'), ('limpeza coqueiros', false, 'Gerais', 'Hospedagem'), ('impostos e taxas', false, 'Gerais', 'Hospedagem'),
+('amenities', true, 'Materiais das suítes', 'Hospedagem'), ('travesseiros', true, 'Materiais das suítes', 'Hospedagem'),
+('papel higiênico', true, 'Materiais das suítes', 'Hospedagem'), ('sacos de lixo', true, 'Materiais das suítes', 'Hospedagem'),
+('secador de cabelo', true, 'Materiais das suítes', 'Hospedagem'),
+('toalhas de banho', true, 'Enxoval de cama e banho', 'Hospedagem'), ('toalhas de rosto', true, 'Enxoval de cama e banho', 'Hospedagem'),
+('lençóis', true, 'Enxoval de cama e banho', 'Hospedagem'), ('fronhas', true, 'Enxoval de cama e banho', 'Hospedagem'),
+('capas protetoras de travesseiro', true, 'Enxoval de cama e banho', 'Hospedagem'), ('capas protetoras de colchão', true, 'Enxoval de cama e banho', 'Hospedagem'),
+('salário dos funcionários de manutenção', false, 'Mão de obra de hospedagem', 'Hospedagem'), ('salário das camareiras', false, 'Mão de obra de hospedagem', 'Hospedagem'),
+('encargos', false, 'Mão de obra de hospedagem', 'Hospedagem'), ('cesta básica', false, 'Mão de obra de hospedagem', 'Hospedagem'),
+('plano de saúde', false, 'Mão de obra de hospedagem', 'Hospedagem'), ('transporte', false, 'Mão de obra de hospedagem', 'Hospedagem'),
+('outros materiais de jardinagem', false, 'Materiais de Jardim', 'Hospedagem'), ('adubo', false, 'Materiais de Jardim', 'Hospedagem'),
+('plantas', false, 'Materiais de Jardim', 'Hospedagem'), ('remédios de plantas', false, 'Materiais de Jardim', 'Hospedagem'),
+('mangueiras', false, 'Materiais de Jardim', 'Hospedagem'), ('conectores de mangueiras', false, 'Materiais de Jardim', 'Hospedagem'),
+('torneiras de jardim', false, 'Materiais de Jardim', 'Hospedagem'), ('aspersores', false, 'Materiais de Jardim', 'Hospedagem'),
+('outros materiais de irrigação', false, 'Materiais de Jardim', 'Hospedagem'),
+('outros materiais de piscina', true, 'Materiais de Piscina', 'Hospedagem'), ('cloro', true, 'Materiais de Piscina', 'Hospedagem'),
+('clarificante', true, 'Materiais de Piscina', 'Hospedagem'), ('barrilha', true, 'Materiais de Piscina', 'Hospedagem'),
+('pastilhas de cloro', true, 'Materiais de Piscina', 'Hospedagem'), ('fluidos de medidores', true, 'Materiais de Piscina', 'Hospedagem'),
+('toalhas de piscina', true, 'Materiais de Piscina', 'Hospedagem'),
+('outros materiais de manutenção', false, 'Materiais de Manutenção', 'Hospedagem'), ('lâmpadas', true, 'Materiais de Manutenção', 'Hospedagem'),
+('fita isolante', true, 'Materiais de Manutenção', 'Hospedagem'), ('fita veda rosca', true, 'Materiais de Manutenção', 'Hospedagem'),
+('cola de cano', true, 'Materiais de Manutenção', 'Hospedagem'), ('silicone', true, 'Materiais de Manutenção', 'Hospedagem'),
+('lubrificantes', true, 'Materiais de Manutenção', 'Hospedagem'), ('antioxidantes', true, 'Materiais de Manutenção', 'Hospedagem'),
+('lixas', false, 'Materiais de Manutenção', 'Hospedagem'), ('peças de reposição', true, 'Materiais de Manutenção', 'Hospedagem'),
+('parafusos', false, 'Materiais de Manutenção', 'Hospedagem'), ('porcas', false, 'Materiais de Manutenção', 'Hospedagem'),
+('prendedores de toldo', false, 'Materiais de Manutenção', 'Hospedagem'), ('fio elétrico', false, 'Materiais de Manutenção', 'Hospedagem'),
+('tomadas', true, 'Materiais de Manutenção', 'Hospedagem'), ('interruptores', true, 'Materiais de Manutenção', 'Hospedagem'),
+('outros materiais elétricos', true, 'Materiais de Manutenção', 'Hospedagem'), ('outros materiais hidráulicos', true, 'Materiais de Manutenção', 'Hospedagem'),
+('rejunte', false, 'Materiais de Manutenção', 'Hospedagem'), ('tintas de parede', true, 'Materiais de Manutenção', 'Hospedagem'),
+('cimento', false, 'Materiais de Manutenção', 'Hospedagem'), ('argamassa', false, 'Materiais de Manutenção', 'Hospedagem'),
+('areia', false, 'Materiais de Manutenção', 'Hospedagem'), ('colas em geral', false, 'Materiais de Manutenção', 'Hospedagem'),
+('impermeabilizantes', false, 'Materiais de Manutenção', 'Hospedagem'), ('cabos', false, 'Materiais de Manutenção', 'Hospedagem'),
+('filtros', false, 'Materiais de Manutenção', 'Hospedagem'), ('conduites', false, 'Materiais de Manutenção', 'Hospedagem'),
+('conectores em geral', false, 'Materiais de Manutenção', 'Hospedagem'), ('conexões hidráulicas', false, 'Materiais de Manutenção', 'Hospedagem'),
+('canos', false, 'Materiais de Manutenção', 'Hospedagem'), ('eletrodutos', false, 'Materiais de Manutenção', 'Hospedagem'),
+('telhas', false, 'Materiais de Manutenção', 'Hospedagem'), ('carrinho de mão', true, 'Materiais de Manutenção', 'Hospedagem'),
+('sacos de lixo', true, 'Materiais de Manutenção', 'Hospedagem'), ('escovão', false, 'Materiais de Manutenção', 'Hospedagem'),
+('escada', false, 'Materiais de Manutenção', 'Hospedagem'), ('caibros', false, 'Materiais de Manutenção', 'Hospedagem'),
+('ripas', false, 'Materiais de Manutenção', 'Hospedagem'), ('linhas de madeira', false, 'Materiais de Manutenção', 'Hospedagem'),
+('toras de eucalipto', false, 'Materiais de Manutenção', 'Hospedagem'), ('tábuas', false, 'Materiais de Manutenção', 'Hospedagem'),
+('medidores em geral', false, 'Materiais de Manutenção', 'Hospedagem'),
+('alicates', false, 'Ferramentas', 'Hospedagem'), ('chaves de fenda', false, 'Ferramentas', 'Hospedagem'),
+('chaves estrela', false, 'Ferramentas', 'Hospedagem'), ('chaves allen', false, 'Ferramentas', 'Hospedagem'),
+('martelos', false, 'Ferramentas', 'Hospedagem'), ('chaves inglesas', false, 'Ferramentas', 'Hospedagem'),
+('chaves de cano', false, 'Ferramentas', 'Hospedagem'), ('serrinha', false, 'Ferramentas', 'Hospedagem'),
+('trenas', false, 'Ferramentas', 'Hospedagem'), ('outras ferramentas de manutenção', false, 'Ferramentas', 'Hospedagem'),
+('Stays (CMS)', false, 'Honorários administrativos', 'Hospedagem'), ('Invictos (Comercial e Atendimento)', false, 'Honorários administrativos', 'Hospedagem'),
+('Financeiro (Márcia)', false, 'Honorários administrativos', 'Hospedagem'), ('Contabilidade (Simone Perla)', false, 'Honorários administrativos', 'Hospedagem'),
+('outras honorários administrativos', false, 'Honorários administrativos', 'Hospedagem'), ('pró-labore', false, 'Honorários administrativos', 'Hospedagem'),
+('detergente', true, 'Materiais de limpeza', 'Hospedagem'), ('álcool', true, 'Materiais de limpeza', 'Hospedagem'),
+('água sanitária', true, 'Materiais de limpeza', 'Hospedagem'), ('perfume de ambiente', false, 'Materiais de limpeza', 'Hospedagem'),
+('desinfetante', true, 'Materiais de limpeza', 'Hospedagem'), ('veja multiuso', true, 'Materiais de limpeza', 'Hospedagem'),
+('limpa vidros', true, 'Materiais de limpeza', 'Hospedagem'), ('baldes', true, 'Materiais de limpeza', 'Hospedagem'),
+('vassouras', true, 'Materiais de limpeza', 'Hospedagem'), ('rodos', true, 'Materiais de limpeza', 'Hospedagem'),
+('panos de limpeza', false, 'Materiais de limpeza', 'Hospedagem'), ('estopas', false, 'Materiais de limpeza', 'Hospedagem'),
+('buchas', false, 'Materiais de limpeza', 'Hospedagem'), ('sabão líquido', true, 'Materiais de limpeza', 'Hospedagem'),
+('sabão em pó', true, 'Materiais de limpeza', 'Hospedagem'), ('sabão em barra', true, 'Materiais de limpeza', 'Hospedagem'),
+('borrifadores', false, 'Materiais de limpeza', 'Hospedagem'), ('outros materiais de limpeza', false, 'Materiais de limpeza', 'Hospedagem'),
+
+('água', false, 'Gerais', 'Café da manhã'), ('luz', false, 'Gerais', 'Café da manhã'), ('gás', false, 'Gerais', 'Café da manhã'),
+('impostos e taxas', false, 'Gerais', 'Café da manhã'),
+('frutas', false, 'Alimentos', 'Café da manhã'), ('ovos', false, 'Alimentos', 'Café da manhã'), ('café', true, 'Alimentos', 'Café da manhã'),
+('chocolate', true, 'Alimentos', 'Café da manhã'), ('farinha de trigo', true, 'Alimentos', 'Café da manhã'), ('manteiga', true, 'Alimentos', 'Café da manhã'),
+('margarina', true, 'Alimentos', 'Café da manhã'), ('requeijão', true, 'Alimentos', 'Café da manhã'), ('cream cheese', true, 'Alimentos', 'Café da manhã'),
+('croissants', true, 'Alimentos', 'Café da manhã'), ('pães', true, 'Alimentos', 'Café da manhã'), ('salgadinhos', false, 'Alimentos', 'Café da manhã'),
+('brioches', false, 'Alimentos', 'Café da manhã'), ('bolos', false, 'Alimentos', 'Café da manhã'), ('açúcar', true, 'Alimentos', 'Café da manhã'),
+('sal', true, 'Alimentos', 'Café da manhã'), ('adoçante', true, 'Alimentos', 'Café da manhã'), ('mel', true, 'Alimentos', 'Café da manhã'),
+('legumes', false, 'Alimentos', 'Café da manhã'), ('verduras', false, 'Alimentos', 'Café da manhã'), ('linguiças', true, 'Alimentos', 'Café da manhã'),
+('bacon', true, 'Alimentos', 'Café da manhã'), ('queijos', true, 'Alimentos', 'Café da manhã'), ('presuntos', true, 'Alimentos', 'Café da manhã'),
+('farinha de tapioca', true, 'Alimentos', 'Café da manhã'), ('farinha de cuscuz', true, 'Alimentos', 'Café da manhã'), ('pimenta', false, 'Alimentos', 'Café da manhã'),
+('temperos', false, 'Alimentos', 'Café da manhã'),
+('salário das camareiras', false, 'Mão de obra de café da manhã', 'Café da manhã'), ('encargos', false, 'Mão de obra de café da manhã', 'Café da manhã'),
+('cesta básica', false, 'Mão de obra de café da manhã', 'Café da manhã'), ('plano de saúde', false, 'Mão de obra de café da manhã', 'Café da manhã'),
+('transporte', false, 'Mão de obra de café da manhã', 'Café da manhã'),
+('copos', false, 'Materiais de café da manhã', 'Café da manhã'), ('xícaras', false, 'Materiais de café da manhã', 'Café da manhã'),
+('pires', false, 'Materiais de café da manhã', 'Café da manhã'), ('pratos', false, 'Materiais de café da manhã', 'Café da manhã'),
+('talheres', false, 'Materiais de café da manhã', 'Café da manhã'), ('jogos americanos', false, 'Materiais de café da manhã', 'Café da manhã'),
+('panos de prato', false, 'Materiais de café da manhã', 'Café da manhã'), ('guardanapos', false, 'Materiais de café da manhã', 'Café da manhã'),
+('papéis toalha', false, 'Materiais de café da manhã', 'Café da manhã'), ('utensílios de cozinha', false, 'Materiais de café da manhã', 'Café da manhã'),
+('Stays (CMS)', false, 'Honorários administrativos', 'Café da manhã'), ('Invictos (Comercial e Atendimento)', false, 'Honorários administrativos', 'Café da manhã'),
+('Financeiro (Márcia)', false, 'Honorários administrativos', 'Café da manhã'), ('Contabilidade (Simone Perla)', false, 'Honorários administrativos', 'Café da manhã'),
+('outras honorários administrativos', false, 'Honorários administrativos', 'Café da manhã'), ('pró-labore', false, 'Honorários administrativos', 'Café da manhã'),
+('detergente', true, 'Materiais de limpeza', 'Café da manhã'), ('álcool', true, 'Materiais de limpeza', 'Café da manhã'),
+('água sanitária', true, 'Materiais de limpeza', 'Café da manhã'), ('perfume de ambiente', false, 'Materiais de limpeza', 'Café da manhã'),
+('desinfetante', true, 'Materiais de limpeza', 'Café da manhã'), ('veja multiuso', true, 'Materiais de limpeza', 'Café da manhã'),
+('limpa vidros', true, 'Materiais de limpeza', 'Café da manhã'), ('baldes', true, 'Materiais de limpeza', 'Café da manhã'),
+('vassouras', true, 'Materiais de limpeza', 'Café da manhã'), ('rodos', true, 'Materiais de limpeza', 'Café da manhã'),
+('panos de limpeza', false, 'Materiais de limpeza', 'Café da manhã'), ('estopas', false, 'Materiais de limpeza', 'Café da manhã'),
+('buchas', false, 'Materiais de limpeza', 'Café da manhã'), ('sabão líquido', true, 'Materiais de limpeza', 'Café da manhã'),
+('sabão em pó', true, 'Materiais de limpeza', 'Café da manhã'), ('sabão em barra', true, 'Materiais de limpeza', 'Café da manhã'),
+('borrifadores', false, 'Materiais de limpeza', 'Café da manhã'), ('outros materiais de limpeza', false, 'Materiais de limpeza', 'Café da manhã'),
+
+('água', false, 'Gerais', 'Bar de piscina'), ('luz', false, 'Gerais', 'Bar de piscina'), ('gás', false, 'Gerais', 'Bar de piscina'),
+('impostos e taxas', false, 'Gerais', 'Bar de piscina'),
+('manteiga', true, 'Alimentos', 'Bar de piscina'), ('margarina', true, 'Alimentos', 'Bar de piscina'), ('pães', true, 'Alimentos', 'Bar de piscina'),
+('açúcar', true, 'Alimentos', 'Bar de piscina'), ('sal', true, 'Alimentos', 'Bar de piscina'), ('adoçante', true, 'Alimentos', 'Bar de piscina'),
+('carnes', true, 'Alimentos', 'Bar de piscina'), ('camarões', true, 'Alimentos', 'Bar de piscina'), ('queijos', true, 'Alimentos', 'Bar de piscina'),
+('ovos', false, 'Alimentos', 'Bar de piscina'), ('presuntos', true, 'Alimentos', 'Bar de piscina'), ('macaxeira', true, 'Alimentos', 'Bar de piscina'),
+('batatas fritas', true, 'Alimentos', 'Bar de piscina'), ('temperos', false, 'Alimentos', 'Bar de piscina'), ('massa de pastel', true, 'Alimentos', 'Bar de piscina'),
+('bolinhos de bacalhau', true, 'Alimentos', 'Bar de piscina'),
+('Vodka Smirnoff', true, 'Bebidas', 'Bar de piscina'), ('Vodka Absolut', true, 'Bebidas', 'Bar de piscina'), ('Cachaça', true, 'Bebidas', 'Bar de piscina'),
+('Campari', true, 'Bebidas', 'Bar de piscina'), ('Gim Tanqueray', true, 'Bebidas', 'Bar de piscina'), ('Água de Coco', true, 'Bebidas', 'Bar de piscina'),
+('Água com gás', true, 'Bebidas', 'Bar de piscina'), ('Água sem gás', true, 'Bebidas', 'Bar de piscina'), ('Refrigerante', true, 'Bebidas', 'Bar de piscina'),
+('Cerveja', true, 'Bebidas', 'Bar de piscina'), ('Café expresso', true, 'Bebidas', 'Bar de piscina'),
+('salário das camareiras', false, 'Mão de obra de bar da piscina', 'Bar de piscina'), ('encargos', false, 'Mão de obra de bar da piscina', 'Bar de piscina'),
+('cesta básica', false, 'Mão de obra de bar da piscina', 'Bar de piscina'), ('plano de saúde', false, 'Mão de obra de bar da piscina', 'Bar de piscina'),
+('transporte', false, 'Mão de obra de bar da piscina', 'Bar de piscina'),
+('taças', false, 'Materiais de bar da piscina', 'Bar de piscina'), ('palitos', false, 'Materiais de bar da piscina', 'Bar de piscina'),
+('canudos', false, 'Materiais de bar da piscina', 'Bar de piscina'), ('mexedores de drink', false, 'Materiais de bar da piscina', 'Bar de piscina'),
+('copos', false, 'Materiais de bar da piscina', 'Bar de piscina'), ('pratos', false, 'Materiais de bar da piscina', 'Bar de piscina'),
+('talheres', false, 'Materiais de bar da piscina', 'Bar de piscina'), ('guardanapos', false, 'Materiais de bar da piscina', 'Bar de piscina'),
+('papéis toalha', false, 'Materiais de bar da piscina', 'Bar de piscina'), ('utensílios de cozinha', false, 'Materiais de bar da piscina', 'Bar de piscina'),
+('Stays (CMS)', false, 'Honorários administrativos', 'Bar de piscina'), ('Invictos (Comercial e Atendimento)', false, 'Honorários administrativos', 'Bar de piscina'),
+('Financeiro (Márcia)', false, 'Honorários administrativos', 'Bar de piscina'), ('Contabilidade (Simone Perla)', false, 'Honorários administrativos', 'Bar de piscina'),
+('outras honorários administrativos', false, 'Honorários administrativos', 'Bar de piscina'), ('pró-labore', false, 'Honorários administrativos', 'Bar de piscina'),
+('detergente', true, 'Materiais de limpeza', 'Bar de piscina'), ('álcool', true, 'Materiais de limpeza', 'Bar de piscina'),
+('água sanitária', true, 'Materiais de limpeza', 'Bar de piscina'), ('perfume de ambiente', false, 'Materiais de limpeza', 'Bar de piscina'),
+('desinfetante', true, 'Materiais de limpeza', 'Bar de piscina'), ('veja multiuso', true, 'Materiais de limpeza', 'Bar de piscina'),
+('limpa vidros', true, 'Materiais de limpeza', 'Bar de piscina'), ('baldes', true, 'Materiais de limpeza', 'Bar de piscina'),
+('vassouras', true, 'Materiais de limpeza', 'Bar de piscina'), ('rodos', true, 'Materiais de limpeza', 'Bar de piscina'),
+('panos de limpeza', false, 'Materiais de limpeza', 'Bar de piscina'), ('estopas', false, 'Materiais de limpeza', 'Bar de piscina'),
+('buchas', false, 'Materiais de limpeza', 'Bar de piscina'), ('sabão líquido', true, 'Materiais de limpeza', 'Bar de piscina'),
+('sabão em pó', true, 'Materiais de limpeza', 'Bar de piscina'), ('sabão em barra', true, 'Materiais de limpeza', 'Bar de piscina'),
+('borrifadores', false, 'Materiais de limpeza', 'Bar de piscina'), ('outros materiais de limpeza', false, 'Materiais de limpeza', 'Bar de piscina'),
+
+('luz', false, 'Gerais', 'Frigobar'), ('Água com gás', true, 'Bebidas', 'Frigobar'), ('Água sem gás', true, 'Bebidas', 'Frigobar'),
+('Refrigerante', true, 'Bebidas', 'Frigobar'), ('Cerveja', true, 'Bebidas', 'Frigobar'), ('Café expresso', true, 'Bebidas', 'Frigobar');
+
+insert into cost_centers (name, position)
+select name, row_number() over ()
+from (select distinct center_name as name from raw_items) t;
+
+-- 5º centro obrigatório (PRD_compras&contabil.md, seção 22.1, item 2.1):
+-- custos administrativos e gastos compartilhados não atribuíveis
+-- diretamente a um dos quatro centros acima. Nasce sem nenhum item de
+-- custo ligado — quem liga é o admin, em "Plano de itens de custo".
+insert into cost_centers (name, position)
+values ('Administração e áreas comuns', (select coalesce(max(position), 0) + 1 from cost_centers))
+on conflict (name) do nothing;
+
+create temp table item_map (item_name text, cost_item_id uuid);
+do $$
+declare r record; v_item_id uuid; v_inv_id uuid;
+begin
+  for r in select item_name, bool_or(is_inventory) as is_inventory from raw_items group by item_name order by item_name loop
+    v_inv_id := null;
+    if r.is_inventory then
+      select id into v_inv_id from inventory_items where lower(name) = lower(r.item_name) limit 1;
+      if v_inv_id is null then
+        insert into inventory_items (name, unit) values (r.item_name, 'un') returning id into v_inv_id;
+      end if;
+    end if;
+    insert into cost_items (name, is_inventory, inventory_item_id) values (r.item_name, r.is_inventory, v_inv_id) returning id into v_item_id;
+    insert into item_map values (r.item_name, v_item_id);
+  end loop;
+end $$;
+
+-- Item de custo → centro, direto (sem subcentro no meio — removido no
+-- Módulo Contábil Leva 1, PRD_compras&contabil.md seção 22.3 item 2).
+-- Rateio igual entre os centros distintos em que cada item aparece,
+-- com a sobra de arredondamento absorvida pelo primeiro centro em
+-- ordem alfabética (garante soma exata de 100%).
+insert into cost_item_centers (cost_item_id, center_id, alloc_pct)
+select im.cost_item_id, cc.id,
+  floor(100.0 / cnt.n) + case when rn.rn = 1 then 100 - cnt.n * floor(100.0 / cnt.n) else 0 end
+from (select distinct item_name, center_name from raw_items) ri
+join item_map im on im.item_name = ri.item_name
+join cost_centers cc on cc.name = ri.center_name
+join (select item_name, count(distinct center_name) as n from raw_items group by item_name) cnt on cnt.item_name = ri.item_name
+join (
+  select item_name, center_name, row_number() over (partition by item_name order by center_name) as rn
+  from (select distinct item_name, center_name from raw_items) t
+) rn on rn.item_name = ri.item_name and rn.center_name = ri.center_name;
+
+-- Categorias de produto iniciais = nomes dos antigos subcentros que
+-- classificavam itens de estoque (migration 076); cada item de estoque
+-- recebe a do primeiro subcentro em que aparecia.
+insert into product_categories (name, position) values
+  ('Alimentos', 1), ('Bebidas', 2), ('Materiais de limpeza', 3), ('Materiais das suítes', 4),
+  ('Enxoval de cama e banho', 5), ('Materiais de Piscina', 6), ('Materiais de Manutenção', 7);
+
+update cost_items ci
+set category_id = pc.id
+from (select distinct on (item_name) item_name, subcenter_name from raw_items where is_inventory order by item_name, ctid) r
+join product_categories pc on lower(pc.name) = lower(r.subcenter_name)
+where lower(ci.name) = lower(r.item_name) and ci.is_product;
+
+-- Itens claramente ADMINISTRATIVOS passam 100% pro 5º centro
+-- ("Administração e áreas comuns") — decisão do proprietário em
+-- 16/10/2026 (migration 075). Luz, água, internet e demais itens
+-- compartilhados ficam como estão.
+delete from cost_item_centers
+where cost_item_id in (
+  select id from cost_items
+  where name in (
+    'Contabilidade (Simone Perla)', 'Financeiro (Márcia)', 'Stays (CMS)',
+    'Invictos (Comercial e Atendimento)', 'outras honorários administrativos', 'pró-labore', 'impostos e taxas'
+  )
+);
+insert into cost_item_centers (cost_item_id, center_id, alloc_pct)
+select ci.id, cc.id, 100
+from cost_items ci
+cross join cost_centers cc
+where cc.name = 'Administração e áreas comuns'
+  and ci.name in (
+    'Contabilidade (Simone Perla)', 'Financeiro (Márcia)', 'Stays (CMS)',
+    'Invictos (Comercial e Atendimento)', 'outras honorários administrativos', 'pró-labore', 'impostos e taxas'
+  );
+
+-- Categorias e catálogo de ativo permanente iniciais.
+insert into asset_categories (name, position) values
+  ('Máquinas', 1), ('Metais e louças banho', 2), ('Aparelhos', 3);
+
+insert into fixed_asset_catalog_items (name, category_id, position)
+select v.name, ac.id, v.pos
+from (values
+  ('Bombas de piscina', 1), ('Bombas pressurizadoras', 2), ('Bombas de irrigação', 3), ('Bombas de poço', 4),
+  ('Boilers', 5), ('Aquecedores Cardal', 6), ('Filtros de piscina', 7), ('Politrizes', 8), ('Maquitas', 9), ('Furadeiras', 10)
+) as v(name, pos) cross join lateral (select id from asset_categories where name = 'Máquinas') ac;
+
+insert into fixed_asset_catalog_items (name, category_id, position)
+select v.name, ac.id, v.pos
+from (values
+  ('Torneiras', 1), ('Chuveiros', 2), ('Vasos sanitários', 3), ('Registros', 4), ('Ralos', 5), ('Pias', 6), ('Espelhos', 7)
+) as v(name, pos) cross join lateral (select id from asset_categories where name = 'Metais e louças banho') ac;
+
+insert into fixed_asset_catalog_items (name, category_id, position)
+select v.name, ac.id, v.pos
+from (values
+  ('Televisores', 1), ('Roteadores', 2), ('Frigobares', 3), ('Refrigeradores', 4), ('Freezers', 5), ('Bebedouros', 6),
+  ('Filtros de água', 7), ('Máquinas de café', 8), ('Ar condicionados', 9), ('Máquinas de lavar', 10),
+  ('Lavadoras pressurizada', 11), ('Aspiradores de pó', 12), ('Câmeras', 13), ('Controladoras', 14),
+  ('Computadores', 15), ('Laptops', 16), ('Impressoras', 17)
+) as v(name, pos) cross join lateral (select id from asset_categories where name = 'Aparelhos') ac;
+
+-- Plano de contas contábil inicial (PRD_compras&contabil.md seção 22.1,
+-- seção 6). `requires_cost_center`: contas de Ativo/Passivo "de
+-- posição" (Caixa, Banco, Estoques, Fornecedores a pagar etc.) não
+-- precisam de centro; Receita/Custo/Despesa sempre fazem mais sentido
+-- com centro, pra alimentar os relatórios por centro.
+insert into ledger_accounts (code, display_code, name, account_group, requires_cost_center) values
+  ('caixa', '1.01', 'Caixa', 'ativo', false),
+  ('banco', '1.02', 'Banco', 'ativo', false),
+  ('consumos-a-liquidar', '1.03', 'Consumos de bar/frigobar a liquidar no checkout', 'ativo', false),
+  ('estoque-bebidas', '1.04', 'Estoque Central de bebidas', 'ativo', false),
+  ('estoque-alimentos', '1.05', 'Estoque Central de alimentos/ingredientes', 'ativo', false),
+  ('estoque-limpeza', '1.06', 'Estoque de materiais de limpeza e amenidades', 'ativo', false),
+  ('estoque-outros', '1.07', 'Outros estoques operacionais', 'ativo', false),
+  ('equipamentos-imobilizado', '1.08', 'Equipamentos e imobilizado', 'ativo', false),
+  ('depreciacao-acumulada', '1.09', 'Depreciação acumulada', 'ativo', false),
+
+  ('fornecedores-a-pagar', '2.01', 'Fornecedores a pagar', 'passivo', false),
+  ('despesas-a-pagar', '2.02', 'Despesas operacionais a pagar', 'passivo', false),
+  ('salarios-a-pagar', '2.03', 'Salários/encargos a pagar', 'passivo', false),
+  ('tributos-a-pagar', '2.04', 'Tributos e taxas a pagar', 'passivo', false),
+  ('outras-obrigacoes', '2.05', 'Outras obrigações operacionais', 'passivo', false),
+
+  ('receita-bebidas-bar', '3.01', 'Receita de bebidas — Bar da piscina', 'receita', true),
+  ('receita-petiscos-bar', '3.02', 'Receita de petiscos — Bar da piscina', 'receita', true),
+  ('receita-drinks-bar', '3.03', 'Receita de drinks — Bar da piscina', 'receita', true),
+  ('receita-bebidas-frigobar', '3.04', 'Receita de bebidas — Frigobar', 'receita', true),
+  ('descontos-bar-frigobar', '3.05', 'Descontos concedidos no bar/frigobar', 'receita', true),
+  ('cancelamentos-bar-frigobar', '3.06', 'Cancelamentos/devoluções do bar/frigobar', 'receita', true),
+
+  ('cmv-bebidas-bar', '4.01', 'CMV de bebidas — Bar da piscina', 'custo', true),
+  ('custo-petiscos-bar', '4.02', 'Custo de ingredientes/petiscos — Bar da piscina', 'custo', true),
+  ('custo-drinks-bar', '4.03', 'Custo de ingredientes/drinks — Bar da piscina', 'custo', true),
+  ('cmv-bebidas-frigobar', '4.04', 'CMV de bebidas — Frigobar', 'custo', true),
+  ('custo-cafe-manha', '4.05', 'Custo de alimentos e bebidas consumidos — Café da manhã', 'custo', true),
+  ('materiais-limpeza-hospedagem', '4.06', 'Materiais de limpeza e amenidades — Hospedagem', 'custo', true),
+  ('lavanderia-hospedagem', '4.07', 'Lavanderia — Hospedagem', 'custo', true),
+  ('mao-de-obra-operacional', '4.08', 'Mão de obra operacional', 'custo', true),
+  ('perdas-estoque', '4.09', 'Perdas e desperdícios de estoque', 'custo', true),
+
+  ('energia-eletrica', '5.01', 'Energia elétrica', 'despesa', true),
+  ('agua-esgoto', '5.02', 'Água e esgoto', 'despesa', true),
+  ('gas', '5.03', 'Gás', 'despesa', true),
+  ('internet-telefonia', '5.04', 'Internet e telefonia', 'despesa', true),
+  ('manutencao', '5.05', 'Manutenção', 'despesa', true),
+  ('jardinagem', '5.06', 'Jardinagem', 'despesa', true),
+  ('piscina', '5.07', 'Piscina', 'despesa', true),
+  ('limpeza-areas-comuns', '5.08', 'Limpeza de áreas comuns', 'despesa', true),
+  ('contabilidade-servicos', '5.09', 'Contabilidade e serviços profissionais', 'despesa', true),
+  ('material-administrativo', '5.10', 'Material administrativo', 'despesa', true),
+  ('tarifas-bancarias', '5.11', 'Tarifas bancárias', 'despesa', false),
+  ('despesas-financeiras', '5.12', 'Despesas financeiras', 'despesa', false),
+  ('pessoal-administrativo', '5.13', 'Despesas com pessoal administrativo', 'despesa', true),
+  ('outras-despesas', '5.14', 'Outras despesas operacionais', 'despesa', true);
+
+-- =====================================================================
+-- Migrations 078 e 079 (forma final — as funções abaixo SUBSTITUEM as
+-- versões anteriores deste arquivo: post_ledger_entry, reverse_ledger_entry,
+-- create_movement_from_expense_item, submit/edit/cancel_comanda e
+-- set_minibar_consumption).
+-- =====================================================================
+
+-- 078: motor de lançamentos automáticos (partidas dobradas) para TODO fato
+-- contábil — compra/despesa (já existia, agora com item e café), consumo de
+-- bar/frigobar (custo no estoque + receita no fechamento da conta +
+-- recebimento no pagamento), baixa manual e ajuste de inventário. Tudo por
+-- gatilho no banco, pra nenhum ponto de escrita poder esquecer.
+
+-- ---------- Item de custo em cada linha do livro ----------
+alter table ledger_entry_lines add column if not exists cost_item_id uuid references cost_items(id) on delete set null;
+create index if not exists ledger_entry_lines_cost_item_idx on ledger_entry_lines (cost_item_id);
+
+-- Núcleo do lançamento (sem checagem de usuário — usado por gatilhos).
+create or replace function post_ledger_entry_core(
+  p_entry_date date,
+  p_document_date date,
+  p_cash_date date,
+  p_description text,
+  p_origin text,
+  p_source_type text,
+  p_source_id uuid,
+  p_lines jsonb,
+  p_created_by uuid
+) returns uuid as $$
+declare
+  v_entry_id uuid;
+  v_total_debito numeric := 0;
+  v_total_credito numeric := 0;
+  v_line jsonb;
+  v_line_count int;
+begin
+  select count(*) into v_line_count from jsonb_array_elements(p_lines);
+  if v_line_count < 2 then
+    raise exception 'Um lançamento precisa de pelo menos 2 linhas (1 débito e 1 crédito).';
+  end if;
+
+  for v_line in select * from jsonb_array_elements(p_lines) loop
+    if (v_line->>'direction') = 'debito' then
+      v_total_debito := v_total_debito + (v_line->>'amount')::numeric;
+    elsif (v_line->>'direction') = 'credito' then
+      v_total_credito := v_total_credito + (v_line->>'amount')::numeric;
+    else
+      raise exception 'direction inválida: %', v_line->>'direction';
+    end if;
+  end loop;
+
+  if abs(v_total_debito - v_total_credito) > 0.01 then
+    raise exception 'Lançamento desbalanceado: débitos % ≠ créditos %', v_total_debito, v_total_credito;
+  end if;
+
+  insert into ledger_entries (entry_date, document_date, cash_date, description, origin, source_type, source_id, created_by)
+  values (p_entry_date, p_document_date, p_cash_date, p_description, p_origin, p_source_type, p_source_id, p_created_by)
+  returning id into v_entry_id;
+
+  insert into ledger_entry_lines (entry_id, account_id, cost_center_id, cost_item_id, direction, amount)
+  select
+    v_entry_id,
+    la.id,
+    nullif(elem->>'cost_center_id', '')::uuid,
+    nullif(elem->>'cost_item_id', '')::uuid,
+    (elem->>'direction')::ledger_entry_direction,
+    (elem->>'amount')::numeric
+  from jsonb_array_elements(p_lines) elem
+  join ledger_accounts la on la.code = (elem->>'account_code');
+
+  if (select count(*) from jsonb_array_elements(p_lines)) <> (select count(*) from ledger_entry_lines where entry_id = v_entry_id) then
+    raise exception 'Uma ou mais contas (account_code) não foram encontradas no plano de contas.';
+  end if;
+
+  return v_entry_id;
+end;
+$$ language plpgsql security definer;
+revoke execute on function post_ledger_entry_core(date, date, date, text, text, text, uuid, jsonb, uuid) from public, anon, authenticated;
+
+create or replace function post_ledger_entry(
+  p_entry_date date,
+  p_document_date date,
+  p_cash_date date,
+  p_description text,
+  p_origin text,
+  p_source_type text,
+  p_source_id uuid,
+  p_lines jsonb
+) returns uuid as $$
+begin
+  if auth.uid() is null then
+    raise exception 'not authorized';
+  end if;
+  return post_ledger_entry_core(p_entry_date, p_document_date, p_cash_date, p_description, p_origin, p_source_type, p_source_id, p_lines, auth.uid());
+end;
+$$ language plpgsql security definer;
+
+create or replace function reverse_ledger_entry_core(p_entry_id uuid, p_reason text, p_created_by uuid) returns uuid as $$
+declare
+  v_new_entry_id uuid;
+  v_original ledger_entries%rowtype;
+begin
+  select * into v_original from ledger_entries where id = p_entry_id;
+  if not found then
+    raise exception 'Lançamento não encontrado.';
+  end if;
+  if v_original.status = 'estornado' then
+    raise exception 'Este lançamento já foi estornado.';
+  end if;
+
+  insert into ledger_entries (entry_date, document_date, cash_date, description, origin, source_type, source_id, reverses_entry_id, created_by)
+  values ((now() at time zone 'America/Sao_Paulo')::date, v_original.document_date, v_original.cash_date, coalesce(p_reason, 'Estorno de: ' || v_original.description), 'estorno', v_original.source_type, v_original.source_id, p_entry_id, p_created_by)
+  returning id into v_new_entry_id;
+
+  insert into ledger_entry_lines (entry_id, account_id, cost_center_id, cost_item_id, direction, amount)
+  select v_new_entry_id, l.account_id, l.cost_center_id, l.cost_item_id,
+    (case when l.direction = 'debito' then 'credito' else 'debito' end)::ledger_entry_direction, l.amount
+  from ledger_entry_lines l
+  where l.entry_id = p_entry_id;
+
+  update ledger_entries set status = 'estornado' where id = p_entry_id;
+  return v_new_entry_id;
+end;
+$$ language plpgsql security definer;
+revoke execute on function reverse_ledger_entry_core(uuid, text, uuid) from public, anon, authenticated;
+
+create or replace function reverse_ledger_entry(p_entry_id uuid, p_reason text) returns uuid as $$
+begin
+  if auth.uid() is null then
+    raise exception 'not authorized';
+  end if;
+  return reverse_ledger_entry_core(p_entry_id, p_reason, auth.uid());
+end;
+$$ language plpgsql security definer;
+
+-- ---------- Colunas novas ----------
+-- Destino do consumo/baixa: centro de custo onde o ativo foi consumido.
+alter table inventory_movements add column if not exists consumption_center_id uuid references cost_centers(id) on delete set null;
+-- Baixa manual por perda/quebra (vai pra "Perdas e desperdícios") em vez de consumo.
+alter table inventory_movements add column if not exists is_loss boolean not null default false;
+-- Linha de compra destinada ao café da manhã: custo reconhecido na compra, não entra no estoque.
+alter table expense_items add column if not exists for_breakfast boolean not null default false;
+-- Rateio próprio desta linha de despesa (substitui o rateio padrão do item de custo): [{center_id, alloc_pct}].
+alter table expense_items add column if not exists center_split jsonb;
+
+-- Gatilho BEFORE: carimba o centro de consumo vindo das funções de bar/frigobar.
+create or replace function set_movement_consumption_center() returns trigger as $$
+declare
+  v_name text;
+begin
+  if new.consumption_center_id is null and new.movement_type = 'baixa_consumo_hospede' then
+    v_name := nullif(current_setting('app.consumption_center', true), '');
+    if v_name is not null then
+      select id into new.consumption_center_id from cost_centers where name = v_name;
+    end if;
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+drop trigger if exists inventory_movements_consumption_center on inventory_movements;
+create trigger inventory_movements_consumption_center
+before insert on inventory_movements
+for each row execute function set_movement_consumption_center();
+
+-- ---------- Lançamento automático de cada movimento de estoque ----------
+create or replace function post_inventory_movement_ledger() returns trigger as $$
+declare
+  v_cost_item_id uuid;
+  v_ledger_code text;
+  v_stock_account text;
+  v_counter text;
+  v_center uuid;
+  v_center_name text;
+  v_value numeric;
+  v_item_name text;
+  v_origin text;
+  v_desc text;
+  v_date date;
+  v_lines jsonb;
+begin
+  if new.movement_type = 'compra' then
+    return new;
+  end if;
+  v_value := round(abs(new.total_value), 2);
+  if v_value <= 0 then
+    return new;
+  end if;
+
+  select ci.id, ci.ledger_account_code into v_cost_item_id, v_ledger_code
+  from cost_items ci where ci.inventory_item_id = new.inventory_item_id limit 1;
+  v_stock_account := coalesce(v_ledger_code, 'estoque-outros');
+  select name into v_item_name from inventory_items where id = new.inventory_item_id;
+  v_date := (new.created_at at time zone 'America/Sao_Paulo')::date;
+  v_center := new.consumption_center_id;
+  select name into v_center_name from cost_centers where id = v_center;
+
+  if new.movement_type = 'baixa_consumo_hospede' then
+    v_origin := 'consumo';
+    v_desc := case when new.total_value < 0 then 'Consumo de ' else 'Estorno de consumo de ' end
+      || coalesce(lower(v_center_name), 'bar/frigobar') || ' — ' || coalesce(v_item_name, 'item');
+    if v_center_name = 'Frigobar' then
+      v_counter := 'cmv-bebidas-frigobar';
+    else
+      v_counter := case v_stock_account
+        when 'estoque-bebidas' then 'cmv-bebidas-bar'
+        when 'estoque-alimentos' then 'custo-petiscos-bar'
+        else 'custo-drinks-bar' end;
+    end if;
+  elsif new.movement_type = 'baixa_manual' then
+    v_origin := 'baixa-manual';
+    if new.is_loss then
+      v_desc := 'Perda/quebra de estoque — ' || coalesce(v_item_name, 'item');
+      v_counter := 'perdas-estoque';
+    else
+      v_desc := 'Baixa manual de estoque — ' || coalesce(v_item_name, 'item') || coalesce(' (' || v_center_name || ')', '');
+      v_counter := case v_center_name
+        when 'Café da manhã' then 'custo-cafe-manha'
+        when 'Frigobar' then 'cmv-bebidas-frigobar'
+        when 'Hospedagem' then 'materiais-limpeza-hospedagem'
+        when 'Administração e áreas comuns' then 'material-administrativo'
+        when 'Bar de piscina' then (case v_stock_account
+          when 'estoque-bebidas' then 'cmv-bebidas-bar'
+          when 'estoque-alimentos' then 'custo-petiscos-bar'
+          else 'custo-drinks-bar' end)
+        else 'perdas-estoque' end;
+    end if;
+  elsif new.movement_type = 'ajuste_contagem' then
+    v_origin := 'inventario';
+    v_desc := case when new.total_value < 0 then 'Ajuste de inventário (falta) — ' else 'Ajuste de inventário (sobra) — ' end || coalesce(v_item_name, 'item');
+    v_counter := 'perdas-estoque';
+  else
+    return new;
+  end if;
+
+  -- Perdas/ajustes sem destino explícito: usa o centro principal do item.
+  if v_center is null and v_cost_item_id is not null then
+    select center_id into v_center from cost_item_centers where cost_item_id = v_cost_item_id order by alloc_pct desc limit 1;
+  end if;
+
+  if new.total_value < 0 then
+    v_lines := jsonb_build_array(
+      jsonb_build_object('account_code', v_counter, 'cost_center_id', v_center, 'cost_item_id', v_cost_item_id, 'direction', 'debito', 'amount', v_value),
+      jsonb_build_object('account_code', v_stock_account, 'cost_center_id', null, 'cost_item_id', v_cost_item_id, 'direction', 'credito', 'amount', v_value));
+  else
+    v_lines := jsonb_build_array(
+      jsonb_build_object('account_code', v_stock_account, 'cost_center_id', null, 'cost_item_id', v_cost_item_id, 'direction', 'debito', 'amount', v_value),
+      jsonb_build_object('account_code', v_counter, 'cost_center_id', v_center, 'cost_item_id', v_cost_item_id, 'direction', 'credito', 'amount', v_value));
+  end if;
+
+  perform post_ledger_entry_core(v_date, v_date, null, v_desc, v_origin, 'inventory_movements', new.id, v_lines, new.created_by);
+  return new;
+end;
+$$ language plpgsql security definer;
+drop trigger if exists inventory_movements_post_ledger on inventory_movements;
+create trigger inventory_movements_post_ledger
+after insert on inventory_movements
+for each row execute function post_inventory_movement_ledger();
+
+-- ---------- Receita do consumo (fechamento) e recebimento (pagamento) ----------
+create or replace function post_room_bill_ledger() returns trigger as $$
+declare
+  v_lines jsonb := '[]'::jsonb;
+  v_total numeric := 0;
+  v_amount numeric;
+  v_bar_center uuid;
+  v_frigo_center uuid;
+  v_bar_total numeric := 0;
+  v_service numeric;
+  v_rec record;
+  v_entry_id uuid;
+  v_suite text;
+  v_date date := (now() at time zone 'America/Sao_Paulo')::date;
+  v_cash text;
+begin
+  if new.status = old.status then
+    return new;
+  end if;
+
+  select number into v_suite from rooms where id = new.room_id;
+  select id into v_bar_center from cost_centers where name = 'Bar de piscina';
+  select id into v_frigo_center from cost_centers where name = 'Frigobar';
+
+  if new.status = 'fechada' then
+    for v_rec in
+      select
+        case
+          when pi.category = 'Petiscos' then 'receita-petiscos-bar'
+          when lower(pi.name) in ('água com gás', 'água sem gás', 'água de coco', 'café expresso', 'campari', 'cerveja', 'refrigerante') then 'receita-bebidas-bar'
+          else 'receita-drinks-bar'
+        end as account_code,
+        sum(bci.quantity * bci.price_snapshot) as amount
+      from bar_comanda_items bci
+      join bar_comandas c on c.id = bci.comanda_id
+      join poolbar_items pi on pi.id = bci.poolbar_item_id
+      where c.bill_id = new.id and c.status <> 'cancelada' and bci.quantity > 0
+      group by 1
+    loop
+      v_amount := round(v_rec.amount, 2);
+      if v_amount > 0 then
+        v_lines := v_lines || jsonb_build_array(jsonb_build_object('account_code', v_rec.account_code, 'cost_center_id', v_bar_center, 'direction', 'credito', 'amount', v_amount));
+        v_total := v_total + v_amount;
+        v_bar_total := v_bar_total + v_amount;
+      end if;
+    end loop;
+
+    select round(coalesce(sum(quantity * price_snapshot), 0), 2) into v_amount from room_bill_minibar_items where bill_id = new.id;
+    if v_amount > 0 then
+      v_lines := v_lines || jsonb_build_array(jsonb_build_object('account_code', 'receita-bebidas-frigobar', 'cost_center_id', v_frigo_center, 'direction', 'credito', 'amount', v_amount));
+      v_total := v_total + v_amount;
+    end if;
+
+    if v_bar_total > 0 and not coalesce(new.service_charge_waived, false) then
+      v_service := round(v_bar_total * 0.10, 2);
+      if v_service > 0 then
+        v_lines := v_lines || jsonb_build_array(jsonb_build_object('account_code', 'salarios-a-pagar', 'cost_center_id', null, 'direction', 'credito', 'amount', v_service));
+        v_total := v_total + v_service;
+      end if;
+    end if;
+
+    if v_total > 0 then
+      v_lines := v_lines || jsonb_build_array(jsonb_build_object('account_code', 'consumos-a-liquidar', 'cost_center_id', null, 'direction', 'debito', 'amount', v_total));
+      perform post_ledger_entry_core(v_date, v_date, null, 'Consumo de bar/frigobar — suíte ' || coalesce(v_suite, '?') || ' (conta fechada)', 'consumo-fechamento', 'room_bills', new.id, v_lines, null);
+    end if;
+
+  elsif old.status = 'fechada' and new.status = 'reaberta' then
+    for v_entry_id in
+      select id from ledger_entries where source_type = 'room_bills' and source_id = new.id and origin = 'consumo-fechamento' and status = 'confirmado'
+    loop
+      perform reverse_ledger_entry_core(v_entry_id, 'Conta reaberta — estorno da receita do consumo (suíte ' || coalesce(v_suite, '?') || ')', null);
+    end loop;
+
+  elsif new.status = 'paga' then
+    select coalesce(sum(l.amount), 0) into v_total
+    from ledger_entries e
+    join ledger_entry_lines l on l.entry_id = e.id
+    join ledger_accounts a on a.id = l.account_id
+    where e.source_type = 'room_bills' and e.source_id = new.id and e.origin = 'consumo-fechamento'
+      and e.status = 'confirmado' and a.code = 'consumos-a-liquidar' and l.direction = 'debito';
+    if v_total > 0 then
+      v_cash := case when new.payment_method = 'dinheiro' then 'caixa' else 'banco' end;
+      perform post_ledger_entry_core(v_date, v_date, v_date,
+        'Recebimento do consumo — suíte ' || coalesce(v_suite, '?') || coalesce(' (' || new.payment_method::text || ')', ''),
+        'recebimento', 'room_bills', new.id,
+        jsonb_build_array(
+          jsonb_build_object('account_code', v_cash, 'cost_center_id', null, 'direction', 'debito', 'amount', v_total),
+          jsonb_build_object('account_code', 'consumos-a-liquidar', 'cost_center_id', null, 'direction', 'credito', 'amount', v_total)),
+        null);
+    end if;
+  end if;
+
+  return new;
+end;
+$$ language plpgsql security definer;
+drop trigger if exists room_bills_post_ledger on room_bills;
+create trigger room_bills_post_ledger
+after update of status on room_bills
+for each row execute function post_room_bill_ledger();
+
+-- ---------- Funções que baixam estoque, agora carimbando o centro de consumo ----------
+create or replace function create_movement_from_expense_item() returns trigger as $$
+declare
+  v_inventory_item_id uuid;
+begin
+  if new.cost_item_id is not null then
+    select inventory_item_id into v_inventory_item_id from cost_items where id = new.cost_item_id;
+    if v_inventory_item_id is not null and not new.for_breakfast then
+      insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_expense_item_id, created_by)
+      values (
+        v_inventory_item_id,
+        'compra',
+        new.quantity,
+        new.id,
+        (select created_by from expenses where id = new.expense_id)
+      );
+
+      update purchase_requests
+      set status = 'atendido', updated_at = now()
+      where inventory_item_id = v_inventory_item_id and status = 'pendente';
+    end if;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create or replace function submit_comanda(p_room_id uuid, p_items jsonb, p_guest_slot room_bill_guest_slot default 'unica')
+returns uuid as $$
+declare
+  v_bill_id uuid;
+  v_bill_status room_bill_status;
+  v_comanda_id uuid;
+  v_next_seq int;
+  v_next_monthly int;
+  v_item jsonb;
+begin
+  if not is_camareira() then
+    raise exception 'not authorized';
+  end if;
+  -- Centro de custo onde este consumo acontece (lido pelo gatilho que lança a contabilidade).
+  perform set_config('app.consumption_center', 'Bar de piscina', true);
+
+  select id, status into v_bill_id, v_bill_status
+  from room_bills where room_id = p_room_id and guest_slot = p_guest_slot and status <> 'paga'
+  for update;
+
+  if v_bill_id is null then
+    insert into room_bills (room_id, status, guest_slot) values (p_room_id, 'aberta', p_guest_slot)
+    returning id, status into v_bill_id, v_bill_status;
+  end if;
+
+  if v_bill_status = 'fechada' then
+    raise exception 'A conta deste quarto está fechada.';
+  end if;
+
+  select coalesce(max(sequence_number), 0) + 1 into v_next_seq
+  from bar_comandas where bill_id = v_bill_id;
+
+  select coalesce(max(monthly_number), 0) + 1 into v_next_monthly
+  from bar_comandas
+  where created_at >= date_trunc('month', now() at time zone 'America/Sao_Paulo') at time zone 'America/Sao_Paulo';
+
+  insert into bar_comandas (room_id, bill_id, sequence_number, monthly_number, status, created_by, last_action_by)
+  values (p_room_id, v_bill_id, v_next_seq, v_next_monthly, 'original', auth.uid(), auth.uid())
+  returning id into v_comanda_id;
+
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    if (v_item->>'quantity')::int > 0 then
+      insert into bar_comanda_items (comanda_id, poolbar_item_id, quantity, price_snapshot)
+      select v_comanda_id, (v_item->>'item_id')::uuid, (v_item->>'quantity')::int, pi.price
+      from poolbar_items pi where pi.id = (v_item->>'item_id')::uuid;
+    end if;
+  end loop;
+
+  -- Baixa de estoque no momento do pedido (Módulo Contábil Leva 4) — via
+  -- ficha técnica, mesma soma por ingrediente de sempre.
+  insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
+  select r.inventory_item_id, 'baixa_consumo_hospede',
+    -sum(bci.quantity * r.portions_count * r.amount_per_portion), v_bill_id,
+    'Baixa automática ao registrar a comanda'
+  from bar_comanda_items bci
+  join inventory_item_recipes r on r.poolbar_item_id = bci.poolbar_item_id
+  where bci.comanda_id = v_comanda_id and bci.quantity > 0
+  group by r.inventory_item_id;
+
+  return v_comanda_id;
+end;
+$$ language plpgsql security definer;
+
+create or replace function edit_comanda(p_comanda_id uuid, p_room_id uuid, p_items jsonb, p_guest_slot room_bill_guest_slot default 'unica')
+returns void as $$
+declare
+  v_old_bill_id uuid;
+  v_old_bill_status room_bill_status;
+  v_old_comanda_status comanda_status;
+  v_old_seq int;
+  v_new_bill_id uuid;
+  v_new_bill_status room_bill_status;
+  v_next_seq int;
+  v_item jsonb;
+begin
+  if not is_camareira() then
+    raise exception 'not authorized';
+  end if;
+  -- Centro de custo onde este consumo acontece (lido pelo gatilho que lança a contabilidade).
+  perform set_config('app.consumption_center', 'Bar de piscina', true);
+
+  select c.bill_id, c.status, c.sequence_number, b.status
+    into v_old_bill_id, v_old_comanda_status, v_old_seq, v_old_bill_status
+  from bar_comandas c
+  join room_bills b on b.id = c.bill_id
+  where c.id = p_comanda_id
+  for update of c;
+
+  if v_old_bill_id is null then
+    raise exception 'Comanda não encontrada.';
+  end if;
+  if v_old_comanda_status = 'cancelada' then
+    raise exception 'Comanda cancelada não pode ser editada.';
+  end if;
+  if v_old_bill_status not in ('aberta', 'reaberta') then
+    raise exception 'A conta deste quarto está fechada ou já foi paga.';
+  end if;
+
+  select id, status into v_new_bill_id, v_new_bill_status
+  from room_bills where room_id = p_room_id and guest_slot = p_guest_slot and status <> 'paga'
+  for update;
+
+  if v_new_bill_id is null then
+    insert into room_bills (room_id, status, guest_slot) values (p_room_id, 'aberta', p_guest_slot)
+    returning id, status into v_new_bill_id, v_new_bill_status;
+  end if;
+
+  if v_new_bill_status = 'fechada' then
+    raise exception 'A conta deste quarto está fechada.';
+  end if;
+
+  if v_new_bill_id <> v_old_bill_id then
+    select coalesce(max(sequence_number), 0) + 1 into v_next_seq
+    from bar_comandas where bill_id = v_new_bill_id;
+  else
+    v_next_seq := v_old_seq;
+  end if;
+
+  update bar_comandas
+  set room_id = p_room_id,
+      bill_id = v_new_bill_id,
+      sequence_number = v_next_seq,
+      status = 'editada',
+      last_action_by = auth.uid(),
+      last_action_at = now()
+  where id = p_comanda_id;
+
+  -- Estorna o estoque dos itens ANTIGOS (já baixado quando a comanda foi
+  -- lançada/editada da última vez) antes de substituí-los.
+  insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
+  select r.inventory_item_id, 'baixa_consumo_hospede',
+    sum(bci.quantity * r.portions_count * r.amount_per_portion), v_old_bill_id,
+    'Estorno de estoque — comanda editada'
+  from bar_comanda_items bci
+  join inventory_item_recipes r on r.poolbar_item_id = bci.poolbar_item_id
+  where bci.comanda_id = p_comanda_id and bci.quantity > 0
+  group by r.inventory_item_id;
+
+  delete from bar_comanda_items where comanda_id = p_comanda_id;
+
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    if (v_item->>'quantity')::int > 0 then
+      insert into bar_comanda_items (comanda_id, poolbar_item_id, quantity, price_snapshot)
+      select p_comanda_id, (v_item->>'item_id')::uuid, (v_item->>'quantity')::int, pi.price
+      from poolbar_items pi where pi.id = (v_item->>'item_id')::uuid;
+    end if;
+  end loop;
+
+  -- Baixa o estoque dos itens NOVOS.
+  insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
+  select r.inventory_item_id, 'baixa_consumo_hospede',
+    -sum(bci.quantity * r.portions_count * r.amount_per_portion), v_new_bill_id,
+    'Baixa automática ao editar a comanda'
+  from bar_comanda_items bci
+  join inventory_item_recipes r on r.poolbar_item_id = bci.poolbar_item_id
+  where bci.comanda_id = p_comanda_id and bci.quantity > 0
+  group by r.inventory_item_id;
+end;
+$$ language plpgsql security definer;
+
+create or replace function cancel_comanda(p_comanda_id uuid, p_ingredients_recovered boolean)
+returns void as $$
+declare
+  v_bill_id uuid;
+  v_bill_status room_bill_status;
+  v_old_status comanda_status;
+begin
+  if not is_camareira() then
+    raise exception 'not authorized';
+  end if;
+  -- Centro de custo onde este consumo acontece (lido pelo gatilho que lança a contabilidade).
+  perform set_config('app.consumption_center', 'Bar de piscina', true);
+
+  select c.bill_id, c.status, b.status into v_bill_id, v_old_status, v_bill_status
+  from bar_comandas c
+  join room_bills b on b.id = c.bill_id
+  where c.id = p_comanda_id
+  for update of c;
+
+  if v_bill_id is null then
+    raise exception 'Comanda não encontrada.';
+  end if;
+  if v_bill_status not in ('aberta', 'reaberta') then
+    raise exception 'A conta deste quarto está fechada ou já foi paga.';
+  end if;
+
+  update bar_comandas
+  set status = 'cancelada', last_action_by = auth.uid(), last_action_at = now()
+  where id = p_comanda_id and status <> 'cancelada';
+
+  if v_old_status <> 'cancelada' and p_ingredients_recovered then
+    insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
+    select r.inventory_item_id, 'baixa_consumo_hospede',
+      sum(bci.quantity * r.portions_count * r.amount_per_portion), v_bill_id,
+      'Estorno de estoque — comanda cancelada (ingredientes recuperados)'
+    from bar_comanda_items bci
+    join inventory_item_recipes r on r.poolbar_item_id = bci.poolbar_item_id
+    where bci.comanda_id = p_comanda_id and bci.quantity > 0
+    group by r.inventory_item_id;
+  end if;
+end;
+$$ language plpgsql security definer;
+
+create or replace function set_minibar_consumption(p_bill_id uuid, p_minibar_item_id uuid, p_quantity int)
+returns void as $$
+declare
+  v_bill_status room_bill_status;
+  v_price numeric;
+  v_old_quantity int;
+  v_new_quantity int;
+  v_delta int;
+begin
+  if not (is_camareira() or is_admin()) then
+    raise exception 'not authorized';
+  end if;
+  -- Centro de custo onde este consumo acontece (lido pelo gatilho que lança a contabilidade).
+  perform set_config('app.consumption_center', 'Frigobar', true);
+
+  select status into v_bill_status from room_bills where id = p_bill_id for update;
+  if v_bill_status is null then
+    raise exception 'Conta não encontrada.';
+  end if;
+  if v_bill_status = 'fechada' then
+    raise exception 'A conta desta suíte está fechada. Não é possível registrar consumo.';
+  end if;
+
+  select price into v_price from minibar_items where id = p_minibar_item_id;
+  if v_price is null then
+    raise exception 'Item de frigobar não encontrado.';
+  end if;
+
+  select quantity into v_old_quantity
+  from room_bill_minibar_items
+  where bill_id = p_bill_id and minibar_item_id = p_minibar_item_id
+  for update;
+  v_old_quantity := coalesce(v_old_quantity, 0);
+  v_new_quantity := greatest(0, p_quantity);
+
+  insert into room_bill_minibar_items (bill_id, minibar_item_id, quantity, price_snapshot, updated_at)
+  values (p_bill_id, p_minibar_item_id, v_new_quantity, v_price, now())
+  on conflict (bill_id, minibar_item_id)
+  do update set quantity = excluded.quantity, price_snapshot = excluded.price_snapshot, updated_at = excluded.updated_at;
+
+  v_delta := v_new_quantity - v_old_quantity;
+  if v_delta <> 0 then
+    insert into inventory_movements (inventory_item_id, movement_type, quantity, reference_room_bill_id, notes)
+    select r.inventory_item_id, 'baixa_consumo_hospede', -(v_delta * r.portions_count * r.amount_per_portion), p_bill_id,
+      case when v_delta > 0
+        then 'Baixa automática ao lançar consumo de frigobar'
+        else 'Estorno de estoque — frigobar reduzido'
+      end
+    from inventory_item_recipes r
+    where r.minibar_item_id = p_minibar_item_id;
+  end if;
+end;
+$$ language plpgsql security definer;
+
+begin;
+-- 079: reclassifica o antigo "Cadastro de despesas" (que na prática tinha produtos
+-- e ferramentas) e liga TODO produto/despesa a uma conta do plano de contas.
+
+-- Categorias novas
+insert into product_categories (name, position)
+select v.name, (select coalesce(max(position), 0) from product_categories) + v.ord
+from (values ('Utensílios e descartáveis', 1), ('Jardinagem', 2)) as v(name, ord)
+where not exists (select 1 from product_categories pc where pc.name = v.name);
+
+-- Categoria de ativo permanente para ferramentas
+insert into asset_categories (name)
+select 'Ferramentas e utensílios duráveis'
+where not exists (select 1 from asset_categories where name = 'Ferramentas e utensílios duráveis');
+
+-- 1) Conta do plano de contas dos produtos que já existiam, pela categoria
+update cost_items ci set ledger_account_code = case pc.name
+    when 'Alimentos' then 'estoque-alimentos'
+    when 'Bebidas' then 'estoque-bebidas'
+    when 'Enxoval de cama e banho' then 'estoque-limpeza'
+    when 'Materiais das suítes' then 'estoque-limpeza'
+    when 'Materiais de limpeza' then 'estoque-limpeza'
+    else 'estoque-outros' end
+from product_categories pc
+where ci.category_id = pc.id and ci.is_product and ci.ledger_account_code is null;
+update cost_items set ledger_account_code = 'estoque-alimentos'
+where is_product and ledger_account_code is null and name ilike 'ovo %';
+update cost_items set ledger_account_code = 'estoque-outros' where is_product and ledger_account_code is null;
+
+-- 2) Despesas de verdade: só ligam à conta
+update cost_items ci set ledger_account_code = m.code
+from (values ('água', 'agua-esgoto'), ('luz', 'energia-eletrica'), ('gás', 'gas'), ('internet', 'internet-telefonia'), ('dedetização', 'limpeza-areas-comuns'), ('limpeza coqueiros', 'jardinagem'), ('encargos', 'mao-de-obra-operacional'), ('plano de saúde', 'mao-de-obra-operacional'), ('cesta básica', 'mao-de-obra-operacional'), ('salário das camareiras', 'mao-de-obra-operacional'), ('salário dos funcionários de manutenção', 'mao-de-obra-operacional'), ('transporte', 'outras-despesas'), ('impostos e taxas', 'outras-despesas'), ('Contabilidade (Simone Perla)', 'contabilidade-servicos'), ('Financeiro (Márcia)', 'pessoal-administrativo'), ('Invictos (Comercial e Atendimento)', 'contabilidade-servicos'), ('Stays (CMS)', 'contabilidade-servicos'), ('outras honorários administrativos', 'contabilidade-servicos'), ('pró-labore', 'pessoal-administrativo')) as m(name, code)
+where ci.name = m.name and not ci.is_product;
+
+-- 3) Materiais, alimentos e descartáveis -> viram produtos (estoque centralizado)
+do $$
+declare
+  r record;
+  v_inv uuid;
+  v_cat uuid;
+begin
+  for r in
+    select * from (values ('bolos', 'Alimentos', 'ingrediente_receita', 'estoque-alimentos'), ('brioches', 'Alimentos', 'ingrediente_receita', 'estoque-alimentos'), ('frutas', 'Alimentos', 'ingrediente_receita', 'estoque-alimentos'), ('legumes', 'Alimentos', 'ingrediente_receita', 'estoque-alimentos'), ('verduras', 'Alimentos', 'ingrediente_receita', 'estoque-alimentos'), ('ovos', 'Alimentos', 'ingrediente_receita', 'estoque-alimentos'), ('pimenta', 'Alimentos', 'ingrediente_receita', 'estoque-alimentos'), ('salgadinhos', 'Alimentos', 'ingrediente_receita', 'estoque-alimentos'), ('temperos', 'Alimentos', 'ingrediente_receita', 'estoque-alimentos'), ('canudos', 'Utensílios e descartáveis', 'material_consumo', 'estoque-outros'), ('mexedores de drink', 'Utensílios e descartáveis', 'material_consumo', 'estoque-outros'), ('palitos', 'Utensílios e descartáveis', 'material_consumo', 'estoque-outros'), ('guardanapos', 'Utensílios e descartáveis', 'material_consumo', 'estoque-outros'), ('papéis toalha', 'Utensílios e descartáveis', 'material_consumo', 'estoque-outros'), ('copos', 'Utensílios e descartáveis', 'material_consumo', 'estoque-outros'), ('pratos', 'Utensílios e descartáveis', 'material_consumo', 'estoque-outros'), ('pires', 'Utensílios e descartáveis', 'material_consumo', 'estoque-outros'), ('talheres', 'Utensílios e descartáveis', 'material_consumo', 'estoque-outros'), ('taças', 'Utensílios e descartáveis', 'material_consumo', 'estoque-outros'), ('xícaras', 'Utensílios e descartáveis', 'material_consumo', 'estoque-outros'), ('jogos americanos', 'Utensílios e descartáveis', 'material_consumo', 'estoque-outros'), ('panos de prato', 'Utensílios e descartáveis', 'material_consumo', 'estoque-outros'), ('utensílios de cozinha', 'Utensílios e descartáveis', 'material_consumo', 'estoque-outros'), ('borrifadores', 'Materiais de limpeza', 'material_limpeza', 'estoque-limpeza'), ('buchas', 'Materiais de limpeza', 'material_limpeza', 'estoque-limpeza'), ('estopas', 'Materiais de limpeza', 'material_limpeza', 'estoque-limpeza'), ('panos de limpeza', 'Materiais de limpeza', 'material_limpeza', 'estoque-limpeza'), ('outros materiais de limpeza', 'Materiais de limpeza', 'material_limpeza', 'estoque-limpeza'), ('perfume de ambiente', 'Materiais de limpeza', 'material_limpeza', 'estoque-limpeza'), ('escovão', 'Materiais de limpeza', 'material_limpeza', 'estoque-limpeza'), ('areia', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('argamassa', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('cabos', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('caibros', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('canos', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('cimento', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('colas em geral', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('conduites', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('conectores de mangueiras', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('conectores em geral', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('conexões hidráulicas', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('eletrodutos', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('fio elétrico', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('impermeabilizantes', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('linhas de madeira', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('lixas', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('parafusos', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('porcas', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('prendedores de toldo', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('rejunte', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('ripas', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('tábuas', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('telhas', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('toras de eucalipto', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('outros materiais de manutenção', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('mangueiras', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('aspersores', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('filtros', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('torneiras de jardim', 'Materiais de Manutenção', 'material_consumo', 'estoque-outros'), ('adubo', 'Jardinagem', 'material_consumo', 'estoque-outros'), ('plantas', 'Jardinagem', 'material_consumo', 'estoque-outros'), ('remédios de plantas', 'Jardinagem', 'material_consumo', 'estoque-outros'), ('outros materiais de jardinagem', 'Jardinagem', 'material_consumo', 'estoque-outros'), ('outros materiais de irrigação', 'Jardinagem', 'material_consumo', 'estoque-outros')) as m(name, category, ptype, account)
+  loop
+    if exists (select 1 from cost_items where name = r.name and not is_product) then
+      select id into v_cat from product_categories where name = r.category;
+      -- categorias antigas ('Materiais de Manutenção') já existem; as demais acabaram de ser criadas acima
+      insert into inventory_items (name, unit) values (r.name, 'un') returning id into v_inv;
+      update cost_items
+      set is_product = true, is_inventory = true, inventory_item_id = v_inv,
+          category_id = v_cat, product_type = r.ptype::product_type, ledger_account_code = r.account
+      where name = r.name and not is_product;
+    end if;
+  end loop;
+end $$;
+
+-- 4) Ferramentas e equipamentos -> catálogo do ativo permanente
+do $$
+declare
+  r record;
+  v_cat uuid;
+  v_id uuid;
+begin
+  select id into v_cat from asset_categories where name = 'Ferramentas e utensílios duráveis';
+  for r in select unnest(array['alicates', 'chaves allen', 'chaves de cano', 'chaves de fenda', 'chaves estrela', 'chaves inglesas', 'martelos', 'trenas', 'serrinha', 'escada', 'medidores em geral', 'outras ferramentas de manutenção']) as name loop
+    select id into v_id from cost_items where name = r.name and not is_product;
+    if v_id is not null then
+      insert into fixed_asset_catalog_items (name, category_id)
+      select r.name, v_cat
+      where not exists (select 1 from fixed_asset_catalog_items where name = r.name and category_id = v_cat);
+      if exists (select 1 from expense_items where cost_item_id = v_id) then
+        update cost_items set active = false where id = v_id;
+      else
+        delete from cost_items where id = v_id;
+      end if;
+    end if;
+  end loop;
+end $$;
+
+commit;
+
+-- Migration 080 (fonte única de rateio)
+-- 080: UMA fonte de rateio só. O rateio por lançamento (expense_items.center_split)
+-- sai; o rateio do item de custo (cost_item_centers) é o único, editável no
+-- cadastro e no Demonstrativo de Custos. Perdas e ajustes de inventário passam
+-- a seguir esse rateio (antes usavam só o centro principal).
+alter table expense_items drop column if exists center_split;
+
+create or replace function post_inventory_movement_ledger() returns trigger as $$
+declare
+  v_cost_item_id uuid;
+  v_ledger_code text;
+  v_stock_account text;
+  v_counter text;
+  v_center uuid;
+  v_center_name text;
+  v_value numeric;
+  v_item_name text;
+  v_origin text;
+  v_desc text;
+  v_date date;
+  v_lines jsonb;
+  v_counter_lines jsonb;
+  v_rec record;
+  v_part numeric;
+  v_acc numeric;
+  v_i int;
+begin
+  if new.movement_type = 'compra' then
+    return new;
+  end if;
+  v_value := round(abs(new.total_value), 2);
+  if v_value <= 0 then
+    return new;
+  end if;
+
+  select ci.id, ci.ledger_account_code into v_cost_item_id, v_ledger_code
+  from cost_items ci where ci.inventory_item_id = new.inventory_item_id limit 1;
+  v_stock_account := coalesce(v_ledger_code, 'estoque-outros');
+  select name into v_item_name from inventory_items where id = new.inventory_item_id;
+  v_date := (new.created_at at time zone 'America/Sao_Paulo')::date;
+  v_center := new.consumption_center_id;
+  select name into v_center_name from cost_centers where id = v_center;
+
+  if new.movement_type = 'baixa_consumo_hospede' then
+    v_origin := 'consumo';
+    v_desc := case when new.total_value < 0 then 'Consumo de ' else 'Estorno de consumo de ' end
+      || coalesce(lower(v_center_name), 'bar/frigobar') || ' — ' || coalesce(v_item_name, 'item');
+    if v_center_name = 'Frigobar' then
+      v_counter := 'cmv-bebidas-frigobar';
+    else
+      v_counter := case v_stock_account
+        when 'estoque-bebidas' then 'cmv-bebidas-bar'
+        when 'estoque-alimentos' then 'custo-petiscos-bar'
+        else 'custo-drinks-bar' end;
+    end if;
+  elsif new.movement_type = 'baixa_manual' then
+    v_origin := 'baixa-manual';
+    if new.is_loss then
+      v_desc := 'Perda/quebra de estoque — ' || coalesce(v_item_name, 'item');
+      v_counter := 'perdas-estoque';
+    else
+      v_desc := 'Baixa manual de estoque — ' || coalesce(v_item_name, 'item') || coalesce(' (' || v_center_name || ')', '');
+      v_counter := case v_center_name
+        when 'Café da manhã' then 'custo-cafe-manha'
+        when 'Frigobar' then 'cmv-bebidas-frigobar'
+        when 'Hospedagem' then 'materiais-limpeza-hospedagem'
+        when 'Administração e áreas comuns' then 'material-administrativo'
+        when 'Bar de piscina' then (case v_stock_account
+          when 'estoque-bebidas' then 'cmv-bebidas-bar'
+          when 'estoque-alimentos' then 'custo-petiscos-bar'
+          else 'custo-drinks-bar' end)
+        else 'perdas-estoque' end;
+    end if;
+  elsif new.movement_type = 'ajuste_contagem' then
+    v_origin := 'inventario';
+    v_desc := case when new.total_value < 0 then 'Ajuste de inventário (falta) — ' else 'Ajuste de inventário (sobra) — ' end || coalesce(v_item_name, 'item');
+    v_counter := 'perdas-estoque';
+  else
+    return new;
+  end if;
+
+  -- Contrapartida (custo/perda): se o destino foi escolhido na baixa, vai inteira
+  -- pra esse centro; senão (perda, ajuste de inventário) segue o RATEIO do item
+  -- de custo — a ÚNICA fonte de rateio do sistema (cost_item_centers).
+  v_counter_lines := '[]'::jsonb;
+  if v_center is not null or v_cost_item_id is null then
+    v_counter_lines := jsonb_build_array(jsonb_build_object('center', v_center, 'amount', v_value));
+  else
+    v_acc := 0;
+    for v_rec in select center_id, alloc_pct from cost_item_centers where cost_item_id = v_cost_item_id order by alloc_pct desc, center_id loop
+      v_part := round(v_value * v_rec.alloc_pct / 100, 2);
+      v_acc := v_acc + v_part;
+      v_counter_lines := v_counter_lines || jsonb_build_array(jsonb_build_object('center', v_rec.center_id, 'amount', v_part));
+    end loop;
+    if jsonb_array_length(v_counter_lines) = 0 then
+      v_counter_lines := jsonb_build_array(jsonb_build_object('center', null, 'amount', v_value));
+    elsif v_acc <> v_value then
+      -- sobra de arredondamento vai na primeira linha (a de maior percentual)
+      v_counter_lines := jsonb_set(v_counter_lines, '{0,amount}', to_jsonb(((v_counter_lines->0->>'amount')::numeric) + (v_value - v_acc)));
+    end if;
+  end if;
+
+  v_lines := '[]'::jsonb;
+  for v_i in 0 .. jsonb_array_length(v_counter_lines) - 1 loop
+    v_lines := v_lines || jsonb_build_array(jsonb_build_object(
+      'account_code', v_counter,
+      'cost_center_id', v_counter_lines->v_i->>'center',
+      'cost_item_id', v_cost_item_id,
+      'direction', case when new.total_value < 0 then 'debito' else 'credito' end,
+      'amount', (v_counter_lines->v_i->>'amount')::numeric));
+  end loop;
+  v_lines := v_lines || jsonb_build_array(jsonb_build_object(
+    'account_code', v_stock_account,
+    'cost_center_id', null,
+    'cost_item_id', v_cost_item_id,
+    'direction', case when new.total_value < 0 then 'credito' else 'debito' end,
+    'amount', v_value));
+
+  perform post_ledger_entry_core(v_date, v_date, null, v_desc, v_origin, 'inventory_movements', new.id, v_lines, new.created_by);
+  return new;
+end;
+$$ language plpgsql security definer;
+
+-- Migration 082 (gerente operacional — o valor do enum já está em user_role acima)
+-- 082: o que o gerente operacional pode ler/gravar no banco. Ele NÃO vira
+-- admin: só recebe as permissões das telas que usa (planejamento diário,
+-- chegadas e saídas, mesas do café, consumo de bar/frigobar — só leitura —,
+-- comissões, lançar compra, lista de compras, validade e baixa de estoque).
+
+create or replace function is_gerente() returns boolean as $$
+  select exists (
+    select 1 from profiles where id = auth.uid() and role = 'gerente_operacional' and active = true
+  );
+$$ language sql security definer stable;
+
+create or replace function is_admin_or_gerente() returns boolean as $$
+  select is_admin() or is_gerente();
+$$ language sql security definer stable;
+
+-- 1) Políticas que já existem e passam a valer também pro gerente.
+do $$
+declare
+  r record;
+  v_using text;
+  v_check text;
+begin
+  for r in
+    select schemaname, tablename, policyname, qual, with_check
+    from pg_policies
+    where schemaname = 'public'
+      and (tablename, policyname) in (values
+        -- planejamento diário
+        ('daily_room_tasks', 'drt_admin_all'),
+        ('daily_room_task_checks', 'drtc_admin_all'),
+        ('daily_room_task_occurrences', 'drto_admin_all'),
+        ('daily_room_task_exclusions', 'drte_admin_insert'),
+        ('daily_room_task_exclusions', 'drte_admin_delete'),
+        -- chegadas e saídas
+        ('daily_arrivals', 'da_admin_write'),
+        ('daily_arrivals', 'da_admin_update'),
+        ('daily_arrivals', 'da_admin_delete'),
+        ('daily_departures', 'dd_admin_write'),
+        ('daily_departures', 'dd_admin_update'),
+        ('daily_departures', 'dd_admin_delete'),
+        -- mesas do café
+        ('daily_breakfast', 'db_admin_write'),
+        ('daily_breakfast', 'db_admin_update'),
+        ('daily_breakfast', 'db_admin_delete'),
+        ('daily_breakfast_settings', 'dbs_admin_write'),
+        ('daily_breakfast_settings', 'dbs_admin_update'),
+        ('daily_breakfast_settings', 'dbs_admin_delete'),
+        ('daily_breakfast_room_assignments', 'dbra_admin_write'),
+        ('daily_breakfast_room_assignments', 'dbra_admin_update'),
+        ('daily_breakfast_room_assignments', 'dbra_admin_delete'),
+        ('daily_breakfast_room_exclusions', 'dbre_admin_insert'),
+        ('daily_breakfast_room_exclusions', 'dbre_admin_delete'),
+        ('breakfast_tables', 'bt_admin_update'),
+        -- comissões
+        ('commission_settings', 'cs_admin_update'),
+        ('commission_statements', 'cst_admin_all'),
+        ('profiles', 'profiles_select_own_or_admin'),
+        -- lançar compra / lista de compras / baixa de estoque / validade
+        ('expenses', 'expenses_select_admin_manutencao'),
+        ('expenses', 'expenses_insert_admin_manutencao'),
+        ('expense_items', 'exp_items_select_admin_manutencao'),
+        ('expense_items', 'exp_items_insert_admin_manutencao'),
+        ('suppliers', 'suppliers_insert_admin_manutencao'),
+        ('fixed_assets', 'fixed_assets_admin_all'),
+        ('inventory_movements', 'inv_mov_insert_baixa_manual'),
+        ('inventory_suggestion_dismissals', 'inv_suggestion_dismissals_admin_all'),
+        ('purchase_requests', 'purchase_req_select_own_or_admin')
+      )
+  loop
+    v_using := case when r.qual is not null then 'using (' || replace(r.qual, 'is_admin()', 'is_admin_or_gerente()') || ')' else '' end;
+    v_check := case when r.with_check is not null then 'with check (' || replace(r.with_check, 'is_admin()', 'is_admin_or_gerente()') || ')' else '' end;
+    execute format('alter policy %I on %I.%I %s %s', r.policyname, r.schemaname, r.tablename, v_using, v_check);
+  end loop;
+end $$;
+
+-- 2) Telas só de leitura pro gerente (consumo de bar e frigobar, detalhe de
+-- serviço, comissões): políticas novas apenas de SELECT.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'bar_comandas', 'bar_comanda_items', 'room_bills', 'room_bill_minibar_items',
+    'daily_room_task_occurrence_photos'
+  ] loop
+    execute format('drop policy if exists %I on %I', t || '_gerente_select', t);
+    execute format('create policy %I on %I for select using (is_gerente())', t || '_gerente_select', t);
+  end loop;
+end $$;
+
+-- 3) Nota de qualidade de uma camareira (comissões): o gerente não pode editar
+-- o perfil inteiro (senão poderia mudar o próprio papel), só esta nota.
+create or replace function set_service_quality_score(p_id uuid, p_score int) returns void as $$
+begin
+  if not is_admin_or_gerente() then
+    raise exception 'not authorized';
+  end if;
+  if p_score < 0 or p_score > 10 then
+    raise exception 'Nota inválida.';
+  end if;
+  update profiles set service_quality_score = p_score where id = p_id and role = 'camareira';
+end;
+$$ language plpgsql security definer;
