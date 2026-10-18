@@ -2808,6 +2808,53 @@ também é feita em Server Components.
       `npm run build` limpos. Fixtures (tarefa de teste, conta de
       manutenção de teste, fotos de teste) removidas do banco local depois.
 
+56. **Parte 49 — Módulo Contábil e Compras (branch `feature/compras`,
+    mesclada em `main` em 17/10/2026)**: tudo que envolve dinheiro, estoque e
+    contabilidade, planejado em 7 levas + correções pedidas pelo proprietário.
+    Requisitos, decisões, testes e histórico completos: **`PRD_compras&contabil.md`
+    (seções 22 a 32)**; deploy/rollback: **`PLANO_DEPLOY_PRODUCAO.md`**. Resumo:
+    - **Plano de contas contábil + partidas dobradas** (`ledger_accounts`,
+      `ledger_entries`, `ledger_entry_lines` com `cost_item_id`/`cost_center_id`):
+      lançamento sempre via `post_ledger_entry`/`reverse_ledger_entry` (núcleo
+      `*_core` sem checagem de usuário, usado por gatilhos). Estorno cria linhas
+      espelhadas; nenhum relatório filtra por status (os estornos se anulam).
+    - **Motor de lançamentos por GATILHO no banco** (migration 078; "gatilho pra
+      nenhum ponto de escrita esquecer"): compra/despesa (TS, `postExpenseLedgerEntry`),
+      movimento de estoque (`post_inventory_movement_ledger`: consumo de bar/frigobar,
+      baixa manual, perda, ajuste de inventário) e conta da suíte
+      (`post_room_bill_ledger`: fechar = receita + taxa de serviço, reabrir = estorno,
+      pagar = caixa/banco). Estoque é CENTRALIZADO (contas 1.04–1.07); o centro de
+      custo vem de onde o item é consumido (`inventory_movements.consumption_center_id`)
+      ou, na compra marcada "Para o café da manhã", do próprio lançamento.
+    - **Cadastro de produtos** (= item de custo `is_product` + item de estoque ligado;
+      unidades e conversões, validade por lote, FIFO de vencimento) e **Cadastro de
+      despesas** (itens de custo sem estoque). **Rateio entre centros e conta do plano
+      de contas são definidos SÓ nos cadastros** (`cost_item_centers` = fonte única,
+      editável também no Demonstrativo de Custos); nunca digitados na compra/despesa.
+      Linha de compra/despesa exige produto/despesa JÁ cadastrado (servidor recusa);
+      só o admin cadastra novos (dentro do lançamento abre o cadastro completo). A IA
+      de leitura de nota só enquadra em produto existente.
+    - **Compra e Despesa são telas separadas** (`/compras/nova`, `/despesas/nova`; mesmo
+      `ExpenseForm` com `kind`). Estoque: baixa (pergunta destino), inventário,
+      previsão de estoque, quebra de estoque, validade.
+    - **Demonstrativos e Relatórios** (`/contabil/demonstrativos`): Demonstrativo de
+      despesas e de Custos (lidos do livro), Balancete analítico/sintético, Livro
+      Diário, Razão, Caixa e bancos — todos com período e exportação CSV/XLSX/RTF/PDF
+      (`src/lib/report-export.tsx` + `exportReport`, XLSX via `write-excel-file`).
+    - **Menus**: admin = Módulo operacional / Módulo Contábil / Sincronização /
+      Integração / Usuários / Questões e Respostas. **Novo papel `gerente_operacional`**
+      (acesso em camadas: proxy com lista de telas, políticas `is_admin_or_gerente()`
+      só no necessário, Server Actions sensíveis com `requireRole`).
+    - **Lições**: (1) `supabase/schema.sql` pode estar defasado de migrations
+      posteriores — ao extrair uma função dele, confira a última migration que a
+      redefine (aconteceu com `create_movement_from_expense_item`); (2) enum novo =
+      migration separada; (3) `.next` apagado com o dev server ligado dá 500 em tudo —
+      pare o servidor antes; (4) no Windows, `git mv` falha se o dev server está
+      observando a pasta; (5) heredoc com crases/aspas no Bash tool quebra — gerar
+      scripts de edição com a ferramenta Write.
+    - **Deploy**: migrations 053–082 rodadas à mão na produção ANTES do código
+      (`supabase/producao/`); ponto de retorno = tag `producao-antes-modulo-contabil`.
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de
@@ -3081,6 +3128,13 @@ instaladas globalmente mas não se aplicam ao escopo atual deste projeto
 o escopo mude no futuro.
 
 ## Onde encontrar cada coisa
+
+- `PRD_compras&contabil.md` — requisitos e histórico do Módulo Contábil (seções 22 a 32);
+  `PLANO_DEPLOY_PRODUCAO.md` — deploy, ensaio e rollback; `supabase/producao/` — SQL pronto.
+- `src/lib/actions/ledger.ts`, `ledger-reports.ts`, `expenses.ts`, `products.ts`, `expiry.ts`,
+  `inventory-*.ts`, `cost-accounting.ts`, `report-export.ts`, `authz.ts` — Server Actions do módulo contábil.
+- `src/app/(admin)/contabil/` (hub, `listas/`, `demonstrativos/`), `compras/`, `despesas/`,
+  `operacional/`, `sincronizacao/`, `integracao/` — telas novas do admin/gerente.
 
 - `PRD_Camareiras_parte01.md` — requisitos completos + changelog detalhado
   da parte 1 (já implementada).

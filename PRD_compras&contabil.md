@@ -3290,3 +3290,32 @@ Vê só **Módulo operacional**, **Módulo Contábil** e **Sincronização**:
   redirecionado nas outras 13 testadas; consegue planejar, lançar chegada,
   anotar mesas, dar nota, baixar estoque e lançar compra; é negado ao
   excluir usuário.
+
+## 32. Colocação em produção (17/10/2026)
+
+Registro do que foi feito para levar a branch `feature/compras` ao `main`/produção.
+Roteiro, ensaio, riscos e formas de voltar atrás: **`PLANO_DEPLOY_PRODUCAO.md`**.
+
+**Estado antes do merge**: `main` = `bdce9ad` (Parte 48, fotos em ocorrência);
+produção na Vercel = deploy `dpl_23hAXZ2HtazGYPtKefqDycbTRGnc`. A branch trazia 30
+migrations (053 a 082) e ~170 arquivos alterados que o banco de produção não tinha.
+
+**Preparação feita**:
+- Ponto de retorno: tag `producao-antes-modulo-contabil` e branch
+  `backup/main-antes-modulo-contabil` no GitHub (ambos em `bdce9ad`).
+- SQL consolidado em `supabase/producao/`: etapa A (enums, fora de transação),
+  etapa B (migrations 054–082, numa transação só) e reverter (restaura as três
+  funções de comanda com a assinatura antiga; desliga os gatilhos contábeis).
+- **Ensaio** numa cópia do banco com o schema do `main`: etapas A e B rodaram sem
+  erro e o resultado ficou idêntico ao banco local (mesmas colunas e políticas);
+  o reverter devolveu `cancel_comanda(uuid)`/`submit_comanda`/`edit_comanda` à forma antiga.
+- Documentação atualizada: `README.md` (variável opcional `ANTHROPIC_API_KEY`,
+  seção 5.1, mapa de menus), `CLAUDE.md` (item 56 e mapa de arquivos) e este PRD.
+
+**O que só o proprietário pode fazer** (o Claude Code não tem acesso ao painel do
+Supabase de produção): backup, rodar as etapas A e B e confirmar. O push do `main` só
+deve acontecer depois, pois o código novo exige as tabelas/funções novas.
+
+**Por que o app antigo ainda funciona depois das migrations**: todas as mudanças são
+aditivas (tabelas, colunas, funções, gatilhos novos), exceto `cancel_comanda`, que
+mudou de assinatura — o script de reverter a restaura.
