@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCashAndBankBalances } from "@/lib/actions/ledger";
+import { getCurrentProfile } from "@/lib/actions/session";
 import {
   ChevronRight,
   CircleDollarSign,
@@ -14,6 +15,7 @@ import {
   CalendarClock,
   FileBarChart,
   ListChecks,
+  PackageMinus,
 } from "lucide-react";
 
 // Módulo Contábil — Levas 1/2/3/4/5 trouxeram o plano de contas contábil,
@@ -28,6 +30,7 @@ const menuItems = [
   { href: "/despesas/nova", label: "Lançar Despesa", icon: Receipt },
   { href: "/compras/lista", label: "Lista de compras", icon: ShoppingBasket },
   { href: "/compras/validade", label: "Produtos com data de validade próximo ao vencimento", icon: CalendarClock },
+  { href: "/compras/baixa", label: "Baixa de estoque", icon: PackageMinus },
   { href: "/compras", label: "Estoque", icon: ShoppingCart },
   { href: "/ativo-permanente", label: "Ativo Permanente", icon: Archive },
   { href: "/contabil/pagamentos", label: "Pagamentos e recebimentos", icon: CircleDollarSign },
@@ -40,8 +43,13 @@ function fmt(v: number): string {
   return `R$ ${v.toFixed(2)}`;
 }
 
+const GERENTE_HREFS = new Set(["/compras/nova", "/compras/lista", "/compras/validade", "/compras/baixa"]);
+
 export default async function ModuloContabilPage() {
-  const balances = await getCashAndBankBalances();
+  const profile = await getCurrentProfile();
+  const isGerente = profile.role === "gerente_operacional";
+  const balances = isGerente ? { caixa: 0, banco: 0 } : await getCashAndBankBalances();
+  const items = isGerente ? menuItems.filter((i) => GERENTE_HREFS.has(i.href)) : menuItems;
 
   return (
     <div className="space-y-6">
@@ -50,6 +58,7 @@ export default async function ModuloContabilPage() {
         subtitle="Compras, fornecedores, estoque, ativo permanente, plano de contas e partidas dobradas — tudo que envolve dinheiro, num lugar só."
       />
 
+      {!isGerente && (
       <div className="grid sm:grid-cols-2 gap-4 max-w-md">
         <Card>
           <CardHeader>
@@ -68,9 +77,10 @@ export default async function ModuloContabilPage() {
           </CardContent>
         </Card>
       </div>
+      )}
 
       <nav className="max-w-md space-y-1.5">
-        {menuItems.map((item) => (
+        {items.map((item) => (
           <Link
             key={item.href}
             href={item.href}

@@ -19,7 +19,7 @@ export async function GET() {
   if (!user) return new NextResponse("Não autorizado.", { status: 401 });
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "admin") return new NextResponse("Acesso restrito ao admin.", { status: 403 });
+  if (profile?.role !== "admin" && profile?.role !== "gerente_operacional") return new NextResponse("Acesso restrito.", { status: 403 });
 
   const demonstrativo = await getClosedPeriodDemonstrativo();
   if (!demonstrativo) {

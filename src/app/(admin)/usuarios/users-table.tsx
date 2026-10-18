@@ -29,6 +29,7 @@ import { Trash2, KeyRound } from "lucide-react";
 const ROLE_LABELS: Record<string, string> = {
   camareira: "Camareira",
   manutencao: "Funcionário de Manutenção",
+  gerente_operacional: "Gerente operacional",
 };
 
 export function UsersTable({ users }: { users: Profile[] }) {

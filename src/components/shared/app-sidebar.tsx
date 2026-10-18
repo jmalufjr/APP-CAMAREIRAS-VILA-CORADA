@@ -72,6 +72,12 @@ const adminNav: NavItem[] = [
   { href: "/questoes-respostas", label: "Questões e Respostas", icon: HelpCircle },
 ];
 
+const gerenteNav: NavItem[] = [
+  adminNav[0],
+  adminNav[1],
+  { href: "/sincronizacao", label: "Sincronização", icon: RefreshCw },
+];
+
 const camareiraNav: NavItem[] = [
   { href: "/tarefas", label: "Minhas suítes", icon: ClipboardList },
   { href: "/mesas", label: "Mesas do café", icon: Coffee },
@@ -95,12 +101,13 @@ function SidebarContent({
   userName,
   onNavigate,
 }: {
-  role: "admin" | "camareira" | "manutencao";
+  role: "admin" | "camareira" | "manutencao" | "gerente";
   userName: string;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const items = role === "admin" ? adminNav : role === "manutencao" ? manutencaoNav : camareiraNav;
+  const items =
+    role === "admin" ? adminNav : role === "gerente" ? gerenteNav : role === "manutencao" ? manutencaoNav : camareiraNav;
 
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
@@ -172,7 +179,7 @@ export function AppSidebar({
   role,
   userName,
 }: {
-  role: "admin" | "camareira" | "manutencao";
+  role: "admin" | "camareira" | "manutencao" | "gerente";
   userName: string;
 }) {
   const [open, setOpen] = useState(false);

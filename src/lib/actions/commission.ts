@@ -107,10 +107,7 @@ export async function updateCamareiraServiceScore(camareiraId: string, score: nu
     return { error: "Nota inválida — precisa ser um número inteiro entre 0 e 10." };
   }
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("profiles")
-    .update({ service_quality_score: score })
-    .eq("id", camareiraId);
+  const { error } = await supabase.rpc("set_service_quality_score", { p_id: camareiraId, p_score: score });
   if (error) return { error: error.message };
   revalidatePath("/operacional/comissoes");
   return { success: true };

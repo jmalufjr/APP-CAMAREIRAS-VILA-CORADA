@@ -6,6 +6,7 @@ import { getAssetCategories, getFixedAssetCatalogItems } from "@/lib/actions/fix
 import { getSupplierOptions } from "@/lib/actions/suppliers";
 import { getProductCategories, getNonProductCostItems } from "@/lib/actions/products";
 import { getLedgerAccounts } from "@/lib/actions/ledger";
+import { getCurrentProfile } from "@/lib/actions/session";
 
 export default async function NovaDespesaPage() {
   const [costItemOptions, costCenters, assetCategories, assetCatalogItems, supplierOptions] = await Promise.all([
@@ -16,8 +17,10 @@ export default async function NovaDespesaPage() {
     getSupplierOptions(),
   ]);
 
+  const profile = await getCurrentProfile();
   const [categories, ledgerAccounts, candidates] = await Promise.all([getProductCategories(), getLedgerAccounts(), getNonProductCostItems()]);
-  const catalog = { categories: categories.filter((c) => c.active), ledgerAccounts, candidates };
+  // Só o admin pode abrir o cadastro de produto dentro do lançamento.
+  const catalog = profile.role === "admin" ? { categories: categories.filter((c) => c.active), ledgerAccounts, candidates } : null;
 
   return (
     <div className="space-y-6">

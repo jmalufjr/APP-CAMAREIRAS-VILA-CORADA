@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "camareira" | "manutencao";
+export type UserRole = "admin" | "camareira" | "manutencao" | "gerente_operacional";
 export type ChecklistType = "arrumacao" | "preparacao" | "troca" | "somente_chegada" | "somente_saida";
 export type TaskStatus = "pendente" | "em_andamento" | "concluido" | "cancelado";
 export type TableShape = "round" | "rect" | "square";

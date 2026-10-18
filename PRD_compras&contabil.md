@@ -3267,3 +3267,26 @@ Demonstrativo de Custos e balancete abrindo com os dados. Fixtures removidas.
   e os cinco checklists (Arrumação, Troca, Saída com Chegada, Somente Saída,
   Somente Chegada) foram para o submenu "Check lists de serviços nas suítes"
   (`/checklists/servicos-suites`). Rotas dos checklists não mudaram.
+
+### 31.8 Novo papel: gerente operacional (17/10/2026)
+
+Papel `gerente_operacional` (migrations `081` e `082`), criado em Usuários.
+Vê só **Módulo operacional**, **Módulo Contábil** e **Sincronização**:
+- Módulo operacional: Resumo operacional (só "Serviços nas suítes" e "Suítes
+  vagas e limpas", sem os cards do topo), Planejamento diário, Chegadas &
+  saídas, Mesas do café, Consumo de Bar e Frigobar (só leitura) e Comissões
+  das camareiras.
+- Módulo Contábil: Lançar Compra, Lista de compras, Produtos com data de
+  validade próximo ao vencimento e Baixa de estoque (que fica direto no
+  hub contábil pra ele). Sem saldos de caixa/banco.
+- **Segurança em camadas**: o proxy só deixa o gerente abrir as telas acima
+  (qualquer outra volta pra /operacional); o banco só dá a ele as permissões
+  dessas telas (`is_admin_or_gerente()` nas políticas necessárias, SELECT
+  apenas em consumo; nota de qualidade da camareira por função própria
+  `set_service_quality_score`, sem poder editar perfis); e as Server
+  Actions sensíveis (usuários, sincronização manual) conferem o papel. Ele não
+  cadastra produto/despesa na hora do lançamento (só o admin).
+- Testado com um gerente real: acessa as 15 telas permitidas e é
+  redirecionado nas outras 13 testadas; consegue planejar, lançar chegada,
+  anotar mesas, dar nota, baixar estoque e lançar compra; é negado ao
+  excluir usuário.

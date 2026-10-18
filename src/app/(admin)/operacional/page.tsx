@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getCurrentProfile } from "@/lib/actions/session";
 import { PageHeader } from "@/components/shared/page-header";
 import {
   LayoutDashboard,
@@ -25,7 +26,19 @@ const menuItems = [
   { href: "/historico", label: "Histórico", icon: History },
 ];
 
-export default function ModuloOperacionalPage() {
+// Itens que o gerente operacional enxerga (o resto é do admin).
+const GERENTE_HREFS = new Set([
+  "/dashboard",
+  "/planejamento",
+  "/chegadas-saidas/gerenciar",
+  "/mesas/gerenciar",
+  "/frigobar",
+  "/operacional/comissoes",
+]);
+
+export default async function ModuloOperacionalPage() {
+  const profile = await getCurrentProfile();
+  const items = profile.role === "gerente_operacional" ? menuItems.filter((i) => GERENTE_HREFS.has(i.href)) : menuItems;
   return (
     <div className="space-y-6">
       <PageHeader
@@ -33,7 +46,7 @@ export default function ModuloOperacionalPage() {
         subtitle="O dia a dia da pousada: planejamento, chegadas e saídas, café da manhã, consumos, listas, manutenção e histórico."
       />
       <nav className="max-w-md space-y-1.5">
-        {menuItems.map((item) => (
+        {items.map((item) => (
           <Link
             key={item.href}
             href={item.href}

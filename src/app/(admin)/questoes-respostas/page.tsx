@@ -380,6 +380,14 @@ export default function QuestoesRespostasPage() {
                 histórico do que essa pessoa já fez no sistema.
               </P>
               <P>
+                Existe também o papel <strong>“Gerente operacional”</strong>: ele só enxerga o Módulo
+                operacional (Resumo operacional com “Serviços nas suítes” e “Suítes vagas e limpas”,
+                Planejamento diário, Chegadas &amp; saídas, Mesas do café, Consumo de Bar e Frigobar e
+                Comissões das camareiras), a Sincronização e, no Módulo Contábil, só Lançar Compra, Lista
+                de compras, Produtos com validade próxima, e Baixa de estoque. Ele não cadastra produtos
+                nem despesas novos, não vê saldos de caixa e banco e não acessa as demais telas.
+              </P>
+              <P>
                 O primeiro acesso de administrador (o seu) é o único que precisa ser criado direto no
                 painel técnico do banco de dados, uma única vez — depois disso, toda a gestão do dia a
                 dia é feita normalmente por essa tela.

@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { UserRole } from "@/lib/types";
+import { requireRole } from "@/lib/actions/authz";
 
 function slugify(name: string) {
   return name
@@ -23,7 +24,9 @@ export async function createUser(formData: FormData) {
 
   if (!name || !password) return { error: "Nome e senha são obrigatórios." };
   if (password.length < 6) return { error: "A senha deve ter ao menos 6 caracteres." };
-  if (role !== "camareira" && role !== "manutencao") return { error: "Papel inválido." };
+  if (role !== "camareira" && role !== "manutencao" && role !== "gerente_operacional") return { error: "Papel inválido." };
+  const denied = await requireRole(["admin"]);
+  if (denied) return { error: denied.error };
 
   const admin = createAdminClient();
   const loginEmail = `${slugify(name)}@camareiras.vilacorada.app`;
@@ -57,6 +60,8 @@ export async function createUser(formData: FormData) {
 }
 
 export async function updateUser(id: string, formData: FormData) {
+  const denied = await requireRole(["admin"]);
+  if (denied) return { error: denied.error };
   const name = String(formData.get("name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim() || null;
   const email = String(formData.get("email") ?? "").trim() || null;
@@ -74,6 +79,8 @@ export async function updateUser(id: string, formData: FormData) {
 }
 
 export async function resetUserPassword(id: string, newPassword: string) {
+  const denied = await requireRole(["admin"]);
+  if (denied) return { error: denied.error };
   if (newPassword.length < 6) return { error: "A senha deve ter ao menos 6 caracteres." };
   const admin = createAdminClient();
   const { error } = await admin.auth.admin.updateUserById(id, { password: newPassword });
@@ -82,6 +89,8 @@ export async function resetUserPassword(id: string, newPassword: string) {
 }
 
 export async function deleteUser(id: string) {
+  const denied = await requireRole(["admin"]);
+  if (denied) return { error: denied.error };
   const admin = createAdminClient();
   const { error } = await admin.auth.admin.deleteUser(id);
   if (error) return { error: error.message };
