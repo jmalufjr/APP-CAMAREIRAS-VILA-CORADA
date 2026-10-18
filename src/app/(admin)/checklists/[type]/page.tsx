@@ -33,7 +33,7 @@ export default async function ChecklistTypePage({
 
   return (
     <div className="space-y-6">
-      <BackLink href="/checklists" />
+      <BackLink href="/checklists/servicos-suites" />
       <PageHeader
         title={TASK_TYPE_LABELS[checklistType]}
         subtitle="Gerencie os itens deste checklist e a ordem em que aparecem para a camareira."

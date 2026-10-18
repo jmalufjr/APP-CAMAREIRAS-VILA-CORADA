@@ -60,7 +60,7 @@ export async function createApiToken(label: string) {
     .insert({ label: trimmed, token_hash: tokenHash, created_by: user?.id ?? null });
   if (error) return { error: error.message };
 
-  revalidatePath("/dashboard/api-tokens");
+  revalidatePath("/integracao/api-tokens");
   // Único momento em que o valor em texto puro existe — devolvido pra tela
   // mostrar uma vez só, nunca persistido em lugar nenhum.
   return { success: true, token };
@@ -73,6 +73,6 @@ export async function revokeApiToken(id: string) {
     .update({ revoked_at: new Date().toISOString() })
     .eq("id", id);
   if (error) return { error: error.message };
-  revalidatePath("/dashboard/api-tokens");
+  revalidatePath("/integracao/api-tokens");
   return { success: true };
 }

@@ -8,7 +8,6 @@ import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { getBarCommissionByCamareira } from "@/lib/actions/comandas";
 import { getBreakfastCommissionPotForRange } from "@/lib/actions/breakfast-commission";
 import { getItemsNeedingPurchaseCount } from "@/lib/actions/purchase-list";
-import { SyncStaysAllButton } from "./sync-stays-all-button";
 import {
   BedDouble,
   Coffee,
@@ -20,8 +19,6 @@ import {
   History,
   ChevronRight,
   Key,
-  Mail,
-  KeyRound,
 } from "lucide-react";
 
 function monthRange() {
@@ -40,9 +37,6 @@ const menuItems = [
   },
   { href: "/dashboard/consumo-frigobar", label: "Consumo de frigobar", icon: Wine },
   { href: "/dashboard/consumo-bar", label: "Consumo de bar", icon: Martini },
-  { href: "/dashboard/comissoes", label: "Comissões das camareiras", icon: Percent },
-  { href: "/dashboard/email-envio", label: "Cadastrar e-mail de envio", icon: Mail },
-  { href: "/dashboard/api-tokens", label: "Chaves de acesso — API de consumos", icon: KeyRound },
 ];
 
 export default async function DashboardPage() {
@@ -133,8 +127,6 @@ export default async function DashboardPage() {
           <ChevronRight size={14} />
         </Link>
       )}
-
-      <SyncStaysAllButton />
 
       <nav className="max-w-md space-y-1.5">
         {menuItems.map((item) => (

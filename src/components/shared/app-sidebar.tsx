@@ -26,6 +26,8 @@ import {
   PackageMinus,
   ShoppingBasket,
   BookOpen,
+  RefreshCw,
+  Plug,
 } from "lucide-react";
 
 interface NavItem {
@@ -64,6 +66,8 @@ const adminNav: NavItem[] = [
     icon: BookOpen,
     matchPrefixes: ["/contabil", "/compras", "/despesas", "/ativo-permanente"],
   },
+  { href: "/sincronizacao", label: "Sincronização", icon: RefreshCw },
+  { href: "/integracao", label: "Integração", icon: Plug },
   { href: "/usuarios", label: "Usuários", icon: Users },
   { href: "/questoes-respostas", label: "Questões e Respostas", icon: HelpCircle },
 ];

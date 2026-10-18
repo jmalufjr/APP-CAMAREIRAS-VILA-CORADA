@@ -8,7 +8,7 @@ export default async function EmailEnvioPage() {
 
   return (
     <div className="space-y-6">
-      <BackLink href="/dashboard" />
+      <BackLink href="/integracao" />
       <PageHeader
         title="Cadastrar e-mail de envio"
         subtitle="E-mail usado para o recibo de conta paga e o demonstrativo de comissões das camareiras."

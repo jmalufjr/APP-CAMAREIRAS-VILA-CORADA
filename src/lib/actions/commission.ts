@@ -112,7 +112,7 @@ export async function updateCamareiraServiceScore(camareiraId: string, score: nu
     .update({ service_quality_score: score })
     .eq("id", camareiraId);
   if (error) return { error: error.message };
-  revalidatePath("/dashboard/comissoes");
+  revalidatePath("/operacional/comissoes");
   return { success: true };
 }
 
@@ -221,7 +221,7 @@ export async function calculateClosedPeriodCommissionStatement() {
     if (insertError) return { error: insertError.message };
   }
 
-  revalidatePath("/dashboard/comissoes");
+  revalidatePath("/operacional/comissoes");
   return { success: true, periodEnd };
 }
 

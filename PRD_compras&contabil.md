@@ -3252,3 +3252,18 @@ Testes (local, sessão real de admin): linha sem produto recusada; compra de
 estoque (Dr estoque 1.05); luz R$ 100 rateada 25/25/25/25 pelo cadastro; perda
 de 2 un do açúcar (cadastro 50% bar / 50% café) → R$ 5 em cada centro;
 Demonstrativo de Custos e balancete abrindo com os dados. Fixtures removidas.
+
+### 31.7 Menus do admin: Sincronização, Integração e Listas operacionais (17/10/2026)
+
+- **Sincronização** (`/sincronizacao`, menu principal): os botões de
+  sincronização com a Stays (Total/Parcial) saíram do Resumo operacional.
+- **Integração** (`/integracao`, logo após Sincronização): "Cadastrar e-mail
+  de envio" e "Chaves de acesso — API de consumos" (antes no Resumo
+  operacional).
+- **Comissões das camareiras** (`/operacional/comissoes`): agora no menu do
+  Módulo operacional, logo após "Consumo de Bar e Frigobar".
+- **Listas operacionais** (antes "Listas"): "Consumo de Frigobar" virou
+  "Cardápio de frigobar", "Bar da Piscina" virou "Cardápio de bar da piscina"
+  e os cinco checklists (Arrumação, Troca, Saída com Chegada, Somente Saída,
+  Somente Chegada) foram para o submenu "Check lists de serviços nas suítes"
+  (`/checklists/servicos-suites`). Rotas dos checklists não mudaram.

@@ -6,6 +6,7 @@ import {
   CalendarClock,
   Coffee,
   Wine,
+  Percent,
   ClipboardList,
   CalendarCheck2,
   History,
@@ -18,7 +19,8 @@ const menuItems = [
   { href: "/chegadas-saidas/gerenciar", label: "Chegadas & saídas", icon: CalendarClock },
   { href: "/mesas/gerenciar", label: "Mesas do café", icon: Coffee },
   { href: "/frigobar", label: "Consumo de Bar e Frigobar", icon: Wine },
-  { href: "/checklists", label: "Listas", icon: ClipboardList },
+  { href: "/operacional/comissoes", label: "Comissões das camareiras", icon: Percent },
+  { href: "/checklists", label: "Listas operacionais", icon: ClipboardList },
   { href: "/manutencao-preventiva", label: "Manutenção Preventiva", icon: CalendarCheck2 },
   { href: "/historico", label: "Histórico", icon: History },
 ];

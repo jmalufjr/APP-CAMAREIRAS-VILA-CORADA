@@ -61,7 +61,7 @@ export default function QuestoesRespostasPage() {
 
               <SubHeading>O botão “Sincronização Stays Total”</SubHeading>
               <P>
-                No Resumo operacional, logo abaixo dos 5 cards de consulta rápida, existe um botão manual
+                No menu principal <strong>“Sincronização”</strong> existe um botão manual
                 que sincroniza as três telas de uma vez, para os casos em que você não quer esperar a
                 próxima atualização automática ou precisa corrigir algo agora (até a Parte 34 esse botão
                 existia separado em cada uma das três telas — foi unificado aqui porque sempre teve
@@ -303,7 +303,7 @@ export default function QuestoesRespostasPage() {
               </P>
               <P>
                 Ao ser paga, a conta gera automaticamente um recibo em PDF e tenta enviá-lo por e-mail
-                para o endereço cadastrado em “Cadastrar e-mail de envio” (menu do Resumo operacional,
+                para o endereço cadastrado em “Cadastrar e-mail de envio” (menu “Integração”,
                 pergunta 9 — sem precisar mexer em nada técnico). Se o envio falhar por algum motivo,
                 você vê um aviso na tela e pode reenviar manualmente. O hóspede pode pagar via PIX
                 direto por uma tela que a camareira abre, mostrando um QR code fixo da pousada.
@@ -354,7 +354,7 @@ export default function QuestoesRespostasPage() {
                 feitos; outros pedem o nome de um técnico externo que executou o serviço).
               </P>
               <P>
-                Você mesmo cadastra e edita essas categorias e itens na tela “Listas” (quantos dias
+                Você mesmo cadastra e edita essas categorias e itens na tela “Listas operacionais” (quantos dias
                 entre uma manutenção e outra, a partir de quando cada uma começa a valer) e acompanha,
                 pela tela “Manutenção Preventiva”, o que está em dia e o que está atrasado, semana a
                 semana.
@@ -518,7 +518,7 @@ export default function QuestoesRespostasPage() {
           <AccordionPanel>
             <div className="space-y-3">
               <P>
-                A tela “Comissões das camareiras” (menu do Resumo operacional) mostra as{" "}
+                A tela “Comissões das camareiras” (Módulo operacional) mostra as{" "}
                 <strong>duas comissões diferentes</strong> que a equipe recebe, uma embaixo da outra:
                 a comissão de 10% do bar por camareira, e a comissão de serviços nas suítes e no café.
                 As duas usam o mesmo conceito de <strong>“último período fechado”</strong>, explicado
@@ -752,7 +752,7 @@ export default function QuestoesRespostasPage() {
                     “Módulo Contábil”) para produtos e itens de custo, e em <strong>“Plano de contas e
                     centros de custos”</strong> para os centros. Ao
                     lançar a compra, você escolhe um item de custo já existente, ou cria um novo ali
-                    mesmo, sem precisar ir até “Listas” — nesse momento você também diz se esse item novo
+                    mesmo, sem precisar ir até “Listas operacionais” — nesse momento você também diz se esse item novo
                     “representa um item de estoque” (pergunta 14) e a quais centros ele pertence.
                   </>,
                   <>
@@ -838,8 +838,7 @@ export default function QuestoesRespostasPage() {
                     editar ou excluir uma despesa já lançada) e exportação em planilha.
                   </>,
                   <>
-                    <strong>Resumo operacional</strong>: a tela “Estoque” (dentro do menu do Resumo
-                    Executivo) mostra os 20 itens mais comprados no mês e desde sempre (por valor), além
+                    <strong>Resumo operacional</strong>: a tela “Previsão de estoque” (Módulo Contábil → Estoque) mostra os 20 itens mais comprados no mês e desde sempre (por valor), além
                     do saldo, do custo médio, do valor em R$ e da previsão de dias restantes de cada item
                     de estoque.
                   </>,

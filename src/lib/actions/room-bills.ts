@@ -498,7 +498,7 @@ export async function updateAccountingEmail(email: string) {
     .update({ accounting_email: trimmed || null, updated_at: new Date().toISOString() })
     .eq("id", 1);
   if (error) return { error: error.message };
-  revalidatePath("/dashboard/email-envio");
+  revalidatePath("/integracao/email-envio");
   return { success: true };
 }
 

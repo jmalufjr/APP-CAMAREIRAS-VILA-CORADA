@@ -87,6 +87,8 @@ export async function updateSession(request: NextRequest) {
       "/manutencao-preventiva",
       "/questoes-respostas",
       "/operacional",
+      "/sincronizacao",
+      "/integracao",
       "/compras",
       "/despesas",
       "/ativo-permanente",

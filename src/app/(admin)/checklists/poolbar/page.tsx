@@ -12,7 +12,7 @@ export default async function PoolbarItemsPage() {
     <div className="space-y-6">
       <BackLink href="/checklists" />
       <PageHeader
-        title="Bar da Piscina"
+        title="Cardápio de bar da piscina"
         subtitle="Gerencie os itens, categorias e preços do bar da piscina disponíveis para a camareira registrar."
       />
       <PoolbarItemsPanel items={(items ?? []) as PoolbarItem[]} />

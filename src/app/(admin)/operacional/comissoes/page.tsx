@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { BackLink } from "@/components/shared/back-link";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CamareiraBarCommissionTable } from "../camareira-bar-commission-table";
+import { CamareiraBarCommissionTable } from "./camareira-bar-commission-table";
 import { getBarCommissionScreenSummary } from "@/lib/actions/comandas";
 import { getSuitesCafeCurrentMonthEstimate, getClosedPeriodDemonstrativo } from "@/lib/actions/commission";
 import { toDateKey, nowInBrazil, monthYearLabelPt } from "@/lib/date";
@@ -20,7 +20,7 @@ export default async function ComissoesPage() {
 
   return (
     <div className="space-y-6">
-      <BackLink href="/dashboard" />
+      <BackLink href="/operacional" />
       <PageHeader
         title="Comissões das camareiras"
         subtitle="Comissão de serviços nas suítes e no café, e comissão de 10% do bar."

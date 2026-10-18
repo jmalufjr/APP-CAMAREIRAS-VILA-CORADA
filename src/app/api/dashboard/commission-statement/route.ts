@@ -9,7 +9,7 @@ import { renderCommissionStatementPdf } from "@/lib/commission-statement-pdf";
 // o demonstrativo do último período fechado relativo a hoje (fecha no dia
 // 25, não no fim do mês — ver closedPeriodRange) — não existe tela de
 // navegar por períodos anteriores, só o botão "Calcular comissão do
-// último período" em /dashboard/comissoes.
+// último período" em /operacional/comissoes.
 export async function GET() {
   const supabase = await createClient();
 
