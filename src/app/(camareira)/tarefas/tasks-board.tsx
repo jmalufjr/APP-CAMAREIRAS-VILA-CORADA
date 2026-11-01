@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import Link from "next/link";
 import type { DailyRoomTask, Profile } from "@/lib/types";
-import { claimTask, cancelTask, unclaimTask } from "@/lib/actions/tasks";
+import { TASK_STATUS_LABELS } from "@/lib/types";
+import { claimTask, cancelTask, unclaimTask, claimReview } from "@/lib/actions/tasks";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import { formatDateShortPt } from "@/lib/date";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { BedDouble, ChevronRight, Hand, Undo2, X } from "lucide-react";
+import { BedDouble, ChevronRight, ClipboardCheck, Hand, Undo2, X } from "lucide-react";
 
 export type TaskWithRoom = DailyRoomTask & { rooms: { number: string; name: string | null } };
 
@@ -21,12 +22,14 @@ export function TasksBoard({
   todayTasks,
   pastAvailableTasks,
   pastMineTasks,
+  reviewTasks,
 }: {
   profile: Profile;
   today: string;
   todayTasks: TaskWithRoom[];
   pastAvailableTasks: TaskWithRoom[];
   pastMineTasks: TaskWithRoom[];
+  reviewTasks: TaskWithRoom[];
 }) {
   if (profile.role !== "camareira") {
     // Visão simples para o admin (referência), sem ações de escolha.
@@ -46,6 +49,9 @@ export function TasksBoard({
 
   const availableToday = todayTasks.filter((t) => !t.assigned_to && t.status !== "concluido");
   const mine = [...todayTasks.filter((t) => t.assigned_to === profile.id), ...pastMineTasks];
+  // Revisão: serviços de OUTRAS camareiras aguardando revisão, e os que eu já estou revisando.
+  const reviewPool = reviewTasks.filter((t) => t.status === "aguardando_revisao" && t.assigned_to !== profile.id);
+  const myReviews = reviewTasks.filter((t) => t.status === "em_revisao" && t.reviewed_by === profile.id);
 
   return (
     <div className="space-y-8">
@@ -81,6 +87,20 @@ export function TasksBoard({
         )}
       </section>
 
+      {(reviewPool.length > 0 || myReviews.length > 0) && (
+        <section className="space-y-3">
+          <h2 className="font-heading text-lg text-primary">Aguardando revisão</h2>
+          <div className="grid sm:grid-cols-2 gap-4">
+            {myReviews.map((task) => (
+              <MyTaskCard key={task.id} task={task} today={today} />
+            ))}
+            {reviewPool.map((task) => (
+              <ReviewTaskCard key={task.id} task={task} today={today} />
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="space-y-3">
         <h2 className="font-heading text-lg text-primary">Minhas suítes</h2>
         {mine.length === 0 ? (
@@ -94,6 +114,45 @@ export function TasksBoard({
         )}
       </section>
     </div>
+  );
+}
+
+// Serviço liberado por outra camareira, aguardando alguém revisar.
+function ReviewTaskCard({ task, today }: { task: TaskWithRoom; today: string }) {
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  const isPast = task.date !== today;
+
+  return (
+    <Card>
+      <CardContent className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          <p className="font-medium flex-1 min-w-0 truncate">Suíte {task.rooms.number}</p>
+          <Button
+            size="sm"
+            className="h-auto flex-col gap-0.5 rounded-xl px-2 py-1 text-[10px] leading-tight [&_svg:not([class*='size-'])]:size-3.5"
+            disabled={isPending}
+            onClick={() =>
+              startTransition(async () => {
+                const result = await claimReview(task.id);
+                if (result?.error) toast.error(result.error);
+                else {
+                  toast.success("Revisão iniciada!");
+                  router.push(`/tarefas/${task.id}`);
+                }
+              })
+            }
+          >
+            <ClipboardCheck size={14} />
+            <span>Revisar</span>
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {TASK_TYPE_LABELS[task.task_type]} · {TASK_STATUS_LABELS[task.status]}
+          {isPast && ` ${formatDateShortPt(task.date)}`}
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -165,7 +224,7 @@ function MyTaskCard({ task, today }: { task: TaskWithRoom; today: string }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const isPast = task.date !== today;
-  const canCancel = task.status !== "concluido";
+  const canCancel = task.status === "pendente" || task.status === "em_andamento";
 
   return (
     <Card className="hover:border-primary transition-colors">
@@ -184,11 +243,7 @@ function MyTaskCard({ task, today }: { task: TaskWithRoom; today: string }) {
         </Link>
         <div className="flex items-center gap-2 shrink-0">
           <Badge variant={task.status === "concluido" ? "default" : "secondary"}>
-            {task.status === "concluido"
-              ? "Concluído"
-              : task.status === "em_andamento"
-              ? "Em andamento"
-              : "Pendente"}
+            {TASK_STATUS_LABELS[task.status]}
           </Badge>
           {canCancel && (
             <Button
@@ -239,11 +294,7 @@ function TaskCard({ task, today, href }: { task: TaskWithRoom; today: string; hr
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Badge variant={task.status === "concluido" ? "default" : "secondary"}>
-            {task.status === "concluido"
-              ? "Concluído"
-              : task.status === "em_andamento"
-              ? "Em andamento"
-              : "Pendente"}
+            {TASK_STATUS_LABELS[task.status]}
           </Badge>
           {href && <ChevronRight size={16} className="text-muted-foreground" />}
         </div>

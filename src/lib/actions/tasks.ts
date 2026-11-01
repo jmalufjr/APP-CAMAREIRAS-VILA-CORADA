@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { OCCURRENCE_PHOTOS_BUCKET } from "@/lib/occurrence-photos";
 import { revalidatePath } from "next/cache";
+import { setMinibarConsumption } from "@/lib/actions/minibar";
+import type { RoomBillGuestSlot } from "@/lib/types";
 
 export async function claimTask(taskId: string) {
   const supabase = await createClient();
@@ -100,21 +102,120 @@ export async function removeOccurrence(id: string) {
   return { success: true };
 }
 
+// A executora libera a suíte: o serviço NÃO fica concluído, vai pra revisão
+// (ver release_daily_room_task / PRD_camareira_revisora.md).
 export async function releaseTask(taskId: string, notes: string) {
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("daily_room_tasks")
-    .update({
-      status: "concluido",
-      finished_at: new Date().toISOString(),
-      released_at: new Date().toISOString(),
-      notes: notes || null,
-    })
-    .eq("id", taskId);
-
+  const { error } = await supabase.rpc("release_daily_room_task", { p_task_id: taskId, p_notes: notes });
   if (error) return { error: error.message };
+  revalidateTaskPages();
+  return { success: true };
+}
+
+function revalidateTaskPages() {
   revalidatePath("/tarefas", "layout");
-  revalidatePath("/dashboard");
+  revalidatePath("/dashboard", "layout");
   revalidatePath("/historico");
+  revalidatePath("/planejamento");
+}
+
+// ---------- Revisão (camareira revisora) ----------
+
+export async function claimReview(taskId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("claim_review", { p_task_id: taskId });
+  if (error) return { error: error.message };
+  revalidateTaskPages();
+  return { success: true };
+}
+
+export async function releaseReview(taskId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("release_review", { p_task_id: taskId });
+  if (error) return { error: error.message };
+  revalidateTaskPages();
+  return { success: true };
+}
+
+export async function setReviewCheckResult(checkId: string, result: "completo" | "incompleto" | null) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_review_check_result", { p_check_id: checkId, p_result: result });
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+export async function setReviewMinibarResult(taskId: string, result: "completo" | "incompleto" | null) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_review_minibar_result", { p_task_id: taskId, p_result: result });
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+// Devolve pra onde o serviço foi: "concluido" (tudo completo) ou
+// "aguardando_correcao" (algum item incompleto).
+export async function finishReview(taskId: string, notes: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("finish_review", { p_task_id: taskId, p_notes: notes });
+  if (error) return { error: error.message };
+  revalidateTaskPages();
+  return { success: true, outcome: data as string };
+}
+
+// ---------- Correção (executora) ----------
+
+export async function startCorrection(taskId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("start_correction", { p_task_id: taskId });
+  if (error) return { error: error.message };
+  revalidateTaskPages();
+  return { success: true };
+}
+
+export async function setCorrectionCheck(checkId: string, corrected: boolean) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_correction_check", { p_check_id: checkId, p_corrected: corrected });
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+export async function setCorrectionMinibarDone(taskId: string, done: boolean) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_correction_minibar_done", { p_task_id: taskId, p_done: done });
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+// Finaliza a correção. Se o frigobar estava incompleto, os valores
+// conferidos/editados pela executora (minibarChanges) só são gravados AGORA —
+// e só se a conta da suíte ainda aceitar lançamento; com a conta fechada/paga
+// o consumo não é alterado e o aviso volta pra tela (o admin ajusta depois).
+export async function finishCorrection(
+  taskId: string,
+  roomId: string,
+  guestSlot: RoomBillGuestSlot,
+  minibarChanges: { itemId: string; quantity: number }[]
+) {
+  const supabase = await createClient();
+  let warning: string | null = null;
+  for (const change of minibarChanges) {
+    const result = await setMinibarConsumption(roomId, change.itemId, change.quantity, guestSlot);
+    if (result?.error) {
+      warning = "A conta de frigobar desta suíte já está fechada ou paga — o consumo não foi alterado. Avise o administrador para ajustar.";
+      break;
+    }
+  }
+  const { error } = await supabase.rpc("finish_correction", { p_task_id: taskId });
+  if (error) return { error: error.message };
+  revalidateTaskPages();
+  return { success: true, warning };
+}
+
+// ---------- Admin / gerente ----------
+
+export async function waiveReview(taskId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("waive_review", { p_task_id: taskId });
+  if (error) return { error: error.message };
+  revalidateTaskPages();
   return { success: true };
 }

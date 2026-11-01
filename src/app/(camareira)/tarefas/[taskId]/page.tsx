@@ -8,6 +8,9 @@ import { getMinibarConsumptionForRoom } from "@/lib/actions/minibar";
 import { resolveAutoMinibarGuestSlot } from "@/lib/room-bills";
 import { signOccurrencePhotoUrls } from "@/lib/occurrence-photos";
 import { ChecklistDetail } from "@/components/shared/checklist-detail";
+import { ReviewPanel } from "@/components/shared/review-panel";
+import { CorrectionPanel } from "@/components/shared/correction-panel";
+import { getCurrentProfile } from "@/lib/actions/session";
 
 export default async function TaskDetailPage({
   params,
@@ -16,6 +19,7 @@ export default async function TaskDetailPage({
 }) {
   const { taskId } = await params;
   const supabase = await createClient();
+  const profile = await getCurrentProfile();
 
   const { data: task } = await supabase
     .from("daily_room_tasks")
@@ -55,6 +59,17 @@ export default async function TaskDetailPage({
     photos: o.daily_room_task_occurrence_photos.map((p) => ({ id: p.id, url: photoUrlMap.get(p.storage_path) ?? null })),
   }));
 
+  // Nomes de quem executou e de quem revisou (aparecem nas telas de revisão/correção).
+  const personIds = [task.assigned_to, task.reviewed_by].filter((v): v is string => !!v);
+  const { data: people } = personIds.length
+    ? await supabase.from("profiles").select("id, name").in("id", personIds)
+    : { data: [] as { id: string; name: string }[] };
+  const nameOf = (id: string | null) => (id ? (people ?? []).find((p) => p.id === id)?.name ?? null : null);
+
+  const isReviewer = task.status === "em_revisao" && task.reviewed_by === profile.id;
+  const isCorrector =
+    (task.status === "aguardando_correcao" || task.status === "em_correcao") && task.assigned_to === profile.id;
+
   const room = (task as unknown as { rooms: { number: string; name: string | null } }).rooms;
 
   return (
@@ -64,14 +79,32 @@ export default async function TaskDetailPage({
         title={`Suíte ${room.number}`}
         subtitle={`Checklist de ${TASK_TYPE_LABELS[task.task_type as ChecklistType].toLowerCase()}`}
       />
-      <ChecklistDetail
-        task={task}
-        checks={checks ?? []}
-        occurrences={occurrences}
-        categories={categories ?? []}
-        minibar={minibar}
-        minibarGuestSlot={minibarGuestSlot}
-      />
+      {isReviewer ? (
+        <ReviewPanel
+          task={task}
+          checks={checks ?? []}
+          occurrences={occurrences}
+          categories={categories ?? []}
+          executorName={nameOf(task.assigned_to)}
+        />
+      ) : isCorrector ? (
+        <CorrectionPanel
+          task={task}
+          checks={checks ?? []}
+          minibar={minibar}
+          minibarGuestSlot={minibarGuestSlot}
+          reviewerName={nameOf(task.reviewed_by)}
+        />
+      ) : (
+        <ChecklistDetail
+          task={task}
+          checks={checks ?? []}
+          occurrences={occurrences}
+          categories={categories ?? []}
+          minibar={minibar}
+          minibarGuestSlot={minibarGuestSlot}
+        />
+      )}
     </div>
   );
 }

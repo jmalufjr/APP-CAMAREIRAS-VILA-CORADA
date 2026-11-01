@@ -183,8 +183,31 @@ export default function QuestoesRespostasPage() {
                 própria tela — inclusive escolher “Sem trabalho” se não houver nada a fazer ali. A
                 camareira, pelo próprio celular, escolhe uma das suítes disponíveis pra trabalhar (você
                 não precisa atribuir manualmente quem faz o quê), preenche um checklist de itens,
-                registra qualquer problema encontrado (ver pergunta 6) e, ao final, libera a suíte como
-                concluída. Você acompanha tudo isso em tempo real na tela de Planejamento.
+                registra qualquer problema encontrado (ver pergunta 6) e, ao final, libera a suíte. Ao
+                liberar, o serviço ainda NÃO está concluído: fica “pendente de revisão”. Você acompanha
+                tudo isso em tempo real na tela de Planejamento.
+              </P>
+              <P>
+                <strong>Revisão por outra camareira:</strong> uma camareira diferente (nunca a mesma que
+                executou) escolhe o serviço na seção “Aguardando revisão”, confere item por item marcando
+                “Completo” ou “Incompleto” (inclusive o frigobar), pode registrar ocorrências de manutenção
+                e observações, e encerra a revisão. Se tudo estiver completo, o serviço é concluído. Se
+                algum item estiver incompleto, ele volta para a camareira que executou como “serviço de
+                correção”: ela aperta “Iniciar correção”, vê só os itens incompletos, marca cada um como
+                corrigido e finaliza — aí sim o serviço é concluído. No frigobar, ela vê os valores que já
+                tinha lançado e pode editá-los; o novo consumo só é gravado ao finalizar a correção (se a
+                conta da suíte já estiver fechada ou paga, o consumo não é alterado e aparece um aviso —
+                o ajuste fica com você). Os horários de início, término e duração da revisão e da
+                correção aparecem na tabela “Serviços dos últimos 7 dias” e no Histórico.
+              </P>
+              <P>
+                <strong>Dispensar a revisão:</strong> se não houver outra camareira disponível, você (ou o
+                gerente operacional) pode dispensar a revisão em “Serviços nas suítes” (Resumo
+                operacional): o serviço passa direto a concluído, sem revisora, e não conta serviço de
+                revisão para ninguém na comissão. Na comissão, cada revisão concluída vale um serviço
+                para a revisora, e o serviço só conta quando o ciclo inteiro termina. Uma suíte de
+                “Somente Saída” pendente de revisão ou de correção aparece como suja em “Suítes vagas e
+                limpas” até ficar totalmente concluída.
               </P>
               <P>
                 Se a camareira escolher a suíte errada ou mudar de ideia antes de terminar, ela também

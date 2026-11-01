@@ -1,6 +1,33 @@
 export type UserRole = "admin" | "camareira" | "manutencao" | "gerente_operacional";
 export type ChecklistType = "arrumacao" | "preparacao" | "troca" | "somente_chegada" | "somente_saida";
-export type TaskStatus = "pendente" | "em_andamento" | "concluido" | "cancelado";
+export type TaskStatus =
+  | "pendente"
+  | "em_andamento"
+  | "aguardando_revisao"
+  | "em_revisao"
+  | "aguardando_correcao"
+  | "em_correcao"
+  | "concluido"
+  | "cancelado";
+export type ReviewResult = "completo" | "incompleto";
+
+// Rótulos dos estados do serviço (a execução termina em "Pendente de revisão";
+// só "Concluído" encerra o ciclo inteiro — PRD_camareira_revisora.md).
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  pendente: "Pendente",
+  em_andamento: "Em andamento",
+  aguardando_revisao: "Pendente de revisão",
+  em_revisao: "Em revisão",
+  aguardando_correcao: "Serviço de correção",
+  em_correcao: "Em correção",
+  concluido: "Concluído",
+  cancelado: "Cancelado",
+};
+
+// O serviço ainda está nas mãos da executora (checklist editável).
+export function isTaskInExecution(status: TaskStatus): boolean {
+  return status === "pendente" || status === "em_andamento";
+}
 export type TableShape = "round" | "rect" | "square";
 export type OccurrenceStatus = "pendente" | "selecionada" | "resolvida";
 export type MaintenanceExecutionType = "nao_tecnico" | "tecnico";
@@ -136,6 +163,19 @@ export interface DailyRoomTask {
   cancelled_by: string | null;
   cancelled_at: string | null;
   stays_locked: boolean;
+  // Revisão e correção (camareira revisora).
+  claimed_at: string | null;
+  reviewed_by: string | null;
+  review_claimed_at: string | null;
+  review_finished_at: string | null;
+  review_notes: string | null;
+  review_minibar_result: ReviewResult | null;
+  review_waived_by: string | null;
+  review_waived_at: string | null;
+  correction_started_at: string | null;
+  correction_finished_at: string | null;
+  correction_minibar_done: boolean;
+  completed_at: string | null;
 }
 
 export interface DailyRoomTaskCheck {
@@ -144,6 +184,8 @@ export interface DailyRoomTaskCheck {
   checklist_item_id: string;
   checked: boolean;
   checked_at: string | null;
+  review_result: ReviewResult | null;
+  corrected: boolean;
 }
 
 export interface DailyRoomTaskOccurrence {

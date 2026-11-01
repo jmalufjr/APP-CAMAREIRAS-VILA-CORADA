@@ -11,7 +11,7 @@ export default async function TarefasPage() {
 
   // RLS já escopa o retorno: camareira vê as tarefas dela + as ainda sem
   // responsável (disponíveis para escolher); admin vê todas.
-  const [{ data: todayTasks }, { data: pastAvailable }, { data: pastMine }] = await Promise.all([
+  const [{ data: todayTasks }, { data: pastAvailable }, { data: pastMine }, { data: reviewTasks }] = await Promise.all([
     supabase.from("daily_room_tasks").select("*, rooms(number, name)").eq("date", date).order("created_at"),
     // Serviços de dias anteriores nunca escolhidos por ninguém: não somem
     // mais da tela, ficam em "Serviços anteriores" até serem escolhidos ou
@@ -30,7 +30,14 @@ export default async function TarefasPage() {
       .select("*, rooms(number, name)")
       .lt("date", date)
       .eq("assigned_to", profile.id)
-      .in("status", ["pendente", "em_andamento"])
+      .in("status", ["pendente", "em_andamento", "aguardando_revisao", "em_revisao", "aguardando_correcao", "em_correcao"])
+      .order("date", { ascending: true }),
+    // Serviços de QUALQUER dia que aguardam revisão (a RLS só mostra à camareira
+    // os de outras executoras, mais os que ela mesma está revisando).
+    supabase
+      .from("daily_room_tasks")
+      .select("*, rooms(number, name)")
+      .in("status", ["aguardando_revisao", "em_revisao"])
       .order("date", { ascending: true }),
   ]);
 
@@ -43,6 +50,7 @@ export default async function TarefasPage() {
         todayTasks={(todayTasks ?? []) as unknown as TaskWithRoom[]}
         pastAvailableTasks={(pastAvailable ?? []) as unknown as TaskWithRoom[]}
         pastMineTasks={(pastMine ?? []) as unknown as TaskWithRoom[]}
+        reviewTasks={(reviewTasks ?? []) as unknown as TaskWithRoom[]}
       />
     </div>
   );
