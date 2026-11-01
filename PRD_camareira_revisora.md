@@ -144,8 +144,7 @@ serviço.
 **Comissão** — `getServiceCountsByCamareira` soma +1 para a revisora de cada serviço concluído com revisão
 real (não dispensada); a revisora entra na lista de camareiras do período.
 
-**Fora do escopo desta entrega** — a exportação CSV da tabela de serviços no Histórico (prevista na
-premissa 9) não foi implementada; a tabela e o filtro de período sim.
+**Exportação CSV** — a tabela de serviços do Histórico tem botão "Exportar CSV" (`historico-servicos.csv`).
 
 **Testes feitos localmente** — fluxo completo no banco com duas camareiras e gerente (executora não revisa a
 própria; encerrar revisão exige tudo marcado; incompleto → correção → concluído; desistir; dispensar

@@ -2863,7 +2863,7 @@ também é feita em Server Components.
     Comissão: +1 serviço para a revisora (revisão não dispensada). "Suítes vagas e limpas" não muda de
     código: só `concluido` vale como limpa. Frigobar fechado/pago na correção: aviso, sem alterar
     consumo. Migrações rodadas à mão na produção ANTES do código (`supabase/producao/04` e `05`).
-    Sem exportação CSV da tabela de serviços do Histórico (pendência).
+    Histórico tem botão "Exportar CSV" da tabela de serviços (`service-log-export-button.tsx`).
 
 ## Convenções e decisões importantes
 

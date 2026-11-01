@@ -18,6 +18,7 @@ import { InventoryShrinkageTable } from "@/components/shared/inventory-shrinkage
 import { getInventoryCountHistoryForPeriod } from "@/lib/actions/inventory-counts";
 import { getServiceLogRows } from "@/lib/service-log";
 import { ServiceLogTable } from "@/app/(admin)/dashboard/service-log-table";
+import { ServiceLogExportButton } from "./service-log-export-button";
 import { toDateKey, nowInBrazil } from "@/lib/date";
 import type { ChecklistType } from "@/lib/types";
 
@@ -145,8 +146,9 @@ export default async function HistoricoPage({
         }))}
       />
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="font-heading text-lg">Serviços no período (execução, revisão e correção)</CardTitle>
+          <ServiceLogExportButton rows={serviceLogRows} />
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <ServiceLogTable rows={serviceLogRows} emptyText="Nenhum serviço concluído no período." />
