@@ -4,7 +4,11 @@ import { BackLink } from "@/components/shared/back-link";
 import { todayKey, tomorrowKey, daysAgoKey } from "@/lib/date";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ServiceLogTable, type ServiceLogRow } from "../service-log-table";
+import { ServiceLogTable } from "../service-log-table";
+import { getServiceLogRows } from "@/lib/service-log";
+import { WaiveReviewButton } from "@/components/shared/waive-review-button";
+import { TASK_STATUS_LABELS, type TaskStatus } from "@/lib/types";
+import { formatDateShortPt } from "@/lib/date";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import type { ChecklistType } from "@/lib/types";
 
@@ -14,44 +18,31 @@ export default async function ServicosSuitesPage() {
   const tomorrow = tomorrowKey();
   const sevenDaysAgo = daysAgoKey(6);
 
-  const [{ data: todayTasks }, { data: tomorrowTasks }, { data: serviceLog }] = await Promise.all([
+  const [{ data: todayTasks }, { data: tomorrowTasks }, serviceLogRows, { data: pendingReview }] = await Promise.all([
     supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", today),
     supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", tomorrow),
     // Serviço concluído pelas camareiras nos últimos 7 dias, para a tabela
     // "Serviços dos últimos 7 dias" abaixo dos cards de hoje/amanhã.
+    getServiceLogRows(supabase, sevenDaysAgo, today),
+    // Serviços que ainda não fecharam o ciclo (revisão / correção), de qualquer dia.
     supabase
       .from("daily_room_tasks")
       .select(
-        "id, date, task_type, claimed_at, started_at, finished_at, rooms(number), profiles!daily_room_tasks_assigned_to_fkey(name)"
+        "id, date, task_type, status, rooms(number), profiles!daily_room_tasks_assigned_to_fkey(name), reviewer:profiles!daily_room_tasks_reviewed_by_fkey(name)"
       )
-      .gte("date", sevenDaysAgo)
-      .lte("date", today)
-      .eq("status", "concluido"),
+      .in("status", ["aguardando_revisao", "em_revisao", "aguardando_correcao", "em_correcao"])
+      .order("date", { ascending: true }),
   ]);
 
-  const serviceLogRows: ServiceLogRow[] = (
-    (serviceLog ?? []) as unknown as {
-      id: string;
-      date: string;
-      task_type: ChecklistType;
-      claimed_at: string | null;
-      started_at: string | null;
-      finished_at: string | null;
-      rooms: { number: string };
-      profiles: { name: string } | null;
-    }[]
-  )
-    .map((r) => ({
-      id: r.id,
-      date: r.date,
-      room_number: r.rooms.number,
-      task_type: r.task_type,
-      claimed_at: r.claimed_at,
-      started_at: r.started_at,
-      finished_at: r.finished_at,
-      camareira_name: r.profiles?.name ?? null,
-    }))
-    .sort((a, b) => (a.date !== b.date ? b.date.localeCompare(a.date) : Number(a.room_number) - Number(b.room_number)));
+  const pendingRows = (pendingReview ?? []) as unknown as {
+    id: string;
+    date: string;
+    task_type: ChecklistType;
+    status: TaskStatus;
+    rooms: { number: string };
+    profiles: { name: string } | null;
+    reviewer: { name: string } | null;
+  }[];
 
   return (
     <div className="space-y-6">
@@ -71,7 +62,7 @@ export default async function ServicosSuitesPage() {
                   {TASK_TYPE_LABELS[t.task_type as ChecklistType]}
                 </span>
                 <Badge variant={t.status === "concluido" ? "default" : "secondary"}>
-                  {t.status === "concluido" ? "Concluído" : t.status === "em_andamento" ? "Em andamento" : "Pendente"}
+                  {TASK_STATUS_LABELS[t.status as TaskStatus]}
                 </Badge>
               </div>
             ))}
@@ -98,6 +89,30 @@ export default async function ServicosSuitesPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-lg">Serviços aguardando revisão ou correção</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {pendingRows.map((t) => (
+            <div key={t.id} className="flex flex-wrap items-center justify-between gap-2 text-sm py-1.5 border-b border-border last:border-0">
+              <span>
+                {formatDateShortPt(t.date)} · Suíte {t.rooms.number} · {TASK_TYPE_LABELS[t.task_type]} ·{" "}
+                {t.profiles?.name ?? "—"}
+                {t.reviewer ? ` (revisão: ${t.reviewer.name})` : ""}
+              </span>
+              <span className="flex items-center gap-2">
+                <Badge variant="secondary">{TASK_STATUS_LABELS[t.status]}</Badge>
+                {t.status === "aguardando_revisao" && <WaiveReviewButton taskId={t.id} />}
+              </span>
+            </div>
+          ))}
+          {pendingRows.length === 0 && (
+            <p className="text-sm text-muted-foreground py-4">Nenhum serviço aguardando revisão ou correção.</p>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

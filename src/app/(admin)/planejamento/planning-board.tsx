@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { Room, Profile, DailyRoomTask, ChecklistType } from "@/lib/types";
+import { TASK_STATUS_LABELS } from "@/lib/types";
 import { setRoomTask } from "@/lib/actions/planning";
 import { TASK_TYPE_LABELS, TASK_TYPE_OPTIONS } from "@/lib/task-type";
 import {
@@ -102,11 +103,7 @@ export function PlanningBoard({
                 <TableCell>
                   {task ? (
                     <Badge variant={task.status === "concluido" ? "default" : "secondary"}>
-                      {task.status === "concluido"
-                        ? "Concluído"
-                        : task.status === "em_andamento"
-                        ? "Em andamento"
-                        : "Pendente"}
+                      {TASK_STATUS_LABELS[task.status]}
                     </Badge>
                   ) : (
                     "—"

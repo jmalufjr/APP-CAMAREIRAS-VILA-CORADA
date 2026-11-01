@@ -79,7 +79,7 @@ export async function createChecklistItem(formData: FormData) {
       .select("id")
       .eq("task_type", type)
       .in("room_id", rooms)
-      .neq("status", "concluido");
+      .in("status", ["pendente", "em_andamento"]);
 
     if (openTasks && openTasks.length > 0) {
       await supabase.from("daily_room_task_checks").insert(

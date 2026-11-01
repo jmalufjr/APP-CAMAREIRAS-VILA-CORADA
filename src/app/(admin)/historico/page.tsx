@@ -16,6 +16,9 @@ import { ComprasHistoryTable } from "@/components/shared/compras-history-table";
 import { ExpenseSummaryCards } from "@/components/shared/expense-summary-cards";
 import { InventoryShrinkageTable } from "@/components/shared/inventory-shrinkage-table";
 import { getInventoryCountHistoryForPeriod } from "@/lib/actions/inventory-counts";
+import { getServiceLogRows } from "@/lib/service-log";
+import { ServiceLogTable } from "@/app/(admin)/dashboard/service-log-table";
+import { ServiceLogExportButton } from "./service-log-export-button";
 import { toDateKey, nowInBrazil } from "@/lib/date";
 import type { ChecklistType } from "@/lib/types";
 
@@ -65,6 +68,7 @@ export default async function HistoricoPage({
     demonstrativoRows,
     expenseBySupplier,
     inventoryShrinkageHistory,
+    serviceLogRows,
   ] = await Promise.all([
     // Comissão = quantidade de suítes elegíveis pro café da manhã por dia
     // (independente de terem sido de fato alocadas a uma mesa) × valor por
@@ -94,6 +98,7 @@ export default async function HistoricoPage({
     getExpenseDemonstrativoForPeriod(from, to),
     getExpenseSummaryBySupplier(from, to),
     getInventoryCountHistoryForPeriod(from, to),
+    getServiceLogRows(supabase, from, to),
   ]);
 
   const commissionRate = Number(commissionSettings?.value_per_table ?? 0);
@@ -140,6 +145,15 @@ export default async function HistoricoPage({
           occurrencesResolved: t.daily_room_task_occurrences.filter((o) => o.status === "resolvida").length,
         }))}
       />
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="font-heading text-lg">Serviços no período (execução, revisão e correção)</CardTitle>
+          <ServiceLogExportButton rows={serviceLogRows} />
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <ServiceLogTable rows={serviceLogRows} emptyText="Nenhum serviço concluído no período." />
+        </CardContent>
+      </Card>
       <TopCategoriesTable
         title="10 categorias de ocorrências manutenção mais frequentes no período"
         categories={topCategories}

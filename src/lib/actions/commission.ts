@@ -39,7 +39,7 @@ async function getCamareiraRoster(
   from: string,
   to: string
 ): Promise<CamareiraRosterRow[]> {
-  const [{ data: active }, { data: taskRows }] = await Promise.all([
+  const [{ data: active }, { data: taskRows }, { data: reviewRows }] = await Promise.all([
     supabase
       .from("profiles")
       .select("id, name, service_quality_score")
@@ -57,6 +57,16 @@ async function getCamareiraRoster(
       .gte("date", from)
       .lte("date", to)
       .not("assigned_to", "is", null),
+    // Quem revisou serviços também conta como "trabalhou no período" (cada
+    // revisão concluída vale 1 serviço — PRD_camareira_revisora.md).
+    supabase
+      .from("daily_room_tasks")
+      .select("reviewed_by, profiles!daily_room_tasks_reviewed_by_fkey(name, service_quality_score)")
+      .eq("status", "concluido")
+      .gte("date", from)
+      .lte("date", to)
+      .is("review_waived_by", null)
+      .not("reviewed_by", "is", null),
   ]);
 
   const map = new Map<string, CamareiraRosterRow>();
@@ -76,6 +86,21 @@ async function getCamareiraRoster(
       service_quality_score: t.profiles?.service_quality_score ?? 5,
     });
   });
+  (
+    (reviewRows ?? []) as unknown as {
+      reviewed_by: string | null;
+      profiles: { name: string; service_quality_score: number } | null;
+    }[]
+  ).forEach((t) => {
+    if (!t.reviewed_by || map.has(t.reviewed_by)) return;
+    const name = t.profiles?.name;
+    if (!name || name === EXCLUDED_CAMAREIRA_NAME) return;
+    map.set(t.reviewed_by, {
+      id: t.reviewed_by,
+      name,
+      service_quality_score: t.profiles?.service_quality_score ?? 5,
+    });
+  });
   return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -86,16 +111,17 @@ async function getServiceCountsByCamareira(
 ): Promise<Map<string, number>> {
   const { data } = await supabase
     .from("daily_room_tasks")
-    .select("assigned_to")
+    .select("assigned_to, reviewed_by, review_waived_by")
     .eq("status", "concluido")
     .gte("date", from)
-    .lte("date", to)
-    .not("assigned_to", "is", null);
+    .lte("date", to);
 
+  // Só conta o ciclo inteiro concluído: a executora ganha 1 serviço e, se houve
+  // revisão de verdade (não dispensada), a revisora também ganha 1.
   const map = new Map<string, number>();
   (data ?? []).forEach((t) => {
-    if (!t.assigned_to) return;
-    map.set(t.assigned_to, (map.get(t.assigned_to) ?? 0) + 1);
+    if (t.assigned_to) map.set(t.assigned_to, (map.get(t.assigned_to) ?? 0) + 1);
+    if (t.reviewed_by && !t.review_waived_by) map.set(t.reviewed_by, (map.get(t.reviewed_by) ?? 0) + 1);
   });
   return map;
 }

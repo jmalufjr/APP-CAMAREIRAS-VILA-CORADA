@@ -2855,6 +2855,16 @@ também é feita em Server Components.
     - **Deploy**: migrations 053–082 rodadas à mão na produção ANTES do código
       (`supabase/producao/`); ponto de retorno = tag `producao-antes-modulo-contabil`.
 
+57. **Parte 50 — Camareira revisora** (01/11/2026, branch `feature/camareira-revisora`;
+    requisitos e decisões em `PRD_camareira_revisora.md`): "Liberar suíte" não conclui mais o serviço —
+    vai para `aguardando_revisao`; outra camareira revisa item a item (completo/incompleto, frigobar
+    incluso); incompleto → `aguardando_correcao`/`em_correcao` com a executora; só então `concluido`.
+    Tudo via funções `security definer` (migrações 083/084). Admin/gerente dispensam a revisão.
+    Comissão: +1 serviço para a revisora (revisão não dispensada). "Suítes vagas e limpas" não muda de
+    código: só `concluido` vale como limpa. Frigobar fechado/pago na correção: aviso, sem alterar
+    consumo. Migrações rodadas à mão na produção ANTES do código (`supabase/producao/04` e `05`).
+    Histórico tem botão "Exportar CSV" da tabela de serviços (`service-log-export-button.tsx`).
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de
