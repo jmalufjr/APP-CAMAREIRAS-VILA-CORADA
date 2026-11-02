@@ -57,15 +57,15 @@ export default async function TicketMedioCanaisPage() {
       <BackLink href="/dashboard" />
       <PageHeader
         title="Ticket médio de canais de venda"
-        subtitle="Preço cadastrado e preço efetivamente cobrado, por grupo de suítes e canal de venda, nos próximos 6 meses."
+        subtitle="Preço cadastrado e preço efetivamente cobrado, por suíte e canal de venda, nos próximos 6 meses."
       />
 
       <ChannelSettingsCard initial={correction} />
 
       <div className="space-y-1 text-xs text-muted-foreground">
         <p>
-          <strong>Diárias reservadas</strong>: noites reservadas no mês pelo canal, somando as suítes do grupo (cada
-          noite conta no dia em que começa; reservas confirmadas, pré-reservas e contratos, sem canceladas).{" "}
+          <strong>Diárias reservadas</strong>: noites reservadas no mês pela suíte neste canal (cada noite conta no dia
+          em que começa; reservas confirmadas, pré-reservas e contratos, sem canceladas).{" "}
           <strong>Preço médio cadastrado</strong>: média dos preços de cada dia do mês na Stays, já com a correção do
           canal. <strong>Ticket médio cobrado</strong>: valor das diárias cobrado nas reservas ÷ diárias do mês (sem
           taxas como ISS). <strong>Variação</strong>: cobrado em relação ao cadastrado.

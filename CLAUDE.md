@@ -2897,7 +2897,9 @@ também é feita em Server Components.
     (#EAB308) e manutenção laranja escuro (#C2410C).
 
 60. **Parte 53 — Ticket médio de canais de venda** (02/11/2026): tela `/dashboard/ticket-medio-canais`
-    (2º item do menu do Resumo operacional, SÓ admin), 4 grupos de suítes de mesmo preço (1; 2–5; 6–9; 10–11)
+    (2º item do menu do Resumo operacional, SÓ admin), 11 blocos (uma suíte cada — a 1ª versão agrupava
+    1; 2–5; 6–9; 10–11 supondo preço igual dentro do grupo, o que a Stays desmentiu: ex. nov/2026 suítes 6–9
+    = 723/788/780/780, e 2–5 diferem em todos os meses; migração `086` troca a chave para s1…s11)
     × 5 canais (Booking, Airbnb, Expedia, Decolar, Reservas diretas) × próximos 6 meses, cada mês com 4
     colunas: diárias reservadas, preço médio cadastrado, ticket médio cobrado e variação %.
     - **Descobertas na API da Stays**: o preço por canal (a tela "Editar Preços" com seletor de canal) NÃO é

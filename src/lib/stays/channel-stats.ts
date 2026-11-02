@@ -4,16 +4,16 @@
 
 import { classifyOrigin, dayNumber, keyFromDayNumber, type CalendarEntryType, type CalendarOrigin } from "@/lib/stays/calendar";
 
-export type GroupKey = "g1" | "g2" | "g3" | "g4";
+// Cada suíte é o seu próprio grupo: os preços cadastrados na Stays diferem entre suítes
+// (mesmo as que se imaginava iguais), então nada é calculado como média de várias suítes.
+export type GroupKey = `s${number}`;
 export type ChannelKey = "booking" | "airbnb" | "expedia" | "decolar" | "direta";
 
-// Os preços variam entre estes quatro grupos de suítes; dentro de um grupo são iguais.
-export const ROOM_GROUPS: { key: GroupKey; label: string; rooms: string[] }[] = [
-  { key: "g1", label: "Suíte 1", rooms: ["1"] },
-  { key: "g2", label: "Suítes 2 a 5", rooms: ["2", "3", "4", "5"] },
-  { key: "g3", label: "Suítes 6 a 9", rooms: ["6", "7", "8", "9"] },
-  { key: "g4", label: "Suítes 10 e 11", rooms: ["10", "11"] },
-];
+export const ROOM_GROUPS: { key: GroupKey; label: string; rooms: string[] }[] = Array.from({ length: 11 }, (_, i) => ({
+  key: `s${i + 1}` as GroupKey,
+  label: `Suíte ${i + 1}`,
+  rooms: [String(i + 1)],
+}));
 
 export const CHANNELS: { key: ChannelKey; label: string }[] = [
   { key: "booking", label: "Booking" },
@@ -147,10 +147,9 @@ export interface BaseAvg {
   days: number;
 }
 
-// Preço base médio cadastrado por (grupo, mês): em cada dia, a média dos preços das
-// suítes do grupo (iguais entre si); depois a média de todos os dias do mês que têm
-// preço. Dias sem preço na Stays (ex.: dias já passados do mês corrente) ficam de
-// fora. Chave: `${grupo}|${mês}`.
+// Preço base médio cadastrado por (suíte, mês): a média dos preços de cada dia do mês
+// que tem preço. Dias sem preço na Stays (ex.: dias já passados do mês corrente) ficam
+// de fora. Chave: `${grupo}|${mês}`.
 export function baseAverages(
   calendarByListing: Map<string, CalendarDayRaw[]>,
   listingToGroup: Map<string, GroupKey>,

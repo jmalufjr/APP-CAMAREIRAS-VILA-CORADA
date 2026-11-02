@@ -452,9 +452,9 @@ export default function QuestoesRespostasPage() {
                   </>,
                   <>
                     <strong>Ticket médio de canais de venda</strong>: uma tabela, só para o admin, com os
-                    próximos 6 meses. As suítes são separadas em 4 grupos de mesmo preço (Suíte 1; Suítes 2
-                    a 5; Suítes 6 a 9; Suítes 10 e 11) e, em cada grupo, uma linha por canal: Booking,
-                    Airbnb, Expedia, Decolar e Reservas diretas (website). Cada mês tem 4 colunas:
+                    próximos 6 meses. Cada suíte tem o seu bloco, com uma linha por canal: Booking, Airbnb,
+                    Expedia, Decolar e Reservas diretas (website) — os preços cadastrados na Stays variam
+                    de suíte para suíte, então não há médias entre suítes. Cada mês tem 4 colunas:
                     diárias reservadas (cada noite conta no dia em que começa), preço médio cadastrado (o
                     preço de cada dia na Stays com a correção do canal, dividido pelos dias do mês),
                     ticket médio cobrado (o que os hóspedes realmente pagaram por diária, dividindo as
