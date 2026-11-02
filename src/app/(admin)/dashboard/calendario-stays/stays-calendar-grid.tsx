@@ -145,8 +145,8 @@ export function StaysCalendarGrid({
         ))}
       </div>
       <p className="text-xs text-muted-foreground">
-        Códigos ao lado do nome: (Pre) pré-reserva · (Con) contrato · (Bloq) bloqueio. Reserva confirmada não leva
-        código.
+        Códigos ao lado do nome: (Pre) pré-reserva · (Con) contrato. Reserva confirmada, bloqueio e manutenção não
+        levam código.
       </p>
 
       <div ref={scrollRef} className="overflow-x-auto rounded-xl border border-border bg-card">

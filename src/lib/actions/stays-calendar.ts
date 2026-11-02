@@ -88,7 +88,10 @@ export async function getStaysCalendar(
     byListing.set(r._idlisting, list);
   }
 
-  const rows: CalendarRow[] = (rooms ?? []).map((room) => ({
+  // Ordem numérica (1, 2, ... 9, 10, 11) — a ordenação do banco é por texto e
+  // colocaria a 10 e a 11 logo depois da 1.
+  const orderedRooms = [...(rooms ?? [])].sort((a, b) => Number(a.number) - Number(b.number));
+  const rows: CalendarRow[] = orderedRooms.map((room) => ({
     roomId: room.id,
     roomNumber: room.number,
     entries: room.stays_listing_id ? byListing.get(room.stays_listing_id) ?? [] : [],

@@ -26,12 +26,12 @@ export interface OriginStyle {
 // claro, azul claro, vermelho escuro, laranja, amarelo escuro, vermelho claro).
 export const ORIGIN_STYLES: Record<CalendarOrigin, OriginStyle> = {
   booking: { label: "Booking", sigla: "B", bg: "#1E3A8A", fg: "#FFFFFF" },
-  airbnb: { label: "Airbnb", sigla: "A", bg: "#14532D", fg: "#FFFFFF" },
+  airbnb: { label: "Airbnb", sigla: "A", bg: "#15803D", fg: "#FFFFFF" },
   decolar: { label: "Decolar", sigla: "D", bg: "#86EFAC", fg: "#052E16" },
   expedia: { label: "Expedia", sigla: "E", bg: "#38BDF8", fg: "#082F49" },
-  direta: { label: "Reserva direta", sigla: "R", bg: "#B8860B", fg: "#FFFFFF" },
+  direta: { label: "Reserva direta", sigla: "R", bg: "#EAB308", fg: "#1C1917" },
   bloqueio: { label: "Bloqueio genérico", sigla: "Bl", bg: "#991B1B", fg: "#FFFFFF" },
-  manutencao: { label: "Bloqueio de manutenção", sigla: "M", bg: "#F97316", fg: "#1C1917" },
+  manutencao: { label: "Bloqueio de manutenção", sigla: "M", bg: "#C2410C", fg: "#FFFFFF" },
   outros: { label: "Outros", sigla: "?", bg: "#FCA5A5", fg: "#450A0A" },
 };
 
@@ -47,13 +47,13 @@ export const ORIGIN_ORDER: CalendarOrigin[] = [
 ];
 
 // Situação da reserva: por extenso no cartão, em código dentro da barra
-// (confirmada não mostra código nenhum).
+// (confirmada, bloqueio e manutenção não mostram código nenhum).
 export const STATUS_INFO: Record<CalendarEntryType, { label: string; code: string }> = {
   booked: { label: "Confirmada", code: "" },
   reserved: { label: "Pré-reserva", code: "Pre" },
   contract: { label: "Contrato", code: "Con" },
-  blocked: { label: "Bloqueio", code: "Bloq" },
-  maintenance: { label: "Bloqueio de manutenção", code: "Bloq" },
+  blocked: { label: "Bloqueio", code: "" },
+  maintenance: { label: "Bloqueio de manutenção", code: "" },
 };
 
 // Origem a partir do tipo e do "parceiro" informado pela Stays. Sem parceiro,
@@ -87,8 +87,8 @@ export interface CalendarRow {
   entries: CalendarEntry[];
 }
 
-// Texto exibido dentro da barra: "Nome (Pre)", "Nome" (confirmada) ou
-// "Bloqueado (Bloq)".
+// Texto exibido dentro da barra: "Nome (Pre)", "Nome" (confirmada),
+// "Bloqueado" ou "Manutenção".
 export function barLabel(e: CalendarEntry): string {
   const code = STATUS_INFO[e.type].code;
   const isBlock = e.type === "blocked" || e.type === "maintenance";

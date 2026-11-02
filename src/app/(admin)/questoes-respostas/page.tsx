@@ -427,11 +427,9 @@ export default function QuestoesRespostasPage() {
           <AccordionPanel>
             <div className="space-y-3">
               <P>
-                É a primeira tela que você vê ao entrar. No topo ficam 5 cards de “Consulta rápida do
-                mês corrente”: suítes concluídas hoje, suítes no café hoje, Comissão Suítes e Café (o
-                pote de comissão do café da manhã do mês, antes chamado “comissão do mês”), Comissão Bar
-                (a comissão de 10% do bar somada de todas as camareiras, antes “10% bar total”) e
-                ocorrências de manutenção hoje. Logo abaixo ficam os botões de sincronização com a Stays
+                É a primeira tela que você vê ao entrar. No topo ficam 2 cards de “Consulta rápida”:
+                suítes concluídas hoje e ocorrências de manutenção hoje. (As comissões ficam na tela
+                “Comissões das camareiras”, explicadas na pergunta 11.) Logo abaixo ficam os botões de sincronização com a Stays
                 (ver pergunta 1).
               </P>
               <P>
@@ -456,12 +454,12 @@ export default function QuestoesRespostasPage() {
                     <strong>Calendário de reservas - Stays</strong>: uma grade igual à do calendário da
                     Stays, com cada suíte numa linha e cada dia numa coluna. Cada reserva aparece como
                     uma barra colorida (começa à tarde do dia da entrada e termina de manhã no dia da
-                    saída) com o nome do hóspede. A cor mostra a origem: azul escuro = Booking, verde
-                    escuro = Airbnb, verde claro = Decolar, azul claro = Expedia, amarelo escuro =
-                    reserva direta (site ou lançada à mão), vermelho escuro = bloqueio, laranja =
-                    bloqueio de manutenção e vermelho claro = outras origens. Ao lado do nome, um código
-                    mostra a situação: (Pre) pré-reserva, (Con) contrato e (Bloq) bloqueio; reserva
-                    confirmada não leva código, e reservas canceladas não aparecem. Passando o mouse (ou
+                    saída) com o nome do hóspede. A cor mostra a origem: azul escuro = Booking, verde =
+                    Airbnb, verde claro = Decolar, azul claro = Expedia, amarelo = reserva direta (site
+                    ou lançada à mão), vermelho escuro = bloqueio, laranja escuro = bloqueio de
+                    manutenção e vermelho claro = outras origens. Ao lado do nome, um código mostra a
+                    situação: (Pre) pré-reserva e (Con) contrato; reserva confirmada, bloqueio e
+                    manutenção não levam código, e reservas canceladas não aparecem. Passando o mouse (ou
                     tocando, no celular) sobre uma barra abre um cartão com nome completo, origem,
                     situação e período. Você escolhe o período em “De” e “Até” e clica em Atualizar. É
                     só consulta: nada é alterado na Stays nem no app. O gerente operacional também vê

@@ -3,41 +3,29 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/actions/session";
 import { PageHeader } from "@/components/shared/page-header";
-import { todayKey, formatDatePt, nowInBrazil } from "@/lib/date";
+import { todayKey, formatDatePt } from "@/lib/date";
 import { Card, CardContent } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
-import { getBarCommissionByCamareira } from "@/lib/actions/comandas";
-import { getBreakfastCommissionPotForRange } from "@/lib/actions/breakfast-commission";
 import { getItemsNeedingPurchaseCount } from "@/lib/actions/purchase-list";
 import {
   BedDouble,
-  Coffee,
   AlertTriangle,
-  Wallet,
   Martini,
   Wine,
-  Percent,
   History,
   ChevronRight,
   Key,
   CalendarRange,
 } from "lucide-react";
 
-function monthRange() {
-  const now = nowInBrazil();
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
-}
-
 const menuItems = [
+  { href: "/dashboard/calendario-stays", label: "Calendário de reservas - Stays", icon: CalendarRange },
   { href: "/dashboard/servicos-suites", label: "Serviços nas suítes", icon: BedDouble },
   {
     href: "/dashboard/suites-disponiveis",
     label: "Suítes vagas e limpas, disponíveis para alugar",
     icon: Key,
   },
-  { href: "/dashboard/calendario-stays", label: "Calendário de reservas - Stays", icon: CalendarRange },
   { href: "/dashboard/consumo-frigobar", label: "Consumo de frigobar", icon: Wine },
   { href: "/dashboard/consumo-bar", label: "Consumo de bar", icon: Martini },
 ];
@@ -68,43 +56,18 @@ export default async function DashboardPage() {
   }
   const supabase = await createClient();
   const today = todayKey();
-  const { start, end } = monthRange();
 
-  const [
-    { data: todayTasks },
-    { data: todayEligibility },
-    { data: todayAssignmentsFallback },
-    { count: occurrencesToday },
-    barCommission,
-    totalCommissionMonth,
-    itemsNeedingPurchaseCount,
-  ] = await Promise.all([
+  const [{ data: todayTasks }, { count: occurrencesToday }, itemsNeedingPurchaseCount] = await Promise.all([
     supabase.from("daily_room_tasks").select("status").eq("date", today),
-    // Suítes elegíveis pro café da manhã hoje (independente de terem sido
-    // de fato alocadas a uma mesa) — só usada aqui pro card "Suítes no
-    // café hoje"; o total em R$ do mês vem de
-    // getBreakfastCommissionPotForRange, que aplica a mesma regra (com o
-    // mesmo fallback) já compartilhada com o Histórico.
-    supabase.from("daily_breakfast_settings").select("eligible_suites_count").eq("date", today).maybeSingle(),
-    // Fallback pra hoje sem eligible_suites_count (regra antiga: conta
-    // suítes alocadas a alguma mesa) — uma mudança de regra não pode
-    // zerar retroativamente um valor que já tinha sido calculado.
-    supabase.from("daily_breakfast_room_assignments").select("room_id").eq("date", today),
     supabase
       .from("daily_room_task_occurrences")
       .select("id, daily_room_tasks!inner(date)", { count: "exact", head: true })
       .eq("daily_room_tasks.date", today),
-    getBarCommissionByCamareira(),
-    getBreakfastCommissionPotForRange(start, end),
     getItemsNeedingPurchaseCount(),
   ]);
 
   const doneToday = (todayTasks ?? []).filter((t) => t.status === "concluido").length;
   const totalToday = (todayTasks ?? []).length;
-
-  const suitesToday = todayEligibility?.eligible_suites_count ?? (todayAssignmentsFallback ?? []).length;
-
-  const barCommissionCurrentMonthTotal = barCommission.currentMonth.reduce((sum, r) => sum + r.commission, 0);
 
   return (
     <div className="space-y-8">
@@ -119,9 +82,6 @@ export default async function DashboardPage() {
         <p className="font-heading text-lg">Consulta rápida do mês corrente</p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <StatCard icon={BedDouble} label="Suítes concluídas hoje" value={`${doneToday} / ${totalToday}`} />
-          <StatCard icon={Coffee} label="Suítes no café hoje" value={String(suitesToday)} />
-          <StatCard icon={Wallet} label="Comissão Suítes e Café" value={`R$ ${totalCommissionMonth.toFixed(2)}`} />
-          <StatCard icon={Percent} label="Comissão Bar" value={`R$ ${barCommissionCurrentMonthTotal.toFixed(2)}`} />
           <StatCard
             icon={AlertTriangle}
             label="Ocorrências Manutenção hoje"

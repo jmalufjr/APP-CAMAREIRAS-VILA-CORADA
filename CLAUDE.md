@@ -2888,6 +2888,14 @@ também é feita em Server Components.
       Com o Docker reiniciado, o gateway local pode ficar sem porta (`net stop winnat` / `net start
       winnat` em terminal administrador, depois `npx supabase start`).
 
+59. **Parte 52 — Ajustes do Calendário e do Resumo operacional** (02/11/2026): o Resumo operacional
+    (`/dashboard`) ficou só com 2 cards de consulta rápida (Suítes concluídas hoje e Ocorrências Manutenção
+    hoje) — saíram "Suítes no café hoje", "Comissão Suítes e Café" e "Comissão Bar" (as comissões continuam em
+    "Comissões das camareiras"); "Calendário de reservas - Stays" virou o 1º item do menu. No calendário:
+    suítes em ordem numérica (1…11; o banco ordena por texto e punha a 10/11 logo após a 1), bloqueio e
+    manutenção sem código "(Bloq)" (só Pre e Con), Airbnb verde médio (#15803D), reserva direta amarelo
+    (#EAB308) e manutenção laranja escuro (#C2410C).
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de
