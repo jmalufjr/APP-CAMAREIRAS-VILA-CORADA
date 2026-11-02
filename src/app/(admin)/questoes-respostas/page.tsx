@@ -453,6 +453,21 @@ export default function QuestoesRespostasPage() {
                     limpas e suítes sujas — explicado com detalhe na pergunta 10.
                   </>,
                   <>
+                    <strong>Calendário de reservas - Stays</strong>: uma grade igual à do calendário da
+                    Stays, com cada suíte numa linha e cada dia numa coluna. Cada reserva aparece como
+                    uma barra colorida (começa à tarde do dia da entrada e termina de manhã no dia da
+                    saída) com o nome do hóspede. A cor mostra a origem: azul escuro = Booking, verde
+                    escuro = Airbnb, verde claro = Decolar, azul claro = Expedia, amarelo escuro =
+                    reserva direta (site ou lançada à mão), vermelho escuro = bloqueio, laranja =
+                    bloqueio de manutenção e vermelho claro = outras origens. Ao lado do nome, um código
+                    mostra a situação: (Pre) pré-reserva, (Con) contrato e (Bloq) bloqueio; reserva
+                    confirmada não leva código, e reservas canceladas não aparecem. Passando o mouse (ou
+                    tocando, no celular) sobre uma barra abre um cartão com nome completo, origem,
+                    situação e período. Você escolhe o período em “De” e “Até” e clica em Atualizar. É
+                    só consulta: nada é alterado na Stays nem no app. O gerente operacional também vê
+                    essa tela.
+                  </>,
+                  <>
                     <strong>Consumo de frigobar</strong>: os totais do mês atual e do mês anterior, item
                     por item, com gráficos de participação de cada um.
                   </>,

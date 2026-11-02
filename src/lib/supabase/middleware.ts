@@ -92,7 +92,7 @@ export async function updateSession(request: NextRequest) {
         "/compras/validade",
         "/compras/baixa",
       ];
-      const prefixes = ["/dashboard/servicos-suites", "/dashboard/suites-disponiveis", "/dashboard/tarefas", "/compras/lista"];
+      const prefixes = ["/dashboard/servicos-suites", "/dashboard/suites-disponiveis", "/dashboard/calendario-stays", "/dashboard/tarefas", "/compras/lista"];
       if (!exact.includes(path) && !prefixes.some(matchesPrefix)) {
         const url = request.nextUrl.clone();
         url.pathname = "/operacional";

@@ -70,3 +70,55 @@ export async function getStaysClientName(clientId: string): Promise<string | nul
   const data = (await res.json()) as { name?: string };
   return data.name ?? null;
 }
+
+// ---------- Calendário de reservas (Stays) ----------
+
+export type StaysCalendarType = "booked" | "reserved" | "contract" | "blocked" | "maintenance";
+
+export interface StaysCalendarEntryRaw {
+  _id: string;
+  id: string; // código curto, ex.: "QK01J"
+  checkInDate: string;
+  checkOutDate: string;
+  _idlisting: string;
+  _idclient?: string; // não existe em bloqueios
+  type: StaysCalendarType;
+  partner?: { name?: string };
+  internalNote?: string;
+}
+
+// A Stays só devolve bloqueios e manutenção se o tipo for pedido
+// explicitamente, e no máximo 100 registros por vez — por isso uma consulta
+// paginada por tipo. Reservas canceladas ficam de fora de propósito.
+const CALENDAR_TYPES: StaysCalendarType[] = ["booked", "reserved", "contract", "blocked", "maintenance"];
+
+async function fetchCalendarType(
+  type: StaysCalendarType,
+  fromDate: string,
+  toDate: string
+): Promise<StaysCalendarEntryRaw[]> {
+  const all: StaysCalendarEntryRaw[] = [];
+  for (let page = 0; page < 30; page++) {
+    const url = new URL("/external/v1/booking/reservations", staysBaseUrl());
+    url.searchParams.set("from", fromDate);
+    url.searchParams.set("to", toDate);
+    url.searchParams.set("dateType", "included");
+    url.searchParams.set("type", type);
+    url.searchParams.set("limit", "100");
+    url.searchParams.set("skip", String(page * 100));
+    const res = await fetch(url, { headers: { Authorization: staysAuthHeader() }, cache: "no-store" });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Stays API respondeu ${res.status}: ${body.slice(0, 300)}`);
+    }
+    const data = (await res.json()) as StaysCalendarEntryRaw[];
+    all.push(...data);
+    if (data.length < 100) break;
+  }
+  return all;
+}
+
+export async function getStaysCalendarEntries(fromDate: string, toDate: string): Promise<StaysCalendarEntryRaw[]> {
+  const lists = await Promise.all(CALENDAR_TYPES.map((t) => fetchCalendarType(t, fromDate, toDate)));
+  return lists.flat();
+}

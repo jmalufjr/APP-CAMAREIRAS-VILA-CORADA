@@ -2865,6 +2865,29 @@ também é feita em Server Components.
     consumo. Migrações rodadas à mão na produção ANTES do código (`supabase/producao/04` e `05`).
     Histórico tem botão "Exportar CSV" da tabela de serviços (`service-log-export-button.tsx`).
 
+58. **Parte 51 — Calendário de reservas - Stays** (02/11/2026, direto em `main`): tela só de consulta
+    em `/dashboard/calendario-stays` (menu do Resumo operacional; admin e gerente), que reproduz o
+    "Calendário Geral" da Stays — suítes nas linhas, dias nas colunas, barras coloridas por origem com o
+    nome do hóspede e código de situação (Pre/Con/Bloq; confirmada sem código; canceladas ocultas) e cartão
+    ao passar o mouse/tocar (nome, origem, situação, período).
+    - **Descobertas na API da Stays (testadas com dados reais)**: `GET /booking/reservations` sem `type`
+      só devolve confirmadas; o parâmetro `type` aceita `reserved` (pré-reserva), `booked` (confirmada),
+      `contract`, `blocked`, `maintenance` e `canceled`; bloqueios e manutenção só vêm se pedidos; o
+      máximo é `limit=100` com `skip` para paginar. A origem vem de `partner.name` ("API booking.com",
+      "API Decolar", "API expedia", "Website"); sem `partner` = reserva lançada à mão. Airbnb ainda não
+      apareceu nos dados — mapeado por nome contendo "airbnb" (confirmar quando houver a primeira).
+    - **Arquivos**: `src/lib/stays/calendar.ts` (regras puras: origem, cores, códigos, posicionamento das
+      barras/faixas), `getStaysCalendarEntries` em `src/lib/stays/client.ts` (uma consulta paginada por
+      tipo, a partir de ontem — mesmo cuidado da Parte 23), `src/lib/actions/stays-calendar.ts` (junta com
+      `rooms.stays_listing_id`, busca nomes em grupos de 8 com cache de 10 min), e a tela em
+      `src/app/(admin)/dashboard/calendario-stays/`. Sem migração. `/dashboard/calendario-stays` entrou
+      na lista de prefixos do gerente em `middleware.ts`.
+    - **Lição de teste**: no navegador de teste (janela em segundo plano) até `/operacional` rodou a
+      ~1 quadro/s, e a captura de tela dava timeout mesmo com o JavaScript respondendo — não confundir com
+      travamento da aplicação; confirmar com um contador de `requestAnimationFrame` numa página simples.
+      Com o Docker reiniciado, o gateway local pode ficar sem porta (`net stop winnat` / `net start
+      winnat` em terminal administrador, depois `npx supabase start`).
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de

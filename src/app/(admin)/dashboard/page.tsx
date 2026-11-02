@@ -20,6 +20,7 @@ import {
   History,
   ChevronRight,
   Key,
+  CalendarRange,
 } from "lucide-react";
 
 function monthRange() {
@@ -36,6 +37,7 @@ const menuItems = [
     label: "Suítes vagas e limpas, disponíveis para alugar",
     icon: Key,
   },
+  { href: "/dashboard/calendario-stays", label: "Calendário de reservas - Stays", icon: CalendarRange },
   { href: "/dashboard/consumo-frigobar", label: "Consumo de frigobar", icon: Wine },
   { href: "/dashboard/consumo-bar", label: "Consumo de bar", icon: Martini },
 ];
@@ -43,7 +45,7 @@ const menuItems = [
 export default async function DashboardPage() {
   const profile = await getCurrentProfile();
   if (profile.role === "gerente_operacional") {
-    const gerenteItems = menuItems.filter((i) => i.href === "/dashboard/servicos-suites" || i.href === "/dashboard/suites-disponiveis");
+    const gerenteItems = menuItems.filter((i) => i.href === "/dashboard/servicos-suites" || i.href === "/dashboard/suites-disponiveis" || i.href === "/dashboard/calendario-stays");
     return (
       <div className="space-y-6">
         <BackLink href="/operacional" />
