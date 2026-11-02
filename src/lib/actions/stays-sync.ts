@@ -2,7 +2,25 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/actions/authz";
-import { getStaysReservationsIncluding, getStaysClientName, type StaysReservationRaw } from "@/lib/stays/client";
+import {
+  getStaysReservationsIncluding,
+  getStaysClientName,
+  getStaysListingCalendar,
+  getStaysReservationsForStats,
+  type StaysReservationRaw,
+} from "@/lib/stays/client";
+import {
+  ROOM_GROUPS,
+  CHANNELS,
+  groupOfRoom,
+  monthKeys,
+  monthEnd,
+  aggregateReservations,
+  baseAverages,
+  type GroupKey,
+  type CalendarDayRaw,
+} from "@/lib/stays/channel-stats";
+import { dayNumber, keyFromDayNumber } from "@/lib/stays/calendar";
 import { deriveWorkType, daysBetween } from "@/lib/stays/derive-planning";
 import { assignRoomsToTables, tableNumber, type RoomGuestCount } from "@/lib/stays/derive-breakfast";
 import { todayKey, tomorrowKey, yesterdayKey } from "@/lib/date";
@@ -795,10 +813,87 @@ export async function syncStaysAll(options?: SyncOptions) {
   const denied = await requireRole(["admin", "gerente_operacional"]);
   if (denied) {
     const e = { error: denied.error };
-    return { planning: e, arrivalsDepartures: e, breakfastTables: e };
+    return { planning: e, arrivalsDepartures: e, breakfastTables: e, channelStats: e };
   }
   const planning = await syncStaysPlanning(options);
   const arrivalsDepartures = await syncStaysArrivalsDepartures(options);
   const breakfastTables = await syncStaysBreakfastTables(options);
-  return { planning, arrivalsDepartures, breakfastTables };
+  const channelStats = await syncStaysChannelStats();
+  return { planning, arrivalsDepartures, breakfastTables, channelStats };
+}
+
+// Ticket médio de canais de venda (tela "Ticket médio de canais de venda"): busca na
+// Stays o preço base de cada dia (calendário de cada suíte) e as reservas dos próximos
+// 6 meses, e grava, por grupo de suítes × canal × mês, as diárias reservadas, o valor
+// cobrado nelas e o preço base médio cadastrado. A correção de preço de cada canal NÃO é
+// gravada aqui (o admin a digita na tela) — a tela aplica em cima do preço base. Roda no
+// cron diário e junto dos botões de sincronização.
+export async function syncStaysChannelStats() {
+  const supabase = createAdminClient();
+  const today = todayKey();
+  const months = monthKeys(today, 6);
+  const rangeFrom = months[0];
+  const rangeTo = monthEnd(months[months.length - 1]);
+
+  const { data: rooms, error: roomsError } = await supabase.from("rooms").select("number, stays_listing_id");
+  if (roomsError) return { error: roomsError.message };
+
+  const listingToGroup = new Map<string, GroupKey>();
+  for (const r of rooms ?? []) {
+    const group = groupOfRoom(r.number);
+    if (group && r.stays_listing_id) listingToGroup.set(r.stays_listing_id, group);
+  }
+
+  let errors = 0;
+  const calendars = new Map<string, CalendarDayRaw[]>();
+  for (const listing of listingToGroup.keys()) {
+    try {
+      calendars.set(listing, await getStaysListingCalendar(listing, rangeFrom, rangeTo));
+    } catch {
+      errors += 1;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300)); // respeita o limite de chamadas da Stays
+  }
+  // Sem nenhum calendário não há como calcular o preço cadastrado: melhor falhar do que gravar vazio.
+  if (calendars.size === 0 && listingToGroup.size > 0) {
+    return { error: "Não foi possível ler os preços cadastrados na Stays." };
+  }
+
+  let reservations;
+  try {
+    // começa um dia antes: mesmo cuidado das outras sincronizações (ver Parte 23)
+    reservations = await getStaysReservationsForStats(keyFromDayNumber(dayNumber(rangeFrom) - 1), rangeTo);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Falha ao consultar as reservas na Stays." };
+  }
+
+  const agg = aggregateReservations(reservations, listingToGroup, months);
+  const base = baseAverages(calendars, listingToGroup, months);
+
+  const rowsToSave = [];
+  for (const g of ROOM_GROUPS) {
+    for (const c of CHANNELS) {
+      for (const m of months) {
+        const cell = agg.get(`${g.key}|${c.key}|${m}`);
+        const b = base.get(`${g.key}|${m}`);
+        rowsToSave.push({
+          group_key: g.key,
+          channel: c.key,
+          month: m,
+          nights: cell?.nights ?? 0,
+          charged_total: cell?.charged ?? 0,
+          base_avg: b?.avg ?? null,
+          base_days: b?.days ?? 0,
+          synced_at: new Date().toISOString(),
+        });
+      }
+    }
+  }
+  const { error: upsertError } = await supabase.from("channel_ticket_stats").upsert(rowsToSave);
+  if (upsertError) return { error: upsertError.message };
+  // meses que já saíram da janela de 6 meses não são mais mostrados
+  await supabase.from("channel_ticket_stats").delete().lt("month", months[0]);
+
+  revalidatePath("/dashboard/ticket-medio-canais");
+  return { success: true as const, updated: rowsToSave.length, skipped: 0, errors };
 }

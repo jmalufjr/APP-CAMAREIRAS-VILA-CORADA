@@ -122,3 +122,71 @@ export async function getStaysCalendarEntries(fromDate: string, toDate: string):
   const lists = await Promise.all(CALENDAR_TYPES.map((t) => fetchCalendarType(t, fromDate, toDate)));
   return lists.flat();
 }
+
+// ---------- Ticket médio de canais de venda ----------
+
+export interface StaysCalendarDay {
+  date: string;
+  prices?: { minStay?: number; _mcval?: { BRL?: number } }[];
+}
+
+// Preço base cadastrado dia a dia de uma suíte (o mesmo da tela "Editar Preços" da
+// Stays, sem canal escolhido = preço da venda direta). Só devolve de hoje em diante.
+export async function getStaysListingCalendar(
+  listingId: string,
+  fromDate: string,
+  toDate: string
+): Promise<StaysCalendarDay[]> {
+  const url = new URL(`/external/v1/calendar/listing/${listingId}`, staysBaseUrl());
+  url.searchParams.set("from", fromDate);
+  url.searchParams.set("to", toDate);
+  const res = await fetch(url, { headers: { Authorization: staysAuthHeader() }, cache: "no-store" });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Stays API respondeu ${res.status}: ${body.slice(0, 300)}`);
+  }
+  return (await res.json()) as StaysCalendarDay[];
+}
+
+export interface StaysStatsReservationRaw {
+  _id: string;
+  id: string;
+  checkInDate: string;
+  checkOutDate: string;
+  _idlisting: string;
+  type: "booked" | "reserved" | "contract";
+  partner?: { name?: string };
+  price?: { hostingDetails?: { _f_nightPrice?: number; pricePeriods?: { days: number; _f_pricePerDay: number }[] } };
+}
+
+const STATS_TYPES: StaysStatsReservationRaw["type"][] = ["booked", "reserved", "contract"];
+
+// Reservas (confirmadas, pré-reservas e contratos — sem canceladas nem bloqueios) com o
+// detalhe de preço, paginadas de 100 em 100. Uma consulta por vez, para não estourar o
+// limite de chamadas da Stays.
+export async function getStaysReservationsForStats(
+  fromDate: string,
+  toDate: string
+): Promise<StaysStatsReservationRaw[]> {
+  const all: StaysStatsReservationRaw[] = [];
+  for (const type of STATS_TYPES) {
+    for (let page = 0; page < 30; page++) {
+      const url = new URL("/external/v1/booking/reservations", staysBaseUrl());
+      url.searchParams.set("from", fromDate);
+      url.searchParams.set("to", toDate);
+      url.searchParams.set("dateType", "included");
+      url.searchParams.set("type", type);
+      url.searchParams.set("limit", "100");
+      url.searchParams.set("skip", String(page * 100));
+      const res = await fetch(url, { headers: { Authorization: staysAuthHeader() }, cache: "no-store" });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`Stays API respondeu ${res.status}: ${body.slice(0, 300)}`);
+      }
+      const data = (await res.json()) as StaysStatsReservationRaw[];
+      all.push(...data);
+      if (data.length < 100) break;
+    }
+  }
+  return all;
+}

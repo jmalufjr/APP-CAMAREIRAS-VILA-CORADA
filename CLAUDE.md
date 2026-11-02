@@ -2896,6 +2896,32 @@ também é feita em Server Components.
     manutenção sem código "(Bloq)" (só Pre e Con), Airbnb verde médio (#15803D), reserva direta amarelo
     (#EAB308) e manutenção laranja escuro (#C2410C).
 
+60. **Parte 53 — Ticket médio de canais de venda** (02/11/2026): tela `/dashboard/ticket-medio-canais`
+    (2º item do menu do Resumo operacional, SÓ admin), 4 grupos de suítes de mesmo preço (1; 2–5; 6–9; 10–11)
+    × 5 canais (Booking, Airbnb, Expedia, Decolar, Reservas diretas) × próximos 6 meses, cada mês com 4
+    colunas: diárias reservadas, preço médio cadastrado, ticket médio cobrado e variação %.
+    - **Descobertas na API da Stays**: o preço por canal (a tela "Editar Preços" com seletor de canal) NÃO é
+      exposto; `GET /calendar/listing/{id}?from&to` devolve só o preço base dia a dia (= venda direta/Website),
+      só de hoje em diante, aceitando ~12 meses por chamada. A "correção de preço" de cada canal (Stays >
+      Dashboard de Channel Managers > canal > Configurações > Financeiro; Airbnb = 38%) também não é
+      exposta — por isso é digitada na tela (`channel_price_settings`, vazio = "—"; Website = 0).
+      Preço do canal = preço base × (1 + %/100). A API recusa parâmetros desconhecidos e devolve 429 se
+      receber muitas chamadas seguidas: sondar com pausa entre as chamadas.
+    - **Preço cobrado por diária**: `price.hostingDetails.pricePeriods` (N dias a R$ X por dia, em ordem a
+      partir do check-in); taxas (ISS) vêm à parte e ficam de fora; se os períodos não fecham com as noites,
+      divide `_f_nightPrice` igualmente. Cada noite pertence ao dia em que começa (check-in até a véspera do
+      check-out) e uma reserva que cruza o mês dá a cada mês a sua parte. Entram confirmadas, pré-reservas e
+      contratos (sem canceladas/bloqueios); direta = Website + lançadas à mão; canal "outros" fica fora.
+    - **Preço cadastrado**: média dos preços de cada dia do mês com preço (dias já passados do mês corrente
+      não vêm da Stays, então ficam de fora), tirando antes a média entre as suítes do grupo.
+    - **Código**: regras puras em `src/lib/stays/channel-stats.ts` (testadas com 14 casos), consultas em
+      `src/lib/stays/client.ts` (`getStaysListingCalendar`, `getStaysReservationsForStats`),
+      `syncStaysChannelStats` em `src/lib/actions/stays-sync.ts` (chamada por `syncStaysAll` e pelo cron
+      diário; grava `channel_ticket_stats`), `updateChannelCorrection` em `src/lib/actions/channel-stats.ts`.
+      Migração `085` (+ `supabase/producao/06-ticket-medio-canais.sql`), a rodar na produção ANTES do código.
+    - **Testado** com a Stays real no banco local (120 linhas; Suíte 1 em novembro: 15 diárias e preço base
+      médio R$ 717,52 em 29 dias, conferidos por um cálculo independente).
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de

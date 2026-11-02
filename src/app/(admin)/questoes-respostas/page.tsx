@@ -451,6 +451,20 @@ export default function QuestoesRespostasPage() {
                     limpas e suítes sujas — explicado com detalhe na pergunta 10.
                   </>,
                   <>
+                    <strong>Ticket médio de canais de venda</strong>: uma tabela, só para o admin, com os
+                    próximos 6 meses. As suítes são separadas em 4 grupos de mesmo preço (Suíte 1; Suítes 2
+                    a 5; Suítes 6 a 9; Suítes 10 e 11) e, em cada grupo, uma linha por canal: Booking,
+                    Airbnb, Expedia, Decolar e Reservas diretas (website). Cada mês tem 4 colunas:
+                    diárias reservadas (cada noite conta no dia em que começa), preço médio cadastrado (o
+                    preço de cada dia na Stays com a correção do canal, dividido pelos dias do mês),
+                    ticket médio cobrado (o que os hóspedes realmente pagaram por diária, dividindo as
+                    reservas dia a dia entre os meses, sem taxas) e a variação entre os dois. A correção
+                    de preço de cada canal (por exemplo 38% no Airbnb) é a mesma da Stays, em Dashboard de
+                    Channel Managers, Configurações, Financeiro — como a Stays não a informa ao sistema, você
+                    digita os percentuais na própria tela e atualiza se mudarem lá. Os dados são atualizados
+                    todo dia sozinhos e também quando você usa os botões de sincronização com a Stays.
+                  </>,
+                  <>
                     <strong>Calendário de reservas - Stays</strong>: uma grade igual à do calendário da
                     Stays, com cada suíte numa linha e cada dia numa coluna. Cada reserva aparece como
                     uma barra colorida (começa à tarde do dia da entrada e termina de manhã no dia da

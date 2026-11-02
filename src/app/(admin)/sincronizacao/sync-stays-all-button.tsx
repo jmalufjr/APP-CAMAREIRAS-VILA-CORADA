@@ -37,6 +37,7 @@ export function SyncStaysAllButton() {
         { label: "Planejamento Diário", r: result.planning },
         { label: "Chegadas & Saídas", r: result.arrivalsDepartures },
         { label: "Mesas do Café", r: result.breakfastTables },
+        { label: "Ticket médio de canais", r: result.channelStats },
       ];
 
       const failed = parts.filter((p) => "error" in p.r);
