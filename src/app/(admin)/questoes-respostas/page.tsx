@@ -453,12 +453,15 @@ export default function QuestoesRespostasPage() {
                   <>
                     <strong>Ticket médio de canais de venda</strong>: uma tabela, só para o admin, com os
                     próximos 6 meses. Cada suíte tem o seu bloco, com uma linha por canal: Booking, Airbnb,
-                    Expedia, Decolar e Reservas diretas (website) — os preços cadastrados na Stays variam
-                    de suíte para suíte, então não há médias entre suítes. Cada mês tem 4 colunas:
+                    Expedia, Decolar e Reservas diretas — os preços cadastrados na Stays variam
+                    de suíte para suíte, então não há médias entre suítes. Cada mês tem 5 colunas:
                     diárias reservadas (cada noite conta no dia em que começa), preço médio cadastrado (o
-                    preço de cada dia na Stays com a correção do canal, dividido pelos dias do mês),
-                    ticket médio cobrado (o que os hóspedes realmente pagaram por diária, dividindo as
-                    reservas dia a dia entre os meses, sem taxas) e a variação entre os dois. A correção
+                    preço de cada dia do mês na Stays com a correção do canal, dividido pelos dias do mês),
+                    ticket médio cadastrado (o mesmo preço cadastrado, mas só nos dias das diárias
+                    reservadas), ticket médio cobrado (o que os hóspedes realmente pagaram por diária,
+                    dividindo as reservas dia a dia entre os meses, sem taxas) e a variação, que compara o
+                    cobrado com o cadastrado nos mesmos dias — é o desconto ou ágio real de cada canal,
+                    sem o efeito de fins de semana mais caros. A correção
                     de preço de cada canal (por exemplo 38% no Airbnb) é a mesma da Stays, em Dashboard de
                     Channel Managers, Configurações, Financeiro — como a Stays não a informa ao sistema, você
                     digita os percentuais na própria tela e atualiza se mudarem lá. Os dados são atualizados

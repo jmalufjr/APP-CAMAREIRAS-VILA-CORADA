@@ -17,6 +17,7 @@ import {
   monthEnd,
   aggregateReservations,
   baseAverages,
+  basePricesByDate,
   type GroupKey,
   type CalendarDayRaw,
 } from "@/lib/stays/channel-stats";
@@ -867,7 +868,7 @@ export async function syncStaysChannelStats() {
     return { error: e instanceof Error ? e.message : "Falha ao consultar as reservas na Stays." };
   }
 
-  const agg = aggregateReservations(reservations, listingToGroup, months);
+  const agg = aggregateReservations(reservations, listingToGroup, months, basePricesByDate(calendars));
   const base = baseAverages(calendars, listingToGroup, months);
 
   const rowsToSave = [];
@@ -884,6 +885,9 @@ export async function syncStaysChannelStats() {
           charged_total: cell?.charged ?? 0,
           base_avg: b?.avg ?? null,
           base_days: b?.days ?? 0,
+          registered_total: cell?.registered ?? 0,
+          matched_nights: cell?.matchedNights ?? 0,
+          matched_charged: cell?.matchedCharged ?? 0,
           synced_at: new Date().toISOString(),
         });
       }

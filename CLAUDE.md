@@ -2921,6 +2921,13 @@ também é feita em Server Components.
       `syncStaysChannelStats` em `src/lib/actions/stays-sync.ts` (chamada por `syncStaysAll` e pelo cron
       diário; grava `channel_ticket_stats`), `updateChannelCorrection` em `src/lib/actions/channel-stats.ts`.
       Migração `085` (+ `supabase/producao/06-ticket-medio-canais.sql`), a rodar na produção ANTES do código.
+    - **Ticket médio cadastrado (migração `087`)**: 5 colunas por mês (diárias reservadas, preço médio
+      cadastrado, ticket médio cadastrado, ticket médio cobrado, variação). O ticket cadastrado soma, noite
+      por noite, o preço base cadastrado das MESMAS diárias reservadas (× correção do canal ÷ diárias) e a
+      variação compara cobrado × cadastrado nessa mesma base de dias (`registered_total`, `matched_nights`,
+      `matched_charged` em `channel_ticket_stats`). Noites sem preço cadastrado na Stays (dias já passados
+      do mês corrente) ficam fora dos dois lados desse par. Rótulo do canal: "Reservas diretas" (sem
+      "(website)").
     - **Testado** com a Stays real no banco local (120 linhas; Suíte 1 em novembro: 15 diárias e preço base
       médio R$ 717,52 em 29 dias, conferidos por um cálculo independente).
 

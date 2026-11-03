@@ -20,7 +20,7 @@ export const CHANNELS: { key: ChannelKey; label: string }[] = [
   { key: "airbnb", label: "Airbnb" },
   { key: "expedia", label: "Expedia" },
   { key: "decolar", label: "Decolar" },
-  { key: "direta", label: "Reservas diretas (website)" },
+  { key: "direta", label: "Reservas diretas" },
 ];
 
 export function groupOfRoom(roomNumber: string): GroupKey | null {
@@ -103,17 +103,38 @@ export function nightlyPrices(res: ReservationForStats): number[] | null {
 }
 
 export interface AggCell {
-  nights: number;
-  charged: number;
+  nights: number; // diárias reservadas no mês
+  charged: number; // valor cobrado nessas diárias
+  // Só as diárias que têm preço cadastrado na Stays (a mesma base de dias nos dois lados):
+  matchedNights: number;
+  matchedCharged: number; // cobrado nessas diárias
+  registered: number; // preço base cadastrado dessas mesmas diárias
+}
+
+// Preço base cadastrado de cada dia, por suíte: listing -> (data -> preço).
+export function basePricesByDate(calendarByListing: Map<string, CalendarDayRaw[]>): Map<string, Map<string, number>> {
+  const out = new Map<string, Map<string, number>>();
+  for (const [listing, days] of calendarByListing) {
+    const byDate = new Map<string, number>();
+    for (const d of days) {
+      const price = d.prices?.[0]?._mcval?.BRL;
+      if (typeof price === "number") byDate.set(d.date, price);
+    }
+    out.set(listing, byDate);
+  }
+  return out;
 }
 
 // Diárias reservadas e valor cobrado por (grupo, canal, mês), contando dia a dia —
-// uma reserva que atravessa a virada do mês dá a cada mês a sua parte das diárias.
+// uma reserva que atravessa a virada do mês dá a cada mês a sua parte das diárias. Para
+// cada diária também soma o preço base cadastrado naquele mesmo dia, de modo que o
+// "ticket cadastrado" e o "ticket cobrado" tenham exatamente a mesma base de dias.
 // Chave: `${grupo}|${canal}|${mês}`.
 export function aggregateReservations(
   reservations: ReservationForStats[],
   listingToGroup: Map<string, GroupKey>,
-  months: string[]
+  months: string[],
+  basePrices: Map<string, Map<string, number>> = new Map()
 ): Map<string, AggCell> {
   const wanted = new Set(months);
   const out = new Map<string, AggCell>();
@@ -124,13 +145,20 @@ export function aggregateReservations(
     const prices = nightlyPrices(r);
     if (!prices) continue;
     const dates = nightDates(r.checkInDate, r.checkOutDate);
+    const listingPrices = basePrices.get(r._idlisting);
     dates.forEach((date, i) => {
       const month = monthStart(date);
       if (!wanted.has(month)) return;
       const key = `${group}|${channel}|${month}`;
-      const cell = out.get(key) ?? { nights: 0, charged: 0 };
+      const cell = out.get(key) ?? { nights: 0, charged: 0, matchedNights: 0, matchedCharged: 0, registered: 0 };
       cell.nights += 1;
       cell.charged += prices[i];
+      const registered = listingPrices?.get(date);
+      if (registered !== undefined) {
+        cell.matchedNights += 1;
+        cell.matchedCharged += prices[i];
+        cell.registered += registered;
+      }
       out.set(key, cell);
     });
   }
