@@ -4411,3 +4411,18 @@ begin
   where id = p_task_id;
 end;
 $$ language plpgsql security definer;
+
+-- ===== 092: unidade padrao por categoria =====
+-- Unidade padrao por categoria de produto: produto novo cadastrado automaticamente (ex.: compra na
+-- feira) nasce com a unidade da categoria em que a IA o alocou. Padrao 'un'; Alimentos em kg.
+alter table product_categories add column if not exists default_unit text not null default 'un';
+update product_categories set default_unit = 'kg' where lower(name) = 'alimentos' and default_unit = 'un';
+
+-- ===== 093: gerente corrige compras =====
+-- Relatorio de compras: o gerente operacional tambem corrige compras (editar/excluir linhas).
+drop policy if exists "expenses_admin_update" on expenses;
+create policy "expenses_admin_update" on expenses for update using (is_admin_or_gerente());
+drop policy if exists "expenses_admin_delete" on expenses;
+create policy "expenses_admin_delete" on expenses for delete using (is_admin_or_gerente());
+drop policy if exists "exp_items_admin_delete" on expense_items;
+create policy "exp_items_admin_delete" on expense_items for delete using (is_admin_or_gerente());

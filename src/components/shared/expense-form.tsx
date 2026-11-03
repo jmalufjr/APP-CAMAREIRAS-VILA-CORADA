@@ -559,6 +559,7 @@ export function ExpenseForm({
         <ReceiptSummaryCard
           parsed={parsed}
           feira={feiraMode}
+          productOptions={costItemOptions.filter((o) => o.is_product).map((o) => ({ id: o.id, name: o.name, unit: o.unit }))}
           onCancel={() => setFeiraMode(false)}
           isReading={isReadingAI}
           receiptFile={receiptFile}

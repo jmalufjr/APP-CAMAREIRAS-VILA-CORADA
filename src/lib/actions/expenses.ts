@@ -707,7 +707,8 @@ export async function getExpenseWithItems(id: string): Promise<ExpenseWithItems 
       "description, quantity, unit_cost, subtotal, discount, freight_and_other_costs, recoverable_tax, non_recoverable_tax, cost_item_id, fixed_asset_id, purchase_quantity, purchase_unit, purchase_unit_cost, expiry_date, for_breakfast, fixed_assets(name)"
     )
     .eq("expense_id", id)
-    .order("created_at");
+    .order("created_at")
+    .order("id");
 
   type Raw = {
     description: string;

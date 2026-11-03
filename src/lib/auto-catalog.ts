@@ -41,6 +41,12 @@ export async function ensureProduct(
     categoryId = (fb?.id as string | undefined) ?? null;
   }
 
+  let unit = "un";
+  if (categoryId) {
+    const { data: cat } = await admin.from("product_categories").select("default_unit").eq("id", categoryId).maybeSingle();
+    if (cat?.default_unit) unit = cat.default_unit as string;
+  }
+
   let ledgerAccount = "estoque-outros";
   let links: { center_id: string; alloc_pct: number }[] = [];
   if (categoryId) {
@@ -93,7 +99,7 @@ export async function ensureProduct(
     .from("inventory_items")
     .insert({
       name,
-      unit: "un",
+      unit,
       reorder_point: 0,
       coverage_days: 7,
       shelf_life_days: null,

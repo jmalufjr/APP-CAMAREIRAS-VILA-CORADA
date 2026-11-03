@@ -3007,6 +3007,21 @@ também é feita em Server Components.
       para testar usei temporariamente portas 243xx em `supabase/config.toml`/`.env.local` (revertidos). Para voltar ao
       normal: `net stop winnat` / `net start winnat` (terminal administrador) e `npx supabase start`.
 
+65. **Parte 58 — Compra na Feira com autocompletar e Relatório de compras** (03/11/2026, direto em `main`):
+    - **Compra na Feira** (`receipt-summary-card.tsx`, modo `feira`): o nome do item completa a partir dos produtos
+      cadastrados (datalist); nome novo é classificado pela IA (`previewFeiraItem`, `src/lib/actions/feira.ts`) numa
+      categoria existente ao sair do campo, e a unidade da categoria aparece ao lado da quantidade. Ao salvar, o
+      produto novo nasce com essa categoria e unidade (`ensureProduct` lê `product_categories.default_unit`, migração
+      `092`; Alimentos = kg, demais = un — sem tela para editar a unidade ainda).
+    - **Relatório de compras** (`/compras/relatorio`, admin e gerente; menu do Módulo Contábil logo abaixo de Lançar
+      Compra): compras dos últimos 30 dias lidas do banco (o que está REGISTRADO), uma linha de cabeçalho (data,
+      fornecedor, nº da nota) + uma por item, compras separadas por linha de meia altura. Tudo editável; "Salvar" envia só
+      as compras alteradas por `savePurchaseCorrections` (reaproveita `updateExpense`: estoque e lançamento contábil
+      refeitos). Item com nome novo é recusado (só produtos cadastrados); preço/quantidade corrigidos zeram
+      desconto/frete/tributos da linha. Migração `093` deixa o gerente editar/excluir compras (RLS).
+    - Produção: `supabase/producao/13` e `14`. Testado no banco local (compra, correção, livro fechando em 27,00 e
+      gerente via SQL); não testado no navegador nem a classificação real pela IA (sem chave local).
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de

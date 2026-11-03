@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import type { ParsedReceipt, ParsedReceiptItem } from "@/lib/actions/receipt-ai";
 import { createReceiptPurchase } from "@/lib/actions/receipt-purchase";
+import { previewFeiraItem } from "@/lib/actions/feira";
 import type { ReceiptPurchaseInput } from "@/lib/actions/receipt-purchase";
 import { compressImageForUpload } from "@/lib/image-compression";
 import { isPendingPaymentMethod, SUPPLIER_PAYMENT_METHOD_LABELS, SUPPLIER_PAYMENT_METHOD_OPTIONS } from "@/lib/payment-method";
@@ -27,11 +28,14 @@ interface FeiraRow {
   unit_cost: string;
   quantity: string;
   breakfast: boolean;
+  matchedId: string | null;
+  categoryId: string | null;
+  unit: string;
 }
 let feiraRowSeq = 0;
 function emptyRow(): FeiraRow {
   feiraRowSeq += 1;
-  return { id: feiraRowSeq, description: "", unit_cost: "", quantity: "1", breakfast: false };
+  return { id: feiraRowSeq, description: "", unit_cost: "", quantity: "1", breakfast: false, matchedId: null, categoryId: null, unit: "" };
 }
 
 function formatBr(key: string): string {
@@ -52,6 +56,7 @@ export function ReceiptSummaryCard({
   onSaved,
   feira,
   onCancel,
+  productOptions = [],
 }: {
   parsed: ParsedReceipt | null;
   isReading: boolean;
@@ -61,6 +66,8 @@ export function ReceiptSummaryCard({
   // Compra na feira: o mesmo card, mas todo editável (fornecedor "Feirante", nota "sem nota").
   feira?: boolean;
   onCancel?: () => void;
+  // Produtos já cadastrados (para completar o nome na compra na feira).
+  productOptions?: { id: string; name: string; unit: string | null }[];
 }) {
   const [breakfast, setBreakfast] = useState<Record<number, boolean>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -81,9 +88,9 @@ export function ReceiptSummaryCard({
     unit_cost: num(r.unit_cost),
     subtotal: Math.round(num(r.quantity) * num(r.unit_cost) * 100) / 100,
     kind: "produto",
-    matched_cost_item_id: null,
+    matched_cost_item_id: r.matchedId,
     matched_asset_catalog_item_id: null,
-    suggested_category_id: null,
+    suggested_category_id: r.categoryId,
     suggested_name: r.description.trim(),
   }));
   const feiraBreakfast = validRows.map((r) => r.breakfast);
@@ -101,6 +108,27 @@ export function ReceiptSummaryCard({
     setRows([emptyRow()]);
     setPaymentMethod("");
     setDueDate("");
+  }
+  // Digitando: se o texto bate com um produto já cadastrado, usa o produto e a unidade dele;
+  // senão, a unidade só aparece depois que a IA alocar a categoria (ao sair do campo).
+  function onDescriptionChange(id: number, text: string) {
+    const hit = productOptions.find((p) => p.name.toLowerCase() === text.trim().toLowerCase());
+    updateRow(id, { description: text, matchedId: hit?.id ?? null, unit: hit ? hit.unit ?? "un" : "", categoryId: null });
+  }
+  async function onDescriptionBlur(id: number, text: string) {
+    const name = text.trim();
+    if (!name) return;
+    const hit = productOptions.find((p) => p.name.toLowerCase() === name.toLowerCase());
+    if (hit) return;
+    const res = await previewFeiraItem(name);
+    if ("error" in res) return;
+    setRows((prev) =>
+      prev.map((r) =>
+        r.id === id && r.description.trim() === name
+          ? { ...r, matchedId: res.matched_cost_item_id, categoryId: res.suggested_category_id, unit: res.unit }
+          : r
+      )
+    );
   }
   function updateRow(id: number, patch: Partial<FeiraRow>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -247,13 +275,22 @@ export function ReceiptSummaryCard({
                           </Button>
                         </td>
                         <td className="px-3 py-2">
-                          <Input value={r.description} onChange={(e) => updateRow(r.id, { description: e.target.value })} placeholder="Item" />
+                          <Input
+                            list="feira-products"
+                            value={r.description}
+                            onChange={(e) => onDescriptionChange(r.id, e.target.value)}
+                            onBlur={(e) => onDescriptionBlur(r.id, e.target.value)}
+                            placeholder="Item"
+                          />
                         </td>
                         <td className="px-3 py-2">
                           <Input className="w-28" inputMode="decimal" value={r.unit_cost} onChange={(e) => updateRow(r.id, { unit_cost: e.target.value })} placeholder="0,00" />
                         </td>
                         <td className="px-3 py-2">
-                          <Input className="w-24" inputMode="decimal" value={r.quantity} onChange={(e) => updateRow(r.id, { quantity: e.target.value })} />
+                          <div className="flex items-center gap-1">
+                            <Input className="w-24" inputMode="decimal" value={r.quantity} onChange={(e) => updateRow(r.id, { quantity: e.target.value })} />
+                            <span className="w-8 text-xs text-muted-foreground">{r.unit}</span>
+                          </div>
                         </td>
                         <td className="px-3 py-2 text-center">
                           <Checkbox
@@ -266,6 +303,11 @@ export function ReceiptSummaryCard({
                     ))}
                   </tbody>
                 </table>
+                <datalist id="feira-products">
+                  {productOptions.map((p) => (
+                    <option key={p.id} value={p.name} />
+                  ))}
+                </datalist>
               </div>
               <Button type="button" variant="outline" size="icon" aria-label="Adicionar linha" onClick={() => setRows((prev) => [...prev, emptyRow()])}>
                 <Plus size={16} />

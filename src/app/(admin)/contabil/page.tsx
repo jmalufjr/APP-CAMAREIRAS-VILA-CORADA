@@ -16,6 +16,7 @@ import {
   FileBarChart,
   ListChecks,
   PackageMinus,
+  FileSpreadsheet,
 } from "lucide-react";
 
 // Módulo Contábil — Levas 1/2/3/4/5 trouxeram o plano de contas contábil,
@@ -27,6 +28,7 @@ import {
 // bancos" (PRD seção 9.1), lido direto do livro de lançamentos.
 const menuItems = [
   { href: "/compras/nova", label: "Lançar Compra", icon: Plus },
+  { href: "/compras/relatorio", label: "Relatório de compras", icon: FileSpreadsheet },
   { href: "/despesas/nova", label: "Lançar Despesa", icon: Receipt },
   { href: "/compras/lista", label: "Lista de compras", icon: ShoppingBasket },
   { href: "/compras/validade", label: "Produtos com data de validade próximo ao vencimento", icon: CalendarClock },
@@ -43,7 +45,7 @@ function fmt(v: number): string {
   return `R$ ${v.toFixed(2)}`;
 }
 
-const GERENTE_HREFS = new Set(["/compras/nova", "/compras/lista", "/compras/validade", "/compras/baixa"]);
+const GERENTE_HREFS = new Set(["/compras/nova", "/compras/relatorio", "/compras/lista", "/compras/validade", "/compras/baixa"]);
 
 export default async function ModuloContabilPage() {
   const profile = await getCurrentProfile();

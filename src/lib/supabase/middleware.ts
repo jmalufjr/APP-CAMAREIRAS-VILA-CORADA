@@ -90,6 +90,7 @@ export async function updateSession(request: NextRequest) {
         "/mesas/gerenciar",
         "/checklists",
         "/compras/nova",
+        "/compras/relatorio",
         "/compras/validade",
         "/compras/baixa",
       ];
