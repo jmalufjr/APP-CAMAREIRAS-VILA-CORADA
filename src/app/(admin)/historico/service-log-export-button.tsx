@@ -3,7 +3,7 @@
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { downloadCsv } from "@/lib/csv-export";
-import { TASK_TYPE_LABELS } from "@/lib/task-type";
+import { taskTypeLabel } from "@/lib/task-type";
 import { formatTimePt, formatDurationPt, effectiveServiceStart } from "@/lib/date";
 import type { ServiceLogRow } from "@/app/(admin)/dashboard/service-log-table";
 
@@ -42,7 +42,7 @@ export function ServiceLogExportButton({ rows }: { rows: ServiceLogRow[] }) {
             return [
               r.date,
               r.room_number,
-              TASK_TYPE_LABELS[r.task_type],
+              taskTypeLabel(r.task_type, r.extra_cleaning),
               r.camareira_name ?? "",
               time(inicio),
               time(r.finished_at),

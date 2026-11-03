@@ -2980,6 +2980,33 @@ também é feita em Server Components.
       avisa; dinheiro (→ caixa) e débito (→ banco). Não testado: a leitura real pela IA e o clique nos botões
       no navegador. `parseReceiptWithAI` ainda usa o modelo `claude-sonnet-5`.
 
+64. **Parte 57 — Limpeza adicional** (03/11/2026, direto em `main`; requisitos e decisões em
+    `PRD_limpeza_adicional.md`): acréscimo de 4 itens extras (filtro do ar, topo do armário, base e espelho
+    da cama) a uma tarefa de troca / saída com chegada / somente saída, no máximo 1x por semana (seg–dom) por
+    suíte, feito por **duas camareiras**.
+    - **Dados**: enum `checklist_type` ganhou `limpeza_adicional` (migração `090`, rodar SOZINHA); `091` cria
+      `daily_room_tasks.extra_cleaning`/`second_assigned_to`/`second_claimed_at`, os 4 itens (+ vínculo a todas as
+      suítes), a política `drt_camareira_select_second` e as funções `claim_extra_cleaning_second` (nova),
+      `cancel_own_claimed_task`, `toggle_daily_room_task_check`, `release_daily_room_task` e `claim_review`
+      (ajustadas). Produção: `supabase/producao/11` e `12`.
+    - **Alocação**: `src/lib/extra-cleaning.ts` (`planExtraCleaning`, pura, 13 casos testados) + `allocateExtraCleaning`
+      em `stays-sync.ts`, chamada no fim de `syncStaysPlanning` (hoje e amanhã, com ou sem `force`; também no cron).
+      Teto 3 (seg–qua), 2 (qui), 3 (sex–dom); +1 quando dias anteriores seg–qui ficaram abaixo do teto; só tarefas
+      pendentes sem camareira; preferência troca > saída com chegada > somente saída; suítes sem limpeza adicional na
+      semana anterior passam na frente. Recalcula completando vagas; nunca mexe em tarefa escolhida/iniciada.
+    - **Duas camareiras**: a 1ª escolha é a `claimTask` de sempre; a 2ª (`claimExtraCleaningSecond`) define `claimed_at`
+      (início) e libera o checklist, que só a 1ª vê. A 2ª cancela só a vaga; a 1ª cancela tudo e devolve ao pool.
+      Revisora nunca é nenhuma das duas. Comissão e histórico contam as duas (`getServiceCountsByCamareira`,
+      `getCamareiraRoster`, registro de serviços); rótulo `taskTypeLabel(tipo, extra)` ("Troca com Limpeza adicional").
+    - **Telas**: nova lista em Listas operacionais → Check lists de serviços (`/checklists/limpeza_adicional`, admin e
+      gerente); `SecondClaimCard` e papel de 2ª camareira em `tasks-board.tsx`; etiqueta no planejamento. Os itens extras
+      vêm sempre depois dos do serviço base (`sortChecksExtrasLast`).
+    - **Testado** no banco local: alocação real contra a Stays (2 suítes marcadas, idempotente) e as funções por
+      sessão simulada (segunda escolha, bloqueios, início, cancelamentos, revisora). **Não testado**: cliques no navegador.
+    - **Ambiente local**: o Windows reservou as portas 54040–54639 (Hyper-V), então o Supabase local não sobe nelas;
+      para testar usei temporariamente portas 243xx em `supabase/config.toml`/`.env.local` (revertidos). Para voltar ao
+      normal: `net stop winnat` / `net start winnat` (terminal administrador) e `npx supabase start`.
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de

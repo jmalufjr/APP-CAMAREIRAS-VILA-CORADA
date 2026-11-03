@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { TASK_TYPE_LABELS } from "@/lib/task-type";
+import { taskTypeLabel } from "@/lib/task-type";
 import { formatDateShortPt, formatTimePt, formatDurationPt, effectiveServiceStart } from "@/lib/date";
 import type { ChecklistType } from "@/lib/types";
 
@@ -11,6 +11,7 @@ export interface ServiceLogRow {
   date: string;
   room_number: string;
   task_type: ChecklistType;
+  extra_cleaning: boolean;
   claimed_at: string | null;
   started_at: string | null;
   finished_at: string | null;
@@ -59,7 +60,7 @@ export function ServiceLogTable({ rows, emptyText }: { rows: ServiceLogRow[]; em
             >
               <TableCell>{formatDateShortPt(r.date)}</TableCell>
               <TableCell>{r.room_number}</TableCell>
-              <TableCell>{TASK_TYPE_LABELS[r.task_type]}</TableCell>
+              <TableCell>{taskTypeLabel(r.task_type, r.extra_cleaning)}</TableCell>
               <TableCell>{r.camareira_name ?? "—"}</TableCell>
               <TableCell>{time(inicio)}</TableCell>
               <TableCell>{time(r.finished_at)}</TableCell>

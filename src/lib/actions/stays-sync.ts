@@ -25,6 +25,7 @@ import { dayNumber, keyFromDayNumber } from "@/lib/stays/calendar";
 import { deriveWorkType, daysBetween } from "@/lib/stays/derive-planning";
 import { assignRoomsToTables, tableNumber, type RoomGuestCount } from "@/lib/stays/derive-breakfast";
 import { todayKey, tomorrowKey, yesterdayKey } from "@/lib/date";
+import { planExtraCleaning, weekStartKey, EXTRA_BASE_TYPES, type ExtraBaseType } from "@/lib/extra-cleaning";
 import { revalidatePath } from "next/cache";
 
 // Existe algum lançamento de verdade (frigobar ou bar) numa conta? Usado
@@ -244,6 +245,96 @@ export interface SyncOptions {
 // ninguém logado — ver src/app/api/cron/stays-sync/route.ts). O cron
 // chama sem `force` (respeita a regra de preferência); o botão manual de
 // cada tela chama com `force: true`.
+// Limpeza adicional (PRD_limpeza_adicional.md): marca, entre as tarefas de troca / saída com chegada /
+// somente saída ainda pendentes e sem camareira, as que recebem o acréscimo nesta semana, e copia os
+// itens extras para o checklist delas. Complementa as vagas que faltam; nunca mexe em tarefa já
+// escolhida, iniciada ou já marcada. Roda a cada sincronização (hoje e amanhã).
+async function allocateExtraCleaning(supabase: ReturnType<typeof createAdminClient>, days: string[]) {
+  const addDays = (key: string, n: number) => {
+    const [y, m, d] = key.split("-").map(Number);
+    return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+  };
+  const weeks = Array.from(new Set(days.map((d) => weekStartKey(d))));
+  let marked = 0;
+
+  for (const wk of weeks) {
+    const weekDays = days.filter((d) => weekStartKey(d) === wk);
+    const weekEnd = addDays(wk, 6);
+
+    const { data: flaggedRows } = await supabase
+      .from("daily_room_tasks")
+      .select("date, room_id")
+      .eq("extra_cleaning", true)
+      .neq("status", "cancelado")
+      .gte("date", wk)
+      .lte("date", weekEnd);
+    const flagged = (flaggedRows ?? []).map((r) => ({ date: r.date as string, roomId: r.room_id as string }));
+
+    // Suítes que ficaram sem a limpeza adicional na semana anterior vêm primeiro (só se houve
+    // alguma limpeza adicional lá — na primeira semana de uso ninguém tem prioridade).
+    const { data: prevRows } = await supabase
+      .from("daily_room_tasks")
+      .select("room_id")
+      .eq("extra_cleaning", true)
+      .neq("status", "cancelado")
+      .gte("date", addDays(wk, -7))
+      .lte("date", addDays(wk, -1));
+    let priorityRooms = new Set<string>();
+    if ((prevRows ?? []).length > 0) {
+      const done = new Set((prevRows ?? []).map((r) => r.room_id as string));
+      const { data: allRooms } = await supabase.from("rooms").select("id").eq("active", true);
+      priorityRooms = new Set((allRooms ?? []).map((r) => r.id as string).filter((id) => !done.has(id)));
+    }
+
+    const { data: taskRows } = await supabase
+      .from("daily_room_tasks")
+      .select("id, date, room_id, task_type, rooms(number)")
+      .in("date", weekDays)
+      .in("task_type", EXTRA_BASE_TYPES)
+      .eq("status", "pendente")
+      .is("assigned_to", null)
+      .eq("extra_cleaning", false);
+
+    const candidates = (taskRows ?? []).map((t) => {
+      const room = t.rooms as unknown as { number: string } | { number: string }[] | null;
+      const number = Array.isArray(room) ? room[0]?.number : room?.number;
+      return {
+        taskId: t.id as string,
+        date: t.date as string,
+        roomId: t.room_id as string,
+        roomNumber: Number(number) || 0,
+        type: t.task_type as ExtraBaseType,
+      };
+    });
+
+    const chosen = planExtraCleaning({ days: weekDays, flagged, candidates, priorityRooms });
+    for (const taskId of chosen) {
+      const cand = candidates.find((c) => c.taskId === taskId)!;
+      const { error } = await supabase
+        .from("daily_room_tasks")
+        .update({ extra_cleaning: true })
+        .eq("id", taskId)
+        .eq("status", "pendente")
+        .is("assigned_to", null);
+      if (error) continue;
+
+      const { data: items } = await supabase
+        .from("room_checklist_items")
+        .select("checklist_item_id, checklist_items!inner(type, active)")
+        .eq("room_id", cand.roomId)
+        .eq("checklist_items.type", "limpeza_adicional")
+        .eq("checklist_items.active", true);
+      if (items && items.length > 0) {
+        await supabase.from("daily_room_task_checks").insert(
+          items.map((i) => ({ daily_room_task_id: taskId, checklist_item_id: i.checklist_item_id }))
+        );
+      }
+      marked++;
+    }
+  }
+  return marked;
+}
+
 export async function syncStaysPlanning(options?: SyncOptions) {
   const force = options?.force ?? false;
   const supabase = createAdminClient();
@@ -403,10 +494,12 @@ export async function syncStaysPlanning(options?: SyncOptions) {
     }
   }
 
+  const extraMarked = await allocateExtraCleaning(supabase, dates);
+
   revalidatePath("/planejamento");
   revalidatePath("/tarefas");
   revalidatePath("/dashboard");
-  return { success: true, updated, skipped };
+  return { success: true, updated, skipped, extraMarked };
 }
 
 // Sincroniza Chegadas & Saídas (hoje + amanhã) com as reservas da Stays —

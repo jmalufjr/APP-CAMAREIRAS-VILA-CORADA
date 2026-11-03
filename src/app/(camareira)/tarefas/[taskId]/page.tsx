@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { BackLink } from "@/components/shared/back-link";
-import { TASK_TYPE_LABELS } from "@/lib/task-type";
+import { taskTypeLabel } from "@/lib/task-type";
 import type { ChecklistType, DailyRoomTaskOccurrence } from "@/lib/types";
 import { getMinibarConsumptionForRoom } from "@/lib/actions/minibar";
 import { resolveAutoMinibarGuestSlot } from "@/lib/room-bills";
@@ -11,6 +11,12 @@ import { ChecklistDetail } from "@/components/shared/checklist-detail";
 import { ReviewPanel } from "@/components/shared/review-panel";
 import { CorrectionPanel } from "@/components/shared/correction-panel";
 import { getCurrentProfile } from "@/lib/actions/session";
+
+// Itens da Limpeza adicional vêm depois dos do serviço base (cada grupo na própria ordem).
+function sortChecksExtrasLast<T extends { checklist_items?: { type?: string; position?: number } | null }>(rows: T[]): T[] {
+  const extra = (r: T) => (r.checklist_items?.type === "limpeza_adicional" ? 1 : 0);
+  return [...rows].sort((a, b) => extra(a) - extra(b) || (a.checklist_items?.position ?? 0) - (b.checklist_items?.position ?? 0));
+}
 
 export default async function TaskDetailPage({
   params,
@@ -36,7 +42,7 @@ export default async function TaskDetailPage({
   const [{ data: checks }, { data: occurrencesRaw }, { data: categories }, minibar] = await Promise.all([
     supabase
       .from("daily_room_task_checks")
-      .select("*, checklist_items(label, description, position)")
+      .select("*, checklist_items(label, description, position, type)")
       .eq("daily_room_task_id", taskId)
       .order("checklist_items(position)"),
     supabase
@@ -70,6 +76,10 @@ export default async function TaskDetailPage({
   const isCorrector =
     (task.status === "aguardando_correcao" || task.status === "em_correcao") && task.assigned_to === profile.id;
 
+  // Limpeza adicional ainda sem a 2ª camareira: o checklist só começa depois que ela escolher.
+  const waitingSecond =
+    task.extra_cleaning && !task.second_assigned_to && (task.status === "pendente" || task.status === "em_andamento");
+
   const room = (task as unknown as { rooms: { number: string; name: string | null } }).rooms;
 
   return (
@@ -77,12 +87,17 @@ export default async function TaskDetailPage({
       <BackLink href="/tarefas" />
       <PageHeader
         title={`Suíte ${room.number}`}
-        subtitle={`Checklist de ${TASK_TYPE_LABELS[task.task_type as ChecklistType].toLowerCase()}`}
+        subtitle={`Checklist de ${taskTypeLabel(task.task_type as ChecklistType, task.extra_cleaning).toLowerCase()}`}
       />
-      {isReviewer ? (
+      {waitingSecond && task.assigned_to === profile.id ? (
+        <p className="rounded-lg border border-border bg-muted/40 p-4 text-sm">
+          Esta é uma <strong>limpeza adicional</strong>: ela é feita por duas camareiras. O checklist só começa depois que
+          uma segunda camareira escolher este serviço na tela “Minhas suítes”.
+        </p>
+      ) : isReviewer ? (
         <ReviewPanel
           task={task}
-          checks={checks ?? []}
+          checks={sortChecksExtrasLast(checks ?? [])}
           occurrences={occurrences}
           categories={categories ?? []}
           executorName={nameOf(task.assigned_to)}
@@ -90,7 +105,7 @@ export default async function TaskDetailPage({
       ) : isCorrector ? (
         <CorrectionPanel
           task={task}
-          checks={checks ?? []}
+          checks={sortChecksExtrasLast(checks ?? [])}
           minibar={minibar}
           minibarGuestSlot={minibarGuestSlot}
           reviewerName={nameOf(task.reviewed_by)}
@@ -98,7 +113,7 @@ export default async function TaskDetailPage({
       ) : (
         <ChecklistDetail
           task={task}
-          checks={checks ?? []}
+          checks={sortChecksExtrasLast(checks ?? [])}
           occurrences={occurrences}
           categories={categories ?? []}
           minibar={minibar}

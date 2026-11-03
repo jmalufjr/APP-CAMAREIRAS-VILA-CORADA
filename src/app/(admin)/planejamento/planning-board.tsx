@@ -87,6 +87,11 @@ export function PlanningBoard({
                       ))}
                     </SelectContent>
                   </Select>
+                  {task?.extra_cleaning && (
+                    <Badge variant="outline" className="mt-1">
+                      + Limpeza adicional
+                    </Badge>
+                  )}
                 </TableCell>
                 <TableCell>
                   {!task ? (
@@ -94,6 +99,7 @@ export function PlanningBoard({
                   ) : camareiraName ? (
                     <Badge variant={task.status === "concluido" ? "default" : "outline"}>
                       {camareiraName}
+                      {task.second_assigned_to && ` e ${camareiraById.get(task.second_assigned_to) ?? "2ª camareira"}`}
                       {task.status === "concluido" && " · entregue"}
                     </Badge>
                   ) : (

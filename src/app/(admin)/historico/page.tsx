@@ -36,6 +36,7 @@ interface TaskWithOccurrences {
   started_at: string | null;
   finished_at: string | null;
   profiles: { name: string } | null;
+  second: { name: string } | null;
   daily_room_task_occurrences: {
     id: string;
     status: string;
@@ -85,7 +86,7 @@ export default async function HistoricoPage({
     supabase
       .from("daily_room_tasks")
       .select(
-        "date, task_type, status, assigned_to, claimed_at, started_at, finished_at, profiles!daily_room_tasks_assigned_to_fkey(name), daily_room_task_occurrences(id, status, occurrence_categories(name))"
+        "date, task_type, status, assigned_to, claimed_at, started_at, finished_at, profiles!daily_room_tasks_assigned_to_fkey(name), second:profiles!daily_room_tasks_second_assigned_to_fkey(name), daily_room_task_occurrences(id, status, occurrence_categories(name))"
       )
       .gte("date", from)
       .lte("date", to)
@@ -134,16 +135,16 @@ export default async function HistoricoPage({
         commissionRate={commissionRate}
         barCommission={barCommission}
         suitesCafeCommission={suitesCafeCommission}
-        tasks={taskRows.map((t) => ({
+        tasks={taskRows.flatMap((t) => [t.profiles?.name ?? "—", ...(t.second?.name ? [t.second.name] : [])].map((camareira) => ({
           date: t.date,
           task_type: t.task_type,
-          camareira: t.profiles?.name ?? "—",
+          camareira,
           claimed_at: t.claimed_at,
           started_at: t.started_at,
           finished_at: t.finished_at,
           occurrences: t.daily_room_task_occurrences.length,
           occurrencesResolved: t.daily_room_task_occurrences.filter((o) => o.status === "resolvida").length,
-        }))}
+        })))}
       />
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">

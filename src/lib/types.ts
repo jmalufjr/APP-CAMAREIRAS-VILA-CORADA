@@ -1,5 +1,5 @@
 export type UserRole = "admin" | "camareira" | "manutencao" | "gerente_operacional";
-export type ChecklistType = "arrumacao" | "preparacao" | "troca" | "somente_chegada" | "somente_saida";
+export type ChecklistType = "arrumacao" | "preparacao" | "troca" | "somente_chegada" | "somente_saida" | "limpeza_adicional";
 export type TaskStatus =
   | "pendente"
   | "em_andamento"
@@ -169,6 +169,10 @@ export interface DailyRoomTask {
   cancelled_by: string | null;
   cancelled_at: string | null;
   stays_locked: boolean;
+  // Limpeza adicional (PRD_limpeza_adicional.md): acréscimo ao serviço base, feito por duas camareiras.
+  extra_cleaning: boolean;
+  second_assigned_to: string | null;
+  second_claimed_at: string | null;
   // Revisão e correção (camareira revisora).
   claimed_at: string | null;
   reviewed_by: string | null;

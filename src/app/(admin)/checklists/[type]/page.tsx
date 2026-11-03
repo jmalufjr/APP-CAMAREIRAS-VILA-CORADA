@@ -6,7 +6,7 @@ import { BackLink } from "@/components/shared/back-link";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
 import { ChecklistItemsPanel } from "../checklist-items-panel";
 
-const VALID_TYPES: ChecklistType[] = ["arrumacao", "preparacao", "troca", "somente_saida", "somente_chegada"];
+const VALID_TYPES: ChecklistType[] = ["arrumacao", "preparacao", "troca", "somente_saida", "somente_chegada", "limpeza_adicional"];
 
 export default async function ChecklistTypePage({
   params,
@@ -35,8 +35,12 @@ export default async function ChecklistTypePage({
     <div className="space-y-6">
       <BackLink href="/checklists/servicos-suites" />
       <PageHeader
-        title={TASK_TYPE_LABELS[checklistType]}
-        subtitle="Gerencie os itens deste checklist e a ordem em que aparecem para a camareira."
+        title={checklistType === "limpeza_adicional" ? "Limpeza adicional (itens extras)" : TASK_TYPE_LABELS[checklistType]}
+        subtitle={
+          checklistType === "limpeza_adicional"
+            ? "Itens acrescentados ao checklist de troca, saída com chegada ou somente saída quando a suíte recebe a limpeza adicional da semana."
+            : "Gerencie os itens deste checklist e a ordem em que aparecem para a camareira."
+        }
       />
       <ChecklistItemsPanel
         type={checklistType}

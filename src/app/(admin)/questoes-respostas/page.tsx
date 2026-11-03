@@ -215,6 +215,30 @@ export default function QuestoesRespostasPage() {
                 disponíveis pra qualquer uma escolher de novo, e tudo que já tinha sido preenchido
                 naquela tentativa (itens marcados, ocorrências, observação) é apagado.
               </P>
+              <SubHeading>Limpeza adicional (uma vez por semana, por suíte)</SubHeading>
+              <P>
+                Uma vez por semana (de segunda a domingo), cada suíte recebe uma <strong>limpeza adicional</strong>:
+                quatro itens extras (filtro do ar condicionado, topo do armário, base da cama e espelho da cama)
+                acrescentados ao checklist de uma <strong>troca</strong>, de uma <strong>saída com chegada</strong> ou
+                de uma <strong>somente saída</strong>. No Planejamento Diário aparece uma etiqueta “+ Limpeza adicional”
+                e, nas telas da camareira, o nome fica, por exemplo, “Troca com Limpeza adicional”.
+              </P>
+              <P>
+                O sistema escolhe sozinho, a cada sincronização com a Stays, quais suítes recebem: no máximo 3 por dia de
+                segunda a quarta e 2 na quinta (se algum dia ficar abaixo do máximo, os dias seguintes podem ter uma a
+                mais, para as 11 suítes serem atendidas de segunda a quinta). O que sobrar vai para sexta, sábado e
+                domingo (até 3 por dia). Entre as suítes do dia, a preferência é troca, depois saída com chegada, depois
+                somente saída. Uma suíte que ficou sem a limpeza adicional na semana anterior passa na frente. Serviços
+                já escolhidos ou iniciados nunca são alterados.
+              </P>
+              <P>
+                Esse serviço é feito por <strong>duas camareiras</strong>. A primeira escolhe como sempre e é a única que
+                vê e preenche o checklist; a segunda escolhe depois, na seção “Limpeza adicional — falta a 2ª camareira”.
+                O serviço só pode começar quando a segunda escolher, e o horário de início é o da escolha dela. Ele conta
+                para as duas (comissão, histórico, registro de serviços), e nenhuma das duas pode ser a revisora. Os
+                quatro itens extras são editados em “Listas operacionais → Check lists de serviços nas suítes → Limpeza
+                adicional (itens extras)”, pelo admin e pelo gerente operacional.
+              </P>
             </div>
           </AccordionPanel>
         </AccordionItem>

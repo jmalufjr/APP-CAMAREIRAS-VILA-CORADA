@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { BackLink } from "@/components/shared/back-link";
-import { TASK_TYPE_LABELS } from "@/lib/task-type";
+import { taskTypeLabel } from "@/lib/task-type";
 import { formatDatePt, formatTimePt, formatDurationPt } from "@/lib/date";
 import type { ChecklistType, DailyRoomTaskOccurrence } from "@/lib/types";
 import { ChecklistDetail } from "@/components/shared/checklist-detail";
@@ -17,6 +17,12 @@ import { signOccurrencePhotoUrls } from "@/lib/occurrence-photos";
 // trava tudo (checkboxes, formulários) quando o status é "concluido". Não
 // recebe `minibar` (edição): em vez disso recebe `minibarSnapshot`, um
 // retrato somente-leitura da conta vigente na data da tarefa.
+// Itens da Limpeza adicional vêm depois dos do serviço base (cada grupo na própria ordem).
+function sortChecksExtrasLast<T extends { checklist_items?: { type?: string; position?: number } | null }>(rows: T[]): T[] {
+  const extra = (r: T) => (r.checklist_items?.type === "limpeza_adicional" ? 1 : 0);
+  return [...rows].sort((a, b) => extra(a) - extra(b) || (a.checklist_items?.position ?? 0) - (b.checklist_items?.position ?? 0));
+}
+
 export default async function AdminTaskDetailPage({
   params,
 }: {
@@ -27,7 +33,7 @@ export default async function AdminTaskDetailPage({
 
   const { data: task } = await supabase
     .from("daily_room_tasks")
-    .select("*, rooms(number, name), profiles!daily_room_tasks_assigned_to_fkey(name), reviewer:profiles!daily_room_tasks_reviewed_by_fkey(name)")
+    .select("*, rooms(number, name), profiles!daily_room_tasks_assigned_to_fkey(name), second:profiles!daily_room_tasks_second_assigned_to_fkey(name), reviewer:profiles!daily_room_tasks_reviewed_by_fkey(name)")
     .eq("id", taskId)
     .single();
 
@@ -36,7 +42,7 @@ export default async function AdminTaskDetailPage({
   const [{ data: checks }, { data: occurrencesRaw }, { data: categories }, minibarSnapshot] = await Promise.all([
     supabase
       .from("daily_room_task_checks")
-      .select("*, checklist_items(label, description, position)")
+      .select("*, checklist_items(label, description, position, type)")
       .eq("daily_room_task_id", taskId)
       .order("checklist_items(position)"),
     supabase
@@ -63,15 +69,16 @@ export default async function AdminTaskDetailPage({
   const reviewerName = (task as unknown as { reviewer: { name: string } | null }).reviewer?.name ?? null;
   const hasReview = !!task.reviewed_by || !!task.review_waived_by || task.status !== "concluido";
   const time = (iso: string | null) => (iso ? formatTimePt(iso) : "—");
-  const camareiraName =
-    (task as unknown as { profiles: { name: string } | null }).profiles?.name ?? "—";
+  const firstName = (task as unknown as { profiles: { name: string } | null }).profiles?.name ?? "—";
+  const secondName = (task as unknown as { second: { name: string } | null }).second?.name ?? null;
+  const camareiraName = secondName ? firstName + " e " + secondName : firstName;
 
   return (
     <div className="space-y-6">
       <BackLink href="/dashboard" />
       <PageHeader
         title={`Suíte ${room.number} — ${formatDatePt(task.date)}`}
-        subtitle={`Checklist de ${TASK_TYPE_LABELS[task.task_type as ChecklistType].toLowerCase()} · ${camareiraName}`}
+        subtitle={`Checklist de ${taskTypeLabel(task.task_type as ChecklistType, task.extra_cleaning).toLowerCase()} · ${camareiraName}`}
       />
       {hasReview && (
         <Card>
@@ -122,7 +129,7 @@ export default async function AdminTaskDetailPage({
       )}
       <ChecklistDetail
         task={task}
-        checks={checks ?? []}
+        checks={sortChecksExtrasLast(checks ?? [])}
         occurrences={occurrences}
         categories={categories ?? []}
         minibarSnapshot={minibarSnapshot}

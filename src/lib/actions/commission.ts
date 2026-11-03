@@ -39,7 +39,7 @@ async function getCamareiraRoster(
   from: string,
   to: string
 ): Promise<CamareiraRosterRow[]> {
-  const [{ data: active }, { data: taskRows }, { data: reviewRows }] = await Promise.all([
+  const [{ data: active }, { data: taskRows }, { data: secondRows }, { data: reviewRows }] = await Promise.all([
     supabase
       .from("profiles")
       .select("id, name, service_quality_score")
@@ -57,6 +57,14 @@ async function getCamareiraRoster(
       .gte("date", from)
       .lte("date", to)
       .not("assigned_to", "is", null),
+    // Limpeza adicional: a 2ª camareira também trabalhou no período.
+    supabase
+      .from("daily_room_tasks")
+      .select("second_assigned_to, profiles!daily_room_tasks_second_assigned_to_fkey(name, service_quality_score)")
+      .eq("status", "concluido")
+      .gte("date", from)
+      .lte("date", to)
+      .not("second_assigned_to", "is", null),
     // Quem revisou serviços também conta como "trabalhou no período" (cada
     // revisão concluída vale 1 serviço — PRD_camareira_revisora.md).
     supabase
@@ -87,6 +95,21 @@ async function getCamareiraRoster(
     });
   });
   (
+    (secondRows ?? []) as unknown as {
+      second_assigned_to: string | null;
+      profiles: { name: string; service_quality_score: number } | null;
+    }[]
+  ).forEach((t) => {
+    if (!t.second_assigned_to || map.has(t.second_assigned_to)) return;
+    const name = t.profiles?.name;
+    if (!name || name === EXCLUDED_CAMAREIRA_NAME) return;
+    map.set(t.second_assigned_to, {
+      id: t.second_assigned_to,
+      name,
+      service_quality_score: t.profiles?.service_quality_score ?? 5,
+    });
+  });
+  (
     (reviewRows ?? []) as unknown as {
       reviewed_by: string | null;
       profiles: { name: string; service_quality_score: number } | null;
@@ -111,7 +134,7 @@ async function getServiceCountsByCamareira(
 ): Promise<Map<string, number>> {
   const { data } = await supabase
     .from("daily_room_tasks")
-    .select("assigned_to, reviewed_by, review_waived_by")
+    .select("assigned_to, second_assigned_to, reviewed_by, review_waived_by")
     .eq("status", "concluido")
     .gte("date", from)
     .lte("date", to);
@@ -121,6 +144,8 @@ async function getServiceCountsByCamareira(
   const map = new Map<string, number>();
   (data ?? []).forEach((t) => {
     if (t.assigned_to) map.set(t.assigned_to, (map.get(t.assigned_to) ?? 0) + 1);
+    // Limpeza adicional: o serviço conta também para a 2ª camareira.
+    if (t.second_assigned_to) map.set(t.second_assigned_to, (map.get(t.second_assigned_to) ?? 0) + 1);
     if (t.reviewed_by && !t.review_waived_by) map.set(t.reviewed_by, (map.get(t.reviewed_by) ?? 0) + 1);
   });
   return map;

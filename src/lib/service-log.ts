@@ -11,7 +11,7 @@ export async function getServiceLogRows(supabase: Supabase, from: string, to: st
   const { data } = await supabase
     .from("daily_room_tasks")
     .select(
-      "id, date, task_type, claimed_at, started_at, finished_at, review_claimed_at, review_finished_at, review_waived_by, correction_started_at, correction_finished_at, rooms(number), profiles!daily_room_tasks_assigned_to_fkey(name), reviewer:profiles!daily_room_tasks_reviewed_by_fkey(name)"
+      "id, date, task_type, extra_cleaning, claimed_at, started_at, finished_at, review_claimed_at, review_finished_at, review_waived_by, correction_started_at, correction_finished_at, rooms(number), profiles!daily_room_tasks_assigned_to_fkey(name), second:profiles!daily_room_tasks_second_assigned_to_fkey(name), reviewer:profiles!daily_room_tasks_reviewed_by_fkey(name)"
     )
     .gte("date", from)
     .lte("date", to)
@@ -22,6 +22,7 @@ export async function getServiceLogRows(supabase: Supabase, from: string, to: st
       id: string;
       date: string;
       task_type: ChecklistType;
+      extra_cleaning: boolean;
       claimed_at: string | null;
       started_at: string | null;
       finished_at: string | null;
@@ -32,6 +33,7 @@ export async function getServiceLogRows(supabase: Supabase, from: string, to: st
       correction_finished_at: string | null;
       rooms: { number: string };
       profiles: { name: string } | null;
+      second: { name: string } | null;
       reviewer: { name: string } | null;
     }[]
   )
@@ -40,10 +42,12 @@ export async function getServiceLogRows(supabase: Supabase, from: string, to: st
       date: r.date,
       room_number: r.rooms.number,
       task_type: r.task_type,
+      extra_cleaning: r.extra_cleaning,
       claimed_at: r.claimed_at,
       started_at: r.started_at,
       finished_at: r.finished_at,
-      camareira_name: r.profiles?.name ?? null,
+      // Limpeza adicional: as duas camareiras aparecem juntas.
+      camareira_name: r.profiles?.name ? (r.second?.name ? r.profiles.name + " e " + r.second.name : r.profiles.name) : null,
       reviewer_name: r.reviewer?.name ?? null,
       review_waived: !!r.review_waived_by,
       review_claimed_at: r.review_claimed_at,

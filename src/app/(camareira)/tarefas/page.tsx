@@ -11,8 +11,12 @@ export default async function TarefasPage() {
 
   // RLS já escopa o retorno: camareira vê as tarefas dela + as ainda sem
   // responsável (disponíveis para escolher); admin vê todas.
-  const [{ data: todayTasks }, { data: pastAvailable }, { data: pastMine }, { data: reviewTasks }] = await Promise.all([
-    supabase.from("daily_room_tasks").select("*, rooms(number, name)").eq("date", date).order("created_at"),
+  const [{ data: todayTasks }, { data: pastAvailable }, { data: pastMine }, { data: reviewTasks }, { data: waitingSecond }] = await Promise.all([
+    supabase
+      .from("daily_room_tasks")
+      .select("*, rooms(number, name), first:profiles!daily_room_tasks_assigned_to_fkey(name)")
+      .eq("date", date)
+      .order("created_at"),
     // Serviços de dias anteriores nunca escolhidos por ninguém: não somem
     // mais da tela, ficam em "Serviços anteriores" até serem escolhidos ou
     // cancelados.
@@ -29,7 +33,7 @@ export default async function TarefasPage() {
       .from("daily_room_tasks")
       .select("*, rooms(number, name)")
       .lt("date", date)
-      .eq("assigned_to", profile.id)
+      .or(`assigned_to.eq.${profile.id},second_assigned_to.eq.${profile.id}`)
       .in("status", ["pendente", "em_andamento", "aguardando_revisao", "em_revisao", "aguardando_correcao", "em_correcao"])
       .order("date", { ascending: true }),
     // Serviços de QUALQUER dia que aguardam revisão (a RLS só mostra à camareira
@@ -38,6 +42,16 @@ export default async function TarefasPage() {
       .from("daily_room_tasks")
       .select("*, rooms(number, name)")
       .in("status", ["aguardando_revisao", "em_revisao"])
+      .order("date", { ascending: true }),
+    // Limpeza adicional que já tem a 1ª camareira e espera a 2ª (de hoje ou de dias anteriores).
+    supabase
+      .from("daily_room_tasks")
+      .select("*, rooms(number, name), first:profiles!daily_room_tasks_assigned_to_fkey(name)")
+      .lte("date", date)
+      .eq("extra_cleaning", true)
+      .not("assigned_to", "is", null)
+      .is("second_assigned_to", null)
+      .in("status", ["pendente", "em_andamento"])
       .order("date", { ascending: true }),
   ]);
 
@@ -51,6 +65,7 @@ export default async function TarefasPage() {
         pastAvailableTasks={(pastAvailable ?? []) as unknown as TaskWithRoom[]}
         pastMineTasks={(pastMine ?? []) as unknown as TaskWithRoom[]}
         reviewTasks={(reviewTasks ?? []) as unknown as TaskWithRoom[]}
+        waitingSecondTasks={(waitingSecond ?? []) as unknown as TaskWithRoom[]}
       />
     </div>
   );

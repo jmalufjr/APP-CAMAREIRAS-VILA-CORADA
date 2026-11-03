@@ -74,12 +74,15 @@ export async function createChecklistItem(formData: FormData) {
     // Retroalimenta as tarefas já criadas (hoje/amanhã) e ainda não
     // concluídas dos quartos selecionados, para que o item novo apareça na
     // tela da camareira sem precisar recriar a tarefa do dia.
-    const { data: openTasks } = await supabase
+    // Itens da Limpeza adicional vão para as tarefas marcadas com a limpeza adicional (qualquer tipo base).
+    const openBase = supabase
       .from("daily_room_tasks")
       .select("id")
-      .eq("task_type", type)
       .in("room_id", rooms)
       .in("status", ["pendente", "em_andamento"]);
+    const { data: openTasks } = await (type === "limpeza_adicional"
+      ? openBase.eq("extra_cleaning", true)
+      : openBase.eq("task_type", type));
 
     if (openTasks && openTasks.length > 0) {
       await supabase.from("daily_room_task_checks").insert(

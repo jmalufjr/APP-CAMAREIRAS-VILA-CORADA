@@ -9,7 +9,7 @@ import { getServiceLogRows } from "@/lib/service-log";
 import { WaiveReviewButton } from "@/components/shared/waive-review-button";
 import { TASK_STATUS_LABELS, type TaskStatus } from "@/lib/types";
 import { formatDateShortPt } from "@/lib/date";
-import { TASK_TYPE_LABELS } from "@/lib/task-type";
+import { taskTypeLabel } from "@/lib/task-type";
 import type { ChecklistType } from "@/lib/types";
 
 export default async function ServicosSuitesPage() {
@@ -28,7 +28,7 @@ export default async function ServicosSuitesPage() {
     supabase
       .from("daily_room_tasks")
       .select(
-        "id, date, task_type, status, rooms(number), profiles!daily_room_tasks_assigned_to_fkey(name), reviewer:profiles!daily_room_tasks_reviewed_by_fkey(name)"
+        "id, date, task_type, extra_cleaning, status, rooms(number), profiles!daily_room_tasks_assigned_to_fkey(name), reviewer:profiles!daily_room_tasks_reviewed_by_fkey(name)"
       )
       .in("status", ["aguardando_revisao", "em_revisao", "aguardando_correcao", "em_correcao"])
       .order("date", { ascending: true }),
@@ -38,6 +38,7 @@ export default async function ServicosSuitesPage() {
     id: string;
     date: string;
     task_type: ChecklistType;
+    extra_cleaning: boolean;
     status: TaskStatus;
     rooms: { number: string };
     profiles: { name: string } | null;
@@ -59,7 +60,7 @@ export default async function ServicosSuitesPage() {
               <div key={t.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border last:border-0">
                 <span>
                   Suíte {(t as unknown as { rooms: { number: string } }).rooms.number} ·{" "}
-                  {TASK_TYPE_LABELS[t.task_type as ChecklistType]}
+                  {taskTypeLabel(t.task_type as ChecklistType, t.extra_cleaning)}
                 </span>
                 <Badge variant={t.status === "concluido" ? "default" : "secondary"}>
                   {TASK_STATUS_LABELS[t.status as TaskStatus]}
@@ -80,7 +81,7 @@ export default async function ServicosSuitesPage() {
             {(tomorrowTasks ?? []).map((t) => (
               <div key={t.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border last:border-0">
                 <span>Suíte {(t as unknown as { rooms: { number: string } }).rooms.number}</span>
-                <Badge variant="outline">{TASK_TYPE_LABELS[t.task_type as ChecklistType]}</Badge>
+                <Badge variant="outline">{taskTypeLabel(t.task_type as ChecklistType, t.extra_cleaning)}</Badge>
               </div>
             ))}
             {(tomorrowTasks ?? []).length === 0 && (
@@ -98,7 +99,7 @@ export default async function ServicosSuitesPage() {
           {pendingRows.map((t) => (
             <div key={t.id} className="flex flex-wrap items-center justify-between gap-2 text-sm py-1.5 border-b border-border last:border-0">
               <span>
-                {formatDateShortPt(t.date)} · Suíte {t.rooms.number} · {TASK_TYPE_LABELS[t.task_type]} ·{" "}
+                {formatDateShortPt(t.date)} · Suíte {t.rooms.number} · {taskTypeLabel(t.task_type, t.extra_cleaning)} ·{" "}
                 {t.profiles?.name ?? "—"}
                 {t.reviewer ? ` (revisão: ${t.reviewer.name})` : ""}
               </span>

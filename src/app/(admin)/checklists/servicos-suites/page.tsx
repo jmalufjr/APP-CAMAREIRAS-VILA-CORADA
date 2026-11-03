@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { BackLink } from "@/components/shared/back-link";
 import { TASK_TYPE_LABELS } from "@/lib/task-type";
-import { Sparkles, RefreshCw, DoorOpen, LogOut, LogIn, ChevronRight } from "lucide-react";
+import { Sparkles, RefreshCw, DoorOpen, LogOut, LogIn, Brush, ChevronRight } from "lucide-react";
 
 const menuItems = [
   { href: "/checklists/arrumacao", label: TASK_TYPE_LABELS.arrumacao, icon: Sparkles },
@@ -10,6 +10,8 @@ const menuItems = [
   { href: "/checklists/preparacao", label: TASK_TYPE_LABELS.preparacao, icon: DoorOpen },
   { href: "/checklists/somente_saida", label: TASK_TYPE_LABELS.somente_saida, icon: LogOut },
   { href: "/checklists/somente_chegada", label: TASK_TYPE_LABELS.somente_chegada, icon: LogIn },
+  // Itens extras acrescentados a troca / saída com chegada / somente saída (PRD_limpeza_adicional.md).
+  { href: "/checklists/limpeza_adicional", label: "Limpeza adicional (itens extras)", icon: Brush },
 ];
 
 export default function ChecklistsServicosSuitesPage() {

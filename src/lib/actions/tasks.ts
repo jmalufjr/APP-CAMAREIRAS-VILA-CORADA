@@ -55,6 +55,17 @@ export async function unclaimTask(taskId: string) {
   return { success: true };
 }
 
+// Limpeza adicional: a 2ª camareira escolhe o serviço (a 1ª já escolheu). Só então ele pode começar;
+// o horário de início passa a ser o desta escolha. O checklist continua só com a 1ª camareira.
+export async function claimExtraCleaningSecond(taskId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("claim_extra_cleaning_second", { p_task_id: taskId });
+  if (error) return { error: error.message };
+  revalidatePath("/tarefas", "layout");
+  revalidatePath("/planejamento");
+  return { success: true };
+}
+
 export async function toggleCheck(checkId: string, checked: boolean) {
   const supabase = await createClient();
   const { error } = await supabase.rpc("toggle_daily_room_task_check", {
