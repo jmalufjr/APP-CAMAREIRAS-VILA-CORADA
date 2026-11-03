@@ -2940,6 +2940,16 @@ também é feita em Server Components.
     "Voltar"; as telas dentro dela continuam voltando para `/dashboard`. Textos antigos "Resumo operacional"
     nas partes 32–53 deste arquivo e em PRDs referem-se a esta mesma tela.
 
+62. **Parte 55 — Gerente operacional também vê e gerencia as "Listas operacionais"** (02/11/2026): o item
+    `/checklists` (e todas as telas abaixo dele) entrou nos acessos do gerente (`middleware.ts`,
+    `GERENTE_HREFS` em `operacional/page.tsx`). Para ele conseguir editar de verdade, a migração `088`
+    (+ `supabase/producao/09-gerente-listas-operacionais.sql`) troca `is_admin()` por
+    `is_admin_or_gerente()` nas políticas de `checklist_items`, `room_checklist_items`,
+    `occurrence_categories`, `maintenance_categories`, `maintenance_items`, `rooms`, `minibar_items`,
+    `poolbar_items` e `breakfast_tables` e nas funções `reorder_checklist_items`,
+    `reorder_maintenance_items`, `recompute_category_schedule` e `recompute_item_schedule`. Exceção
+    deliberada: apagar suíte (`rooms_admin_delete`) continua só do admin.
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de

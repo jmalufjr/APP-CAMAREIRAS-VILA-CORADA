@@ -88,11 +88,12 @@ export async function updateSession(request: NextRequest) {
         "/frigobar",
         "/chegadas-saidas/gerenciar",
         "/mesas/gerenciar",
+        "/checklists",
         "/compras/nova",
         "/compras/validade",
         "/compras/baixa",
       ];
-      const prefixes = ["/dashboard/servicos-suites", "/dashboard/suites-disponiveis", "/dashboard/calendario-stays", "/dashboard/tarefas", "/compras/lista"];
+      const prefixes = ["/dashboard/servicos-suites", "/dashboard/suites-disponiveis", "/dashboard/calendario-stays", "/dashboard/tarefas", "/checklists", "/compras/lista"];
       if (!exact.includes(path) && !prefixes.some(matchesPrefix)) {
         const url = request.nextUrl.clone();
         url.pathname = "/operacional";

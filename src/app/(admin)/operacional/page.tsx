@@ -31,6 +31,7 @@ const GERENTE_HREFS = new Set([
   "/mesas/gerenciar",
   "/frigobar",
   "/operacional/comissoes",
+  "/checklists",
 ]);
 
 export default async function ModuloOperacionalPage() {
