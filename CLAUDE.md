@@ -3017,7 +3017,7 @@ também é feita em Server Components.
       Compra): compras dos últimos 30 dias lidas do banco (o que está REGISTRADO), uma linha de cabeçalho (data,
       fornecedor, nº da nota) + uma por item, compras separadas por linha de meia altura. Tudo editável; "Salvar" envia só
       as compras alteradas por `savePurchaseCorrections` (reaproveita `updateExpense`: estoque e lançamento contábil
-      refeitos). Item com nome novo é recusado (só produtos cadastrados); preço/quantidade corrigidos zeram
+      refeitos). Item com nome novo cadastra o produto (categoria pela IA); preço/quantidade corrigidos zeram
       desconto/frete/tributos da linha. Migração `093` deixa o gerente editar/excluir compras (RLS).
     - Produção: `supabase/producao/13` e `14`. Testado no banco local (compra, correção, livro fechando em 27,00 e
       gerente via SQL); não testado no navegador nem a classificação real pela IA (sem chave local).

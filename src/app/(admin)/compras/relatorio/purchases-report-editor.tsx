@@ -107,6 +107,9 @@ export function PurchasesReportEditor({
 
   return (
     <div className="space-y-4">
+      <Button onClick={save} disabled={isPending}>
+        <Save size={16} /> {isPending ? "Salvando..." : "Salvar"}
+      </Button>
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-sm">
           <thead className="bg-muted/60 text-left">
@@ -191,9 +194,6 @@ export function PurchasesReportEditor({
           ))}
         </datalist>
       </div>
-      <Button onClick={save} disabled={isPending}>
-        <Save size={16} /> {isPending ? "Salvando..." : "Salvar"}
-      </Button>
     </div>
   );
 }

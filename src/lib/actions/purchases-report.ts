@@ -5,6 +5,9 @@ import { requireRole } from "@/lib/actions/authz";
 import { updateExpense, getExpenseWithItems } from "@/lib/actions/expenses";
 import type { ExpenseItemInput } from "@/lib/actions/expenses";
 import { daysAgoKey, todayKey } from "@/lib/date";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { ensureProduct } from "@/lib/auto-catalog";
+import { previewFeiraItem } from "@/lib/actions/feira";
 
 export interface PurchaseReportItem {
   position: number; // posição da linha na compra (ordem de criação)
@@ -111,6 +114,23 @@ export async function savePurchaseCorrections(corrections: PurchaseCorrection[])
     if (original.date < daysAgoKey(30)) {
       errors.push(`A compra de ${original.date} tem mais de 30 dias e não pode mais ser corrigida.`);
       continue;
+    }
+
+    // Nome novo numa linha de produto: cadastra o produto (categoria escolhida pela IA entre as existentes).
+    for (const it of original.items.map((o, idx) => ({ o, edit: c.items.find((e) => e.position === idx) }))) {
+      const name = it.edit?.description.trim();
+      if (!name || it.o.fixed_asset_id || name.toLowerCase() === it.o.description.trim().toLowerCase()) continue;
+      if (productByName.has(name.toLowerCase())) continue;
+      const preview = await previewFeiraItem(name);
+      const made = await ensureProduct(createAdminClient(), {
+        name,
+        categoryId: "error" in preview ? null : preview.suggested_category_id,
+      });
+      if (made.error || !made.id) {
+        errors.push(`Compra de ${original.date}: ${made.error ?? `não foi possível cadastrar "${name}".`}`);
+        continue;
+      }
+      productByName.set(name.toLowerCase(), made.id);
     }
 
     let failed = false;
