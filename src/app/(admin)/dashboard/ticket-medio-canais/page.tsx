@@ -149,11 +149,13 @@ function GroupRows({
   return (
     <>
       <tr>
+        {/* A célula ocupa a tabela inteira, então ela mesma não "gruda" na esquerda; o nome fica
+            num bloco interno que gruda (sticky) e acompanha a rolagem lateral. */}
         <td
           colSpan={1 + months.length * 5}
-          className="sticky left-0 border-b border-border bg-secondary px-3 py-1.5 font-heading text-base text-secondary-foreground"
+          className="border-b border-border bg-secondary p-0 font-heading text-base text-secondary-foreground"
         >
-          {label}
+          <div className="sticky left-0 w-fit px-3 py-1.5">{label}</div>
         </td>
       </tr>
       {CHANNELS.map((c) => (
