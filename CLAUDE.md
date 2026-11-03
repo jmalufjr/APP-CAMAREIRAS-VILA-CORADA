@@ -2950,6 +2950,36 @@ também é feita em Server Components.
     `reorder_maintenance_items`, `recompute_category_schedule` e `recompute_item_schedule`. Exceção
     deliberada: apagar suíte (`rooms_admin_delete`) continua só do admin.
 
+63. **Parte 56 — "Lançar Compra" em dois cards, pagamento por janela e cadastro automático pela IA**
+    (03/11/2026): `ExpenseForm` (compra nova) abre só com (1) foto/PDF da nota e (2) `ReceiptSummaryCard`
+    (`receipt-summary-card.tsx`): resumo SOMENTE de consulta da nota lida (data, fornecedor, nº, total; linhas
+    com descrição/preço/quantidade e caixa "Café da manhã"), botões **Salvar** e **Inserir manualmente**.
+    Competência = sempre a data da nota; sem link/QR/observações na compra (a despesa e a edição mantêm o
+    formulário antigo). "Inserir manualmente" (`manualMode`) abre o formulário completo (dados da nota com
+    novo campo opcional "Valor total da nota" + "Itens da compra").
+    - **Salvar** abre uma janela de forma de pagamento: PIX e cartão de débito → banco; dinheiro → caixa;
+      **cartão de crédito e a prazo → pendentes** (conta a pagar) e com **vencimento obrigatório nos dois**.
+      Migração `089` (+ `supabase/producao/10-forma-pagamento-debito-credito.sql`, rodar SOZINHA) adicionou
+      `cartao_debito`/`cartao_credito` ao enum `supplier_payment_method`; `cartao_corporativo` ficou só como
+      legado. `isPendingPaymentMethod` (`payment-method.ts`) decide pendente/vencimento em `expenses.ts`;
+      "Pagamentos e recebimentos" liquida com PIX/dinheiro/débito.
+    - **IA**: `parseReceiptWithAI` (`receipt-ai.ts`) agora devolve por item `kind` (produto|ativo), produto
+      ou bem do catálogo já cadastrado (`matched_*`), e — se não achou — categoria e nome sugeridos; também
+      lista bens do catálogo de ativo e as categorias no prompt. Nunca grava.
+    - **Gravação**: `createReceiptPurchase` (`receipt-purchase.ts`, papéis admin/gerente/manutenção): fornecedor
+      existente ou novo, aviso de nota repetida ANTES de cadastrar qualquer coisa, enquadra cada item e CRIA o
+      que faltar com o client admin (`auto-catalog.ts`): **produto novo** = categoria da IA (ou "Utensílios e
+      descartáveis"), conta contábil mais usada e rateio por centro copiados dos produtos da mesma categoria,
+      controla estoque, unidade "un"; **bem novo** = item de catálogo na categoria sugerida (ou "Ferramentas e
+      utensílios duráveis") + bem. Isto SUBSTITUI a regra da Parte 49 de que só o admin cadastra produto novo.
+      O total impresso na nota que difere da soma dos itens vira desconto/frete proporcional (`receipt-adjust.ts`,
+      ignora diferença > 50%). Em seguida reaproveita `createExpense` (estoque, lançamento contábil, foto).
+    - **Testado** no banco local com a gravação real (sem IA — não há `ANTHROPIC_API_KEY` local): PIX com produto
+      existente (café), produto novo, bem novo, fornecedor novo e desconto de total (partidas fecham); crédito sem
+      vencimento recusado; gerente com crédito pendente (→ fornecedores a pagar) e produto novo; nota repetida
+      avisa; dinheiro (→ caixa) e débito (→ banco). Não testado: a leitura real pela IA e o clique nos botões
+      no navegador. `parseReceiptWithAI` ainda usa o modelo `claude-sonnet-5`.
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de

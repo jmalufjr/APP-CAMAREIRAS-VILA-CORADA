@@ -7,6 +7,7 @@ import { postLedgerEntry } from "@/lib/actions/ledger";
 import type { LedgerEntryLineInput } from "@/lib/actions/ledger";
 import type { SupplierPaymentMethod, ExpensePaymentStatus } from "@/lib/types";
 import { nowInBrazil, toDateKey } from "@/lib/date";
+import { isPendingPaymentMethod } from "@/lib/payment-method";
 
 function revalidateAll() {
   revalidatePath("/compras", "layout");
@@ -355,8 +356,8 @@ function parseExpenseFormData(formData: FormData): { error?: string; fields?: Ex
   const itemsRaw = String(formData.get("items") ?? "[]");
   const confirm_duplicate = formData.get("confirm_duplicate") === "true";
 
-  if (payment_method === "a_prazo" && !due_date) {
-    return { error: "Informe o vencimento — compra/despesa a prazo precisa de uma data de vencimento." };
+  if (isPendingPaymentMethod(payment_method) && !due_date) {
+    return { error: "Informe o vencimento — compra/despesa a prazo ou no cartão de crédito precisa de uma data de vencimento." };
   }
 
   let items: ExpenseItemInput[];
@@ -399,7 +400,7 @@ export async function createExpense(formData: FormData) {
     if (isDuplicate) return { duplicateWarning: true, error: "Já existe uma despesa com o mesmo fornecedor, número do documento, data e valor. Tem certeza que quer lançar de novo?" };
   }
 
-  const payment_status: ExpensePaymentStatus = f.payment_method === "a_prazo" ? "pendente" : "pago";
+  const payment_status: ExpensePaymentStatus = isPendingPaymentMethod(f.payment_method) ? "pendente" : "pago";
   const paid_at = payment_status === "pago" ? new Date().toISOString() : null;
 
   const { data: expense, error } = await supabase
@@ -497,7 +498,7 @@ export async function updateExpense(id: string, formData: FormData) {
   // paga continua paga; editar uma pendente continua pendente (a menos
   // que a forma de pagamento informada agora não seja mais "a prazo").
   const payment_status: ExpensePaymentStatus =
-    current?.payment_status === "pago" ? "pago" : f.payment_method === "a_prazo" ? "pendente" : "pago";
+    current?.payment_status === "pago" ? "pago" : isPendingPaymentMethod(f.payment_method) ? "pendente" : "pago";
   const paid_at = payment_status === "pago" ? (current?.paid_at ?? new Date().toISOString()) : null;
 
   const { error: updateError } = await supabase
@@ -623,7 +624,7 @@ export async function deleteExpense(id: string) {
 // pendente) — só liquida a obrigação já reconhecida, nunca reconhece a
 // despesa/estoque de novo (ver PRD_compras&contabil.md seção 4.1/6.6).
 export async function payExpense(id: string, paymentMethod: SupplierPaymentMethod) {
-  if (paymentMethod === "a_prazo") return { error: "Selecione uma forma de pagamento de verdade pra liquidar." };
+  if (isPendingPaymentMethod(paymentMethod)) return { error: "Selecione uma forma de pagamento de verdade pra liquidar." };
   const supabase = await createClient();
 
   const { data: expense } = await supabase

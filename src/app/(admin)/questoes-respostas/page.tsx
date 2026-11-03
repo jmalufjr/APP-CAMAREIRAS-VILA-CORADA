@@ -709,57 +709,38 @@ export default function QuestoesRespostasPage() {
                 quando algo está acabando e dá baixa manual num item (ver pergunta 14).
               </P>
 
-              <SubHeading>Como uma compra é registrada, campo por campo</SubHeading>
-              <List
-                items={[
-                  <>
-                    <strong>Data</strong>, <strong>data de competência</strong> (quando o gasto conta pra
-                    fins contábeis — em branco, usa a mesma data) e <strong>número do documento</strong>{" "}
-                    (nota/cupom, opcional).
-                  </>,
-                  <>
-                    <strong>Fornecedor</strong> — um cadastro de verdade agora (nome, CPF/CNPJ, contato),
-                    não mais um texto livre: escolha um já cadastrado ou crie um novo ali mesmo, sem sair
-                    da tela.
-                  </>,
-                  <>
-                    <strong>Forma de pagamento</strong>: Banco/Pix, Dinheiro, Cartão corporativo ou{" "}
-                    <strong>A prazo</strong> — essa última não é bem uma “forma de pagamento”, é avisar
-                    que ainda não foi pago; escolhendo-a, aparece um campo de vencimento, e a despesa vai
-                    pra tela “Pagamentos e recebimentos” até alguém confirmar o pagamento de verdade (ver
-                    mais abaixo). Essa lista é diferente da forma de pagamento que o hóspede usa pra pagar
-                    a própria conta de consumo — são dois conceitos separados no aplicativo.
-                  </>,
-                  <>
-                    <strong>Link ou código da nota fiscal</strong> (opcional) — pode digitar, ou apontar a
-                    câmera do celular pro QR code da nota e deixar o aplicativo ler sozinho.
-                  </>,
-                  <>
-                    <strong>Observações</strong> livres.
-                  </>,
-                  <>
-                    <strong>Foto ou PDF da nota/recibo</strong> (opcional) — tire uma foto na hora ou
-                    escolha um arquivo já salvo no celular.
-                  </>,
-                  <>
-                    Com a foto/PDF anexado, o botão <strong>“Ler nota com IA”</strong> faz a inteligência
-                    artificial ler a nota sozinha e já preencher fornecedor, data, número do documento,
-                    forma de pagamento e os itens comprados — sempre vale conferir os dados antes de
-                    salvar, já que a leitura pode errar, principalmente em notas manuscritas ou mal
-                    fotografadas.
-                  </>,
-                  <>
-                    <strong>Itens da compra</strong> (opcional): se a nota tiver vários produtos diferentes
-                    (uma compra de supermercado, por exemplo), cada um vira uma linha, com descrição,
-                    quantidade e custo unitário — e, se abrir o campo “Desconto, frete e tributos” de uma
-                    linha, também desconto (reduz o custo), frete/outros custos e tributo não recuperável
-                    (os dois aumentam o custo), e tributo recuperável (só registrado, nunca muda o custo —
-                    é um crédito a recuperar depois, não uma despesa de verdade). Se a despesa não tiver
-                    “itens” de verdade (uma conta de luz, o honorário de um contador), não é preciso
-                    cadastrar nenhuma linha — só o valor total.
-                  </>,
-                ]}
-              />
+              <SubHeading>Como lançar uma compra (foto ou PDF da nota)</SubHeading>
+              <P>
+                A tela “Lançar Compra” abre com dois cards. No primeiro, você tira uma foto (ou escolhe um
+                arquivo, foto ou PDF) da nota e clica em <strong>“Ler nota com IA”</strong>. No segundo
+                aparece o <strong>resumo da nota lida</strong>, só para consulta: no topo a data da nota, o
+                fornecedor, o número (se houver) e o total, e uma linha para cada item comprado, com
+                descrição, preço e quantidade, mais uma caixa para marcar o que é do{" "}
+                <strong>café da manhã</strong>. A data de competência é sempre a data da nota.
+              </P>
+              <P>
+                Ao clicar em <strong>“Salvar”</strong>, abre uma janela pedindo a forma de pagamento:{" "}
+                <strong>PIX</strong> e <strong>cartão de débito</strong> saem do banco; <strong>dinheiro</strong>{" "}
+                sai do caixa; <strong>cartão de crédito</strong> e <strong>a prazo</strong> ficam pendentes
+                (contas a pagar) e exigem a data de vencimento. Ao confirmar, a inteligência artificial
+                enquadra cada item num produto ou num bem do ativo permanente que já esteja cadastrado; o que
+                não existir é <strong>cadastrado automaticamente</strong> como produto novo (herdando a conta
+                contábil e a divisão por centro de custo dos produtos da mesma categoria, controlando estoque
+                em unidades) ou como bem novo do ativo permanente. O fornecedor também é cadastrado se ainda
+                não existir. Vale conferir depois, no Cadastro de produtos, o que foi criado automaticamente
+                — a leitura pode errar, principalmente em notas manuscritas ou mal fotografadas. Se o total
+                impresso na nota for diferente da soma dos itens (um desconto no cupom, por exemplo), a
+                diferença é distribuída nos itens como desconto ou frete. Isso vale para o administrador, o
+                gerente operacional e o funcionário de manutenção.
+              </P>
+              <P>
+                O botão <strong>“Inserir manualmente”</strong> abre o formulário completo: dados da nota
+                (data, fornecedor, número, forma de pagamento e o valor total da nota, que você pode
+                editar) e o card “Itens da compra”, onde cada item é lançado e alocado à mão, com desconto,
+                frete e tributos de cada linha. Não existem mais, na compra, os campos de link/código da nota,
+                leitura de QR code e observações.
+              </P>
+
               <P>
                 O sistema avisa (sem bloquear) se já existir outra despesa igual — mesmo fornecedor,
                 número do documento, data e valor —, caso de nota lançada duas vezes por engano.
@@ -775,12 +756,12 @@ export default function QuestoesRespostasPage() {
 
               <SubHeading>Compra a prazo e a tela “Pagamentos e recebimentos”</SubHeading>
               <P>
-                Uma despesa lançada como <strong>“A prazo”</strong> fica pendente até alguém confirmar o
-                pagamento de verdade, na tela <strong>“Pagamentos e recebimentos”</strong> (menu “Módulo
-                Contábil”) — lista todas as despesas pendentes, ordenadas pelo vencimento, com um botão
-                “Registrar pagamento” que pede a forma final (Banco/Pix, Dinheiro ou Cartão corporativo).
-                Uma despesa lançada em qualquer outra forma de pagamento já nasce paga, sem passar por
-                essa tela.
+                Uma compra ou despesa lançada como <strong>“A prazo”</strong> ou no{" "}
+                <strong>“Cartão de crédito”</strong> fica pendente até alguém confirmar o pagamento de
+                verdade, na tela <strong>“Pagamentos e recebimentos”</strong> (menu “Módulo Contábil”) — lista
+                todas as pendentes, ordenadas pelo vencimento, com um botão “Registrar pagamento” que pede a
+                forma final (PIX, Dinheiro ou Cartão de débito). Uma compra lançada em PIX, dinheiro ou cartão
+                de débito já nasce paga, sem passar por essa tela.
               </P>
 
               <SubHeading>Pra onde cada linha (ou o valor total) é classificada</SubHeading>

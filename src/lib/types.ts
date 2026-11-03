@@ -44,7 +44,13 @@ export type PaymentMethod =
 // despesa) — diferente de PaymentMethod acima, que é do lado HÓSPEDE
 // (pagando a própria conta de consumo). Ver PRD_compras&contabil.md
 // seção 22.3 item 12.
-export type SupplierPaymentMethod = "banco_pix" | "dinheiro" | "cartao_corporativo" | "a_prazo";
+export type SupplierPaymentMethod =
+  | "banco_pix"
+  | "dinheiro"
+  | "cartao_debito"
+  | "cartao_credito"
+  | "a_prazo"
+  | "cartao_corporativo"; // legado: só compras antigas
 export type ExpensePaymentStatus = "pago" | "pendente";
 export type InventoryMovementType = "compra" | "baixa_manual" | "baixa_consumo_hospede" | "ajuste_contagem";
 export type InventoryCountStatus = "em_andamento" | "concluida";

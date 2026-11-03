@@ -9,11 +9,14 @@ import type { CostItemOption } from "@/lib/actions/cost-plan";
 import { createSupplier } from "@/lib/actions/suppliers";
 import type { SupplierOption } from "@/lib/actions/suppliers";
 import { parseReceiptWithAI } from "@/lib/actions/receipt-ai";
+import type { ParsedReceipt } from "@/lib/actions/receipt-ai";
+import { ReceiptSummaryCard } from "@/components/shared/receipt-summary-card";
+import { applyTotalAdjustment } from "@/lib/receipt-adjust";
 import { compressImageForUpload } from "@/lib/image-compression";
 import type { AssetCategory, CostCenter, FixedAssetCatalogItem, LedgerAccount, ProductCategory } from "@/lib/types";
 import { ProductDialog } from "@/app/(admin)/contabil/listas/produtos/product-dialog";
 import { CostItemDialog } from "@/app/(admin)/contabil/listas/despesas/cost-item-dialog";
-import { SUPPLIER_PAYMENT_METHOD_OPTIONS } from "@/lib/payment-method";
+import { SUPPLIER_PAYMENT_METHOD_OPTIONS, SUPPLIER_PAYMENT_METHOD_LABELS, isPendingPaymentMethod } from "@/lib/payment-method";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -161,6 +164,14 @@ export function ExpenseForm({
   const [nfceUrl, setNfceUrl] = useState(initial?.nfce_url ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const isDespesa = kind === "despesa";
+  // Lançar Compra (novo): começa só com 2 cards (foto/PDF + resumo da nota lida, somente consulta);
+  // "Inserir manualmente" abre o formulário completo. Despesa e edição usam sempre o formulário completo.
+  const [parsed, setParsed] = useState<ParsedReceipt | null>(null);
+  const [manualMode, setManualMode] = useState(false);
+  const useCaptureFlow = !isDespesa && mode === "create" && !manualMode;
+  // Valor total impresso na nota (opcional, só no formulário manual de compra): a diferença para
+  // a soma dos itens vira desconto ou frete.
+  const [noteTotal, setNoteTotal] = useState("");
   const [manualTotal, setManualTotal] = useState(
     initial && (initial.items.length === 0 || isDespesa) ? String(initial.total_amount) : ""
   );
@@ -226,6 +237,11 @@ export function ExpenseForm({
     }
 
     const data = result.data;
+    if (useCaptureFlow) {
+      setParsed(data);
+      toast.success("Nota lida — confira o resumo abaixo.");
+      return;
+    }
     if (data.supplier_name) {
       const match = supplierOptions.find((s) => s.name.toLowerCase() === data.supplier_name!.trim().toLowerCase());
       if (match) {
@@ -238,7 +254,6 @@ export function ExpenseForm({
     if (data.date) setDate(data.date);
     if (data.document_number) setDocumentNumber(data.document_number);
     if (data.payment_method) setPaymentMethod(data.payment_method);
-    if (data.nfce_url) setNfceUrl(data.nfce_url);
     if (isDespesa) {
       const sum = data.items.reduce((t, i) => t + i.quantity * i.unit_cost, 0);
       const value = data.total_amount || sum;
@@ -335,8 +350,8 @@ export function ExpenseForm({
       toast.error("Selecione a categoria da despesa.");
       return;
     }
-    if (paymentMethod === "a_prazo" && !dueDate.trim()) {
-      toast.error("Informe o vencimento — compra/despesa a prazo precisa de uma data de vencimento.");
+    if (isPendingPaymentMethod(paymentMethod) && !dueDate.trim()) {
+      toast.error("Informe o vencimento — compra/despesa a prazo ou no cartão de crédito precisa de uma data de vencimento.");
       return;
     }
     if (supplierId === "new" && !newSupplierName.trim()) {
@@ -422,15 +437,24 @@ export function ExpenseForm({
       async function doSubmit(confirmDuplicate: boolean) {
         const formData = new FormData();
         formData.set("date", date);
-        formData.set("competence_date", competenceDate.trim() || date);
+        formData.set("competence_date", isDespesa ? competenceDate.trim() || date : date);
         formData.set("document_number", documentNumber.trim());
         if (resolvedSupplierId) formData.set("supplier_id", resolvedSupplierId);
         formData.set("payment_method", paymentMethod);
-        if (paymentMethod === "a_prazo") formData.set("due_date", dueDate);
+        if (isPendingPaymentMethod(paymentMethod)) formData.set("due_date", dueDate);
         formData.set("nfce_url", nfceUrl);
         formData.set("notes", notes);
-        formData.set("total_amount", String(total));
-        formData.set("items", JSON.stringify(itemsPayload));
+        // Compra: se o valor total da nota foi informado, a diferença vira desconto/frete nas linhas.
+        const finalItems =
+          !isDespesa && items.length > 0
+            ? (applyTotalAdjustment(
+                itemsPayload as unknown as { subtotal: number; discount: number; freight_and_other_costs: number }[],
+                Number(noteTotal.replace(",", ".")) || null
+              ) as unknown as typeof itemsPayload)
+            : itemsPayload;
+        const finalTotal = (finalItems as unknown as { subtotal: number }[]).reduce((sum, r) => sum + r.subtotal, 0);
+        formData.set("total_amount", String(!isDespesa && items.length > 0 ? Math.round(finalTotal * 100) / 100 : total));
+        formData.set("items", JSON.stringify(finalItems));
         if (confirmDuplicate) formData.set("confirm_duplicate", "true");
         if (preparedReceipt) formData.set("receipt", preparedReceipt.blob, preparedReceipt.filename);
         return mode === "edit" && expenseId ? await updateExpense(expenseId, formData) : await createExpense(formData);
@@ -466,7 +490,7 @@ export function ExpenseForm({
     <div className="space-y-4">
       <Card>
         <CardContent className="space-y-3">
-          <h3 className="font-heading text-lg">Foto ou PDF da nota/recibo (opcional)</h3>
+          <h3 className="font-heading text-lg">{useCaptureFlow ? "Foto ou PDF da nota" : "Foto ou PDF da nota/recibo (opcional)"}</h3>
           <input
             ref={fileInputRef}
             type="file"
@@ -518,11 +542,26 @@ export function ExpenseForm({
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            A leitura automática preenche fornecedor, data, forma de pagamento e itens — confira tudo antes de salvar.
-            Se não for possível ler, preencha os campos manualmente abaixo. Aceita foto ou PDF da nota.
+            {useCaptureFlow
+              ? "A leitura mostra, no resumo abaixo, o fornecedor, a data, o número e os itens da nota. Aceita foto ou PDF."
+              : "A leitura automática preenche fornecedor, data, forma de pagamento e itens — confira tudo antes de salvar. Se não for possível ler, preencha os campos manualmente abaixo. Aceita foto ou PDF da nota."}
           </p>
         </CardContent>
       </Card>
+
+      {useCaptureFlow ? (
+        <ReceiptSummaryCard
+          parsed={parsed}
+          isReading={isReadingAI}
+          receiptFile={receiptFile}
+          onManual={() => setManualMode(true)}
+          onSaved={() => {
+            router.back();
+            router.refresh();
+          }}
+        />
+      ) : (
+      <>
 
       <Card>
         <CardContent className="space-y-3">
@@ -531,16 +570,18 @@ export function ExpenseForm({
               <Label>Data</Label>
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
-            <div className="space-y-1.5">
-              <Label>Data de competência (opcional)</Label>
-              <Input
-                type="date"
-                value={competenceDate}
-                onChange={(e) => setCompetenceDate(e.target.value)}
-                placeholder={date}
-              />
-              <p className="text-xs text-muted-foreground">Em branco, usa a mesma data acima.</p>
-            </div>
+            {isDespesa && (
+              <div className="space-y-1.5">
+                <Label>Data de competência (opcional)</Label>
+                <Input
+                  type="date"
+                  value={competenceDate}
+                  onChange={(e) => setCompetenceDate(e.target.value)}
+                  placeholder={date}
+                />
+                <p className="text-xs text-muted-foreground">Em branco, usa a mesma data acima.</p>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>{isDespesa ? "Fornecedor/prestador (opcional)" : "Fornecedor (opcional)"}</Label>
               <Select value={supplierId || "none"} onValueChange={(v) => setSupplierId(v === "none" ? "" : (v ?? ""))}>
@@ -582,7 +623,7 @@ export function ExpenseForm({
               <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v ?? "")}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecione (opcional)">
-                    {(v: string) => SUPPLIER_PAYMENT_METHOD_OPTIONS.find((o) => o.value === v)?.label ?? v}
+                    {(v: string) => SUPPLIER_PAYMENT_METHOD_LABELS[v as keyof typeof SUPPLIER_PAYMENT_METHOD_LABELS] ?? v}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -594,30 +635,50 @@ export function ExpenseForm({
                 </SelectContent>
               </Select>
             </div>
-            {paymentMethod === "a_prazo" && (
+            {isPendingPaymentMethod(paymentMethod) && (
               <div className="space-y-1.5">
-                <Label>Vencimento</Label>
+                <Label>Vencimento (obrigatório)</Label>
                 <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
               </div>
             )}
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Link/código da nota fiscal (opcional)</Label>
-            <div className="flex gap-2">
+          {!isDespesa && (
+            <div className="space-y-1.5 max-w-xs">
+              <Label>Valor total da nota (R$, opcional)</Label>
               <Input
-                value={nfceUrl}
-                onChange={(e) => setNfceUrl(e.target.value)}
-                placeholder="Cole o link, ou leia o QR code da nota"
+                inputMode="decimal"
+                value={noteTotal}
+                onChange={(e) => setNoteTotal(e.target.value)}
+                placeholder={itemsTotal.toFixed(2)}
               />
-              <BarcodeScannerButton onScan={handleScanNfceQr} label="Ler QR" formats={["qr_code"]} />
+              <p className="text-xs text-muted-foreground">
+                Em branco, vale a soma dos itens (R$ {itemsTotal.toFixed(2)}). Se informar outro valor, a diferença vira
+                desconto (se menor) ou frete/outros custos (se maior).
+              </p>
             </div>
-          </div>
+          )}
 
-          <div className="space-y-1.5">
-            <Label>Observações (opcional)</Label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
-          </div>
+          {isDespesa && (
+            <>
+              <div className="space-y-1.5">
+                <Label>Link/código da nota fiscal (opcional)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={nfceUrl}
+                    onChange={(e) => setNfceUrl(e.target.value)}
+                    placeholder="Cole o link, ou leia o QR code da nota"
+                  />
+                  <BarcodeScannerButton onScan={handleScanNfceQr} label="Ler QR" formats={["qr_code"]} />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Observações (opcional)</Label>
+                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -999,6 +1060,8 @@ export function ExpenseForm({
       <Button onClick={handleSubmit} disabled={isPending} size="lg" className="w-full sm:w-auto">
         {isPending ? "Salvando..." : mode === "edit" ? "Salvar alterações" : isDespesa ? "Salvar despesa" : "Salvar compra"}
       </Button>
+      </>
+      )}
     </div>
   );
 }

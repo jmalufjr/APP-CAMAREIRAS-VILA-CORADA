@@ -27,26 +27,35 @@ export const PAYMENT_METHOD_OPTIONS: { value: PaymentMethod; label: string }[] =
 // de hóspede").
 export const GUEST_PAYMENT_METHOD_OPTIONS = PAYMENT_METHOD_OPTIONS.filter((o) => o.value !== "boleto");
 
-// Forma de pagamento do lado FORNECEDOR, usada em "Lançar compras e
-// despesas" (expenses.payment_method) — "a_prazo" não é uma forma de
-// pagamento de verdade, é a ausência de pagamento por ora: a despesa
-// nasce "pendente" e vira uma conta a pagar, até alguém registrar o
-// pagamento de verdade na tela "Pagamentos e recebimentos".
+// Forma de pagamento do lado FORNECEDOR, usada em "Lançar Compra"/"Lançar Despesa"
+// (expenses.payment_method). Cartão de crédito e "a prazo" não são pagamentos de
+// verdade: a compra nasce "pendente" e vira uma conta a pagar, até alguém registrar o
+// pagamento na tela "Pagamentos e recebimentos". PIX e cartão de débito saem do banco;
+// dinheiro sai do caixa.
 export const SUPPLIER_PAYMENT_METHOD_LABELS: Record<SupplierPaymentMethod, string> = {
-  banco_pix: "Banco/PIX",
+  banco_pix: "PIX",
   dinheiro: "Dinheiro",
-  cartao_corporativo: "Cartão corporativo",
+  cartao_debito: "Cartão de débito",
+  cartao_credito: "Cartão de crédito (fica pendente)",
   a_prazo: "A prazo (fica pendente)",
+  cartao_corporativo: "Cartão corporativo", // legado
 };
 
 export const SUPPLIER_PAYMENT_METHOD_OPTIONS: { value: SupplierPaymentMethod; label: string }[] = [
-  { value: "banco_pix", label: SUPPLIER_PAYMENT_METHOD_LABELS.banco_pix },
-  { value: "dinheiro", label: SUPPLIER_PAYMENT_METHOD_LABELS.dinheiro },
-  { value: "cartao_corporativo", label: SUPPLIER_PAYMENT_METHOD_LABELS.cartao_corporativo },
-  { value: "a_prazo", label: SUPPLIER_PAYMENT_METHOD_LABELS.a_prazo },
-];
+  "banco_pix",
+  "dinheiro",
+  "cartao_debito",
+  "cartao_credito",
+  "a_prazo",
+].map((v) => ({ value: v as SupplierPaymentMethod, label: SUPPLIER_PAYMENT_METHOD_LABELS[v as SupplierPaymentMethod] }));
 
-// Só as 3 formas de liquidação de verdade (sem "a prazo", que não é uma
-// forma de pagamento, é a ausência dele) — usado na tela "Pagamentos e
-// recebimentos" ao registrar o pagamento de uma conta pendente.
-export const SETTLEMENT_PAYMENT_METHOD_OPTIONS = SUPPLIER_PAYMENT_METHOD_OPTIONS.filter((o) => o.value !== "a_prazo");
+// Formas que NÃO pagam na hora: a compra fica pendente e exige data de vencimento.
+export function isPendingPaymentMethod(method: string | null | undefined): boolean {
+  return method === "a_prazo" || method === "cartao_credito";
+}
+
+// Só as formas de liquidação de verdade (as que não deixam pendente) — usado na tela
+// "Pagamentos e recebimentos" ao registrar o pagamento de uma conta pendente.
+export const SETTLEMENT_PAYMENT_METHOD_OPTIONS = SUPPLIER_PAYMENT_METHOD_OPTIONS.filter(
+  (o) => !isPendingPaymentMethod(o.value)
+);
