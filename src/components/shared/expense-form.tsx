@@ -28,7 +28,7 @@ import { BarcodeScannerButton } from "@/components/shared/barcode-scanner";
 import { CameraCaptureButton } from "@/components/shared/camera-capture-button";
 import { unitOptions, unitFactor } from "@/lib/units";
 import { addDaysKey } from "@/lib/date";
-import { Sparkles, Trash2, Plus, X, FileText, FolderOpen, ChevronDown, ChevronUp } from "lucide-react";
+import { Sparkles, Trash2, Plus, X, FileText, FolderOpen, Store, ChevronDown, ChevronUp } from "lucide-react";
 
 type LineType = "cost_item" | "fixed_asset";
 
@@ -168,6 +168,7 @@ export function ExpenseForm({
   // "Inserir manualmente" abre o formulário completo. Despesa e edição usam sempre o formulário completo.
   const [parsed, setParsed] = useState<ParsedReceipt | null>(null);
   const [manualMode, setManualMode] = useState(false);
+  const [feiraMode, setFeiraMode] = useState(false);
   const useCaptureFlow = !isDespesa && mode === "create" && !manualMode;
   // Valor total impresso na nota (opcional, só no formulário manual de compra): a diferença para
   // a soma dos itens vira desconto ou frete.
@@ -540,6 +541,11 @@ export function ExpenseForm({
             <Button type="button" variant="outline" onClick={handleReadWithAI} disabled={!receiptFile || isReadingAI}>
               <Sparkles size={16} /> {isReadingAI ? "Lendo..." : "Ler nota com IA"}
             </Button>
+            {useCaptureFlow && (
+              <Button type="button" variant="outline" onClick={() => setFeiraMode(true)} disabled={feiraMode}>
+                <Store size={16} /> Compra na Feira
+              </Button>
+            )}
           </div>
           <p className="text-xs text-muted-foreground">
             {useCaptureFlow
@@ -552,6 +558,8 @@ export function ExpenseForm({
       {useCaptureFlow ? (
         <ReceiptSummaryCard
           parsed={parsed}
+          feira={feiraMode}
+          onCancel={() => setFeiraMode(false)}
           isReading={isReadingAI}
           receiptFile={receiptFile}
           onManual={() => setManualMode(true)}
