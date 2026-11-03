@@ -43,13 +43,13 @@ interface NavItem {
 }
 
 const adminNav: NavItem[] = [
+  { href: "/dashboard", label: "Resumo executivo", icon: LayoutDashboard },
   {
     href: "/operacional",
     label: "Módulo operacional",
-    icon: LayoutDashboard,
+    icon: ClipboardList,
     matchPrefixes: [
       "/operacional",
-      "/dashboard",
       "/planejamento",
       "/chegadas-saidas",
       "/mesas",
@@ -73,8 +73,9 @@ const adminNav: NavItem[] = [
 ];
 
 const gerenteNav: NavItem[] = [
-  adminNav[0],
-  adminNav[1],
+  adminNav[0], // Resumo executivo
+  adminNav[1], // Módulo operacional
+  adminNav[2], // Módulo Contábil
   { href: "/sincronizacao", label: "Sincronização", icon: RefreshCw },
 ];
 

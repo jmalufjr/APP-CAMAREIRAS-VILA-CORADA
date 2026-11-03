@@ -403,9 +403,9 @@ export default function QuestoesRespostasPage() {
                 histórico do que essa pessoa já fez no sistema.
               </P>
               <P>
-                Existe também o papel <strong>“Gerente operacional”</strong>: ele só enxerga o Módulo
-                operacional (Resumo operacional com “Serviços nas suítes” e “Suítes vagas e limpas”,
-                Planejamento diário, Chegadas &amp; saídas, Mesas do café, Consumo de Bar e Frigobar e
+                Existe também o papel <strong>“Gerente operacional”</strong>: ele só enxerga o Resumo
+                executivo (com “Serviços nas suítes”, “Suítes vagas e limpas” e o Calendário de reservas), o Módulo
+                operacional (Planejamento diário, Chegadas &amp; saídas, Mesas do café, Consumo de Bar e Frigobar e
                 Comissões das camareiras), a Sincronização e, no Módulo Contábil, só Lançar Compra, Lista
                 de compras, Produtos com validade próxima, e Baixa de estoque. Ele não cadastra produtos
                 nem despesas novos, não vê saldos de caixa e banco e não acessa as demais telas.
@@ -419,10 +419,10 @@ export default function QuestoesRespostasPage() {
           </AccordionPanel>
         </AccordionItem>
 
-        {/* 9. Resumo operacional */}
+        {/* 9. Resumo executivo */}
         <AccordionItem value="dashboard">
           <AccordionTrigger>
-            <span className="font-heading text-base">9. O que a tela “Resumo operacional” me mostra?</span>
+            <span className="font-heading text-base">9. O que a tela “Resumo executivo” me mostra?</span>
           </AccordionTrigger>
           <AccordionPanel>
             <div className="space-y-3">
@@ -516,7 +516,7 @@ export default function QuestoesRespostasPage() {
           <AccordionPanel>
             <div className="space-y-3">
               <P>
-                Essa tela (menu do Resumo operacional, “Suítes vagas e limpas, disponíveis para alugar”)
+                Essa tela (menu do Resumo executivo, “Suítes vagas e limpas, disponíveis para alugar”)
                 mostra duas listas — <strong>suítes limpas</strong> e <strong>suítes sujas</strong> —
                 com todas as suítes que não têm hóspede previsto pra ficar hospedado hoje à noite. É
                 sempre calculada na hora, sem nenhum horário de corte: se uma suíte “disponível” receber
@@ -899,7 +899,7 @@ export default function QuestoesRespostasPage() {
                     editar ou excluir uma despesa já lançada) e exportação em planilha.
                   </>,
                   <>
-                    <strong>Resumo operacional</strong>: a tela “Previsão de estoque” (Módulo Contábil → Estoque) mostra os 20 itens mais comprados no mês e desde sempre (por valor), além
+                    <strong>Resumo executivo</strong>: a tela “Previsão de estoque” (Módulo Contábil → Estoque) mostra os 20 itens mais comprados no mês e desde sempre (por valor), além
                     do saldo, do custo médio, do valor em R$ e da previsão de dias restantes de cada item
                     de estoque.
                   </>,

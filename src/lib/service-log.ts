@@ -5,7 +5,7 @@ import type { ServiceLogRow } from "@/app/(admin)/dashboard/service-log-table";
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
 // Serviços CONCLUÍDOS (ciclo inteiro: execução + revisão + correção) num intervalo
-// de datas, com os horários de revisão e correção. Usada pelo Resumo operacional
+// de datas, com os horários de revisão e correção. Usada pelo Resumo executivo
 // (últimos 7 dias) e pelo Histórico (período escolhido).
 export async function getServiceLogRows(supabase: Supabase, from: string, to: string): Promise<ServiceLogRow[]> {
   const { data } = await supabase

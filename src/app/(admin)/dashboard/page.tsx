@@ -1,4 +1,3 @@
-import { BackLink } from "@/components/shared/back-link";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/actions/session";
@@ -38,8 +37,7 @@ export default async function DashboardPage() {
     const gerenteItems = menuItems.filter((i) => i.href === "/dashboard/servicos-suites" || i.href === "/dashboard/suites-disponiveis" || i.href === "/dashboard/calendario-stays");
     return (
       <div className="space-y-6">
-        <BackLink href="/operacional" />
-        <PageHeader title="Resumo operacional" subtitle={`Resumo de hoje, ${formatDatePt(todayKey())}`} />
+        <PageHeader title="Resumo executivo" subtitle={`Resumo de hoje, ${formatDatePt(todayKey())}`} />
         <nav className="max-w-md space-y-1.5">
           {gerenteItems.map((item) => (
             <Link
@@ -73,9 +71,8 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <BackLink href="/operacional" />
       <PageHeader
-        title="Resumo operacional"
+        title="Resumo executivo"
         subtitle={`Resumo de hoje, ${formatDatePt(today)}`}
         action={<ThemeToggle />}
       />

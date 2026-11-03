@@ -2931,6 +2931,15 @@ também é feita em Server Components.
     - **Testado** com a Stays real no banco local (120 linhas; Suíte 1 em novembro: 15 diárias e preço base
       médio R$ 717,52 em 29 dias, conferidos por um cálculo independente).
 
+61. **Parte 54 — "Resumo executivo" volta a ser menu principal** (02/11/2026): o menu que se chamava "Resumo
+    operacional" (`/dashboard`) voltou a se chamar **Resumo executivo** e saiu da lista de dentro do Módulo
+    operacional — agora é o 1º item do menu lateral, acima de "Módulo operacional", para admin e gerente
+    operacional (`adminNav`/`gerenteNav` em `app-sidebar.tsx`). O Módulo operacional ganhou o ícone de
+    lista (o painel ficou com o do Resumo executivo), perdeu `/dashboard` dos `matchPrefixes` e a tela
+    `/operacional` não lista mais o Resumo. Como é item de 1º nível, a página `/dashboard` não tem mais
+    "Voltar"; as telas dentro dela continuam voltando para `/dashboard`. Textos antigos "Resumo operacional"
+    nas partes 32–53 deste arquivo e em PRDs referem-se a esta mesma tela.
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de

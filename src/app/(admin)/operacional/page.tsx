@@ -2,7 +2,6 @@ import Link from "next/link";
 import { getCurrentProfile } from "@/lib/actions/session";
 import { PageHeader } from "@/components/shared/page-header";
 import {
-  LayoutDashboard,
   ClipboardCheck,
   CalendarClock,
   Coffee,
@@ -15,7 +14,6 @@ import {
 } from "lucide-react";
 
 const menuItems = [
-  { href: "/dashboard", label: "Resumo operacional", icon: LayoutDashboard },
   { href: "/planejamento", label: "Planejamento diário", icon: ClipboardCheck },
   { href: "/chegadas-saidas/gerenciar", label: "Chegadas & saídas", icon: CalendarClock },
   { href: "/mesas/gerenciar", label: "Mesas do café", icon: Coffee },
@@ -28,7 +26,6 @@ const menuItems = [
 
 // Itens que o gerente operacional enxerga (o resto é do admin).
 const GERENTE_HREFS = new Set([
-  "/dashboard",
   "/planejamento",
   "/chegadas-saidas/gerenciar",
   "/mesas/gerenciar",
