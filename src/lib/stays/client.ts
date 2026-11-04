@@ -190,3 +190,67 @@ export async function getStaysReservationsForStats(
   }
   return all;
 }
+
+// ---------- Avaliações de hóspedes (GET /external/v1/reviews/guest) ----------
+// Descoberto na prática: exige `from`/`to` (a API recusa mais de 1 ano; a Stays recomenda consultar de 6 em 6 meses), devolve `reviewList` +
+// `totalReviews`, e pagina por `limit` (até 100) e `page` (a partir de 0).
+export type StaysReviewRaw = Record<string, unknown> & {
+  _id: string;
+  source: string;
+  day: string;
+  rating?: number;
+  client?: { _id?: string; fName?: string };
+  apartment?: { _id?: string; avatar?: string };
+  reserve?: { _id?: string; id?: string };
+};
+
+const REVIEWS_PAGE_SIZE = 100;
+let reviewsCache: { at: number; data: StaysReviewRaw[] } | null = null;
+
+async function fetchReviewsWindow(from: string, to: string): Promise<StaysReviewRaw[]> {
+  const out: StaysReviewRaw[] = [];
+  for (let page = 0; page < 50; page++) {
+    const url = new URL("/external/v1/reviews/guest", staysBaseUrl());
+    url.searchParams.set("from", from);
+    url.searchParams.set("to", to);
+    url.searchParams.set("limit", String(REVIEWS_PAGE_SIZE));
+    url.searchParams.set("page", String(page));
+    const res = await fetch(url, { headers: { Authorization: staysAuthHeader() }, cache: "no-store" });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Stays API respondeu ${res.status}: ${body.slice(0, 300)}`);
+    }
+    const data = (await res.json()) as { reviewList?: StaysReviewRaw[]; totalReviews?: number };
+    const list = data.reviewList ?? [];
+    out.push(...list);
+    if (list.length === 0 || out.length >= (data.totalReviews ?? 0)) break;
+    await new Promise((r) => setTimeout(r, 250)); // a Stays limita chamadas seguidas (429)
+  }
+  return out;
+}
+
+// Todas as avaliações disponíveis: janelas de 6 meses (182 dias), da mais recente para trás, até quatro
+// janelas seguidas vazias (2 anos sem nada). Guardado em memória por 5 minutos (a lista muda devagar e cada consulta custa
+// várias chamadas à Stays).
+export async function getStaysGuestReviews(todayKey: string): Promise<StaysReviewRaw[]> {
+  if (reviewsCache && Date.now() - reviewsCache.at < 5 * 60 * 1000) return reviewsCache.data;
+
+  const shift = (key: string, days: number) => {
+    const [y, m, d] = key.split("-").map(Number);
+    return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+  };
+  const all = new Map<string, StaysReviewRaw>();
+  let to = todayKey;
+  let emptyInARow = 0;
+  for (let i = 0; i < 20 && emptyInARow < 4; i++) {
+    const from = shift(to, -181);
+    const list = await fetchReviewsWindow(from, to);
+    list.forEach((r) => all.set(r._id, r));
+    emptyInARow = list.length === 0 ? emptyInARow + 1 : 0;
+    to = shift(from, -1);
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  const data = [...all.values()];
+  reviewsCache = { at: Date.now(), data };
+  return data;
+}

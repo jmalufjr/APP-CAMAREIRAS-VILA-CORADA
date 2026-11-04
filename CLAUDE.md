@@ -3022,6 +3022,22 @@ também é feita em Server Components.
     - Produção: `supabase/producao/13` e `14`. Testado no banco local (compra, correção, livro fechando em 27,00 e
       gerente via SQL); não testado no navegador nem a classificação real pela IA (sem chave local).
 
+66. **Parte 59 — Avaliações de hóspedes (Stays)** (04/11/2026, direto em `main`, sem migração): duas telas no
+    Resumo executivo (só admin): `/dashboard/avaliacoes` (todas as avaliações, com notas por item e comentários) e
+    `/dashboard/avaliacoes-medias` (médias por suíte → por canal → por item; a Suíte 1 mostra no fim a média geral da
+    pousada por canal e, dentro de cada canal, por item).
+    - **API da Stays**: `GET /external/v1/reviews/guest` (não está na doc pública; a Stays informou o endereço).
+      Exige `from`/`to` (recusa mais de 1 ano; a Stays recomenda janelas de 6 em 6 meses), pagina por `limit` (até
+      100) e `page` **a partir de 0**, e devolve `reviewList` + `totalReviews`. `getStaysGuestReviews` (client.ts)
+      percorre janelas de 6 meses para trás até 4 vazias seguidas, com cache em memória de 5 min (~10 s sem cache).
+      Origens vistas: `bookingcom`, `airbnb`, `expedia`, `internal` (formulário da própria Stays); Decolar ainda não
+      apareceu. Cada avaliação traz suíte (`apartment._id` = `rooms.stays_listing_id`), hóspede e código da reserva.
+    - **Regras** (`src/lib/stays/reviews.ts`, puras): escala única 0–5 (itens do Booking vêm 0–10 e são divididos por
+      2); item com 0 = "não avaliado" e fica fora das médias; itens por canal em `ITEM_DEFS`; comentários em
+      `COMMENT_FIELDS`. Carregamento em `getGuestReviews` (`src/lib/actions/stays-reviews.ts`, só admin).
+    - **Testado** contra a Stays real (238 avaliações de 13/01/2025 a 03/11/2026: Booking 176, Airbnb 21, Expedia 2,
+      interna 39; médias conferidas). **Não testado** nas telas (Docker desligado na hora); só `tsc`/`lint`.
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de
