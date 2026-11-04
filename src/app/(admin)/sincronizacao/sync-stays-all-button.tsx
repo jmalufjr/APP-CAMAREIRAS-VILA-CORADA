@@ -40,7 +40,8 @@ export function SyncStaysAllButton() {
         { label: "Ticket médio de canais", r: result.channelStats },
       ];
 
-      const failed = parts.filter((p) => "error" in p.r);
+      const reviewsResult = result.guestReviews;
+      const failed = [...parts, { label: "Avaliações dos hóspedes", r: reviewsResult }].filter((p) => "error" in p.r);
       if (failed.length > 0) {
         toast.error(failed.map((p) => `${p.label}: ${(p.r as { error: string }).error}`).join(" · "));
       }
@@ -64,7 +65,11 @@ export function SyncStaysAllButton() {
           `Sincronizado com ${totals.errors} erro(s): ${totals.updated} atualizado(s), ${totals.skipped} preservado(s). Veja o console/logs para detalhes.`
         );
       } else if (failed.length === 0) {
-        toast.success(`Sincronizado: ${totals.updated} atualizado(s), ${totals.skipped} preservado(s).`);
+        const newReviews = "inserted" in reviewsResult ? (reviewsResult.inserted ?? 0) : 0;
+        toast.success(
+          `Sincronizado: ${totals.updated} atualizado(s), ${totals.skipped} preservado(s)` +
+            (newReviews > 0 ? `; ${newReviews} avaliação(ões) nova(s) de hóspedes.` : ".")
+        );
       }
 
       router.refresh();

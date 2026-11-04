@@ -7,6 +7,7 @@ import {
   getStaysClientName,
   getStaysListingCalendar,
   getStaysReservationsForStats,
+  getStaysGuestReviews,
   type StaysReservationRaw,
 } from "@/lib/stays/client";
 import {
@@ -25,6 +26,8 @@ import { dayNumber, keyFromDayNumber } from "@/lib/stays/calendar";
 import { deriveWorkType, daysBetween } from "@/lib/stays/derive-planning";
 import { assignRoomsToTables, tableNumber, type RoomGuestCount } from "@/lib/stays/derive-breakfast";
 import { todayKey, tomorrowKey, yesterdayKey } from "@/lib/date";
+import { normalizeReview } from "@/lib/stays/reviews";
+import { extractTopicsForPending } from "@/lib/review-topics";
 import { planExtraCleaning, weekStartKey, EXTRA_BASE_TYPES, type ExtraBaseType } from "@/lib/extra-cleaning";
 import { revalidatePath } from "next/cache";
 
@@ -907,13 +910,14 @@ export async function syncStaysAll(options?: SyncOptions) {
   const denied = await requireRole(["admin", "gerente_operacional"]);
   if (denied) {
     const e = { error: denied.error };
-    return { planning: e, arrivalsDepartures: e, breakfastTables: e, channelStats: e };
+    return { planning: e, arrivalsDepartures: e, breakfastTables: e, channelStats: e, guestReviews: e };
   }
   const planning = await syncStaysPlanning(options);
   const arrivalsDepartures = await syncStaysArrivalsDepartures(options);
   const breakfastTables = await syncStaysBreakfastTables(options);
   const channelStats = await syncStaysChannelStats();
-  return { planning, arrivalsDepartures, breakfastTables, channelStats };
+  const guestReviews = await syncStaysGuestReviews();
+  return { planning, arrivalsDepartures, breakfastTables, channelStats, guestReviews };
 }
 
 // Ticket médio de canais de venda (tela "Ticket médio de canais de venda"): busca na
@@ -993,4 +997,77 @@ export async function syncStaysChannelStats() {
 
   revalidatePath("/dashboard/ticket-medio-canais");
   return { success: true as const, updated: rowsToSave.length, skipped: 0, errors };
+}
+
+// Avaliações de hóspedes (tela "Avaliações dos hóspedes"): traz da Stays todas as avaliações
+// disponíveis e guarda/atualiza a cópia em guest_reviews. As novas recebem first_seen_at = agora
+// (é isso que a tela mostra como "novas"); na PRIMEIRA importação o first_seen_at é a data da própria
+// avaliação, para o histórico antigo não aparecer todo como novo. Nunca apaga nada, nem mexe na
+// resposta registrada. Depois, a IA lê os comentários ainda não lidos (melhor esforço).
+// Texto estável de um valor (chaves em ordem alfabética): o banco guarda jsonb com as chaves
+// reordenadas, então comparar JSON.stringify direto acusaria mudança que não existe.
+function canon(v: unknown): string {
+  if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
+  if (v && typeof v === "object") {
+    return "{" + Object.keys(v as object).sort().map((k) => JSON.stringify(k) + ":" + canon((v as Record<string, unknown>)[k])).join(",") + "}";
+  }
+  return JSON.stringify(v ?? null);
+}
+
+export async function syncStaysGuestReviews() {
+  const supabase = createAdminClient();
+  try {
+    const { data: rooms } = await supabase.from("rooms").select("number, stays_listing_id");
+    const suiteByListing = new Map<string, string>();
+    (rooms ?? []).forEach((r) => {
+      if (r.stays_listing_id) suiteByListing.set(r.stays_listing_id as string, String(Number(r.number) || r.number));
+    });
+
+    const raw = await getStaysGuestReviews(todayKey(), true);
+    const reviews = raw.map((r) => normalizeReview(r, suiteByListing));
+
+    const { data: existing } = await supabase.from("guest_reviews").select("id, rating, items, comments, suite_number");
+    const known = new Map(
+      (existing ?? []).map((e) => [e.id as string, canon([e.rating === null ? null : Number(e.rating), e.items, e.comments, e.suite_number])])
+    );
+    const firstImport = known.size === 0;
+    const nowIso = new Date().toISOString();
+
+    const toInsert: Record<string, unknown>[] = [];
+    let updated = 0;
+    for (const r of reviews) {
+      const base = {
+        day: r.day,
+        channel: r.channel,
+        suite_number: r.suite,
+        guest_name: r.guestName,
+        reservation_code: r.reservationCode,
+        stays_status: r.status,
+        rating: r.rating,
+        items: r.items,
+        comments: r.comments,
+        synced_at: nowIso,
+      };
+      const prev = known.get(r.id);
+      if (prev === undefined) {
+        toInsert.push({ id: r.id, ...base, first_seen_at: firstImport ? `${r.day}T12:00:00Z` : nowIso });
+      } else if (prev !== canon([r.rating, r.items, r.comments, r.suite])) {
+        // Conteúdo mudou na Stays: atualiza e manda a IA reler os comentários.
+        const { error } = await supabase.from("guest_reviews").update({ ...base, topics_read_at: null }).eq("id", r.id);
+        if (!error) updated++;
+      }
+    }
+    for (let i = 0; i < toInsert.length; i += 200) {
+      const { error } = await supabase.from("guest_reviews").insert(toInsert.slice(i, i + 200));
+      if (error) return { error: error.message };
+    }
+
+    const topics = await extractTopicsForPending(supabase, 40);
+    revalidatePath("/dashboard/avaliacoes");
+    revalidatePath("/dashboard/avaliacoes-medias");
+    revalidatePath("/dashboard/avaliacoes-temas");
+    return { success: true, inserted: toInsert.length, updated, total: reviews.length, topics };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erro ao sincronizar as avaliações." };
+  }
 }

@@ -3038,6 +3038,28 @@ também é feita em Server Components.
     - **Testado** contra a Stays real (238 avaliações de 13/01/2025 a 03/11/2026: Booking 176, Airbnb 21, Expedia 2,
       interna 39; médias conferidas). **Não testado** nas telas (Docker desligado na hora); só `tsc`/`lint`.
 
+67. **Parte 60 — Avaliações dos hóspedes: menu, resposta, novas e assuntos pela IA** (04/11/2026, direto em `main`;
+    migração `094` + `supabase/producao/15`): evolução da Parte 59. Agora admin **e gerente** veem tudo (middleware,
+    `requireRole`). O item do Resumo executivo virou **"Avaliações dos hóspedes"** (`/dashboard/avaliacoes-hospedes`,
+    submenu) com 3 telas: **"Avaliações: conteúdo e resposta"** (`/dashboard/avaliacoes`, ex-"Avaliações de hóspedes"),
+    **"Médias..."** (`avaliacoes-medias`) e **"Assuntos citados pelos hóspedes"** (`avaliacoes-temas`).
+    - **Cópia no banco**: `guest_reviews` (avaliação + notas por item + comentários + resposta) e `guest_review_topics`
+      (assunto, polaridade). `syncStaysGuestReviews` (`stays-sync.ts`) importa tudo da Stays, é chamada por `syncStaysAll`
+      (botões) e pelo cron diário, nunca apaga nem mexe em resposta. **"Novas"** = `first_seen_at` nos últimos 7 dias
+      (a 1ª importação grava a data da própria avaliação, para o histórico não nascer todo "novo"). Mudança de conteúdo
+      na Stays reenvia os comentários à IA; a comparação usa `canon()` porque o jsonb reordena chaves.
+    - **Resposta**: `saveReviewReply`/`ReplyBox`, por admin ou gerente; fica **só no app** (quem e quando). A Stays tem
+      `PATCH /external/v1/reviews/guest/{id}` (existe), mas os campos aceitos não são documentados e descobri-los exigiria
+      alterar uma avaliação real — falta perguntar à Stays qual campo publica a resposta e se ela vai ao Booking/Airbnb.
+    - **Assuntos pela IA** (`src/lib/review-topics.ts`): lotes de 15, rótulos curtos reaproveitando os já usados, só
+      positivo/negativo, sem duplicar na mesma avaliação; até 40 por sincronização e botão "Ler comentários pendentes" (60).
+      Tela soma "vezes citado" por polaridade. Modelo `claude-sonnet-5`.
+    - **Médias**: o card "Média geral da pousada" (por canal e por canal×item) agora fica no topo, fora da Suíte 1.
+    - **Testado** no banco local com a Stays real (238 importadas, 2ª sincronização sem reler nada, resposta gravada/
+      apagada, páginas 200 para admin e gerente, gerente continua barrado no ticket médio) e a leitura pela IA com um
+      servidor de mentira (a chave local é inválida): contagem, deduplicação e pendências corretas. **Não testado** com a
+      IA real nem os cliques no navegador.
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de

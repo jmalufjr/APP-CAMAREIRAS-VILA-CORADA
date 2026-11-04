@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/shared/page-header";
 import { BackLink } from "@/components/shared/back-link";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
 import { getGuestReviews } from "@/lib/actions/stays-reviews";
 import {
@@ -39,19 +40,64 @@ function ItemsTable({ data }: { data: ChannelAverage }) {
   );
 }
 
+function PousadaCard({ all }: { all: NormalizedReview[] }) {
+  const channels = channelsPresent(all);
+  return (
+    <Card className="max-w-3xl border-primary/40">
+      <CardHeader>
+        <CardTitle className="font-heading text-lg">
+          Média geral da pousada · {fmt(overallAverage(all))} · {plural(all.length)}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-1.5">
+          <p className="text-sm font-medium">Por canal</p>
+          <table className="w-full max-w-md text-sm">
+            <thead className="text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="py-1 font-medium">Canal</th>
+                <th className="py-1 text-right font-medium">Média</th>
+                <th className="py-1 text-right font-medium">Avaliações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {channels.map((c) => {
+                const a = channelAverage(all, c);
+                return (
+                  <tr key={c} className="border-t border-border">
+                    <td className="py-1.5">{a.channelLabel}</td>
+                    <td className="py-1.5 text-right tabular-nums">{fmt(a.average)}</td>
+                    <td className="py-1.5 text-right tabular-nums text-muted-foreground">{a.count}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {channels.map((c) => {
+          const a = channelAverage(all, c);
+          return (
+            <div key={c} className="space-y-1.5">
+              <p className="text-sm font-medium">
+                {a.channelLabel} · por item avaliado · média {fmt(a.average)}
+              </p>
+              <ItemsTable data={a} />
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
 function SuiteBlock({
   suite,
   reviews,
-  all,
-  isFirst,
 }: {
   suite: string;
   reviews: NormalizedReview[];
-  all: NormalizedReview[];
-  isFirst: boolean;
 }) {
   const channels = channelsPresent(reviews);
-  const allChannels = channelsPresent(all);
 
   return (
     <AccordionItem value={`suite-${suite}`}>
@@ -68,7 +114,6 @@ function SuiteBlock({
           <Accordion className="space-y-2">
             {channels.map((c) => {
               const mine = channelAverage(reviews, c);
-              const hotel = isFirst ? channelAverage(all, c) : null;
               return (
                 <AccordionItem key={c} value={`suite-${suite}-${c}`}>
                   <AccordionTrigger>
@@ -79,14 +124,6 @@ function SuiteBlock({
                   </AccordionTrigger>
                   <AccordionPanel className="space-y-4">
                     <ItemsTable data={mine} />
-                    {hotel && (
-                      <div className="space-y-1.5 rounded-lg bg-muted/40 p-3">
-                        <p className="text-sm font-medium">
-                          Média geral da pousada neste canal · {fmt(hotel.average)} · {plural(hotel.count)}
-                        </p>
-                        <ItemsTable data={hotel} />
-                      </div>
-                    )}
                   </AccordionPanel>
                 </AccordionItem>
               );
@@ -94,34 +131,6 @@ function SuiteBlock({
           </Accordion>
         )}
 
-        {isFirst && (
-          <div className="space-y-1.5 rounded-lg bg-muted/40 p-3">
-            <p className="text-sm font-medium">
-              Média geral da pousada · {fmt(overallAverage(all))} · {plural(all.length)}
-            </p>
-            <table className="w-full max-w-md text-sm">
-              <thead className="text-left text-xs text-muted-foreground">
-                <tr>
-                  <th className="py-1 font-medium">Canal</th>
-                  <th className="py-1 text-right font-medium">Média</th>
-                  <th className="py-1 text-right font-medium">Avaliações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allChannels.map((c) => {
-                  const a = channelAverage(all, c);
-                  return (
-                    <tr key={c} className="border-t border-border">
-                      <td className="py-1.5">{a.channelLabel}</td>
-                      <td className="py-1.5 text-right tabular-nums">{fmt(a.average)}</td>
-                      <td className="py-1.5 text-right tabular-nums text-muted-foreground">{a.count}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
       </AccordionPanel>
     </AccordionItem>
   );
@@ -133,7 +142,7 @@ export default async function AvaliacoesMediasPage() {
   if ("error" in result) {
     return (
       <div className="space-y-6">
-        <BackLink href="/dashboard" />
+        <BackLink href="/dashboard/avaliacoes-hospedes" />
         <PageHeader title="Médias das avaliações" subtitle="Por suíte, por canal e por item avaliado." />
         <p className="text-sm text-destructive">{result.error}</p>
       </div>
@@ -149,14 +158,16 @@ export default async function AvaliacoesMediasPage() {
 
   return (
     <div className="space-y-6">
-      <BackLink href="/dashboard" />
+      <BackLink href="/dashboard/avaliacoes-hospedes" />
       <PageHeader
         title="Médias das avaliações"
         subtitle="Uma seção por suíte; dentro dela, um canal por vez; dentro de cada canal, a média de cada item avaliado. Notas de 0 a 5. Itens não avaliados pelo hóspede ficam fora da média."
       />
+      <PousadaCard all={reviews} />
+
       <Accordion className="space-y-3 max-w-3xl">
-        {numbers.map((n, idx) => (
-          <SuiteBlock key={n} suite={n} reviews={reviews.filter((r) => r.suite === n)} all={reviews} isFirst={idx === 0} />
+        {numbers.map((n) => (
+          <SuiteBlock key={n} suite={n} reviews={reviews.filter((r) => r.suite === n)} />
         ))}
       </Accordion>
       {orphan > 0 && (

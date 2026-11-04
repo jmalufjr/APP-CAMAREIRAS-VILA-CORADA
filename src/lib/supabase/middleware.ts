@@ -91,6 +91,10 @@ export async function updateSession(request: NextRequest) {
         "/checklists",
         "/compras/nova",
         "/compras/relatorio",
+        "/dashboard/avaliacoes-hospedes",
+        "/dashboard/avaliacoes",
+        "/dashboard/avaliacoes-medias",
+        "/dashboard/avaliacoes-temas",
         "/compras/validade",
         "/compras/baixa",
       ];

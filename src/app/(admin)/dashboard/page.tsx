@@ -17,14 +17,12 @@ import {
   CalendarRange,
   CircleDollarSign,
   Star,
-  BarChart3,
 } from "lucide-react";
 
 const menuItems = [
   { href: "/dashboard/calendario-stays", label: "Calendário de reservas - Stays", icon: CalendarRange },
   { href: "/dashboard/ticket-medio-canais", label: "Ticket médio de canais de venda", icon: CircleDollarSign },
-  { href: "/dashboard/avaliacoes", label: "Avaliações de hóspedes", icon: Star },
-  { href: "/dashboard/avaliacoes-medias", label: "Médias das avaliações por suíte, canal e item", icon: BarChart3 },
+  { href: "/dashboard/avaliacoes-hospedes", label: "Avaliações dos hóspedes", icon: Star },
   { href: "/dashboard/servicos-suites", label: "Serviços nas suítes", icon: BedDouble },
   {
     href: "/dashboard/suites-disponiveis",
@@ -38,7 +36,7 @@ const menuItems = [
 export default async function DashboardPage() {
   const profile = await getCurrentProfile();
   if (profile.role === "gerente_operacional") {
-    const gerenteItems = menuItems.filter((i) => i.href === "/dashboard/servicos-suites" || i.href === "/dashboard/suites-disponiveis" || i.href === "/dashboard/calendario-stays");
+    const gerenteItems = menuItems.filter((i) => i.href === "/dashboard/servicos-suites" || i.href === "/dashboard/suites-disponiveis" || i.href === "/dashboard/calendario-stays" || i.href === "/dashboard/avaliacoes-hospedes");
     return (
       <div className="space-y-6">
         <PageHeader title="Resumo executivo" subtitle={`Resumo de hoje, ${formatDatePt(todayKey())}`} />

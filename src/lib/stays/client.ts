@@ -232,8 +232,8 @@ async function fetchReviewsWindow(from: string, to: string): Promise<StaysReview
 // Todas as avaliações disponíveis: janelas de 6 meses (182 dias), da mais recente para trás, até quatro
 // janelas seguidas vazias (2 anos sem nada). Guardado em memória por 5 minutos (a lista muda devagar e cada consulta custa
 // várias chamadas à Stays).
-export async function getStaysGuestReviews(todayKey: string): Promise<StaysReviewRaw[]> {
-  if (reviewsCache && Date.now() - reviewsCache.at < 5 * 60 * 1000) return reviewsCache.data;
+export async function getStaysGuestReviews(todayKey: string, fresh = false): Promise<StaysReviewRaw[]> {
+  if (!fresh && reviewsCache && Date.now() - reviewsCache.at < 5 * 60 * 1000) return reviewsCache.data;
 
   const shift = (key: string, days: number) => {
     const [y, m, d] = key.split("-").map(Number);
