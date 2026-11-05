@@ -3053,7 +3053,8 @@ também é feita em Server Components.
       alterar uma avaliação real — falta perguntar à Stays qual campo publica a resposta e se ela vai ao Booking/Airbnb.
     - **Assuntos pela IA** (`src/lib/review-topics.ts`): lotes de 15, rótulos curtos reaproveitando os já usados, só
       positivo/negativo, sem duplicar na mesma avaliação; até 40 por sincronização e botão "Ler comentários pendentes" (60).
-      Tela soma "vezes citado" por polaridade. Modelo `claude-sonnet-5`.
+      Tela soma "vezes citado" por polaridade. Modelo `claude-sonnet-5`. Lotes de 10, `max_tokens` 8192; se a resposta vier cortada/inválida
+      (visto em produção com lotes de 15), o lote é dividido ao meio e relido, sem derrubar o resto.
     - **Médias**: o card "Média geral da pousada" (por canal e por canal×item) agora fica no topo, fora da Suíte 1.
     - **Testado** no banco local com a Stays real (238 importadas, 2ª sincronização sem reler nada, resposta gravada/
       apagada, páginas 200 para admin e gerente, gerente continua barrado no ticket médio) e a leitura pela IA com um
