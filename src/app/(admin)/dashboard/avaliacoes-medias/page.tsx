@@ -7,6 +7,7 @@ import {
   channelAverage,
   channelsPresent,
   overallAverage,
+  overallItemAverages,
   type ChannelAverage,
   type NormalizedReview,
 } from "@/lib/stays/reviews";
@@ -51,7 +52,7 @@ function PousadaCard({ all }: { all: NormalizedReview[] }) {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-1.5">
-          <p className="text-sm font-medium">Por canal</p>
+          <p className="text-sm font-medium">Média geral da pousada por canal</p>
           <table className="w-full max-w-md text-sm">
             <thead className="text-left text-xs text-muted-foreground">
               <tr>
@@ -74,12 +75,16 @@ function PousadaCard({ all }: { all: NormalizedReview[] }) {
             </tbody>
           </table>
         </div>
+        <div className="space-y-1.5">
+          <p className="text-sm font-medium">Média geral da pousada por item avaliado (todos os canais)</p>
+          <ItemsTable data={{ channel: "all", channelLabel: "Todos os canais", average: overallAverage(all), count: all.length, items: overallItemAverages(all) }} />
+        </div>
         {channels.map((c) => {
           const a = channelAverage(all, c);
           return (
             <div key={c} className="space-y-1.5">
               <p className="text-sm font-medium">
-                {a.channelLabel} · por item avaliado · média {fmt(a.average)}
+                Média geral da pousada por item avaliado no {a.channelLabel} · média do canal {fmt(a.average)}
               </p>
               <ItemsTable data={a} />
             </div>

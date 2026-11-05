@@ -170,3 +170,12 @@ export function channelsPresent(reviews: NormalizedReview[]): string[] {
 export function overallAverage(reviews: NormalizedReview[]): number | null {
   return avg(reviews.map((r) => r.rating).filter((v): v is number => v !== null));
 }
+
+// Média de cada item avaliado somando todos os canais (itens com o mesmo nome entram juntos).
+export function overallItemAverages(reviews: NormalizedReview[]): ItemAverage[] {
+  const byItem = new Map<string, number[]>();
+  reviews.forEach((r) => r.items.forEach((i) => byItem.set(i.label, [...(byItem.get(i.label) ?? []), i.value])));
+  return [...byItem.entries()]
+    .map(([label, values]) => ({ label, average: avg(values) as number, count: values.length }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
