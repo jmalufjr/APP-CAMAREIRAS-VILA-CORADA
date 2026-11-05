@@ -5,6 +5,7 @@ import {
   syncStaysBreakfastTables,
   syncStaysChannelStats,
   syncStaysGuestReviews,
+  syncStaysIndicators,
 } from "@/lib/actions/stays-sync";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -29,6 +30,7 @@ export async function GET(request: NextRequest) {
   const breakfastTables = await syncStaysBreakfastTables();
   const channelStats = await syncStaysChannelStats();
   const guestReviews = await syncStaysGuestReviews();
+  const indicators = await syncStaysIndicators();
 
   // Retenção de 90 dias do histórico de mudanças da API de consumos
   // (PRD_consumos-api-joao-v1.md item 4) — soma de graça na mesma execução
@@ -37,5 +39,5 @@ export async function GET(request: NextRequest) {
   const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
   await supabase.from("room_bill_change_events").delete().lt("occurred_at", cutoff);
 
-  return NextResponse.json({ planning, arrivalsDepartures, breakfastTables, channelStats, guestReviews });
+  return NextResponse.json({ planning, arrivalsDepartures, breakfastTables, channelStats, guestReviews, indicators });
 }

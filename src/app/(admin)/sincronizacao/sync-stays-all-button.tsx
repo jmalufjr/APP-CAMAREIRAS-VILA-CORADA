@@ -41,7 +41,7 @@ export function SyncStaysAllButton() {
       ];
 
       const reviewsResult = result.guestReviews;
-      const failed = [...parts, { label: "Avaliações dos hóspedes", r: reviewsResult }].filter((p) => "error" in p.r);
+      const failed = [...parts, { label: "Avaliações dos hóspedes", r: reviewsResult }, { label: "Indicadores", r: result.indicators }].filter((p) => "error" in p.r);
       if (failed.length > 0) {
         toast.error(failed.map((p) => `${p.label}: ${(p.r as { error: string }).error}`).join(" · "));
       }

@@ -8,6 +8,7 @@ import {
   getStaysListingCalendar,
   getStaysReservationsForStats,
   getStaysGuestReviews,
+  getStaysIndicatorData,
   type StaysReservationRaw,
 } from "@/lib/stays/client";
 import {
@@ -15,18 +16,21 @@ import {
   CHANNELS,
   groupOfRoom,
   monthKeys,
+  monthStart,
   monthEnd,
   aggregateReservations,
   baseAverages,
   basePricesByDate,
   type GroupKey,
   type CalendarDayRaw,
+  type ReservationForStats,
 } from "@/lib/stays/channel-stats";
 import { dayNumber, keyFromDayNumber } from "@/lib/stays/calendar";
 import { deriveWorkType, daysBetween } from "@/lib/stays/derive-planning";
 import { assignRoomsToTables, tableNumber, type RoomGuestCount } from "@/lib/stays/derive-breakfast";
-import { todayKey, tomorrowKey, yesterdayKey } from "@/lib/date";
+import { todayKey, tomorrowKey, yesterdayKey, addDaysKey } from "@/lib/date";
 import { normalizeReview } from "@/lib/stays/reviews";
+import { computeMonthBases, monthsBetween, IND_CHANNELS, type BlockEntry } from "@/lib/stays/indicators";
 import { extractTopicsForPending } from "@/lib/review-topics";
 import { planExtraCleaning, weekStartKey, EXTRA_BASE_TYPES, type ExtraBaseType } from "@/lib/extra-cleaning";
 import { revalidatePath } from "next/cache";
@@ -910,14 +914,15 @@ export async function syncStaysAll(options?: SyncOptions) {
   const denied = await requireRole(["admin", "gerente_operacional"]);
   if (denied) {
     const e = { error: denied.error };
-    return { planning: e, arrivalsDepartures: e, breakfastTables: e, channelStats: e, guestReviews: e };
+    return { planning: e, arrivalsDepartures: e, breakfastTables: e, channelStats: e, guestReviews: e, indicators: e };
   }
   const planning = await syncStaysPlanning(options);
   const arrivalsDepartures = await syncStaysArrivalsDepartures(options);
   const breakfastTables = await syncStaysBreakfastTables(options);
   const channelStats = await syncStaysChannelStats();
   const guestReviews = await syncStaysGuestReviews();
-  return { planning, arrivalsDepartures, breakfastTables, channelStats, guestReviews };
+  const indicators = await syncStaysIndicators();
+  return { planning, arrivalsDepartures, breakfastTables, channelStats, guestReviews, indicators };
 }
 
 // Ticket médio de canais de venda (tela "Ticket médio de canais de venda"): busca na
@@ -1069,5 +1074,64 @@ export async function syncStaysGuestReviews() {
     return { success: true, inserted: toInsert.length, updated, total: reviews.length, topics };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Erro ao sincronizar as avaliações." };
+  }
+}
+
+// Indicadores (tela "Indicadores"): traz da Stays as reservas com preço e os bloqueios/manutenção e
+// guarda a base de cada mês (diárias pagas/gratuitas e receita por canal, noites bloqueadas e em
+// manutenção). A tela lê só dessas tabelas. Sem nada guardado ainda (ou com `full`), importa todo o
+// histórico; nas demais vezes refaz de 3 meses atrás até 6 meses à frente (o passado distante não muda).
+export async function syncStaysIndicators(options?: { full?: boolean }) {
+  const supabase = createAdminClient();
+  try {
+    const { data: rooms } = await supabase.from("rooms").select("stays_listing_id").eq("active", true).not("stays_listing_id", "is", null);
+    const listingIds = new Set((rooms ?? []).map((r) => r.stays_listing_id as string));
+    if (listingIds.size === 0) return { error: "Nenhuma suíte com stays_listing_id configurado." };
+
+    const { count } = await supabase.from("indicator_months").select("month", { count: "exact", head: true });
+    const full = options?.full === true || (count ?? 0) === 0;
+
+    const today = todayKey();
+    const lastMonth = monthKeys(today, 7)[6];
+    const toKey = monthEnd(lastMonth);
+    const fromKey = full ? null : monthStart(addDaysKey(today, -90));
+
+    const data = await getStaysIndicatorData(fromKey, toKey);
+    const starts = [...data.reservations.map((r) => r.checkInDate), ...data.blocks.map((b) => b.checkInDate)].sort();
+    const firstMonth = fromKey ? monthStart(fromKey) : starts.length > 0 ? monthStart(starts[0]) : monthStart(today);
+    const months = monthsBetween(firstMonth, lastMonth);
+
+    const bases = computeMonthBases(
+      data.reservations as ReservationForStats[],
+      data.blocks.filter((b) => b.type === "blocked" || b.type === "maintenance") as BlockEntry[],
+      listingIds,
+      months
+    );
+
+    const nowIso = new Date().toISOString();
+    const monthRows = months.map((m) => ({
+      month: m,
+      rooms: listingIds.size,
+      blocked_nights: bases.get(m)!.blocked,
+      maintenance_nights: bases.get(m)!.maintenance,
+      synced_at: nowIso,
+    }));
+    const channelRows = months.flatMap((m) =>
+      IND_CHANNELS.map(({ key }) => {
+        const c = bases.get(m)!.channels[key];
+        return { month: m, channel: key, paid_nights: c.paid, free_nights: c.free, revenue: Math.round(c.revenue * 100) / 100 };
+      })
+    );
+
+    const { error: e1 } = await supabase.from("indicator_months").upsert(monthRows, { onConflict: "month" });
+    if (e1) return { error: e1.message };
+    for (let i = 0; i < channelRows.length; i += 300) {
+      const { error: e2 } = await supabase.from("indicator_month_channels").upsert(channelRows.slice(i, i + 300), { onConflict: "month,channel" });
+      if (e2) return { error: e2.message };
+    }
+    revalidatePath("/dashboard/indicadores");
+    return { success: true, months: months.length, full };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erro ao sincronizar os indicadores." };
   }
 }

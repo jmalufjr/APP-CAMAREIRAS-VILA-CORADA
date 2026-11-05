@@ -3061,6 +3061,25 @@ também é feita em Server Components.
       servidor de mentira (a chave local é inválida): contagem, deduplicação e pendências corretas. **Não testado** com a
       IA real nem os cliques no navegador.
 
+68. **Parte 61 — Indicadores (ADR, RevPAR, NetRevPAR, ocupação)** (05/11/2026, direto em `main`; migração `095` +
+    `supabase/producao/16`; requisitos em `PRD_indicadores.md`): tela `/dashboard/indicadores` (Resumo executivo, **só admin**,
+    logo abaixo de "Avaliações dos hóspedes"), com card de comissão por canal no topo, resumo das fórmulas, "Mês corrente e
+    meses seguintes" e "Meses fechados" (mais recente primeiro).
+    - **Dados**: `getStaysIndicatorData` (client.ts) busca em janelas de 6 meses as reservas com preço (confirmadas, pré-reservas,
+      contratos) e os bloqueios/manutenção; `syncStaysIndicators` (stays-sync.ts, chamada por `syncStaysAll` e pelo cron) guarda
+      por mês/canal as diárias pagas, gratuitas e a receita (`indicator_month_channels`) e por mês as noites bloqueadas e em
+      manutenção (`indicator_months`). A tela só lê dessas tabelas (~0,3 s); a 1ª abertura importa todo o histórico (~30 s; histórico
+      da pousada vai de jan/2024), as sincronizações seguintes refazem de 3 meses atrás a 6 à frente. Comissão: `channel_commissions`
+      (um % por canal, aplicado na hora de exibir — mudar recalcula todos os meses, inclusive os fechados).
+    - **Regras** (`src/lib/stays/indicators.ts`, puras, 17 casos testados): diária = dia do check-in até a véspera do check-out
+      (virada de mês e check-out no dia 1º corretos); valor 0/sem preço = gratuita; bloqueio/manutenção contam 1x por suíte/dia.
+    - **Divergência do PRD (a STR prevalece, explicada na tela e na pergunta 17 de "Questões e Respostas")**: oferta = suítes × dias
+      do mês, **sem** descontar bloqueio/manutenção; ocupação comercial = vendidas ÷ oferta; ocupação física segue o PRD (não existe
+      na STR). Bloqueio/manutenção aparecem em colunas à parte.
+    - **Testado**: regras com casos sintéticos; importação real da Stays no banco local (34 meses fechados, 7 abertos; ex. nov/2026:
+      140 diárias, ADR R$ 823, RevPAR R$ 349), comissão (booking 15% → NetRevPAR menor), validação do %, sincronização parcial, e a
+      página renderizada por sessão real de admin. **Não testado** nos cliques do navegador.
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de

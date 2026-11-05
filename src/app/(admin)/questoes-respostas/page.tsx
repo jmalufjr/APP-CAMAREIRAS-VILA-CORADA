@@ -1286,6 +1286,73 @@ export default function QuestoesRespostasPage() {
             </div>
           </AccordionPanel>
         </AccordionItem>
+
+        <AccordionItem value="indicadores">
+          <AccordionTrigger>
+            <span className="text-left">17. Como são calculados os indicadores (ADR, RevPAR, NetRevPAR e ocupação)?</span>
+          </AccordionTrigger>
+          <AccordionPanel>
+            <div className="space-y-3">
+              <P>
+                A tela <strong>Indicadores</strong> (Resumo executivo, só para o administrador) mostra, mês a
+                mês, o desempenho da pousada com os dados da Stays. Tudo é contado por <strong>diária</strong>:
+                cada diária pertence ao dia em que começa (o check-in conta, o check-out não). Uma reserva
+                que atravessa a virada do mês dá a cada mês a sua parte das diárias e da receita — um check-out
+                no dia 1º é diária do último dia do mês anterior, e um check-in no último dia do mês é diária
+                desse dia. Reservas canceladas não entram em nada. A tela separa os <strong>meses fechados</strong>{" "}
+                do <strong>mês corrente e dos seguintes</strong>, que ainda mudam com novas reservas.
+              </P>
+              <SubHeading>As fórmulas</SubHeading>
+              <List
+                items={[
+                  <>
+                    <strong>Diárias disponíveis</strong>: número de suítes × dias do mês.
+                  </>,
+                  <>
+                    <strong>ADR</strong> (diária média): receita bruta de hospedagem ÷ diárias vendidas. Só
+                    entram diárias com cobrança; as gratuitas ficam fora.
+                  </>,
+                  <>
+                    <strong>RevPAR</strong> (receita por diária disponível): receita bruta ÷ diárias disponíveis.
+                  </>,
+                  <>
+                    <strong>NetRevPAR</strong>: (receita bruta − comissões dos canais) ÷ diárias disponíveis.
+                  </>,
+                  <>
+                    <strong>Ocupação comercial</strong>: diárias vendidas ÷ diárias disponíveis.
+                  </>,
+                  <>
+                    <strong>Ocupação física</strong>: (vendidas + gratuitas + bloqueadas) ÷ (disponíveis −
+                    manutenção).
+                  </>,
+                ]}
+              />
+              <P>
+                A <strong>receita bruta</strong> é só a de hospedagem, diária a diária, antes das comissões e
+                sem impostos ou taxas. A <strong>comissão</strong> de cada canal (Booking, Airbnb, Expedia,
+                Decolar/Despegar, reservas diretas e outros) é um percentual que o administrador digita no
+                card do topo da tela; ela vale para todos os meses (mudar o percentual recalcula tudo) e só
+                afeta o NetRevPAR.
+              </P>
+              <SubHeading>Onde o cálculo segue o padrão da STR/CoStar e não o pedido original</SubHeading>
+              <P>
+                O pedido original descontava as noites bloqueadas e as de manutenção do total de diárias
+                disponíveis (no RevPAR, no NetRevPAR e na ocupação comercial). O padrão internacional da
+                STR/CoStar <strong>não faz isso</strong>: a oferta é sempre todas as suítes × todos os dias do
+                mês — uma suíte só sai da conta quando é retirada do inventário por um período longo (uma
+                reforma, por exemplo). Por isso a tela usa a oferta completa e mostra as noites de bloqueio e
+                de manutenção em colunas separadas, para você conferir quanto pesaram. A ocupação física não
+                existe na STR e foi mantida como o pedido original define. A STR também não conta cortesias
+                (diárias gratuitas) como vendidas nem como receita, o que coincide com o pedido.
+              </P>
+              <P>
+                Os números ficam guardados no app e são atualizados a cada sincronização com a Stays (manual
+                ou automática). Na primeira abertura a tela importa todo o histórico, o que leva alguns
+                instantes; o botão “Atualizar histórico completo” refaz essa importação quando necessário.
+              </P>
+            </div>
+          </AccordionPanel>
+        </AccordionItem>
       </Accordion>
     </div>
   );

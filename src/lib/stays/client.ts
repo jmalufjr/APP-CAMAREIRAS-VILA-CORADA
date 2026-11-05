@@ -254,3 +254,39 @@ export async function getStaysGuestReviews(todayKey: string, fresh = false): Pro
   reviewsCache = { at: Date.now(), data };
   return data;
 }
+
+// ---------- Indicadores (ADR, RevPAR...) ----------
+// Reservas com preço (confirmadas, pré-reservas e contratos) e bloqueios/manutenção de um período
+// longo, buscados em janelas de 6 meses (mais seguras para a Stays). `fromKey` = null busca todo o
+// histórico: volta janela a janela, até 4 seguidas sem nenhuma reserva nem bloqueio (2 anos).
+export async function getStaysIndicatorData(
+  fromKey: string | null,
+  toKey: string
+): Promise<{ reservations: StaysStatsReservationRaw[]; blocks: StaysCalendarEntryRaw[] }> {
+  const shift = (key: string, days: number) => {
+    const [y, m, d] = key.split("-").map(Number);
+    return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+  };
+  const reservations = new Map<string, StaysStatsReservationRaw>();
+  const blocks = new Map<string, StaysCalendarEntryRaw>();
+  const pause = () => new Promise((r) => setTimeout(r, 250));
+
+  let to = toKey;
+  let emptyInARow = 0;
+  for (let i = 0; i < 30; i++) {
+    const from = shift(to, -181);
+    if (fromKey && to < fromKey) break;
+    const windowFrom = fromKey && from < fromKey ? fromKey : from;
+
+    const res = await getStaysReservationsForStats(windowFrom, to);
+    const blk = [...(await fetchCalendarType("blocked", windowFrom, to)), ...(await fetchCalendarType("maintenance", windowFrom, to))];
+    res.forEach((r) => reservations.set(r._id, r));
+    blk.forEach((b) => blocks.set(b._id, b));
+
+    emptyInARow = res.length === 0 && blk.length === 0 ? emptyInARow + 1 : 0;
+    if (!fromKey && emptyInARow >= 4) break;
+    to = shift(windowFrom, -1);
+    await pause();
+  }
+  return { reservations: [...reservations.values()], blocks: [...blocks.values()] };
+}

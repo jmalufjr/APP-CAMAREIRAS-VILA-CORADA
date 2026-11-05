@@ -17,12 +17,14 @@ import {
   CalendarRange,
   CircleDollarSign,
   Star,
+  TrendingUp,
 } from "lucide-react";
 
 const menuItems = [
   { href: "/dashboard/calendario-stays", label: "Calendário de reservas - Stays", icon: CalendarRange },
   { href: "/dashboard/ticket-medio-canais", label: "Ticket médio de canais de venda", icon: CircleDollarSign },
   { href: "/dashboard/avaliacoes-hospedes", label: "Avaliações dos hóspedes", icon: Star },
+  { href: "/dashboard/indicadores", label: "Indicadores", icon: TrendingUp },
   { href: "/dashboard/servicos-suites", label: "Serviços nas suítes", icon: BedDouble },
   {
     href: "/dashboard/suites-disponiveis",
