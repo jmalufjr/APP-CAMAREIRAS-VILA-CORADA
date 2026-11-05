@@ -56,7 +56,7 @@ export async function signInAction(formData: FormData) {
     admin: "/dashboard",
     camareira: "/tarefas",
     manutencao: "/manutencao/ocorrencias",
-    gerente_operacional: "/operacional",
+    gerente_operacional: "/dashboard",
   };
   redirect(roleHome[profile?.role ?? "camareira"] ?? "/tarefas");
 }

@@ -65,10 +65,12 @@ export async function updateSession(request: NextRequest) {
       admin: "/dashboard",
       camareira: "/tarefas",
       manutencao: "/manutencao/ocorrencias",
-      gerente_operacional: "/operacional",
+      gerente_operacional: "/dashboard",
     };
 
-    if (path === "/login") {
+    // Já logado: tanto /login quanto a página inicial (/) levam direto à tela inicial do papel
+    // (admin e gerente: Resumo executivo).
+    if (path === "/login" || path === "/") {
       const url = request.nextUrl.clone();
       url.pathname = roleHome[profile.role] ?? "/tarefas";
       return NextResponse.redirect(url);
@@ -101,7 +103,7 @@ export async function updateSession(request: NextRequest) {
       const prefixes = ["/dashboard/servicos-suites", "/dashboard/suites-disponiveis", "/dashboard/calendario-stays", "/dashboard/tarefas", "/checklists", "/compras/lista"];
       if (!exact.includes(path) && !prefixes.some(matchesPrefix)) {
         const url = request.nextUrl.clone();
-        url.pathname = "/operacional";
+        url.pathname = "/dashboard";
         return NextResponse.redirect(url);
       }
       return response;
