@@ -142,7 +142,12 @@ export interface MonthIndicators {
   adr: number | null;
   revpar: number | null;
   netRevpar: number | null;
-  occCommercial: number | null; // 0 a 1
+  occCommercial: number | null; // 0 a 1 (padrão STR: sobre todas as noites do mês)
+  // Critério do PRD (descontando bloqueio e/ou manutenção da oferta) — convive com o da STR.
+  availablePrd: number; // noites disponíveis sem bloqueio nem manutenção
+  revparPrd: number | null;
+  netRevparPrd: number | null;
+  occCommercialPrd: number | null; // vendidas ÷ (oferta − manutenção)
   occPhysical: number | null; // 0 a 1
 }
 
@@ -183,6 +188,10 @@ export function computeIndicators(base: MonthBase, rooms: number, commissionPct:
     revpar: div(revenue, supply),
     netRevpar: div(netRevenue, supply),
     occCommercial: div(paid, supply),
+    availablePrd: Math.max(0, supply - base.blocked - base.maintenance),
+    revparPrd: div(revenue, supply - base.blocked - base.maintenance),
+    netRevparPrd: div(netRevenue, supply - base.blocked - base.maintenance),
+    occCommercialPrd: div(paid, supply - base.maintenance),
     occPhysical: div(paid + free + base.blocked, supply - base.maintenance),
   };
 }

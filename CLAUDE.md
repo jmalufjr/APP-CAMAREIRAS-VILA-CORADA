@@ -3073,9 +3073,10 @@ também é feita em Server Components.
       (um % por canal, aplicado na hora de exibir — mudar recalcula todos os meses, inclusive os fechados).
     - **Regras** (`src/lib/stays/indicators.ts`, puras, 17 casos testados): diária = dia do check-in até a véspera do check-out
       (virada de mês e check-out no dia 1º corretos); valor 0/sem preço = gratuita; bloqueio/manutenção contam 1x por suíte/dia.
-    - **Divergência do PRD (a STR prevalece, explicada na tela e na pergunta 17 de "Questões e Respostas")**: oferta = suítes × dias
-      do mês, **sem** descontar bloqueio/manutenção; ocupação comercial = vendidas ÷ oferta; ocupação física segue o PRD (não existe
-      na STR). Bloqueio/manutenção aparecem em colunas à parte.
+    - **Divergências STR × PRD: a tela mostra as DUAS versões em colunas separadas** ("(STR)" e "(PRD)", explicado na tela e na
+      pergunta 17 de "Questões e Respostas"): oferta STR = suítes × dias do mês; oferta PRD = isso − bloqueio − manutenção (RevPAR e
+      NetRevPAR); ocupação comercial STR = vendidas ÷ oferta STR, PRD = vendidas ÷ (oferta − manutenção). ADR e ocupação física
+      (só existe no PRD) têm uma coluna. Bloqueio/manutenção também têm colunas próprias.
     - **Testado**: regras com casos sintéticos; importação real da Stays no banco local (34 meses fechados, 7 abertos; ex. nov/2026:
       140 diárias, ADR R$ 823, RevPAR R$ 349), comissão (booking 15% → NetRevPAR menor), validação do %, sincronização parcial, e a
       página renderizada por sessão real de admin. **Não testado** nos cliques do navegador.

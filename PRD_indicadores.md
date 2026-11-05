@@ -46,7 +46,10 @@ Instruções: salvar este texto como `PRD_indicadores.md`, implementar, testar, 
 | Comissão | `channel_commissions` (um % por canal, inclusive "Outros"). Aplicada na hora de exibir, então mudar o % recalcula todos os meses (a comissão não é congelada por mês). |
 | Admin e gerente | A tela é só do **admin** (tem receita), como o Ticket médio. |
 
-### 2.1 Divergências da STR/CoStar (a STR prevalece)
+### 2.1 Divergências da STR/CoStar (a tela mostra as DUAS versões, em colunas separadas)
+
+> Atualização (05/11/2026, pedido do proprietário): onde a STR e este PRD divergem, a tela traz uma coluna "(STR)" e uma
+> coluna "(PRD)" — RevPAR, NetRevPAR, Ocupação comercial e as noites disponíveis. ADR e Ocupação física têm uma só coluna.
 
 1. **Noites disponíveis (RevPAR, Ocupação):** a STR define oferta = nº de UHs × dias do mês, **sem** descontar noites bloqueadas
    ou em manutenção (só se a UH sair do inventário, como numa reforma longa informada à STR). O PRD pedia descontá-las. Usei a

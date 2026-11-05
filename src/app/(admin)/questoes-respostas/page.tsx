@@ -1334,16 +1334,32 @@ export default function QuestoesRespostasPage() {
                 card do topo da tela; ela vale para todos os meses (mudar o percentual recalcula tudo) e só
                 afeta o NetRevPAR.
               </P>
-              <SubHeading>Onde o cálculo segue o padrão da STR/CoStar e não o pedido original</SubHeading>
+              <SubHeading>Onde o pedido original e o padrão da STR/CoStar diferem: duas colunas</SubHeading>
               <P>
-                O pedido original descontava as noites bloqueadas e as de manutenção do total de diárias
-                disponíveis (no RevPAR, no NetRevPAR e na ocupação comercial). O padrão internacional da
-                STR/CoStar <strong>não faz isso</strong>: a oferta é sempre todas as suítes × todos os dias do
-                mês — uma suíte só sai da conta quando é retirada do inventário por um período longo (uma
-                reforma, por exemplo). Por isso a tela usa a oferta completa e mostra as noites de bloqueio e
-                de manutenção em colunas separadas, para você conferir quanto pesaram. A ocupação física não
-                existe na STR e foi mantida como o pedido original define. A STR também não conta cortesias
-                (diárias gratuitas) como vendidas nem como receita, o que coincide com o pedido.
+                O pedido original descontava as noites bloqueadas e as de manutenção do total de diárias disponíveis. O padrão
+                internacional da STR/CoStar <strong>não faz isso</strong>: a oferta é sempre todas as suítes × todos os dias do mês — uma
+                suíte só sai da conta quando é retirada do inventário por um período longo (uma reforma, por exemplo). Como os dois
+                critérios são úteis, a tela mostra <strong>as duas versões lado a lado</strong>, sempre rotuladas:
+              </P>
+              <List
+                items={[
+                  <>
+                    <strong>RevPAR e NetRevPAR (STR)</strong>: divididos por todas as suítes × dias do mês. <strong>(PRD)</strong>:
+                    divididos pelas diárias sem bloqueio nem manutenção (coluna “Disponíveis (PRD)”).
+                  </>,
+                  <>
+                    <strong>Ocupação comercial (STR)</strong>: vendidas ÷ todas as diárias do mês. <strong>(PRD)</strong>: vendidas ÷
+                    (diárias do mês − manutenção).
+                  </>,
+                  <>
+                    <strong>ADR</strong> e <strong>Ocupação física</strong> não têm versão dupla: o ADR é igual nos dois critérios, e a
+                    ocupação física só existe no pedido original (a STR não a define).
+                  </>,
+                ]}
+              />
+              <P>
+                A STR também não conta cortesias (diárias gratuitas) como vendidas nem como receita, o que coincide com o pedido. As noites
+                de bloqueio e de manutenção aparecem em colunas próprias, para você ver quanto pesaram.
               </P>
               <P>
                 Os números ficam guardados no app e são atualizados a cada sincronização com a Stays (manual

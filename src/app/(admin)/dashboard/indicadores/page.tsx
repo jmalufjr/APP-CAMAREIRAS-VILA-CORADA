@@ -23,14 +23,18 @@ function IndicatorsTable({ rows, emptyText }: { rows: MonthIndicators[]; emptyTe
             <th className="px-3 py-2 text-right font-medium">Gratuitas</th>
             <th className="px-3 py-2 text-right font-medium">Bloqueio</th>
             <th className="px-3 py-2 text-right font-medium">Manutenção</th>
-            <th className="px-3 py-2 text-right font-medium">Disponíveis</th>
+            <th className="px-3 py-2 text-right font-medium">Disponíveis (STR)</th>
+            <th className="px-3 py-2 text-right font-medium">Disponíveis (PRD)</th>
             <th className="px-3 py-2 text-right font-medium">Receita bruta</th>
             <th className="px-3 py-2 text-right font-medium">Comissões</th>
             <th className="px-3 py-2 text-right font-medium">Receita líquida</th>
             <th className="px-3 py-2 text-right font-medium">ADR</th>
-            <th className="px-3 py-2 text-right font-medium">RevPAR</th>
-            <th className="px-3 py-2 text-right font-medium">NetRevPAR</th>
-            <th className="px-3 py-2 text-right font-medium">Ocupação comercial</th>
+            <th className="px-3 py-2 text-right font-medium">RevPAR (STR)</th>
+            <th className="px-3 py-2 text-right font-medium">RevPAR (PRD)</th>
+            <th className="px-3 py-2 text-right font-medium">NetRevPAR (STR)</th>
+            <th className="px-3 py-2 text-right font-medium">NetRevPAR (PRD)</th>
+            <th className="px-3 py-2 text-right font-medium">Ocupação comercial (STR)</th>
+            <th className="px-3 py-2 text-right font-medium">Ocupação comercial (PRD)</th>
             <th className="px-3 py-2 text-right font-medium">Ocupação física</th>
           </tr>
         </thead>
@@ -43,13 +47,17 @@ function IndicatorsTable({ rows, emptyText }: { rows: MonthIndicators[]; emptyTe
               <td className="px-3 py-2 text-right tabular-nums">{int(m.blocked)}</td>
               <td className="px-3 py-2 text-right tabular-nums">{int(m.maintenance)}</td>
               <td className="px-3 py-2 text-right tabular-nums">{int(m.supply)}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{int(m.availablePrd)}</td>
               <td className="px-3 py-2 text-right tabular-nums">{money(m.revenue)}</td>
               <td className="px-3 py-2 text-right tabular-nums">{money(m.commission)}</td>
               <td className="px-3 py-2 text-right tabular-nums">{money(m.netRevenue)}</td>
               <td className="px-3 py-2 text-right tabular-nums font-medium">{money(m.adr)}</td>
               <td className="px-3 py-2 text-right tabular-nums font-medium">{money(m.revpar)}</td>
+              <td className="px-3 py-2 text-right tabular-nums font-medium">{money(m.revparPrd)}</td>
               <td className="px-3 py-2 text-right tabular-nums font-medium">{money(m.netRevpar)}</td>
+              <td className="px-3 py-2 text-right tabular-nums font-medium">{money(m.netRevparPrd)}</td>
               <td className="px-3 py-2 text-right tabular-nums font-medium">{pct(m.occCommercial)}</td>
+              <td className="px-3 py-2 text-right tabular-nums font-medium">{pct(m.occCommercialPrd)}</td>
               <td className="px-3 py-2 text-right tabular-nums font-medium">{pct(m.occPhysical)}</td>
             </tr>
           ))}
@@ -90,15 +98,18 @@ export default async function IndicadoresPage() {
           <p>
             <strong>ADR</strong> = receita bruta de hospedagem ÷ diárias vendidas (só as com cobrança). <strong>RevPAR</strong> = receita
             bruta ÷ diárias disponíveis. <strong>NetRevPAR</strong> = (receita bruta − comissões) ÷ diárias disponíveis.{" "}
-            <strong>Ocupação comercial</strong> = diárias vendidas ÷ diárias disponíveis.
+            <strong>Ocupação comercial</strong> = diárias vendidas ÷ diárias disponíveis. <strong>Ocupação física</strong> = (vendidas +
+            gratuitas + bloqueadas) ÷ (disponíveis − manutenção).
           </p>
           <p>
-            <strong>Ocupação física</strong> = (vendidas + gratuitas + bloqueadas) ÷ (disponíveis − manutenção).
+            Onde o pedido original (PRD) e o padrão da STR/CoStar diferem, a tela mostra <strong>as duas colunas</strong>:{" "}
+            <strong>(STR)</strong> usa como diárias disponíveis todas as suítes × os dias do mês, sem descontar nada; <strong>(PRD)</strong>{" "}
+            desconta as noites de bloqueio e manutenção (RevPAR e NetRevPAR) ou só as de manutenção (ocupação comercial). ADR e ocupação
+            física não divergem.
           </p>
           <p className="text-muted-foreground">
-            Seguindo o padrão da STR/CoStar, as diárias disponíveis são todas as suítes × os dias do mês, <strong>sem descontar</strong>{" "}
-            bloqueio e manutenção (que aparecem em colunas à parte). Diárias gratuitas não entram em receita nem em “vendidas”. A
-            receita é só de hospedagem, sem impostos e taxas. Reservas canceladas ficam de fora. Detalhes em “Questões e Respostas”.
+            Diárias gratuitas não entram em receita nem em “vendidas”. A receita é só de hospedagem, sem impostos e taxas. Reservas
+            canceladas ficam de fora. Detalhes em “Questões e Respostas”.
           </p>
         </CardContent>
       </Card>
