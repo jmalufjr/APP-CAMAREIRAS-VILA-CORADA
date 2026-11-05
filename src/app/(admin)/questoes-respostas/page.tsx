@@ -1329,9 +1329,10 @@ export default function QuestoesRespostasPage() {
               />
               <P>
                 A <strong>receita bruta</strong> é só a de hospedagem, diária a diária, antes das comissões e
-                sem impostos ou taxas. A <strong>comissão</strong> de cada canal (Booking, Airbnb, Expedia,
-                Decolar/Despegar, reservas diretas e outros) é um percentual que o administrador digita no
-                card do topo da tela; ela vale para todos os meses (mudar o percentual recalcula tudo) e só
+                sem impostos ou taxas. A <strong>comissão</strong> vem da própria Stays: ela informa, em cada
+                reserva, o valor em reais cobrado pelo canal (hoje isso existe para Booking, Airbnb e Decolar), e o sistema
+                reparte esse valor entre as diárias. Quando a Stays não informa o valor (hoje, a Expedia), usa-se o
+                percentual que o administrador digita no card do topo da tela, que vale para todos os meses. A comissão só
                 afeta o NetRevPAR.
               </P>
               <SubHeading>Onde o pedido original e o padrão da STR/CoStar diferem: duas colunas</SubHeading>

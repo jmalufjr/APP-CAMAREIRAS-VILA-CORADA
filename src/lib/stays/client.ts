@@ -155,7 +155,7 @@ export interface StaysStatsReservationRaw {
   checkOutDate: string;
   _idlisting: string;
   type: "booked" | "reserved" | "contract";
-  partner?: { name?: string };
+  partner?: { name?: string; commission?: { _mcval?: { BRL?: number } } };
   price?: { hostingDetails?: { _f_nightPrice?: number; pricePeriods?: { days: number; _f_pricePerDay: number }[] } };
 }
 

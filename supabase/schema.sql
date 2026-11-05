@@ -4507,3 +4507,10 @@ drop policy if exists channel_commissions_select on channel_commissions;
 create policy channel_commissions_select on channel_commissions for select using (is_admin());
 drop policy if exists channel_commissions_update on channel_commissions;
 create policy channel_commissions_update on channel_commissions for update using (is_admin()) with check (is_admin());
+
+-- ===== 096: indicadores - comissao real =====
+-- Indicadores: comissao real informada pela Stays em cada reserva (R$), repartida entre as diarias.
+-- Depois de rodar, use "Atualizar historico completo" na tela Indicadores para preencher os meses antigos.
+alter table indicator_month_channels
+  add column if not exists commission_actual numeric(14,2) not null default 0,
+  add column if not exists revenue_with_commission numeric(14,2) not null default 0;

@@ -108,7 +108,8 @@ export default async function IndicadoresPage() {
             física não divergem.
           </p>
           <p className="text-muted-foreground">
-            Diárias gratuitas não entram em receita nem em “vendidas”. A receita é só de hospedagem, sem impostos e taxas. Reservas
+            As <strong>comissões</strong> são as informadas pela Stays em cada reserva (valor em R$, repartido entre as diárias); só onde a
+            Stays não informa, usa-se o percentual do card acima. Diárias gratuitas não entram em receita nem em “vendidas”. A receita é só de hospedagem, sem impostos e taxas. Reservas
             canceladas ficam de fora. Detalhes em “Questões e Respostas”.
           </p>
         </CardContent>

@@ -1119,7 +1119,15 @@ export async function syncStaysIndicators(options?: { full?: boolean }) {
     const channelRows = months.flatMap((m) =>
       IND_CHANNELS.map(({ key }) => {
         const c = bases.get(m)!.channels[key];
-        return { month: m, channel: key, paid_nights: c.paid, free_nights: c.free, revenue: Math.round(c.revenue * 100) / 100 };
+        return {
+          month: m,
+          channel: key,
+          paid_nights: c.paid,
+          free_nights: c.free,
+          revenue: Math.round(c.revenue * 100) / 100,
+          commission_actual: Math.round(c.commissionActual * 100) / 100,
+          revenue_with_commission: Math.round(c.revenueWithCommission * 100) / 100,
+        };
       })
     );
 

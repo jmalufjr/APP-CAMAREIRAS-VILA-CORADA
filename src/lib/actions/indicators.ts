@@ -39,7 +39,7 @@ export async function getIndicators(): Promise<{ error: string } | IndicatorsDat
 
   const [{ data: months, error }, { data: chans }, { data: coms }] = await Promise.all([
     supabase.from("indicator_months").select("month, rooms, blocked_nights, maintenance_nights, synced_at").order("month"),
-    supabase.from("indicator_month_channels").select("month, channel, paid_nights, free_nights, revenue"),
+    supabase.from("indicator_month_channels").select("month, channel, paid_nights, free_nights, revenue, commission_actual, revenue_with_commission"),
     supabase.from("channel_commissions").select("channel, percent"),
   ]);
   if (error) return { error: error.message };
@@ -54,19 +54,25 @@ export async function getIndicators(): Promise<{ error: string } | IndicatorsDat
       blocked: m.blocked_nights as number,
       maintenance: m.maintenance_nights as number,
       channels: {
-        booking: { paid: 0, free: 0, revenue: 0 },
-        airbnb: { paid: 0, free: 0, revenue: 0 },
-        expedia: { paid: 0, free: 0, revenue: 0 },
-        decolar: { paid: 0, free: 0, revenue: 0 },
-        direta: { paid: 0, free: 0, revenue: 0 },
-        outros: { paid: 0, free: 0, revenue: 0 },
+        booking: { paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
+        airbnb: { paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
+        expedia: { paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
+        decolar: { paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
+        direta: { paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
+        outros: { paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
       },
     })
   );
   (chans ?? []).forEach((c) => {
     const b = bases.get(c.month as string);
     if (!b) return;
-    b.channels[c.channel as IndChannel] = { paid: c.paid_nights as number, free: c.free_nights as number, revenue: Number(c.revenue) };
+    b.channels[c.channel as IndChannel] = {
+      paid: c.paid_nights as number,
+      free: c.free_nights as number,
+      revenue: Number(c.revenue),
+      commissionActual: Number(c.commission_actual),
+      revenueWithCommission: Number(c.revenue_with_commission),
+    };
   });
 
   const currentMonth = `${todayKey().slice(0, 7)}-01`;

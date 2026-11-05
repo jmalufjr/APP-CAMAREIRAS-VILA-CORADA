@@ -27,6 +27,10 @@ export interface ChannelMonthBase {
   paid: number; // diárias vendidas (com cobrança)
   free: number; // diárias gratuitas (valor 0 ou sem preço)
   revenue: number; // receita bruta de hospedagem dessas diárias (sem impostos/taxas)
+  // Comissão que a própria Stays informa na reserva (R$), repartida entre as diárias na proporção do
+  // valor de cada uma, e a receita das diárias de reservas que trazem esse valor.
+  commissionActual: number;
+  revenueWithCommission: number;
 }
 
 export interface MonthBase {
@@ -44,12 +48,12 @@ export interface BlockEntry {
 }
 
 const emptyChannels = (): Record<IndChannel, ChannelMonthBase> => ({
-  booking: { paid: 0, free: 0, revenue: 0 },
-  airbnb: { paid: 0, free: 0, revenue: 0 },
-  expedia: { paid: 0, free: 0, revenue: 0 },
-  decolar: { paid: 0, free: 0, revenue: 0 },
-  direta: { paid: 0, free: 0, revenue: 0 },
-  outros: { paid: 0, free: 0, revenue: 0 },
+  booking: { paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
+  airbnb: { paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
+  expedia: { paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
+  decolar: { paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
+  direta: { paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
+  outros: { paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
 });
 
 // Meses de `fromMonth` a `toMonth` (inclusive), como "YYYY-MM-01".
@@ -96,6 +100,8 @@ export function computeMonthBases(
     if (!listingIds.has(r._idlisting)) continue;
     const channel: IndChannel = channelFromOrigin(classifyOrigin(r.type, r.partner?.name)) ?? "outros";
     const prices = nightlyPrices(r);
+    const commissionTotal = r.partner?.commission?._mcval?.BRL;
+    const priceSum = prices ? prices.reduce((a, b) => a + b, 0) : 0;
     nightDates(r.checkInDate, r.checkOutDate).forEach((date, i) => {
       const month = monthStart(date);
       if (!wanted.has(month)) return;
@@ -104,6 +110,10 @@ export function computeMonthBases(
       if (price > 0) {
         cell.paid += 1;
         cell.revenue += price;
+        if (typeof commissionTotal === "number" && commissionTotal > 0 && priceSum > 0) {
+          cell.commissionActual += (commissionTotal * price) / priceSum;
+          cell.revenueWithCommission += price;
+        }
       } else {
         cell.free += 1;
       }
@@ -153,7 +163,7 @@ export interface MonthIndicators {
 
 const div = (a: number, b: number): number | null => (b > 0 ? a / b : null);
 
-// `commissionPct`: percentual por canal (ex.: 15 = 15%). Regras (PRD_indicadores.md, seção 2.1):
+// `commissionPct`: percentual por canal (ex.: 15 = 15%), usado só onde a Stays não informa a comissão da reserva. Regras (PRD_indicadores.md, seção 2.1):
 // oferta = suítes × dias (padrão STR, sem descontar bloqueio/manutenção); ADR = receita ÷ diárias
 // pagas; RevPAR = receita ÷ oferta; NetRevPAR = (receita − comissões) ÷ oferta; Ocupação comercial
 // = pagas ÷ oferta; Ocupação física (conceito do PRD, fora da STR) = (pagas + gratuitas +
@@ -170,7 +180,8 @@ export function computeIndicators(base: MonthBase, rooms: number, commissionPct:
     paid += c.paid;
     free += c.free;
     revenue += c.revenue;
-    commission += (c.revenue * (commissionPct[key] ?? 0)) / 100;
+    // Comissão real informada pela Stays onde existe; o percentual só cobre a receita sem esse valor.
+    commission += c.commissionActual + (Math.max(0, c.revenue - c.revenueWithCommission) * (commissionPct[key] ?? 0)) / 100;
   }
   const netRevenue = revenue - commission;
   return {

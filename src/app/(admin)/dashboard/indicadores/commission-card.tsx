@@ -38,8 +38,9 @@ export function CommissionCard({ rows }: { rows: CommissionRow[] }) {
       <CardHeader>
         <CardTitle className="font-heading text-lg">Comissão por canal de venda</CardTitle>
         <p className="text-xs text-muted-foreground">
-          Percentual descontado da receita de cada canal para chegar à receita líquida (NetRevPAR). ADR e RevPAR usam a receita
-          antes das comissões. O percentual vale para todos os meses.
+          A comissão de cada reserva vem da própria Stays (valor em R$ informado por Booking, Airbnb e Decolar). O percentual abaixo é
+          usado <strong>só quando a Stays não informa o valor</strong> (hoje, a Expedia) e vale para todos os meses. ADR e RevPAR usam a
+          receita antes das comissões; o NetRevPAR desconta as comissões.
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
