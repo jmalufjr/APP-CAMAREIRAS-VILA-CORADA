@@ -163,7 +163,7 @@ export interface MonthIndicators {
 
 const div = (a: number, b: number): number | null => (b > 0 ? a / b : null);
 
-// `commissionPct`: percentual por canal (ex.: 15 = 15%), usado só onde a Stays não informa a comissão da reserva. Regras (PRD_indicadores.md, seção 2.1):
+// `commissionPct`: percentual por canal (ex.: 15 = 15%); só o da Expedia é usado (ver abaixo). Regras (PRD_indicadores.md, seção 2.1):
 // oferta = suítes × dias (padrão STR, sem descontar bloqueio/manutenção); ADR = receita ÷ diárias
 // pagas; RevPAR = receita ÷ oferta; NetRevPAR = (receita − comissões) ÷ oferta; Ocupação comercial
 // = pagas ÷ oferta; Ocupação física (conceito do PRD, fora da STR) = (pagas + gratuitas +
@@ -180,8 +180,9 @@ export function computeIndicators(base: MonthBase, rooms: number, commissionPct:
     paid += c.paid;
     free += c.free;
     revenue += c.revenue;
-    // Comissão real informada pela Stays onde existe; o percentual só cobre a receita sem esse valor.
-    commission += c.commissionActual + (Math.max(0, c.revenue - c.revenueWithCommission) * (commissionPct[key] ?? 0)) / 100;
+    // Expedia: sempre o percentual do card (a Stays não informa o valor). Demais canais: só o valor da
+    // comissão que a Stays informa em cada reserva.
+    commission += key === "expedia" ? (c.revenue * (commissionPct.expedia ?? 0)) / 100 : c.commissionActual;
   }
   const netRevenue = revenue - commission;
   return {

@@ -19,13 +19,13 @@ function IndicatorsTable({ rows, emptyText }: { rows: MonthIndicators[]; emptyTe
         <thead className="bg-muted/60 text-left text-xs">
           <tr>
             <th className="sticky left-0 bg-muted px-3 py-2 font-medium">Mês</th>
-            <th className="px-3 py-2 text-right font-medium">Diárias vendidas</th>
+            <th className="px-3 py-2 text-right font-medium">Total de noites vendidas</th>
             <th className="px-3 py-2 text-right font-medium">Gratuitas</th>
             <th className="px-3 py-2 text-right font-medium">Bloqueio</th>
             <th className="px-3 py-2 text-right font-medium">Manutenção</th>
-            <th className="px-3 py-2 text-right font-medium">Disponíveis (STR)</th>
-            <th className="px-3 py-2 text-right font-medium">Disponíveis (PRD)</th>
-            <th className="px-3 py-2 text-right font-medium">Receita bruta</th>
+            <th className="px-3 py-2 text-right font-medium">Total de noites disponíveis (STR)</th>
+            <th className="px-3 py-2 text-right font-medium">Total de noites disponíveis (PRD)</th>
+            <th className="px-3 py-2 text-right font-medium">Receita de hospedagem</th>
             <th className="px-3 py-2 text-right font-medium">Comissões</th>
             <th className="px-3 py-2 text-right font-medium">Receita líquida</th>
             <th className="px-3 py-2 text-right font-medium">ADR</th>
@@ -108,8 +108,8 @@ export default async function IndicadoresPage() {
             física não divergem.
           </p>
           <p className="text-muted-foreground">
-            As <strong>comissões</strong> são as informadas pela Stays em cada reserva (valor em R$, repartido entre as diárias); só onde a
-            Stays não informa, usa-se o percentual do card acima. Diárias gratuitas não entram em receita nem em “vendidas”. A receita é só de hospedagem, sem impostos e taxas. Reservas
+            As <strong>comissões</strong> de Booking, Airbnb e Decolar são as informadas pela Stays em cada reserva (valor em R$, repartido entre
+            as diárias); a da Expedia usa o percentual do card acima. Diárias gratuitas não entram em receita nem em “vendidas”. A receita é só de hospedagem, sem impostos e taxas. Reservas
             canceladas ficam de fora. Detalhes em “Questões e Respostas”.
           </p>
         </CardContent>

@@ -3080,6 +3080,7 @@ também é feita em Server Components.
     - **Testado**: regras com casos sintéticos; importação real da Stays no banco local (34 meses fechados, 7 abertos; ex. nov/2026:
       140 diárias, ADR R$ 823, RevPAR R$ 349), comissão (booking 15% → NetRevPAR menor), validação do %, sincronização parcial, e a
       página renderizada por sessão real de admin. **Não testado** nos cliques do navegador.
+    - **Comissão (regra final, 05/11/2026)**: Booking, Airbnb e Decolar usam **só** a comissão que a Stays informa em cada reserva; a **Expedia usa sempre o percentual do card** (único campo editável) sobre toda a receita dela; os percentuais dos demais canais ficam guardados mas não são usados. A tabela mostra "Total de noites vendidas", "Total de noites disponíveis (STR/PRD)", "Receita de hospedagem" e "Comissões".
     - **Comissão real da Stays (migração `096`, `supabase/producao/17`)**: cada reserva traz `partner.commission._mcval.BRL` (valor em
       R$): existe para Booking (142 de 142 reservas testadas, ~13–20% da hospedagem), Airbnb e Decolar; na Expedia o campo vem sem valor
       e nas reservas diretas não há comissão. O app reparte esse valor entre as diárias da reserva na proporção do preço de cada uma
