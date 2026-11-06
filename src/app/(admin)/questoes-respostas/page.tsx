@@ -1306,7 +1306,8 @@ export default function QuestoesRespostasPage() {
               <List
                 items={[
                   <>
-                    <strong>Diárias disponíveis</strong>: número de suítes × dias do mês.
+                    <strong>Diárias disponíveis</strong>: número de suítes × dias do mês. O número de suítes de cada mês é fixo na tela: 1 até
+                    dezembro de 2024, 5 de janeiro a setembro de 2025, 7 de outubro a dezembro de 2025 e 11 a partir de janeiro de 2026.
                   </>,
                   <>
                     <strong>ADR</strong> (diária média): receita bruta de hospedagem ÷ diárias vendidas. Só
@@ -1331,9 +1332,9 @@ export default function QuestoesRespostasPage() {
                 A <strong>receita bruta</strong> é só a de hospedagem, diária a diária, antes das comissões e
                 sem impostos ou taxas. A <strong>comissão</strong> de Booking, Airbnb e Decolar vem da própria
                 Stays: ela informa, em cada reserva, o valor em reais cobrado pelo canal, e o sistema reparte esse valor entre
-                as diárias. A da <strong>Expedia</strong> (que a Stays não informa) é calculada com o percentual que o
-                administrador digita no card do topo da tela, aplicado a toda a receita da Expedia em todos os meses. A
-                comissão só afeta o NetRevPAR. A tabela mostra, mês a mês, a receita de hospedagem, as comissões, o total
+                as diárias. A <strong>Expedia</strong> e as <strong>reservas diretas</strong> não têm comissão: a diária da
+                Expedia na Stays já vem líquida, porque a Expedia cobra a comissão do hóspede e não da pousada. A comissão só
+                afeta o NetRevPAR. A tabela mostra, mês a mês, a receita de hospedagem, as comissões, o total
                 de noites vendidas e o total de noites disponíveis usados nas contas.
               </P>
               <SubHeading>Onde o pedido original e o padrão da STR/CoStar diferem: duas colunas</SubHeading>

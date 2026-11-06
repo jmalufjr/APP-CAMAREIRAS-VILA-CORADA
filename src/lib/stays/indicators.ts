@@ -141,6 +141,7 @@ export function computeMonthBases(
 export interface MonthIndicators {
   month: string;
   days: number;
+  rooms: number; // número de suítes da pousada no mês
   supply: number; // noites disponíveis (STR): suítes × dias do mês
   paid: number;
   free: number;
@@ -163,12 +164,22 @@ export interface MonthIndicators {
 
 const div = (a: number, b: number): number | null => (b > 0 ? a / b : null);
 
-// `commissionPct`: percentual por canal (ex.: 15 = 15%); só o da Expedia é usado (ver abaixo). Regras (PRD_indicadores.md, seção 2.1):
+// Regras (PRD_indicadores.md, seção 2.1):
 // oferta = suítes × dias (padrão STR, sem descontar bloqueio/manutenção); ADR = receita ÷ diárias
 // pagas; RevPAR = receita ÷ oferta; NetRevPAR = (receita − comissões) ÷ oferta; Ocupação comercial
 // = pagas ÷ oferta; Ocupação física (conceito do PRD, fora da STR) = (pagas + gratuitas +
 // bloqueio) ÷ (oferta − manutenção).
-export function computeIndicators(base: MonthBase, rooms: number, commissionPct: Partial<Record<IndChannel, number>>): MonthIndicators {
+// Número de suítes da pousada em cada mês (informado pelo proprietário): 1 até dez/2024, 5 de jan a set/2025,
+// 7 de out a dez/2025 e 11 a partir de jan/2026. É a base das noites disponíveis.
+export function suitesInMonth(month: string): number {
+  const ym = month.slice(0, 7);
+  if (ym <= "2024-12") return 1;
+  if (ym <= "2025-09") return 5;
+  if (ym <= "2025-12") return 7;
+  return 11;
+}
+
+export function computeIndicators(base: MonthBase, rooms: number): MonthIndicators {
   const days = daysInMonth(base.month);
   const supply = rooms * days;
   let paid = 0;
@@ -180,14 +191,15 @@ export function computeIndicators(base: MonthBase, rooms: number, commissionPct:
     paid += c.paid;
     free += c.free;
     revenue += c.revenue;
-    // Expedia: sempre o percentual do card (a Stays não informa o valor). Demais canais: só o valor da
-    // comissão que a Stays informa em cada reserva.
-    commission += key === "expedia" ? (c.revenue * (commissionPct.expedia ?? 0)) / 100 : c.commissionActual;
+    // Comissão = o valor que a Stays informa em cada reserva (Booking, Airbnb, Decolar). Expedia e reservas
+    // diretas não têm comissão para a pousada (a diária da Expedia já vem líquida e ela cobra do hóspede).
+    if (key !== "expedia") commission += c.commissionActual;
   }
   const netRevenue = revenue - commission;
   return {
     month: base.month,
     days,
+    rooms,
     supply,
     paid,
     free,

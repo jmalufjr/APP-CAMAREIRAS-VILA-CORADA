@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getIndicators } from "@/lib/actions/indicators";
 import { formatDateTimePt, monthYearLabelPt } from "@/lib/date";
 import type { MonthIndicators } from "@/lib/stays/indicators";
-import { CommissionCard } from "./commission-card";
 import { RefreshButton } from "./refresh-button";
 
 const money = (n: number | null) => (n === null ? "—" : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
@@ -23,6 +22,7 @@ function IndicatorsTable({ rows, emptyText }: { rows: MonthIndicators[]; emptyTe
             <th className="px-3 py-2 text-right font-medium">Gratuitas</th>
             <th className="px-3 py-2 text-right font-medium">Bloqueio</th>
             <th className="px-3 py-2 text-right font-medium">Manutenção</th>
+            <th className="px-3 py-2 text-right font-medium">Número de suítes</th>
             <th className="px-3 py-2 text-right font-medium">Total de noites disponíveis (STR)</th>
             <th className="px-3 py-2 text-right font-medium">Total de noites disponíveis (PRD)</th>
             <th className="px-3 py-2 text-right font-medium">Receita de hospedagem</th>
@@ -46,6 +46,7 @@ function IndicatorsTable({ rows, emptyText }: { rows: MonthIndicators[]; emptyTe
               <td className="px-3 py-2 text-right tabular-nums">{int(m.free)}</td>
               <td className="px-3 py-2 text-right tabular-nums">{int(m.blocked)}</td>
               <td className="px-3 py-2 text-right tabular-nums">{int(m.maintenance)}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{int(m.rooms)}</td>
               <td className="px-3 py-2 text-right tabular-nums">{int(m.supply)}</td>
               <td className="px-3 py-2 text-right tabular-nums">{int(m.availablePrd)}</td>
               <td className="px-3 py-2 text-right tabular-nums">{money(m.revenue)}</td>
@@ -88,8 +89,6 @@ export default async function IndicadoresPage() {
         subtitle="ADR, RevPAR, NetRevPAR e taxas de ocupação por mês, calculados por diária (check-in inclusivo, check-out exclusivo) com os dados da Stays."
       />
 
-      <CommissionCard rows={result.commissions} />
-
       <Card>
         <CardHeader>
           <CardTitle className="font-heading text-lg">Como os números são calculados (resumo)</CardTitle>
@@ -108,9 +107,12 @@ export default async function IndicadoresPage() {
             física não divergem.
           </p>
           <p className="text-muted-foreground">
-            As <strong>comissões</strong> de Booking, Airbnb e Decolar são as informadas pela Stays em cada reserva (valor em R$, repartido entre
-            as diárias); a da Expedia usa o percentual do card acima. Diárias gratuitas não entram em receita nem em “vendidas”. A receita é só de hospedagem, sem impostos e taxas. Reservas
-            canceladas ficam de fora. Detalhes em “Questões e Respostas”.
+            O <strong>número de suítes</strong> de cada mês é fixo: 1 até dezembro de 2024, 5 de janeiro a setembro de 2025, 7 de outubro a
+            dezembro de 2025 e 11 a partir de janeiro de 2026; as noites disponíveis são esse número × os dias do mês. As{" "}
+            <strong>comissões</strong> são as informadas pela Stays em cada reserva (Booking, Airbnb e Decolar/Despegar, em R$, repartidas entre as
+            diárias); a Expedia e as reservas diretas não têm comissão (a diária da Expedia já vem líquida, e ela cobra o hóspede). Diárias
+            gratuitas não entram em receita nem em “vendidas”. A receita é só de hospedagem, sem impostos e taxas. Reservas canceladas ficam de
+            fora. Detalhes em “Questões e Respostas”.
           </p>
         </CardContent>
       </Card>
@@ -126,7 +128,7 @@ export default async function IndicadoresPage() {
       <section className="space-y-3">
         <h2 className="font-heading text-lg text-primary">Meses fechados</h2>
         <p className="text-xs text-muted-foreground">
-          Meses já encerrados, do mais recente para o mais antigo. A comissão usa o percentual cadastrado hoje.
+          Meses já encerrados, do mais recente para o mais antigo. As comissões são as que a Stays informou em cada reserva (Booking, Airbnb e Decolar); Expedia e reservas diretas não têm comissão.
         </p>
         <IndicatorsTable rows={result.closed} emptyText="Nenhum mês fechado com dados." />
       </section>

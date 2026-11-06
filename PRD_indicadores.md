@@ -69,3 +69,12 @@ Instruções: salvar este texto como `PRD_indicadores.md`, implementar, testar, 
 3. Busca da Stays em janelas de 6 meses; `syncStaysIndicators` (cron + botões); ações de leitura e de comissão.
 4. Tela `/dashboard/indicadores` (card de comissões, meses fechados, mês corrente e seguintes, explicação resumida) e item de menu.
 5. Item novo em "Questões e Respostas"; CLAUDE.md (Parte 61); testes locais; commit e push.
+
+## 4. Atualizações (05/11/2026)
+
+- **Número de suítes por mês** (coluna "Número de suítes", antes das noites disponíveis): 1 de jan a dez/2024; 5 de jan a set/2025;
+  7 de out a dez/2025; 11 de jan/2026 em diante (o pedido dizia "janeiro de 2025" para as 11 suítes, o que contradiz as 5 e 7 suítes
+  do mesmo período; foi lido como janeiro de 2026). As noites disponíveis, o RevPAR, o NetRevPAR e as ocupações usam esse número
+  (`suitesInMonth`, `src/lib/stays/indicators.ts`), não mais a contagem atual de suítes.
+- **Comissão**: só a informada pela Stays em cada reserva (Booking, Airbnb, Decolar). **Expedia e reservas diretas não têm comissão** —
+  a diária da Expedia na Stays já é líquida e ela cobra a comissão do hóspede. O card de percentual foi removido.
