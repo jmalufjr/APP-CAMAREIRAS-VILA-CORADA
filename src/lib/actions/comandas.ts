@@ -39,6 +39,32 @@ export async function submitComanda(
   return { success: true, comandaId: data as string };
 }
 
+// Pedido novo com a assinatura do hóspede (imagem PNG em data URL). O pedido e a assinatura são
+// gravados juntos, na mesma transação; a hora da assinatura é a do servidor.
+export async function submitComandaSigned(
+  roomId: string,
+  items: ComandaItemInput[],
+  guestSlot: RoomBillGuestSlot,
+  signaturePng: string
+) {
+  if (!roomId) return { error: "Selecione a suíte." };
+  const validItems = items.filter((i) => i.quantity > 0);
+  if (validItems.length === 0) return { error: "Selecione ao menos um item com quantidade." };
+  if (!signaturePng.startsWith("data:image/png;base64,")) return { error: "Assinatura inválida." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("submit_comanda_signed", {
+    p_room_id: roomId,
+    p_items: validItems,
+    p_guest_slot: guestSlot,
+    p_signature: signaturePng,
+  });
+  if (error) return { error: error.message };
+
+  revalidateComandaPaths();
+  return { success: true, comandaId: data as string };
+}
+
 export async function editComanda(
   comandaId: string,
   roomId: string,
@@ -108,6 +134,9 @@ export interface ComandaListItem {
   // de mostrar só o número da suíte.
   guestSlot: RoomBillGuestSlot;
   guestNameHint: string | null;
+  // Assinatura do hóspede (imagem PNG em data URL) e quando foi assinada; nulos em comandas antigas.
+  signaturePng: string | null;
+  signedAt: string | null;
 }
 
 export interface ComandaListItemLine {
@@ -127,6 +156,8 @@ type ComandaRow = {
   status: ComandaStatus;
   created_at: string;
   last_action_at: string;
+  signature_png: string | null;
+  signed_at: string | null;
   rooms: { number: string } | null;
   created_by_profile: { name: string } | null;
   last_action_by_profile: { name: string } | null;
@@ -142,7 +173,7 @@ type ComandaItemRow = {
 };
 
 const COMANDA_ROW_SELECT =
-  "id, room_id, sequence_number, monthly_number, status, created_at, last_action_at, rooms(number), created_by_profile:profiles!bar_comandas_created_by_fkey(name), last_action_by_profile:profiles!bar_comandas_last_action_by_fkey(name), room_bills!inner(status, paid_at, guest_slot, guest_name_hint)";
+  "id, room_id, sequence_number, monthly_number, status, created_at, last_action_at, signature_png, signed_at, rooms(number), created_by_profile:profiles!bar_comandas_created_by_fkey(name), last_action_by_profile:profiles!bar_comandas_last_action_by_fkey(name), room_bills!inner(status, paid_at, guest_slot, guest_name_hint)";
 
 // Busca os itens de um conjunto de comandas já embutidos no resultado da
 // lista (em vez de buscar item a item quando o usuário abre o modal de
@@ -192,6 +223,8 @@ async function attachItemsAndMap(
       bill_paid_at: r.room_bills?.paid_at ?? null,
       guestSlot: r.room_bills?.guest_slot ?? "unica",
       guestNameHint: r.room_bills?.guest_name_hint ?? null,
+      signaturePng: r.signature_png,
+      signedAt: r.signed_at,
     };
   });
 }

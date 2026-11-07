@@ -3088,6 +3088,8 @@ também é feita em Server Components.
       (`commissionActual`/`revenueWithCommission` em `indicator_month_channels`); o percentual do card só cobre a receita **sem** valor
       informado (hoje, Expedia). Depois de rodar a migração, "Atualizar histórico completo" preenche os meses antigos.
 
+69. **Parte 62 — Assinatura do hóspede na comanda** (07/11/2026): em pedido NOVO, "Fazer pedido" abre o resumo (itens, preços, total) com "Cancelar pedido" (zera as quantidades) e "Confirmar pedido"; este abre o quadro de assinatura (`signature-pad.tsx`) e "Enviar pedido" grava pedido + imagem PNG + data/hora do servidor na mesma transação (`submit_comanda_signed`, migração `097` / `supabase/producao/18`; colunas `bar_comandas.signature_png`/`signed_at`). A assinatura aparece em `comanda-detail-dialog.tsx` (comandas ativas e inativas, camareira e admin). Edição de comanda não pede nova assinatura. Rodar a migração ANTES do código: as listas de comanda passam a ler as colunas novas.
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de

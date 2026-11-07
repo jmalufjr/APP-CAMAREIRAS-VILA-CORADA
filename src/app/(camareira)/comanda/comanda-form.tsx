@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { submitComanda, editComanda, cancelComanda } from "@/lib/actions/comandas";
+import { submitComandaSigned, editComanda, cancelComanda } from "@/lib/actions/comandas";
 import type { RoomOption } from "@/lib/actions/comandas";
 import type { PoolbarItem, RoomBillGuestSlot } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { QuantityStepper } from "@/components/shared/quantity-stepper";
+import { SignaturePad, type SignaturePadHandle } from "@/components/shared/signature-pad";
 import {
   Select,
   SelectContent,
@@ -62,6 +63,11 @@ export function ComandaForm({
   );
   const [quantities, setQuantities] = useState<Record<string, number>>(initialQuantities ?? {});
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  // Pedido novo: resumo (hóspede confere) → assinatura → envio.
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [signOpen, setSignOpen] = useState(false);
+  const [signEmpty, setSignEmpty] = useState(true);
+  const padRef = useRef<SignaturePadHandle>(null);
 
   const selectedRoom = rooms.find((r) => optionKey(r.room_id, r.guestSlot) === selectedKey);
   const roomIdCounts = new Map<string, number>();
@@ -88,30 +94,76 @@ export function ComandaForm({
 
   const hasAnyQuantity = Object.values(quantities).some((q) => q > 0);
 
-  function handleSubmit() {
-    if (isLocked) return;
+  function validateOrder(): boolean {
+    if (isLocked) return false;
     if (!selectedRoom) {
       toast.error("Selecione a suíte.");
-      return;
+      return false;
     }
     if (!hasAnyQuantity) {
       toast.error("Selecione ao menos um item com quantidade.");
+      return false;
+    }
+    return true;
+  }
+
+  const orderItems = Object.entries(quantities)
+    .filter(([, q]) => q > 0)
+    .map(([item_id, quantity]) => ({ item_id, quantity }));
+
+  const summaryLines = orderItems.map(({ item_id, quantity }) => {
+    const item = poolbarItems.find((i) => i.id === item_id);
+    return { id: item_id, name: item?.name ?? "—", quantity, subtotal: quantity * Number(item?.price ?? 0) };
+  });
+  const summaryTotal = summaryLines.reduce((sum, l) => sum + l.subtotal, 0);
+
+  // "Fazer pedido" (pedido novo) abre o resumo; "Salvar e reenviar" (edição) segue direto.
+  function handleMakeOrder() {
+    if (!validateOrder()) return;
+    setSummaryOpen(true);
+  }
+
+  // Cancelar pedido: volta para a tela de novo pedido com tudo zerado.
+  function handleCancelOrder() {
+    setSummaryOpen(false);
+    setQuantities({});
+  }
+
+  function handleConfirmOrder() {
+    setSummaryOpen(false);
+    setSignEmpty(true);
+    setSignOpen(true);
+  }
+
+  function handleSendSigned() {
+    if (!validateOrder() || !selectedRoom) return;
+    if (!padRef.current || padRef.current.isEmpty()) {
+      toast.error("O hóspede precisa assinar para enviar o pedido.");
       return;
     }
-    const items = Object.entries(quantities)
-      .filter(([, q]) => q > 0)
-      .map(([item_id, quantity]) => ({ item_id, quantity }));
-
+    const signature = padRef.current.toPngDataUrl();
     startTransition(async () => {
-      const result =
-        mode === "create"
-          ? await submitComanda(selectedRoom.room_id, items, selectedRoom.guestSlot)
-          : await editComanda(comandaId!, selectedRoom.room_id, items, selectedRoom.guestSlot);
+      const result = await submitComandaSigned(selectedRoom.room_id, orderItems, selectedRoom.guestSlot, signature);
       if (result?.error) {
         toast.error(result.error);
         return;
       }
-      toast.success(mode === "create" ? "Pedido enviado." : "Comanda atualizada.");
+      setSignOpen(false);
+      toast.success("Pedido enviado.");
+      router.push("/comanda");
+      router.refresh();
+    });
+  }
+
+  function handleEditSubmit() {
+    if (!validateOrder() || !selectedRoom) return;
+    startTransition(async () => {
+      const result = await editComanda(comandaId!, selectedRoom.room_id, orderItems, selectedRoom.guestSlot);
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Comanda atualizada.");
       router.push("/comanda");
       router.refresh();
     });
@@ -203,8 +255,8 @@ export function ComandaForm({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button onClick={handleSubmit} disabled={isPending || isLocked}>
-            {mode === "create" ? "Enviar pedido" : "Salvar e reenviar"}
+          <Button onClick={mode === "create" ? handleMakeOrder : handleEditSubmit} disabled={isPending || isLocked}>
+            {mode === "create" ? "Fazer pedido" : "Salvar e reenviar"}
           </Button>
           {mode === "edit" && (
             <Button variant="destructive" disabled={isPending || isLocked} onClick={() => setCancelDialogOpen(true)}>
@@ -213,6 +265,59 @@ export function ComandaForm({
           )}
         </div>
       </div>
+
+      <Dialog open={summaryOpen} onOpenChange={setSummaryOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Resumo do pedido</DialogTitle>
+          </DialogHeader>
+          {selectedRoom && (
+            <p className="text-sm text-muted-foreground">
+              {roomOptionLabel(selectedRoom, (roomIdCounts.get(selectedRoom.room_id) ?? 1) > 1)}
+            </p>
+          )}
+          <div className="space-y-1.5">
+            {summaryLines.map((l) => (
+              <div key={l.id} className="flex items-center justify-between text-sm">
+                <span>
+                  {l.name} <span className="text-muted-foreground">× {l.quantity}</span>
+                </span>
+                <span>R$ {l.subtotal.toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-between border-t border-border pt-2 text-sm font-medium">
+            <span>Total</span>
+            <span>R$ {summaryTotal.toFixed(2)}</span>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCancelOrder}>
+              Cancelar pedido
+            </Button>
+            <Button onClick={handleConfirmOrder}>Confirmar pedido</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={signOpen} onOpenChange={(open) => !isPending && setSignOpen(open)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assinatura do hóspede</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Peça ao hóspede para assinar com o dedo no quadro abaixo. Total do pedido: R$ {summaryTotal.toFixed(2)}.
+          </p>
+          <SignaturePad ref={padRef} disabled={isPending} onChange={setSignEmpty} />
+          <DialogFooter>
+            <Button variant="outline" disabled={isPending || signEmpty} onClick={() => padRef.current?.clear()}>
+              Limpar
+            </Button>
+            <Button disabled={isPending || signEmpty} onClick={handleSendSigned}>
+              Enviar pedido
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
         <DialogContent>

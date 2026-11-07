@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge";
 import type { ComandaListItem } from "@/lib/actions/comandas";
 import { comandaDisplayStatus } from "@/lib/comanda-status";
+import { formatDateTimePt } from "@/lib/date";
 
 export function ComandaDetailDialog({
   comanda,
@@ -41,6 +42,24 @@ export function ComandaDetailDialog({
             <div className="flex items-center justify-between border-t border-border pt-2 font-medium text-sm">
               <span>Total</span>
               <span>R$ {comanda.total.toFixed(2)}</span>
+            </div>
+            <div className="space-y-1.5 border-t border-border pt-2">
+              <p className="text-xs font-medium text-muted-foreground">Assinatura do hóspede</p>
+              {comanda.signaturePng ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={comanda.signaturePng}
+                    alt="Assinatura do hóspede"
+                    className="w-full rounded-lg border border-border bg-white"
+                  />
+                  {comanda.signedAt && (
+                    <p className="text-xs text-muted-foreground">Assinado em {formatDateTimePt(comanda.signedAt)}</p>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">Sem assinatura registrada.</p>
+              )}
             </div>
           </div>
         )}
