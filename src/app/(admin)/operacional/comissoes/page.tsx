@@ -4,17 +4,19 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CamareiraBarCommissionTable } from "./camareira-bar-commission-table";
 import { getBarCommissionScreenSummary } from "@/lib/actions/comandas";
-import { getSuitesCafeCurrentMonthEstimate, getClosedPeriodDemonstrativo } from "@/lib/actions/commission";
+import { getSuitesCafeCurrentMonthEstimate, getClosedPeriodDemonstrativo, getCommissionArchive } from "@/lib/actions/commission";
+import { CommissionArchiveCard } from "./commission-archive-card";
 import { toDateKey, nowInBrazil, monthYearLabelPt } from "@/lib/date";
 import type { CommissionSettings } from "@/lib/types";
 import { SuitesCafeCommissionPanel } from "./suites-cafe-commission-panel";
 
 export default async function ComissoesPage() {
   const supabase = await createClient();
-  const [barCommission, estimate, demonstrativo, { data: commissionSettings }] = await Promise.all([
+  const [barCommission, estimate, demonstrativo, archive, { data: commissionSettings }] = await Promise.all([
     getBarCommissionScreenSummary(),
     getSuitesCafeCurrentMonthEstimate(),
     getClosedPeriodDemonstrativo(),
+    getCommissionArchive(),
     supabase.from("commission_settings").select("*").single(),
   ]);
 
@@ -50,6 +52,8 @@ export default async function ComissoesPage() {
         demonstrativo={demonstrativo}
         currentMonthLabel={monthYearLabelPt(toDateKey(nowInBrazil()))}
       />
+
+      <CommissionArchiveCard months={archive} />
     </div>
   );
 }

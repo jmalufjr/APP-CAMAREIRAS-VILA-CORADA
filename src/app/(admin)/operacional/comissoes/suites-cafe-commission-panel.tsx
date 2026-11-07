@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  updateCamareiraServiceScore,
   setClosedPeriodScore,
   sendCommissionStatementEmail,
   type SuitesCafeEstimateRow,
@@ -43,14 +42,6 @@ export function SuitesCafeCommissionPanel({
         toast.success("Valor atualizado.");
         router.refresh();
       }
-    });
-  }
-
-  function updateScore(camareiraId: string, score: number) {
-    startTransition(async () => {
-      const result = await updateCamareiraServiceScore(camareiraId, score);
-      if (result?.error) toast.error(result.error);
-      else router.refresh();
     });
   }
 
@@ -103,13 +94,13 @@ export function SuitesCafeCommissionPanel({
         <div className="space-y-2">
           <p className="text-sm font-medium">Mês corrente (estimativa) · {currentMonthLabel}</p>
           <p className="text-sm">
-            Bolo de comissão estimado (se todas tivessem nota 10): <strong>R$ {estimate.totalPot.toFixed(2)}</strong>
+            Bolo de comissão estimado (considera todas as camareiras com nota 10): <strong>R$ {estimate.totalPot.toFixed(2)}</strong>
           </p>
           <p className="text-xs text-muted-foreground">
-            O pote do mês é repartido pelo percentual de serviços que cada camareira concluiu (troca, arrumação,
-            somente saída, somente chegada, saída com chegada) e a parte dela é multiplicada pela nota ÷ 10 (nota 10
-            = parte inteira, nota 0 = zero); a nota de uma não altera a parte das outras. O pote ainda está se
-            formando dia a dia. É só uma estimativa informativa; o valor oficial e recebível é sempre o do mês anterior, abaixo.
+            O bolo do mês é repartido pelo percentual de serviços que cada camareira concluiu (troca, arrumação,
+            somente saída, somente chegada, saída com chegada), como se todas tivessem nota 10. O bolo ainda está se
+            formando dia a dia. É só uma estimativa informativa; as notas de cada camareira entram no cálculo do mês
+            anterior, abaixo.
           </p>
           <div className="overflow-x-auto">
             <Table>
@@ -117,7 +108,6 @@ export function SuitesCafeCommissionPanel({
                 <TableRow>
                   <TableHead>Camareira</TableHead>
                   <TableHead className="text-right">% de serviços (mês)</TableHead>
-                  <TableHead>Nota</TableHead>
                   <TableHead className="text-right">Comissão estimada</TableHead>
                 </TableRow>
               </TableHeader>
@@ -126,21 +116,12 @@ export function SuitesCafeCommissionPanel({
                   <TableRow key={r.camareira_id}>
                     <TableCell>{r.camareira_name}</TableCell>
                     <TableCell className="text-right">{r.service_percentage.toFixed(1)}%</TableCell>
-                    <TableCell>
-                      <QuantityStepper
-                        value={r.score}
-                        min={0}
-                        max={10}
-                        disabled={isPending}
-                        onChange={(v) => updateScore(r.camareira_id, v)}
-                      />
-                    </TableCell>
                     <TableCell className="text-right">R$ {r.amount.toFixed(2)}</TableCell>
                   </TableRow>
                 ))}
                 {estimate.rows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
                       Nenhuma camareira ativa cadastrada.
                     </TableCell>
                   </TableRow>
@@ -149,8 +130,8 @@ export function SuitesCafeCommissionPanel({
               {estimate.rows.length > 0 && (
                 <TableFooter>
                   <TableRow>
-                    <TableCell colSpan={3} className="font-medium">
-                      Total estimado a pagar (mês até hoje)
+                    <TableCell colSpan={2} className="font-medium">
+                      Total do bolo (mês até hoje)
                     </TableCell>
                     <TableCell className="text-right font-medium">R$ {totalEstimate.toFixed(2)}</TableCell>
                   </TableRow>

@@ -3098,6 +3098,8 @@ também é feita em Server Components.
 
 73. **Parte 66 — Comissão pelo mês calendário** (07/11/2026; migração `101` / `supabase/producao/22`): o "mês anterior" passa a ser o mês calendário completo (01 ao último dia), sem corte no dia 25; `closedPeriodRange` simplificada. A migração move as notas já gravadas (period_end no dia 25) para o último dia do mesmo mês. SUBSTITUI o corte do dia 25 das partes 36, 37 e 65.
 
+74. **Parte 67 — Histórico e Comissões** (07/11/2026; migração `102` / `supabase/producao/23`): no Histórico, o card "ocorrências e comissão de bar" saiu e Comissão Bar/Comissão Suítes e Café passaram para "Por camareira — serviços e comissões" (CSV junto). Em Comissões das camareiras, a estimativa do mês corrente não tem coluna de nota (mostra o bolo como se todas fossem nota 10) e há o card "Registro mensal das comissões": meses já encerrados além do mês anterior, congelados em `commission_statements` (`bar_amount`, `frozen_at`) por `getCommissionArchive` na abertura da tela (congela os meses com notas gravadas e o mês imediatamente anterior ao mês anterior). O Histórico por período calcula a comissão de suítes e café mês a mês com a nota gravada de cada mês (padrão 10). A nota de `profiles.service_quality_score` deixou de ser usada.
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de

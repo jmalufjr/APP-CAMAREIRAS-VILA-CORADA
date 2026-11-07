@@ -207,7 +207,7 @@ export function HistoryTables({
   }, [byDay]);
 
   const diarioColSpan = 3 + TASK_TYPE_OPTIONS.length + 3;
-  const camareiraServicosColSpan = 1 + TASK_TYPE_OPTIONS.length + 2;
+  const camareiraServicosColSpan = 1 + TASK_TYPE_OPTIONS.length + 4;
 
   return (
     <div className="space-y-6">
@@ -301,7 +301,7 @@ export function HistoryTables({
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="font-heading text-lg">Por camareira — serviços</CardTitle>
+          <CardTitle className="font-heading text-lg">Por camareira — serviços e comissões</CardTitle>
           <Button
             variant="outline"
             size="sm"
@@ -312,18 +312,16 @@ export function HistoryTables({
                   ...TASK_TYPE_OPTIONS.map((o) => o.label),
                   "Total",
                   "Duração média",
-                  "Ocorrências Manutenção",
-                  "Ocorrências Manutenção resolvidas",
-                  "Total 10% bar no período (R$)",
+                  "Comissão Bar (R$)",
+                  "Comissão Suítes e Café (R$)",
                 ],
                 ...byCamareira.map(([name, v]) => [
                   name,
                   ...TASK_TYPE_OPTIONS.map((o) => v.byType[o.value]),
                   TASK_TYPE_OPTIONS.reduce((sum, o) => sum + v.byType[o.value], 0),
                   v.durationCount > 0 ? formatMinutesPt(v.durationSumMin / v.durationCount) : "—",
-                  v.ocorrencias,
-                  v.ocorrenciasResolvidas,
                   v.barCommission.toFixed(2),
+                  v.suitesCafeCommission.toFixed(2),
                 ]),
               ])
             }
@@ -341,6 +339,8 @@ export function HistoryTables({
                 ))}
                 <TableHead>Total</TableHead>
                 <TableHead>Duração média</TableHead>
+                <TableHead>Comissão Bar</TableHead>
+                <TableHead>Comissão Suítes e Café</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -352,48 +352,13 @@ export function HistoryTables({
                   ))}
                   <TableCell>{TASK_TYPE_OPTIONS.reduce((sum, o) => sum + v.byType[o.value], 0)}</TableCell>
                   <TableCell>{v.durationCount > 0 ? formatMinutesPt(v.durationSumMin / v.durationCount) : "—"}</TableCell>
-                </TableRow>
-              ))}
-              {byCamareira.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={camareiraServicosColSpan} className="text-center text-muted-foreground py-8">
-                    Sem dados no período.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-heading text-lg">Por camareira — ocorrências e comissão de bar</CardTitle>
-        </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Camareira</TableHead>
-                <TableHead>Ocorrências Manutenção</TableHead>
-                <TableHead>Ocorrências resolvidas</TableHead>
-                <TableHead>Comissão Bar</TableHead>
-                <TableHead>Comissão Suítes e Café</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {byCamareira.map(([name, v]) => (
-                <TableRow key={name}>
-                  <TableCell>{name}</TableCell>
-                  <TableCell>{v.ocorrencias}</TableCell>
-                  <TableCell>{v.ocorrenciasResolvidas}</TableCell>
                   <TableCell>R$ {v.barCommission.toFixed(2)}</TableCell>
                   <TableCell>R$ {v.suitesCafeCommission.toFixed(2)}</TableCell>
                 </TableRow>
               ))}
               {byCamareira.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={camareiraServicosColSpan} className="text-center text-muted-foreground py-8">
                     Sem dados no período.
                   </TableCell>
                 </TableRow>

@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { requireRole } from "@/lib/actions/authz";
 import { revalidatePath } from "next/cache";
 import { Resend } from "resend";
 import { nowInBrazil, toDateKey, todayKey, monthYearLabelPt, nextDayBrasiliaUtcBoundary } from "@/lib/date";
@@ -200,7 +202,8 @@ export async function getSuitesCafeCurrentMonthEstimate(): Promise<{
     camareiraId: c.id,
     camareiraName: c.name,
     serviceCount: serviceCounts.get(c.id) ?? 0,
-    score: c.service_quality_score,
+    // A estimativa do mês corrente mostra o bolo repartido como se todas tivessem nota 10.
+    score: 10,
   }));
   const results = computeWeightedSuitesCafeCommission(inputs, totalPot);
 
@@ -323,20 +326,176 @@ export async function getSuitesCafeCommissionForPeriod(
   to: string
 ): Promise<SuitesCafeCommissionByCamareiraRow[]> {
   const supabase = await createClient();
-  const [camareiras, serviceCounts, totalPot] = await Promise.all([
-    getCamareiraRoster(supabase, from, to),
-    getServiceCountsByCamareira(supabase, from, to),
-    getBreakfastCommissionPotForRange(from, to),
+  const months = calendarMonthsInRange(from, to);
+  const { data: savedRows } = await supabase
+    .from("commission_statements")
+    .select("period_end, camareira_id, score")
+    .in("period_end", months.map((m) => m.monthEnd));
+  const savedScore = new Map((savedRows ?? []).map((r) => [`${r.period_end}:${r.camareira_id}`, r.score as number]));
+
+  const totals = new Map<string, number>();
+  for (const m of months) {
+    const [camareiras, serviceCounts, pot] = await Promise.all([
+      getCamareiraRoster(supabase, m.start, m.end),
+      getServiceCountsByCamareira(supabase, m.start, m.end),
+      getBreakfastCommissionPotForRange(m.start, m.end),
+    ]);
+    const inputs: CamareiraWeightInput[] = camareiras.map((c) => ({
+      camareiraId: c.id,
+      camareiraName: c.name,
+      serviceCount: serviceCounts.get(c.id) ?? 0,
+      score: savedScore.get(`${m.monthEnd}:${c.id}`) ?? 10,
+    }));
+    computeWeightedSuitesCafeCommission(inputs, pot).forEach((r) => {
+      totals.set(r.camareiraName, (totals.get(r.camareiraName) ?? 0) + r.amount);
+    });
+  }
+  return Array.from(totals.entries()).map(([camareira_name, amount]) => ({ camareira_name, amount }));
+}
+
+// Meses calendário que o intervalo toca, cada um com o trecho de datas dentro do intervalo.
+function calendarMonthsInRange(from: string, to: string): { start: string; end: string; monthEnd: string }[] {
+  const out: { start: string; end: string; monthEnd: string }[] = [];
+  let y = Number(from.slice(0, 4));
+  let m = Number(from.slice(5, 7)) - 1;
+  const lastY = Number(to.slice(0, 4));
+  const lastM = Number(to.slice(5, 7)) - 1;
+  while (y < lastY || (y === lastY && m <= lastM)) {
+    const first = toDateKey(new Date(Date.UTC(y, m, 1)));
+    const monthEnd = toDateKey(new Date(Date.UTC(y, m + 1, 0)));
+    out.push({ start: first < from ? from : first, end: monthEnd > to ? to : monthEnd, monthEnd });
+    m++;
+    if (m > 11) {
+      m = 0;
+      y++;
+    }
+  }
+  return out;
+}
+
+// ---------- Registro mensal (meses encerrados além do mês anterior) ----------
+
+export interface CommissionArchiveRow {
+  camareira_name: string;
+  score: number;
+  suites_cafe_amount: number;
+  bar_amount: number;
+  total_amount: number;
+}
+
+export interface CommissionArchiveMonth {
+  periodEnd: string;
+  rows: CommissionArchiveRow[];
+  totalSuitesCafe: number;
+  totalBar: number;
+  grandTotal: number;
+}
+
+// Congela os valores de um mês (notas, % de serviços e as duas comissões) em commission_statements.
+async function freezeMonth(monthStart: string, monthEnd: string) {
+  const user = await createClient();
+  const admin = createAdminClient();
+  const [camareiras, serviceCounts, pot, { data: savedScores }, barRows] = await Promise.all([
+    getCamareiraRoster(user, monthStart, monthEnd),
+    getServiceCountsByCamareira(user, monthStart, monthEnd),
+    getBreakfastCommissionPotForRange(monthStart, monthEnd),
+    user.from("commission_statements").select("camareira_id, score").eq("period_end", monthEnd),
+    getBarCommissionByCamareiraForPeriod(monthStart, monthEnd),
   ]);
+  const scoreById = new Map((savedScores ?? []).map((r) => [r.camareira_id as string, r.score as number]));
+  const barByName = new Map(barRows.map((r) => [r.camareira_name, r.commission]));
 
   const inputs: CamareiraWeightInput[] = camareiras.map((c) => ({
     camareiraId: c.id,
     camareiraName: c.name,
     serviceCount: serviceCounts.get(c.id) ?? 0,
-    score: c.service_quality_score,
+    score: scoreById.get(c.id) ?? 10,
   }));
-  const results = computeWeightedSuitesCafeCommission(inputs, totalPot);
-  return results.map((r) => ({ camareira_name: r.camareiraName, amount: r.amount }));
+  const results = computeWeightedSuitesCafeCommission(inputs, pot);
+  const names = new Set(results.map((r) => r.camareiraName));
+  const now = new Date().toISOString();
+
+  const rows = [
+    ...results.map((r) => ({
+      period_end: monthEnd,
+      camareira_id: r.camareiraId,
+      camareira_name: r.camareiraName,
+      service_percentage: r.servicePercent,
+      score: r.score,
+      suites_cafe_amount: r.amount,
+      bar_amount: barByName.get(r.camareiraName) ?? 0,
+      frozen_at: now,
+    })),
+    // Camareiras que só tiveram comissão de bar no mês.
+    ...barRows
+      .filter((b) => !names.has(b.camareira_name))
+      .map((b) => ({
+        period_end: monthEnd,
+        camareira_id: null,
+        camareira_name: b.camareira_name,
+        service_percentage: 0,
+        score: 10,
+        suites_cafe_amount: 0,
+        bar_amount: b.commission,
+        frozen_at: now,
+      })),
+  ];
+  if (rows.length === 0) return;
+  await admin.from("commission_statements").delete().eq("period_end", monthEnd).is("frozen_at", null);
+  await admin.from("commission_statements").insert(rows);
+}
+
+// Devolve o registro mensal. Antes, "vira o mês": todo mês anterior ao mês anterior (último fechado) que
+// já tinha notas gravadas, mais o mês imediatamente anterior a ele, são congelados com os valores do mês.
+export async function getCommissionArchive(): Promise<CommissionArchiveMonth[]> {
+  const denied = await requireRole(["admin", "gerente_operacional"]);
+  if (denied) return [];
+  const supabase = await createClient();
+  const closed = closedPeriodRange(nowInBrazil());
+
+  const { data: existing } = await supabase
+    .from("commission_statements")
+    .select("period_end, frozen_at")
+    .lt("period_end", closed.periodEnd);
+  const frozenEnds = new Set((existing ?? []).filter((r) => r.frozen_at).map((r) => r.period_end as string));
+  const pendingEnds = new Set((existing ?? []).filter((r) => !r.frozen_at).map((r) => r.period_end as string));
+
+  const prevMonthEnd = toDateKey(new Date(Date.UTC(Number(closed.start.slice(0, 4)), Number(closed.start.slice(5, 7)) - 1, 0)));
+  if (!frozenEnds.has(prevMonthEnd)) pendingEnds.add(prevMonthEnd);
+
+  for (const end of pendingEnds) {
+    if (frozenEnds.has(end)) continue;
+    const start = `${end.slice(0, 7)}-01`;
+    try {
+      await freezeMonth(start, end);
+    } catch {
+      // tenta de novo na próxima abertura da tela
+    }
+  }
+
+  const { data: rows } = await supabase
+    .from("commission_statements")
+    .select("period_end, camareira_name, score, suites_cafe_amount, bar_amount")
+    .lt("period_end", closed.periodEnd)
+    .not("frozen_at", "is", null)
+    .order("period_end", { ascending: false })
+    .order("camareira_name");
+
+  const byMonth = new Map<string, CommissionArchiveRow[]>();
+  (rows ?? []).forEach((r) => {
+    const list = byMonth.get(r.period_end as string) ?? [];
+    const sc = Number(r.suites_cafe_amount);
+    const bar = Number(r.bar_amount);
+    list.push({ camareira_name: r.camareira_name, score: r.score, suites_cafe_amount: sc, bar_amount: bar, total_amount: sc + bar });
+    byMonth.set(r.period_end as string, list);
+  });
+  return Array.from(byMonth.entries()).map(([periodEnd, list]) => ({
+    periodEnd,
+    rows: list,
+    totalSuitesCafe: list.reduce((a, r) => a + r.suites_cafe_amount, 0),
+    totalBar: list.reduce((a, r) => a + r.bar_amount, 0),
+    grandTotal: list.reduce((a, r) => a + r.total_amount, 0),
+  }));
 }
 
 // ---------- Envio do demonstrativo por e-mail ----------

@@ -4620,3 +4620,12 @@ $$ language plpgsql security definer set search_path = public;
 update commission_statements
 set period_end = (date_trunc('month', period_end) + interval '1 month' - interval '1 day')::date
 where extract(day from period_end) = 25;
+
+-- ===== 102: registro mensal das comissoes =====
+alter table commission_statements
+  add column if not exists bar_amount numeric(10,2) not null default 0,
+  add column if not exists frozen_at timestamptz;
+
+-- Gerente operacional tambem le as notas e o registro mensal.
+drop policy if exists cst_gerente_select on commission_statements;
+create policy cst_gerente_select on commission_statements for select using (is_admin_or_gerente());

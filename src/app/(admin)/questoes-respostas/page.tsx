@@ -646,11 +646,14 @@ export default function QuestoesRespostasPage() {
               <P>
                 A tela mostra, acima de cada tabela, o <strong>bolo de comissão</strong> (o total de suítes e
                 café que seria pago se todas as camareiras tivessem nota 10). A tabela do mês corrente é só
-                uma <strong>estimativa</strong> que muda dia a dia. A do <strong>mês anterior</strong> é a
+                uma <strong>estimativa</strong> que muda dia a dia, sem notas (considera todas com nota 10). A do <strong>mês anterior</strong> é a
                 oficial: a nota de cada camareira é editada direto nela (começa em 10), os valores se
                 atualizam na hora — não há botão de calcular — e dá pra baixar um PDF ou enviar por e-mail
                 (pra “Cadastrar e-mail de envio”, pergunta 9) o demonstrativo com as duas comissões de cada
-                camareira e o total geral.
+                camareira e o total geral. No fim da tela, o card <strong>“Registro mensal das comissões”</strong>
+                guarda os meses mais antigos: quando o mês vira, o mês que era “mês anterior” passa pra esse
+                registro, com os valores (notas e comissões) congelados, e o mês que acabou de fechar assume o
+                lugar de “mês anterior”.
               </P>
 
               <SubHeading>Quem entra no cálculo</SubHeading>
@@ -690,16 +693,14 @@ export default function QuestoesRespostasPage() {
                 por tipo e por camareira (incluindo o tempo médio que cada uma leva do início ao fim de
                 um serviço), ocorrências de manutenção mais comuns, consumo de frigobar e bar, mesas do
                 café e a coluna “Comissão Suítes e Café” (usando, pra cada mês fechado, o valor
-                congelado daquele mês — ver pergunta 4). A tabela “Por camareira” vem dividida em duas:
-                uma com os serviços realizados (por tipo, total e duração média), outra com as
-                ocorrências de manutenção, a “Comissão Bar” (contas cuja taxa foi isentada pelo hóspede
-                não entram — ver pergunta 5) e a “Comissão Suítes e Café” de cada camareira no período
-                escolhido — essa última sempre calculada na hora pro período que você escolher, com a
-                nota de cada camareira como está hoje (diferente da tabela do “mês anterior” da
-                pergunta 11, que usa a nota própria daquele mês). A camareira de teste “admin-camareira” nunca aparece em
-                nenhuma das colunas de comissão. Também dá pra exportar essas informações em uma
-                planilha (CSV), caso queira analisar os números em outro programa ou guardar um
-                relatório.
+                congelado daquele mês — ver pergunta 4). A tabela “Por camareira — serviços e comissões” mostra, pra cada
+                camareira, os serviços realizados (por tipo, total e duração média), a “Comissão Bar”
+                (contas cuja taxa foi isentada pelo hóspede não entram — ver pergunta 5) e a “Comissão
+                Suítes e Café” no período escolhido. Essa última é calculada na hora, mês a mês, usando a
+                nota gravada de cada mês (10 quando nenhuma foi gravada). A camareira de teste
+                “admin-camareira” nunca aparece em nenhuma das colunas de comissão. Também dá pra exportar
+                essas informações em uma planilha (CSV), caso queira analisar os números em outro
+                programa ou guardar um relatório.
               </P>
             </div>
           </AccordionPanel>
