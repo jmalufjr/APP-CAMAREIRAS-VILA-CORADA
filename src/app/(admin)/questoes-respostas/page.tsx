@@ -610,15 +610,11 @@ export default function QuestoesRespostasPage() {
                 primeiro abaixo porque vale pras duas.
               </P>
 
-              <SubHeading>O “mês anterior”: por que não é o mês calendário</SubHeading>
+              <SubHeading>O “mês anterior”</SubHeading>
               <P>
-                A comissão do mês precisa estar pronta e paga <strong>antes</strong> do mês terminar,
-                não só depois — por isso o fechamento não acompanha o calendário (dia 1 a dia 31/30):
-                ele fecha sempre no <strong>dia 25</strong>, sobrando até o dia 25 do mês seguinte pra
-                conferir e pagar com tranquilidade. O período que fecha no dia 25 de um mês vai do dia
-                26 do mês anterior até esse dia 25. Por exemplo: o período fechado em 25/09 é “o último
-                período” de 26/09 até 25/10 — só no dia 25/10, quando o período seguinte fecha, é que
-                ele deixa de ser “o último”.
+                As duas comissões são fechadas pelo <strong>mês calendário</strong>: o “mês anterior” é
+                o mês completo, do dia 1º ao último dia. Por exemplo, a comissão de outubro considera de
+                01/10 a 31/10 — e vale como “mês anterior” durante todo novembro.
               </P>
 
               <SubHeading>Comissão de 10% do bar por camareira</SubHeading>
@@ -628,7 +624,7 @@ export default function QuestoesRespostasPage() {
                 é sempre quem recebe; ver pergunta 5). Contas cuja taxa de serviço foi isentada pelo
                 hóspede não entram no cálculo. A tela mostra duas colunas lado a lado: “Mês corrente
                 (estimativa)” (soma as comandas desde o dia 1º deste mês até hoje, muda dia a dia) e
-                “Mês anterior (nome do mês)” — o valor definitivo do período já fechado, que não muda
+                “Mês anterior (nome do mês)” — o valor definitivo do mês já encerrado, que não muda
                 mais. Essa segunda coluna é sempre calculada na hora, sem precisar de nenhum botão,
                 porque a comissão de bar não depende de nada que você edite manualmente.
               </P>
@@ -675,7 +671,7 @@ export default function QuestoesRespostasPage() {
                 tabela do <strong>mês anterior</strong> descrita acima: no Histórico, o valor é
                 sempre calculado na hora pro período arbitrário que você escolher no filtro, usando a
                 nota atual de cada camareira (a do mês corrente) — a tabela do mês anterior usa a nota
-                própria daquele período, fechado sempre no dia 25.
+                própria daquele mês.
               </P>
             </div>
           </AccordionPanel>
@@ -699,9 +695,8 @@ export default function QuestoesRespostasPage() {
                 ocorrências de manutenção, a “Comissão Bar” (contas cuja taxa foi isentada pelo hóspede
                 não entram — ver pergunta 5) e a “Comissão Suítes e Café” de cada camareira no período
                 escolhido — essa última sempre calculada na hora pro período que você escolher, com a
-                nota de cada camareira como está hoje (diferente do “Calcular comissão do último
-                período” da pergunta 11, que é um retrato fechado de um período de aproximadamente um
-                mês, sempre fechado no dia 25). A camareira de teste “admin-camareira” nunca aparece em
+                nota de cada camareira como está hoje (diferente da tabela do “mês anterior” da
+                pergunta 11, que usa a nota própria daquele mês). A camareira de teste “admin-camareira” nunca aparece em
                 nenhuma das colunas de comissão. Também dá pra exportar essas informações em uma
                 planilha (CSV), caso queira analisar os números em outro programa ou guardar um
                 relatório.

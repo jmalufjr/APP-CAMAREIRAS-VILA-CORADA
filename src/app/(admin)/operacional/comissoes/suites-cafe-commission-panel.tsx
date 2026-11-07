@@ -163,8 +163,7 @@ export function SuitesCafeCommissionPanel({
         <div className="space-y-3 border-t border-border pt-5">
           <p className="text-sm font-medium">Mês anterior ({monthYearLabelPt(demonstrativo.periodEnd)})</p>
           <p className="text-xs text-muted-foreground">
-            O período de comissão fecha sempre no dia 25 (não no fim do mês): o mês anterior vai do dia 26 ao dia 25
-            seguinte. A nota de cada camareira é editada aqui mesmo e é a usada no cálculo deste período (começa em
+            O mês anterior é o mês calendário completo (do dia 1º ao último dia). A nota de cada camareira é editada aqui mesmo e é a usada no cálculo deste período (começa em
             10); mudar a nota de uma não altera a comissão das outras. Não há mais botão de calcular: os valores são
             atualizados na hora.
           </p>

@@ -4615,3 +4615,8 @@ begin
   on conflict (period_end, camareira_id) do update set score = excluded.score, generated_at = now();
 end;
 $$ language plpgsql security definer set search_path = public;
+
+-- ===== 101: comissao pelo mes calendario =====
+update commission_statements
+set period_end = (date_trunc('month', period_end) + interval '1 month' - interval '1 day')::date
+where extract(day from period_end) = 25;

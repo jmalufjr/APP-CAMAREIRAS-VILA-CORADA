@@ -42,8 +42,8 @@ export function CamareiraBarCommissionTable({
       <p className="text-xs text-muted-foreground">
         &ldquo;Mês corrente (estimativa)&rdquo; soma as comandas lançadas desde o dia 1º deste mês até hoje, e
         muda dia a dia. &ldquo;Mês anterior ({monthYearLabelPt(closedPeriod.periodEnd)})&rdquo; é o valor
-        definitivo do período já fechado — de 26 do mês anterior a 25 deste, o mesmo corte usado na comissão de
-        serviços nas suítes e no café — e não muda mais, já que o período está encerrado.
+        definitivo do mês já encerrado (do dia 1º ao último dia), o mesmo período usado na comissão de serviços nas
+        suítes e no café — e não muda mais.
       </p>
       <div className="overflow-x-auto">
         <Table>

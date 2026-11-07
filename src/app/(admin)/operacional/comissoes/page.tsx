@@ -35,7 +35,7 @@ export default async function ComissoesPage() {
             10% do valor de cada comanda, atribuído a quem a lançou originalmente — mesmo quando outra
             camareira editou a comanda depois. Contas cuja taxa de serviço foi isentada pelo hóspede não
             entram no cálculo. Assim como a comissão de serviços nas suítes e no café abaixo, o valor
-            definitivo é sempre o do mês anterior (fechado no dia 25) — não do mês calendário.
+            definitivo é sempre o do mês anterior (do dia 1º ao último dia do mês).
           </p>
           <CamareiraBarCommissionTable
             currentMonthEstimate={barCommission.currentMonthEstimate}
