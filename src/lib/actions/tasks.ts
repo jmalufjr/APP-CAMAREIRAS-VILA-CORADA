@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { OCCURRENCE_PHOTOS_BUCKET } from "@/lib/occurrence-photos";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { syncStaysPlanning } from "@/lib/actions/stays-sync";
 import { setMinibarConsumption } from "@/lib/actions/minibar";
 import type { RoomBillGuestSlot } from "@/lib/types";
 
@@ -31,13 +33,50 @@ export async function claimTask(taskId: string) {
   return { success: true };
 }
 
+// Depois de uma troca deixar de ser feita (cancelada, recusada) ou ser antecipada, o serviço dos
+// próximos dias da suíte precisa ser recalculado. Roda depois de responder à camareira (sem
+// deixá-la esperando) e respeita tudo o que o admin travou.
+function recalculatePlanningAfterResponse() {
+  after(async () => {
+    try {
+      await syncStaysPlanning();
+    } catch {
+      // melhor esforço: a sincronização diária refaz o cálculo de qualquer forma
+    }
+  });
+}
+
 export async function cancelTask(taskId: string) {
   const supabase = await createClient();
   const { error } = await supabase.rpc("cancel_daily_room_task", { p_task_id: taskId });
   if (error) return { error: error.message };
+  recalculatePlanningAfterResponse();
   revalidatePath("/tarefas", "layout");
   revalidatePath("/planejamento");
   revalidatePath("/dashboard");
+  return { success: true };
+}
+
+// A camareira informa que o hóspede não quis o serviço (arrumação ou troca). O serviço fica
+// cancelado e, se era uma troca, o próximo serviço da suíte passa a contemplar a troca.
+export async function declineServiceByGuest(taskId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("decline_service_by_guest", { p_task_id: taskId });
+  if (error) return { error: error.message };
+  recalculatePlanningAfterResponse();
+  revalidatePath("/tarefas", "layout");
+  revalidatePath("/planejamento");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+// Arrumação: marca que houve troca de roupa de cama e banho a pedido do hóspede (antecipa a troca).
+export async function setBedlinenChanged(taskId: string, value: boolean) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_task_bedlinen_changed", { p_task_id: taskId, p_value: value });
+  if (error) return { error: error.message };
+  recalculatePlanningAfterResponse();
+  revalidatePath("/planejamento");
   return { success: true };
 }
 

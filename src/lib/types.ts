@@ -169,6 +169,10 @@ export interface DailyRoomTask {
   cancelled_by: string | null;
   cancelled_at: string | null;
   stays_locked: boolean;
+  // Hóspede não quis o serviço (arrumação/troca): o serviço fica cancelado com este motivo.
+  guest_declined: boolean;
+  // Arrumação em que houve troca de roupa de cama e banho a pedido do hóspede.
+  bedlinen_changed: boolean;
   // Limpeza adicional (PRD_limpeza_adicional.md): acréscimo ao serviço base, feito por duas camareiras.
   extra_cleaning: boolean;
   second_assigned_to: string | null;

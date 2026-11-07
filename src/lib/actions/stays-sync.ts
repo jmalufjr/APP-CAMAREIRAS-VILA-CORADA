@@ -26,7 +26,7 @@ import {
   type ReservationForStats,
 } from "@/lib/stays/channel-stats";
 import { dayNumber, keyFromDayNumber } from "@/lib/stays/calendar";
-import { deriveWorkType, daysBetween } from "@/lib/stays/derive-planning";
+import { deriveWorkType, daysBetween, type StayTaskHistoryEntry } from "@/lib/stays/derive-planning";
 import { assignRoomsToTables, tableNumber, type RoomGuestCount } from "@/lib/stays/derive-breakfast";
 import { todayKey, tomorrowKey, yesterdayKey, addDaysKey } from "@/lib/date";
 import { normalizeReview } from "@/lib/stays/reviews";
@@ -393,6 +393,29 @@ export async function syncStaysPlanning(options?: SyncOptions) {
     if (checkingIn) arrivingClientToRoomToday.set(checkingIn._idclient, room.id);
   });
 
+  // Histórico dos serviços da estadia de cada suíte, para a regra de troca saber o que de fato
+  // aconteceu (troca feita, antecipada a pedido do hóspede, cancelada, recusada ou não feita).
+  // Serviço de dias passados só conta como troca se foi realmente executado; o de hoje (usado ao
+  // calcular amanhã) conta enquanto não for cancelado/recusado.
+  const doneStatuses = new Set(["concluido", "aguardando_revisao", "em_revisao", "aguardando_correcao", "em_correcao"]);
+  const historyByRoom = new Map<string, StayTaskHistoryEntry[]>();
+  const stayStarts = reservations.map((r) => r.checkInDate).filter((d) => d < today);
+  if (stayStarts.length > 0) {
+    const earliest = stayStarts.reduce((a, b) => (a < b ? a : b));
+    const { data: pastTasks } = await supabase
+      .from("daily_room_tasks")
+      .select("room_id, date, task_type, status, bedlinen_changed")
+      .gte("date", earliest)
+      .lte("date", today);
+    (pastTasks ?? []).forEach((t) => {
+      const executed = t.date < today ? doneStatuses.has(t.status as string) : t.status !== "cancelado";
+      const isTroca = t.task_type === "troca" || (t.task_type === "arrumacao" && t.bedlinen_changed === true);
+      const list = historyByRoom.get(t.room_id as string) ?? [];
+      list.push({ date: t.date as string, trocaDone: executed && isTroca });
+      historyByRoom.set(t.room_id as string, list);
+    });
+  }
+
   // Lápides de "Sem trabalho" explícito (ver `setRoomTask`/CLAUDE.md Parte
   // 15) — ignoradas com `force`, igual a `stays_locked`.
   let exclusions: { date: string; room_id: string }[] = [];
@@ -412,7 +435,7 @@ export async function syncStaysPlanning(options?: SyncOptions) {
   for (const date of dates) {
     for (const room of rooms as { id: string; stays_listing_id: string }[]) {
       const roomReservations = byListing.get(room.stays_listing_id) ?? [];
-      const desiredType = deriveWorkType(roomReservations, date);
+      const desiredType = deriveWorkType(roomReservations, date, historyByRoom.get(room.id) ?? []);
 
       // O carimbo/divisão de conta só importa pro dia corrente (é sobre
       // cobrança acontecendo agora, não sobre planejamento de amanhã) —

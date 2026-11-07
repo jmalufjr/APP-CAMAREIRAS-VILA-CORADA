@@ -6,13 +6,13 @@ import { toast } from "sonner";
 import Link from "next/link";
 import type { DailyRoomTask, Profile } from "@/lib/types";
 import { TASK_STATUS_LABELS } from "@/lib/types";
-import { claimTask, cancelTask, unclaimTask, claimReview, claimExtraCleaningSecond } from "@/lib/actions/tasks";
+import { claimTask, cancelTask, unclaimTask, claimReview, claimExtraCleaningSecond, declineServiceByGuest } from "@/lib/actions/tasks";
 import { taskTypeLabel } from "@/lib/task-type";
 import { formatDateShortPt } from "@/lib/date";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { BedDouble, ChevronRight, ClipboardCheck, Hand, Undo2, X } from "lucide-react";
+import { BedDouble, ChevronRight, ClipboardCheck, Hand, Undo2, UserX, X } from "lucide-react";
 
 export type TaskWithRoom = DailyRoomTask & {
   rooms: { number: string; name: string | null };
@@ -288,6 +288,8 @@ function MyTaskCard({ task, today, meId }: { task: TaskWithRoom; today: string; 
   // Sou a 2ª camareira da limpeza adicional: não tenho o checklist, só acompanho.
   const isSecond = task.second_assigned_to === meId && task.assigned_to !== meId;
   const waitingSecond = task.extra_cleaning && !task.second_assigned_to && canCancel;
+  // Arrumação/troca que eu escolhi: posso informar que o hóspede não quis o serviço.
+  const canDecline = canCancel && !isSecond && (task.task_type === "arrumacao" || task.task_type === "troca");
 
   return (
     <Card className={isSecond ? undefined : "hover:border-primary transition-colors"}>
@@ -343,6 +345,30 @@ function MyTaskCard({ task, today, meId }: { task: TaskWithRoom; today: string; 
           )}
         </div>
       </CardContent>
+      {canDecline && (
+        <CardContent>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full gap-1.5"
+            disabled={isPending}
+            onClick={() => {
+              if (!confirm(`Confirmar que o hóspede da Suíte ${task.rooms.number} não quis o serviço de ${taskTypeLabel(task.task_type, false).toLowerCase()}? O serviço será cancelado.`)) return;
+              startTransition(async () => {
+                const result = await declineServiceByGuest(task.id);
+                if (result?.error) toast.error(result.error);
+                else {
+                  toast.success("Serviço cancelado: o hóspede não quis.");
+                  router.refresh();
+                }
+              });
+            }}
+          >
+            <UserX size={14} />
+            <span>Hóspede não quis o serviço</span>
+          </Button>
+        </CardContent>
+      )}
     </Card>
   );
 }

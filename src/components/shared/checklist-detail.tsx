@@ -10,7 +10,7 @@ import type {
   RoomBillGuestSlot,
 } from "@/lib/types";
 import { TASK_STATUS_LABELS, isTaskInExecution } from "@/lib/types";
-import { toggleCheck, releaseTask } from "@/lib/actions/tasks";
+import { toggleCheck, releaseTask, setBedlinenChanged as setBedlinenChangedAction } from "@/lib/actions/tasks";
 import { OccurrencesCard, type OccurrenceRow } from "@/components/shared/occurrences-card";
 import { setMinibarConsumption, type MinibarRoomConsumption } from "@/lib/actions/minibar";
 import type { RoomBillSnapshot } from "@/lib/actions/room-bills";
@@ -58,6 +58,7 @@ export function ChecklistDetail({
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const [notes, setNotes] = useState(task.notes ?? "");
+  const [bedlinenChanged, setBedlinenChanged] = useState(task.bedlinen_changed);
   // Estado local dos checks: a fonte de verdade da UI, atualizada de forma
   // otimista no clique. Evita esperar o round trip ao servidor + um
   // router.refresh() de página inteira só para o "xisinho" aparecer.
@@ -305,6 +306,38 @@ export function ChecklistDetail({
                 </div>
               </>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {task.task_type === "arrumacao" && (!isReleased || task.bedlinen_changed) && (
+        <Card>
+          <CardContent>
+            <label className="flex items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-5 shrink-0"
+                checked={bedlinenChanged}
+                disabled={isReleased || isPending}
+                onChange={(e) => {
+                  const value = e.target.checked;
+                  setBedlinenChanged(value);
+                  startTransition(async () => {
+                    const result = await setBedlinenChangedAction(task.id, value);
+                    if (result?.error) {
+                      toast.error(result.error);
+                      setBedlinenChanged(!value);
+                    }
+                  });
+                }}
+              />
+              <span>
+                <span className="font-medium">Houve troca de roupa de cama e banho a pedido do hóspede</span>
+                <span className="block text-xs text-muted-foreground">
+                  Marque quando o hóspede pedir a troca nesta arrumação: o calendário de trocas da estadia é atualizado.
+                </span>
+              </span>
+            </label>
           </CardContent>
         </Card>
       )}

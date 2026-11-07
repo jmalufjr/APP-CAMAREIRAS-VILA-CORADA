@@ -3090,6 +3090,8 @@ também é feita em Server Components.
 
 69. **Parte 62 — Assinatura do hóspede na comanda** (07/11/2026): em pedido NOVO, "Fazer pedido" abre o resumo (itens, preços, total) com "Cancelar pedido" (zera as quantidades) e "Confirmar pedido"; este abre o quadro de assinatura (`signature-pad.tsx`) e "Enviar pedido" grava pedido + imagem PNG + data/hora do servidor na mesma transação (`submit_comanda_signed`, migração `097` / `supabase/producao/18`; colunas `bar_comandas.signature_png`/`signed_at`). A assinatura aparece em `comanda-detail-dialog.tsx` (comandas ativas e inativas, camareira e admin). Edição de comanda não pede nova assinatura. Rodar a migração ANTES do código: as listas de comanda passam a ler as colunas novas.
 
+70. **Parte 63 — Hóspede não quis o serviço e troca antecipada** (07/11/2026; migração `098` / `supabase/producao/19`): em "Minhas suítes", arrumação/troca escolhidas ganham o botão "Hóspede não quis o serviço" (`decline_service_by_guest`: status `cancelado` + `guest_declined`). No checklist de arrumação há a caixa "troca de roupa de cama e banho a pedido do hóspede" (`bedlinen_changed`). A regra de troca (`deriveWorkType`, `derive-planning.ts`) agora recebe o histórico da estadia: o calendário é refeito a partir da última troca REALMENTE feita (troca concluída/em revisão, ou arrumação com a caixa marcada); troca cancelada, recusada ou não feita continua "devida" e o próximo dia vira troca. Sem histórico, vale o calendário original. `cancelTask`, recusa e a caixa disparam `syncStaysPlanning` via `after()` para recalcular amanhã. Rodar a migração ANTES do código (a sincronização lê as colunas novas).
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de

@@ -33,9 +33,19 @@ export function daysBetween(fromDateKey: string, toDateKey: string): number {
 // PRD_regrasdenegocio.md seção 2. Retorna null quando não há nenhuma
 // reserva relevante naquele dia (quarto vago, sem trabalho definido pela
 // Stays).
+// Histórico dos serviços já registrados da suíte (dias anteriores à data calculada): `trocaDone` é
+// true quando naquele dia houve de fato troca de roupa de cama/banho (serviço de troca feito, ou
+// arrumação com "troca a pedido do hóspede"). Serviço cancelado, recusado pelo hóspede ou nunca
+// feito entra como `trocaDone: false`.
+export interface StayTaskHistoryEntry {
+  date: string;
+  trocaDone: boolean;
+}
+
 export function deriveWorkType(
   roomReservations: StaysReservationRaw[],
-  dateKey: string
+  dateKey: string,
+  history: StayTaskHistoryEntry[] = []
 ): ChecklistType | null {
   const checkingOut = roomReservations.find((r) => r.checkOutDate === dateKey);
   const checkingIn = roomReservations.find((r) => r.checkInDate === dateKey);
@@ -48,7 +58,22 @@ export function deriveWorkType(
   if (staying) {
     const nightsElapsed = daysBetween(staying.checkInDate, dateKey);
     const totalNights = daysBetween(staying.checkInDate, staying.checkOutDate);
-    return trocaNights(totalNights).includes(nightsElapsed) ? "troca" : "arrumacao";
+
+    // Sem histórico nenhum da estadia: vale o calendário original da reserva.
+    const stayHistory = history.filter((h) => h.date > staying.checkInDate && h.date < dateKey);
+    if (stayHistory.length === 0) {
+      return trocaNights(totalNights).includes(nightsElapsed) ? "troca" : "arrumacao";
+    }
+
+    // Com histórico: o calendário é refeito a partir da última troca que realmente aconteceu
+    // (ou do check-in). Se a troca prevista não foi feita (cancelada, recusada, não executada),
+    // ela continua "devida" e passa para o dia seguinte; se foi antecipada a pedido do
+    // hóspede, a contagem recomeça dali.
+    const lastTroca = stayHistory
+      .filter((h) => h.trocaDone)
+      .reduce((max, h) => Math.max(max, daysBetween(staying.checkInDate, h.date)), 0);
+    const due = trocaNights(totalNights - lastTroca).map((n) => n + lastTroca);
+    return due.length > 0 && nightsElapsed >= due[0] ? "troca" : "arrumacao";
   }
 
   return null;
