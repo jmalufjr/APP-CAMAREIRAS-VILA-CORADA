@@ -272,7 +272,7 @@ export function ComandaForm({
             <DialogTitle>Resumo do pedido</DialogTitle>
           </DialogHeader>
           {selectedRoom && (
-            <p className="text-sm text-muted-foreground">
+            <p className="rounded-lg bg-muted px-3 py-2 text-base font-semibold">
               {roomOptionLabel(selectedRoom, (roomIdCounts.get(selectedRoom.room_id) ?? 1) > 1)}
             </p>
           )}
@@ -304,6 +304,11 @@ export function ComandaForm({
           <DialogHeader>
             <DialogTitle>Assinatura do hóspede</DialogTitle>
           </DialogHeader>
+          {selectedRoom && (
+            <p className="rounded-lg bg-muted px-3 py-2 text-base font-semibold">
+              {roomOptionLabel(selectedRoom, (roomIdCounts.get(selectedRoom.room_id) ?? 1) > 1)}
+            </p>
+          )}
           <p className="text-sm text-muted-foreground">
             Peça ao hóspede para assinar com o dedo no quadro abaixo. Total do pedido: R$ {summaryTotal.toFixed(2)}.
           </p>
