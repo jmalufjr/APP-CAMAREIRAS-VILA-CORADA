@@ -606,11 +606,11 @@ export default function QuestoesRespostasPage() {
                 A tela “Comissões das camareiras” (Módulo operacional) mostra as{" "}
                 <strong>duas comissões diferentes</strong> que a equipe recebe, uma embaixo da outra:
                 a comissão de 10% do bar por camareira, e a comissão de serviços nas suítes e no café.
-                As duas usam o mesmo conceito de <strong>“último período fechado”</strong>, explicado
+                As duas usam o mesmo conceito de <strong>“mês anterior”</strong>, explicado
                 primeiro abaixo porque vale pras duas.
               </P>
 
-              <SubHeading>O “último período fechado”: por que não é o mês calendário</SubHeading>
+              <SubHeading>O “mês anterior”: por que não é o mês calendário</SubHeading>
               <P>
                 A comissão do mês precisa estar pronta e paga <strong>antes</strong> do mês terminar,
                 não só depois — por isso o fechamento não acompanha o calendário (dia 1 a dia 31/30):
@@ -628,7 +628,7 @@ export default function QuestoesRespostasPage() {
                 é sempre quem recebe; ver pergunta 5). Contas cuja taxa de serviço foi isentada pelo
                 hóspede não entram no cálculo. A tela mostra duas colunas lado a lado: “Mês corrente
                 (estimativa)” (soma as comandas desde o dia 1º deste mês até hoje, muda dia a dia) e
-                “Último período (nome do mês)” — o valor definitivo do período já fechado, que não muda
+                “Mês anterior (nome do mês)” — o valor definitivo do período já fechado, que não muda
                 mais. Essa segunda coluna é sempre calculada na hora, sem precisar de nenhum botão,
                 porque a comissão de bar não depende de nada que você edite manualmente.
               </P>
@@ -648,14 +648,13 @@ export default function QuestoesRespostasPage() {
                 redistribuído (por isso o total pago pode ficar menor que o pote).
               </P>
               <P>
-                A tela mostra uma tabela do mês corrente, que é só uma <strong>estimativa</strong> que
-                muda dia a dia (percentual de serviços até hoje, sobre o pote até hoje). Pra fechar de
-                verdade, use o botão <strong>“Calcular comissão do último período”</strong>: ele grava a
-                nota de cada camareira exatamente como está naquele instante, aplicada sobre o
-                percentual de serviços e o pote já definitivos do último período fechado, e libera
-                baixar um PDF ou enviar por e-mail (pra “Cadastrar e-mail de envio”, pergunta 9) um
-                demonstrativo com as duas comissões de cada camareira e o total geral. Clicar de novo
-                refaz o cálculo do zero — útil se você corrigir alguma nota depois de já ter calculado.
+                A tela mostra, acima de cada tabela, o <strong>bolo de comissão</strong> (o total de suítes e
+                café que seria pago se todas as camareiras tivessem nota 10). A tabela do mês corrente é só
+                uma <strong>estimativa</strong> que muda dia a dia. A do <strong>mês anterior</strong> é a
+                oficial: a nota de cada camareira é editada direto nela (começa em 10), os valores se
+                atualizam na hora — não há botão de calcular — e dá pra baixar um PDF ou enviar por e-mail
+                (pra “Cadastrar e-mail de envio”, pergunta 9) o demonstrativo com as duas comissões de cada
+                camareira e o total geral.
               </P>
 
               <SubHeading>Quem entra no cálculo</SubHeading>
@@ -673,11 +672,10 @@ export default function QuestoesRespostasPage() {
               <SubHeading>No Histórico</SubHeading>
               <P>
                 A coluna “Comissão Suítes e Café” do Histórico (ver pergunta 12) é diferente do{" "}
-                <strong>“Calcular comissão do último período”</strong> descrito acima: ali, o valor é
+                tabela do <strong>mês anterior</strong> descrita acima: no Histórico, o valor é
                 sempre calculado na hora pro período arbitrário que você escolher no filtro, usando a
-                nota de cada camareira como está <strong>hoje</strong> — não é o retrato fechado e
-                congelado do botão “Calcular”, que é específico do último período de ~1 mês, fechado
-                sempre no dia 25.
+                nota atual de cada camareira (a do mês corrente) — a tabela do mês anterior usa a nota
+                própria daquele período, fechado sempre no dia 25.
               </P>
             </div>
           </AccordionPanel>

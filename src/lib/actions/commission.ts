@@ -216,65 +216,29 @@ export async function getSuitesCafeCurrentMonthEstimate(): Promise<{
   };
 }
 
-// ---------- Fechamento do último período (botão "Calcular") ----------
+// ---------- Mês anterior (período fechado no dia 25) ----------
 
-// Calcula e grava (substituindo qualquer cálculo anterior do mesmo
-// período) o demonstrativo de comissão de serviços nas suítes e no café
-// do último período fechado — fecha sempre no dia 25 (não no fim do mês
-// calendário), pra dar tempo de conferir e pagar antes do mês virar (ver
-// closedPeriodRange). Captura a nota de cada camareira NO MOMENTO deste
-// clique, aplicada sobre o percentual de serviços e o pote do período já
-// fechado — os dois já naturalmente estáveis, não precisam de
-// congelamento próprio.
-export async function calculateClosedPeriodCommissionStatement() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { periodEnd, start, end } = closedPeriodRange(nowInBrazil());
-
-  const [camareiras, serviceCounts, totalPot] = await Promise.all([
-    getCamareiraRoster(supabase, start, end),
-    getServiceCountsByCamareira(supabase, start, end),
-    getBreakfastCommissionPotForRange(start, end),
-  ]);
-
-  const inputs: CamareiraWeightInput[] = camareiras.map((c) => ({
-    camareiraId: c.id,
-    camareiraName: c.name,
-    serviceCount: serviceCounts.get(c.id) ?? 0,
-    score: c.service_quality_score,
-  }));
-  const results = computeWeightedSuitesCafeCommission(inputs, totalPot);
-
-  const { error: deleteError } = await supabase
-    .from("commission_statements")
-    .delete()
-    .eq("period_end", periodEnd);
-  if (deleteError) return { error: deleteError.message };
-
-  if (results.length > 0) {
-    const { error: insertError } = await supabase.from("commission_statements").insert(
-      results.map((r) => ({
-        period_end: periodEnd,
-        camareira_id: r.camareiraId,
-        camareira_name: r.camareiraName,
-        service_percentage: r.servicePercent,
-        score: r.score,
-        suites_cafe_amount: r.amount,
-        generated_by: user?.id ?? null,
-      }))
-    );
-    if (insertError) return { error: insertError.message };
+// O admin/gerente edita a nota de cada camareira direto na tabela do mês anterior; ela fica guardada
+// por período em commission_statements.score e é a nota usada no cálculo. Sem nota gravada, vale 10.
+export async function setClosedPeriodScore(camareiraId: string, camareiraName: string, score: number) {
+  if (!Number.isInteger(score) || score < 0 || score > 10) {
+    return { error: "Nota inválida — precisa ser um número inteiro entre 0 e 10." };
   }
-
+  const supabase = await createClient();
+  const { periodEnd } = closedPeriodRange(nowInBrazil());
+  const { error } = await supabase.rpc("set_commission_period_score", {
+    p_period_end: periodEnd,
+    p_camareira_id: camareiraId,
+    p_camareira_name: camareiraName,
+    p_score: score,
+  });
+  if (error) return { error: error.message };
   revalidatePath("/operacional/comissoes");
-  return { success: true, periodEnd };
+  return { success: true };
 }
 
 export interface CommissionStatementRow {
-  camareira_id: string | null;
+  camareira_id: string;
   camareira_name: string;
   service_percentage: number;
   score: number;
@@ -285,51 +249,57 @@ export interface CommissionStatementRow {
 
 export interface CommissionStatement {
   periodEnd: string;
-  generatedAt: string;
+  // Bolo de comissão: o total de suítes e café que seria pago se todas as camareiras tivessem nota 10.
+  pot: number;
   rows: CommissionStatementRow[];
   totalSuitesCafe: number;
   totalBar: number;
   grandTotal: number;
 }
 
-// Demonstrativo já calculado do último período fechado (relativo a hoje)
-// — combina as linhas congeladas de commission_statements (comissão de
-// suítes e café, com a nota capturada no momento do cálculo) com a
-// comissão de bar do mesmo período, recalculada ao vivo (também estável
-// pra um período fechado, não precisa de congelamento próprio). Retorna
-// null se o botão "Calcular comissão do último período" ainda não foi
-// clicado depois do fechamento desse período.
-export async function getClosedPeriodDemonstrativo(): Promise<CommissionStatement | null> {
+// Demonstrativo do mês anterior (período fechado no dia 25 mais recente), sempre calculado na hora:
+// % de serviços e bolo do período já fechado, nota gravada de cada camareira (padrão 10) e comissão
+// de bar do mesmo período.
+export async function getClosedPeriodDemonstrativo(): Promise<CommissionStatement> {
   const supabase = await createClient();
   const { periodEnd, start, end } = closedPeriodRange(nowInBrazil());
 
-  const { data: statementRows } = await supabase
-    .from("commission_statements")
-    .select("*")
-    .eq("period_end", periodEnd)
-    .order("camareira_name");
-  if (!statementRows || statementRows.length === 0) return null;
-
-  const barRows = await getBarCommissionByCamareiraForPeriod(start, end);
+  const [camareiras, serviceCounts, pot, { data: savedScores }, barRows] = await Promise.all([
+    getCamareiraRoster(supabase, start, end),
+    getServiceCountsByCamareira(supabase, start, end),
+    getBreakfastCommissionPotForRange(start, end),
+    supabase.from("commission_statements").select("camareira_id, score").eq("period_end", periodEnd),
+    getBarCommissionByCamareiraForPeriod(start, end),
+  ]);
+  const scoreById = new Map((savedScores ?? []).map((r) => [r.camareira_id as string, r.score as number]));
   const barByName = new Map(barRows.map((r) => [r.camareira_name, r.commission]));
 
-  const rows: CommissionStatementRow[] = statementRows.map((r) => {
-    const barAmount = barByName.get(r.camareira_name) ?? 0;
-    const suitesCafeAmount = Number(r.suites_cafe_amount);
-    return {
-      camareira_id: r.camareira_id,
-      camareira_name: r.camareira_name,
-      service_percentage: Number(r.service_percentage),
-      score: r.score,
-      suites_cafe_amount: suitesCafeAmount,
-      bar_amount: barAmount,
-      total_amount: suitesCafeAmount + barAmount,
-    };
-  });
+  const inputs: CamareiraWeightInput[] = camareiras.map((c) => ({
+    camareiraId: c.id,
+    camareiraName: c.name,
+    serviceCount: serviceCounts.get(c.id) ?? 0,
+    score: scoreById.get(c.id) ?? 10,
+  }));
+  const results = computeWeightedSuitesCafeCommission(inputs, pot);
+
+  const rows: CommissionStatementRow[] = results
+    .map((r) => {
+      const barAmount = barByName.get(r.camareiraName) ?? 0;
+      return {
+        camareira_id: r.camareiraId,
+        camareira_name: r.camareiraName,
+        service_percentage: r.servicePercent,
+        score: r.score,
+        suites_cafe_amount: r.amount,
+        bar_amount: barAmount,
+        total_amount: r.amount + barAmount,
+      };
+    })
+    .sort((x, y) => x.camareira_name.localeCompare(y.camareira_name));
 
   return {
     periodEnd,
-    generatedAt: statementRows[0].generated_at,
+    pot,
     rows,
     totalSuitesCafe: rows.reduce((sum, r) => sum + r.suites_cafe_amount, 0),
     totalBar: rows.reduce((sum, r) => sum + r.bar_amount, 0),
@@ -344,7 +314,7 @@ export interface SuitesCafeCommissionByCamareiraRow {
   amount: number;
 }
 
-// Mesma fórmula de peso (% serviços + % notas, em média) aplicada a um
+// Mesma fórmula (% de serviços × nota ÷ 10) aplicada a um
 // período arbitrário escolhido no filtro do Histórico — sempre ao vivo,
 // com a nota atual de cada camareira (diferente do demonstrativo do botão
 // "Calcular", que é um retrato pontual de um período inteiro fechado).
@@ -377,7 +347,6 @@ export async function getSuitesCafeCommissionForPeriod(
 // explícito e recebe o resultado na hora via toast.
 export async function sendCommissionStatementEmail() {
   const demonstrativo = await getClosedPeriodDemonstrativo();
-  if (!demonstrativo) return { error: "Calcule a comissão do último período antes de enviar." };
 
   const { accounting_email: accountingEmail } = await getReceiptSettings();
   if (!accountingEmail) return { error: "Cadastre o e-mail de envio antes (menu \"Cadastrar e-mail de envio\")." };
@@ -389,8 +358,8 @@ export async function sendCommissionStatementEmail() {
     const { error } = await resend.emails.send({
       from: process.env.RECEIPT_FROM_EMAIL ?? "Vila Corada <recibos@consumos.vilacorada.com.br>",
       to: accountingEmail,
-      subject: `Comissões das camareiras — Último período (${label})`,
-      text: `Segue em anexo o demonstrativo de comissões das camareiras do último período fechado (${label}).`,
+      subject: `Comissões das camareiras — Mês anterior (${label})`,
+      text: `Segue em anexo o demonstrativo de comissões das camareiras do mês anterior (${label}).`,
       attachments: [
         { filename: `comissoes-${demonstrativo.periodEnd}.pdf`, content: pdfBuffer },
       ],

@@ -3094,6 +3094,8 @@ também é feita em Server Components.
 
 71. **Parte 64 — Ajustes de status, revisão e comissão** (07/11/2026): (a) serviço recusado pelo hóspede aparece como "Cancelado a pedido do hóspede" (`taskStatusLabel`, `types.ts`) no Planejamento diário e em "Serviços nas suítes"; (b) "Dispensar revisão" saiu das telas do Resumo executivo (só consulta) e vive em Planejamento diário, no card "Serviços pendentes de revisão" (qualquer dia); (c) comissão de suítes e café mudou: parte de cada camareira = pote × % de serviços dela × nota ÷ 10 (`computeWeightedSuitesCafeCommission`) — a nota só reduz a parte de quem a recebeu, não redistribui; o total pago pode ser menor que o pote. A nota padrão passou a ser 10 (migração 099).
 
+72. **Parte 65 — "Mês anterior" com nota editável** (07/11/2026; migração `100` / `supabase/producao/21`): o "último período" passou a se chamar "Mês anterior" (mesmo corte no dia 25). Acabou o botão "Calcular": a tabela do mês anterior é calculada na hora e a coluna "Nota usada" é editável (RPC `set_commission_period_score`, guarda em `commission_statements.score` por período; sem nota gravada vale 10). Acima de cada tabela aparece o "bolo de comissão" (total se todas tivessem nota 10). PDF e e-mail usam sempre o cálculo atual.
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de

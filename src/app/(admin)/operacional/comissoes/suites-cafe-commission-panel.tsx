@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   updateCamareiraServiceScore,
-  calculateClosedPeriodCommissionStatement,
+  setClosedPeriodScore,
   sendCommissionStatementEmail,
   type SuitesCafeEstimateRow,
   type CommissionStatement,
@@ -28,7 +28,7 @@ export function SuitesCafeCommissionPanel({
 }: {
   commission: CommissionSettings;
   estimate: { rows: SuitesCafeEstimateRow[]; totalPot: number };
-  demonstrativo: CommissionStatement | null;
+  demonstrativo: CommissionStatement;
   currentMonthLabel: string;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -54,14 +54,11 @@ export function SuitesCafeCommissionPanel({
     });
   }
 
-  function calculateClosedPeriod() {
+  function updateClosedScore(camareiraId: string, camareiraName: string, score: number) {
     startTransition(async () => {
-      const result = await calculateClosedPeriodCommissionStatement();
+      const result = await setClosedPeriodScore(camareiraId, camareiraName, score);
       if (result?.error) toast.error(result.error);
-      else {
-        toast.success("Comissão do último período calculada.");
-        router.refresh();
-      }
+      else router.refresh();
     });
   }
 
@@ -105,12 +102,14 @@ export function SuitesCafeCommissionPanel({
 
         <div className="space-y-2">
           <p className="text-sm font-medium">Mês corrente (estimativa) · {currentMonthLabel}</p>
+          <p className="text-sm">
+            Bolo de comissão estimado (se todas tivessem nota 10): <strong>R$ {estimate.totalPot.toFixed(2)}</strong>
+          </p>
           <p className="text-xs text-muted-foreground">
             O pote do mês é repartido pelo percentual de serviços que cada camareira concluiu (troca, arrumação,
             somente saída, somente chegada, saída com chegada) e a parte dela é multiplicada pela nota ÷ 10 (nota 10
             = parte inteira, nota 0 = zero); a nota de uma não altera a parte das outras. O pote ainda está se
-            formando dia a dia. É só uma estimativa informativa; o valor oficial e recebível é sempre o do último período fechado, calculado
-            abaixo.
+            formando dia a dia. É só uma estimativa informativa; o valor oficial e recebível é sempre o do mês anterior, abaixo.
           </p>
           <div className="overflow-x-auto">
             <Table>
@@ -151,7 +150,7 @@ export function SuitesCafeCommissionPanel({
                 <TableFooter>
                   <TableRow>
                     <TableCell colSpan={3} className="font-medium">
-                      Total do pote (mês até hoje)
+                      Total estimado a pagar (mês até hoje)
                     </TableCell>
                     <TableCell className="text-right font-medium">R$ {totalEstimate.toFixed(2)}</TableCell>
                   </TableRow>
@@ -162,80 +161,81 @@ export function SuitesCafeCommissionPanel({
         </div>
 
         <div className="space-y-3 border-t border-border pt-5">
-          <p className="text-sm font-medium">Fechamento do último período</p>
+          <p className="text-sm font-medium">Mês anterior ({monthYearLabelPt(demonstrativo.periodEnd)})</p>
           <p className="text-xs text-muted-foreground">
-            O período de comissão fecha sempre no dia 25 (não no fim do mês), pra dar tempo de conferir e calcular
-            antes do mês virar — por exemplo, o período fechado em 25/09 pode ser calculado de 26/09 até 25/10, até
-            o período seguinte (fechado em 25/10) tomar o lugar de &ldquo;último período&rdquo;. Ao clicar, a nota
-            de cada camareira é capturada exatamente como está neste momento, e multiplicada pela parte de
-            serviços e pelo pote já fechados desse período — o resultado fica salvo até você clicar de novo (por
-            exemplo, depois de corrigir alguma nota).
+            O período de comissão fecha sempre no dia 25 (não no fim do mês): o mês anterior vai do dia 26 ao dia 25
+            seguinte. A nota de cada camareira é editada aqui mesmo e é a usada no cálculo deste período (começa em
+            10); mudar a nota de uma não altera a comissão das outras. Não há mais botão de calcular: os valores são
+            atualizados na hora.
           </p>
-          <Button variant="outline" disabled={isPending} onClick={calculateClosedPeriod}>
-            Calcular comissão do último período
-          </Button>
-
-          {demonstrativo ? (
-            <div className="space-y-3 pt-2">
-              <p className="text-sm text-muted-foreground">
-                Último período ({monthYearLabelPt(demonstrativo.periodEnd)})
-              </p>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Camareira</TableHead>
-                      <TableHead className="text-right">% serviços</TableHead>
-                      <TableHead className="text-right">Nota usada</TableHead>
-                      <TableHead className="text-right">Suítes e Café</TableHead>
-                      <TableHead className="text-right">Bar</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {demonstrativo.rows.map((r) => (
-                      <TableRow key={r.camareira_name}>
-                        <TableCell>{r.camareira_name}</TableCell>
-                        <TableCell className="text-right">{r.service_percentage.toFixed(1)}%</TableCell>
-                        <TableCell className="text-right">{r.score}</TableCell>
-                        <TableCell className="text-right">R$ {r.suites_cafe_amount.toFixed(2)}</TableCell>
-                        <TableCell className="text-right">R$ {r.bar_amount.toFixed(2)}</TableCell>
-                        <TableCell className="text-right">R$ {r.total_amount.toFixed(2)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                  <TableFooter>
-                    <TableRow>
-                      <TableCell colSpan={3} className="font-medium">
-                        Total geral
-                      </TableCell>
-                      <TableCell className="text-right font-medium">R$ {demonstrativo.totalSuitesCafe.toFixed(2)}</TableCell>
-                      <TableCell className="text-right font-medium">R$ {demonstrativo.totalBar.toFixed(2)}</TableCell>
-                      <TableCell className="text-right font-medium">R$ {demonstrativo.grandTotal.toFixed(2)}</TableCell>
-                    </TableRow>
-                  </TableFooter>
-                </Table>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  nativeButton={false}
-                  render={
-                    <a href="/api/dashboard/commission-statement" target="_blank" rel="noreferrer">
-                      <Download size={14} /> Baixar PDF
-                    </a>
-                  }
-                />
-                <Button variant="outline" disabled={isPending} onClick={sendEmail}>
-                  <Mail size={14} /> Enviar por e-mail
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Ainda não calculado para o último período. Clique no botão acima para gerar o demonstrativo.
-            </p>
-          )}
+          <p className="text-sm">
+            Bolo de comissão do mês anterior (se todas tivessem nota 10): <strong>R$ {demonstrativo.pot.toFixed(2)}</strong>
+          </p>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Camareira</TableHead>
+                  <TableHead className="text-right">% serviços</TableHead>
+                  <TableHead>Nota usada</TableHead>
+                  <TableHead className="text-right">Suítes e Café</TableHead>
+                  <TableHead className="text-right">Bar</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {demonstrativo.rows.map((r) => (
+                  <TableRow key={r.camareira_id}>
+                    <TableCell>{r.camareira_name}</TableCell>
+                    <TableCell className="text-right">{r.service_percentage.toFixed(1)}%</TableCell>
+                    <TableCell>
+                      <QuantityStepper
+                        value={r.score}
+                        min={0}
+                        max={10}
+                        disabled={isPending}
+                        onChange={(v) => updateClosedScore(r.camareira_id, r.camareira_name, v)}
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">R$ {r.suites_cafe_amount.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">R$ {r.bar_amount.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">R$ {r.total_amount.toFixed(2)}</TableCell>
+                  </TableRow>
+                ))}
+                {demonstrativo.rows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                      Nenhuma camareira com serviço neste período.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+              <TableFooter>
+                <TableRow>
+                  <TableCell colSpan={3} className="font-medium">
+                    Total geral
+                  </TableCell>
+                  <TableCell className="text-right font-medium">R$ {demonstrativo.totalSuitesCafe.toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-medium">R$ {demonstrativo.totalBar.toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-medium">R$ {demonstrativo.grandTotal.toFixed(2)}</TableCell>
+                </TableRow>
+              </TableFooter>
+            </Table>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={
+                <a href="/api/dashboard/commission-statement" target="_blank" rel="noreferrer">
+                  <Download size={14} /> Baixar PDF
+                </a>
+              }
+            />
+            <Button variant="outline" disabled={isPending} onClick={sendEmail}>
+              <Mail size={14} /> Enviar por e-mail
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

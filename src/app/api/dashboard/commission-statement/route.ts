@@ -8,8 +8,7 @@ import { renderCommissionStatementPdf } from "@/lib/commission-statement-pdf";
 // PDF do recibo de conta (/api/room-bills/[billId]/receipt). Sempre serve
 // o demonstrativo do último período fechado relativo a hoje (fecha no dia
 // 25, não no fim do mês — ver closedPeriodRange) — não existe tela de
-// navegar por períodos anteriores, só o botão "Calcular comissão do
-// último período" em /operacional/comissoes.
+// navegar por períodos anteriores (em /operacional/comissoes, "Mês anterior").
 export async function GET() {
   const supabase = await createClient();
 
@@ -22,10 +21,6 @@ export async function GET() {
   if (profile?.role !== "admin" && profile?.role !== "gerente_operacional") return new NextResponse("Acesso restrito.", { status: 403 });
 
   const demonstrativo = await getClosedPeriodDemonstrativo();
-  if (!demonstrativo) {
-    return new NextResponse("Calcule a comissão do último período antes de baixar o PDF.", { status: 404 });
-  }
-
   const pdf = await renderCommissionStatementPdf(demonstrativo);
   return new NextResponse(new Uint8Array(pdf), {
     headers: {

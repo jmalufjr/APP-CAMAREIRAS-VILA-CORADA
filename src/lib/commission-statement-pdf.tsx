@@ -33,7 +33,7 @@ function StatementDocument({ data }: { data: CommissionStatement }) {
     <Document>
       <Page size="A4" style={styles.page}>
         <Text style={styles.title}>Vila Corada — Demonstrativo de comissões das camareiras</Text>
-        <Text style={styles.subtitle}>Último período ({monthYearLabelPt(data.periodEnd)})</Text>
+        <Text style={styles.subtitle}>Mês anterior ({monthYearLabelPt(data.periodEnd)})</Text>
 
         <View style={styles.headerRow}>
           <Text style={styles.colName}>Camareira</Text>
