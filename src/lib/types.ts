@@ -24,6 +24,12 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   cancelado: "Cancelado",
 };
 
+// Rótulo do status de um serviço, com o motivo quando o hóspede não quis o serviço.
+export function taskStatusLabel(task: { status: TaskStatus; guest_declined?: boolean | null }): string {
+  if (task.status === "cancelado" && task.guest_declined) return "Cancelado a pedido do hóspede";
+  return TASK_STATUS_LABELS[task.status];
+}
+
 // O serviço ainda está nas mãos da executora (checklist editável).
 export function isTaskInExecution(status: TaskStatus): boolean {
   return status === "pendente" || status === "em_andamento";

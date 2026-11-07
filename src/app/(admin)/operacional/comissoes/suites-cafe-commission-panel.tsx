@@ -106,10 +106,10 @@ export function SuitesCafeCommissionPanel({
         <div className="space-y-2">
           <p className="text-sm font-medium">Mês corrente (estimativa) · {currentMonthLabel}</p>
           <p className="text-xs text-muted-foreground">
-            O peso de cada camareira é a média entre o percentual de serviços que ela concluiu no mês (troca,
-            arrumação, somente saída, somente chegada, saída com chegada) e o percentual de sua nota em relação à
-            soma de todas as notas — aplicado sobre o pote do mês, que ainda está se formando dia a dia. É só uma
-            estimativa informativa; o valor oficial e recebível é sempre o do último período fechado, calculado
+            O pote do mês é repartido pelo percentual de serviços que cada camareira concluiu (troca, arrumação,
+            somente saída, somente chegada, saída com chegada) e a parte dela é multiplicada pela nota ÷ 10 (nota 10
+            = parte inteira, nota 0 = zero); a nota de uma não altera a parte das outras. O pote ainda está se
+            formando dia a dia. É só uma estimativa informativa; o valor oficial e recebível é sempre o do último período fechado, calculado
             abaixo.
           </p>
           <div className="overflow-x-auto">
@@ -167,8 +167,8 @@ export function SuitesCafeCommissionPanel({
             O período de comissão fecha sempre no dia 25 (não no fim do mês), pra dar tempo de conferir e calcular
             antes do mês virar — por exemplo, o período fechado em 25/09 pode ser calculado de 26/09 até 25/10, até
             o período seguinte (fechado em 25/10) tomar o lugar de &ldquo;último período&rdquo;. Ao clicar, a nota
-            de cada camareira é capturada exatamente como está neste momento, e combinada com o percentual de
-            serviços e o pote já fechados desse período — o resultado fica salvo até você clicar de novo (por
+            de cada camareira é capturada exatamente como está neste momento, e multiplicada pela parte de
+            serviços e pelo pote já fechados desse período — o resultado fica salvo até você clicar de novo (por
             exemplo, depois de corrigir alguma nota).
           </p>
           <Button variant="outline" disabled={isPending} onClick={calculateClosedPeriod}>

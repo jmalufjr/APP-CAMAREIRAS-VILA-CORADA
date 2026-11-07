@@ -6,7 +6,6 @@ import { taskTypeLabel } from "@/lib/task-type";
 import { formatDatePt, formatTimePt, formatDurationPt } from "@/lib/date";
 import type { ChecklistType, DailyRoomTaskOccurrence } from "@/lib/types";
 import { ChecklistDetail } from "@/components/shared/checklist-detail";
-import { WaiveReviewButton } from "@/components/shared/waive-review-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TASK_STATUS_LABELS } from "@/lib/types";
 import { getRoomBillSnapshotForDate } from "@/lib/actions/room-bills";
@@ -85,7 +84,6 @@ export default async function AdminTaskDetailPage({
           <CardContent className="space-y-3 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="font-heading text-lg">Revisão e correção</h3>
-              {task.status === "aguardando_revisao" && <WaiveReviewButton taskId={task.id} />}
             </div>
             <p>
               Situação: <strong>{TASK_STATUS_LABELS[task.status as keyof typeof TASK_STATUS_LABELS]}</strong>

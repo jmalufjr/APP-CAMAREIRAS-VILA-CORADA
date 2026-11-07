@@ -6,8 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ServiceLogTable } from "../service-log-table";
 import { getServiceLogRows } from "@/lib/service-log";
-import { WaiveReviewButton } from "@/components/shared/waive-review-button";
-import { TASK_STATUS_LABELS, type TaskStatus } from "@/lib/types";
+import { TASK_STATUS_LABELS, taskStatusLabel, type TaskStatus, type DailyRoomTask } from "@/lib/types";
 import { formatDateShortPt } from "@/lib/date";
 import { taskTypeLabel } from "@/lib/task-type";
 import type { ChecklistType } from "@/lib/types";
@@ -63,7 +62,7 @@ export default async function ServicosSuitesPage() {
                   {taskTypeLabel(t.task_type as ChecklistType, t.extra_cleaning)}
                 </span>
                 <Badge variant={t.status === "concluido" ? "default" : "secondary"}>
-                  {TASK_STATUS_LABELS[t.status as TaskStatus]}
+                  {taskStatusLabel(t as unknown as DailyRoomTask)}
                 </Badge>
               </div>
             ))}
@@ -105,7 +104,6 @@ export default async function ServicosSuitesPage() {
               </span>
               <span className="flex items-center gap-2">
                 <Badge variant="secondary">{TASK_STATUS_LABELS[t.status]}</Badge>
-                {t.status === "aguardando_revisao" && <WaiveReviewButton taskId={t.id} />}
               </span>
             </div>
           ))}

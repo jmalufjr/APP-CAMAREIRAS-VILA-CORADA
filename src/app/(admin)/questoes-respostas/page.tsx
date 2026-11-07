@@ -639,13 +639,13 @@ export default function QuestoesRespostasPage() {
                 multiplicado pela quantidade de suítes elegíveis pro café da manhã (ver pergunta 4),
                 acumulado dia a dia. Pra decidir a fatia de cada camareira, você atribui a cada uma uma{" "}
                 <strong>nota de 0 a 10</strong> (começa em 5, com botões de mais/menos) reconhecendo a
-                qualidade do trabalho dela — pode editar quando quiser, não é uma nota mensal. O valor
-                que cada camareira recebe é a <strong>média entre dois percentuais</strong>: o
-                percentual dela na quantidade total de serviços concluídos no período (troca, arrumação,
-                somente saída, somente chegada, saída com chegada, de todas as camareiras somadas) e o
-                percentual da nota dela na soma das notas de todas. Como os dois percentuais somam 100%
-                cada um, essa média também soma 100% — o total repartido sempre bate certinho com o
-                pote, sem sobra nem falta.
+                qualidade do trabalho dela — pode editar quando quiser, não é uma nota mensal. A parte de
+                cada camareira vem do <strong>percentual dela na quantidade total de serviços
+                concluídos</strong> no período (troca, arrumação, somente saída, somente chegada, saída
+                com chegada, de todas as camareiras somadas), <strong>multiplicado pela nota dividida por
+                10</strong>. Nota 10 paga a parte inteira; nota 0 zera a parte dela. Reduzir a nota de uma
+                camareira reduz só a comissão dela — a das outras não muda, e o valor que sobra não é
+                redistribuído (por isso o total pago pode ficar menor que o pote).
               </P>
               <P>
                 A tela mostra uma tabela do mês corrente, que é só uma <strong>estimativa</strong> que
