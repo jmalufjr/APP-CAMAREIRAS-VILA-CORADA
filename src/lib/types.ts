@@ -76,7 +76,7 @@ export interface Profile {
   active: boolean;
   created_at: string;
   // Nota de qualidade do serviço (comissão de serviços nas suítes e no
-  // café) — único valor contínuo por camareira, 0 a 10, padrão 5.
+  // café) — único valor contínuo por camareira, 0 a 10, padrão 10.
   service_quality_score: number;
 }
 

@@ -68,7 +68,7 @@ create table profiles (
   -- Nota de qualidade do serviço (comissão de serviços nas suítes e no
   -- café) — valor único e contínuo por camareira, não "por mês";
   -- editável pelo admin a qualquer momento, entre 0 e 10.
-  service_quality_score integer not null default 5
+  service_quality_score integer not null default 10
     check (service_quality_score between 0 and 10)
 );
 
@@ -4592,3 +4592,8 @@ begin
   update daily_room_tasks set bedlinen_changed = p_value where id = p_task_id;
 end;
 $$ language plpgsql security definer set search_path = public;
+
+-- ===== 099: nota padrao 10 =====
+alter table profiles alter column service_quality_score set default 10;
+-- Camareiras que ainda estao na nota 5 (o antigo padrao) passam para 10.
+update profiles set service_quality_score = 10 where role = 'camareira' and service_quality_score = 5;

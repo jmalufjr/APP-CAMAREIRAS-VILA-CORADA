@@ -638,7 +638,7 @@ export default function QuestoesRespostasPage() {
                 O valor total a repartir (“o pote”) é o campo “Valor da comissão por café servido”
                 multiplicado pela quantidade de suítes elegíveis pro café da manhã (ver pergunta 4),
                 acumulado dia a dia. Pra decidir a fatia de cada camareira, você atribui a cada uma uma{" "}
-                <strong>nota de 0 a 10</strong> (começa em 5, com botões de mais/menos) reconhecendo a
+                <strong>nota de 0 a 10</strong> (começa em 10, com botões de mais/menos) reconhecendo a
                 qualidade do trabalho dela — pode editar quando quiser, não é uma nota mensal. A parte de
                 cada camareira vem do <strong>percentual dela na quantidade total de serviços
                 concluídos</strong> no período (troca, arrumação, somente saída, somente chegada, saída
