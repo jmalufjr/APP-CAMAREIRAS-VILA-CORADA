@@ -184,7 +184,9 @@ export default function QuestoesRespostasPage() {
                 camareira, pelo próprio celular, escolhe uma das suítes disponíveis pra trabalhar (você
                 não precisa atribuir manualmente quem faz o quê), preenche um checklist de itens,
                 registra qualquer problema encontrado (ver pergunta 6) e, ao final, libera a suíte. Ao
-                liberar, o serviço ainda NÃO está concluído: fica “pendente de revisão”. Você acompanha
+                liberar, o serviço é concluído direto — a revisão é dispensada por padrão. Se você (ou o gerente
+                operacional) habilitou a revisão daquela suíte no Planejamento diário, ele NÃO fica concluído: fica
+                “pendente de revisão”. Você acompanha
                 tudo isso em tempo real na tela de Planejamento.
               </P>
               <P>
@@ -201,9 +203,10 @@ export default function QuestoesRespostasPage() {
                 correção aparecem na tabela “Serviços dos últimos 7 dias” e no Histórico.
               </P>
               <P>
-                <strong>Dispensar a revisão:</strong> se não houver outra camareira disponível, você (ou o
-                gerente operacional) pode dispensar a revisão em “Serviços nas suítes” (Resumo
-                operacional): o serviço passa direto a concluído, sem revisora, e não conta serviço de
+                <strong>Habilitar e dispensar a revisão:</strong> no Planejamento diário, a coluna “Revisão” tem uma
+                chave por suíte (desligada por padrão, até a suíte ser liberada). Se uma revisão já estiver pendente e
+                não houver outra camareira disponível, você (ou o gerente operacional) pode dispensá-la no card
+                “Serviços pendentes de revisão” do próprio Planejamento diário: o serviço passa direto a concluído, sem revisora, e não conta serviço de
                 revisão para ninguém na comissão. Na comissão, cada revisão concluída vale um serviço
                 para a revisora, e o serviço só conta quando o ciclo inteiro termina. Uma suíte de
                 “Somente Saída” pendente de revisão ou de correção aparece como suja em “Suítes vagas e

@@ -3104,6 +3104,8 @@ também é feita em Server Components.
 
 76. **Parte 69 — Feriadão na prioridade da limpeza adicional** (10/11/2026): `dayPriorityTier` conta os feriados seguidos no início da semana (nacionais ou Carnaval seg–qua, `isHolidayForExtraCleaning` em `holidays-br.ts`); esses dias ficam com a prioridade do domingo e a ordem normal recomeça no primeiro dia seguinte; sábado sempre por último.
 
+77. **Parte 70 — Revisão opcional e limpeza adicional editáveis no Planejamento diário** (10/11/2026; migração `103` / `supabase/producao/24`): `daily_room_tasks.review_required` (padrão false = revisão dispensada: `release_daily_room_task` conclui direto; se true, vai para `aguardando_revisao`) com chave por suíte na coluna "Revisão" (`set_task_review_required`, só antes de liberar; a sincronização mantém o valor se recriar a tarefa). Coluna "Limpeza adicional": chave por suíte (`set_task_extra_cleaning`, só troca/saída com chegada/somente saída ainda não escolhida) que grava `extra_cleaning_locked`; `allocateExtraCleaning` ignora tarefas travadas na sincronização parcial e só a total (`force`) as devolve ao sorteio.
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de
