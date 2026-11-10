@@ -6,8 +6,8 @@ import { isNationalHoliday } from "@/lib/holidays-br";
 
 export type ExtraBaseType = "troca" | "preparacao" | "somente_saida";
 
-// Preferência de tipo (menor = escolhido antes): troca, saída com chegada, somente saída.
-const TYPE_PREFERENCE: Record<ExtraBaseType, number> = { troca: 0, preparacao: 1, somente_saida: 2 };
+// Preferência de tipo (menor = escolhido antes): somente saída, saída com chegada, troca (desde 10/11/2026).
+const TYPE_PREFERENCE: Record<ExtraBaseType, number> = { somente_saida: 0, preparacao: 1, troca: 2 };
 
 export const EXTRA_BASE_TYPES: ExtraBaseType[] = ["troca", "preparacao", "somente_saida"];
 
@@ -109,7 +109,7 @@ export function planExtraCleaning(input: {
 //  - no máximo 3 por dia; o teto do dia depende de quantas suítes têm serviço nele:
 //    até 5 suítes → 3; de 6 a 9 → 2; mais de 9 → 0;
 //  - continuam: prioridade de quem ficou sem na semana anterior, no máximo 1 por suíte por semana,
-//    preferência de tipo (troca > saída com chegada > somente saída) e ordem de prioridade dos dias.
+//    preferência de tipo (somente saída > saída com chegada > troca) e ordem de prioridade dos dias.
 // ---------------------------------------------------------------------------------------------
 
 export const EXTRA_RULES_V2_START = "2026-11-11";

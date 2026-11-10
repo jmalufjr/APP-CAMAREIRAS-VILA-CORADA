@@ -33,8 +33,8 @@ O nome exibido passa a ser "Saída com chegada com Limpeza adicional", "Somente 
 - As que sobrarem no fim da semana "não terão preferência de alocação na semana seguinte, ou seja, deverão ser
   escolhidas primeiro assim que possível".
 - Nunca mais de uma alocação por suíte por semana.
-- Preferência de tipo (sem quebrar a regra de quantidade por dia): **troca**, depois **saída com chegada**, depois
-  **somente saída**.
+- Preferência de tipo (sem quebrar a regra de quantidade por dia): **somente saída**, depois **saída com chegada**, depois
+  **troca** (alterado em 10/11/2026).
 
 ### 1.2 Execução por duas camareiras
 

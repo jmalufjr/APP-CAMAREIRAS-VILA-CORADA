@@ -230,7 +230,7 @@ export default function QuestoesRespostasPage() {
                 recebe mais de uma por semana, e quem ficou sem na semana anterior passa na frente. A ordem de prioridade
                 dos dias é segunda, terça, quarta, quinta, sexta, domingo e, por último, sábado; se a segunda-feira for
                 feriado nacional, a ordem começa na terça e a segunda passa a valer como o domingo. Entre as suítes do
-                dia, a preferência é troca, depois saída com chegada, depois somente saída. Serviços
+                dia, a preferência é somente saída, depois saída com chegada, depois troca. Serviços
                 já escolhidos ou iniciados nunca são alterados.
               </P>
               <P>

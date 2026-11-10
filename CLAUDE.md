@@ -2992,7 +2992,7 @@ também é feita em Server Components.
     - **Alocação**: `src/lib/extra-cleaning.ts` (`planExtraCleaning`, pura, 13 casos testados) + `allocateExtraCleaning`
       em `stays-sync.ts`, chamada no fim de `syncStaysPlanning` (hoje e amanhã, com ou sem `force`; também no cron).
       Teto 3 (seg–qua), 2 (qui), 3 (sex–dom); +1 quando dias anteriores seg–qui ficaram abaixo do teto; só tarefas
-      pendentes sem camareira; preferência troca > saída com chegada > somente saída; suítes sem limpeza adicional na
+      pendentes sem camareira; preferência (desde 10/11/2026) somente saída > saída com chegada > troca; suítes sem limpeza adicional na
       semana anterior passam na frente. Recalcula completando vagas; nunca mexe em tarefa escolhida/iniciada.
     - **Duas camareiras**: a 1ª escolha é a `claimTask` de sempre; a 2ª (`claimExtraCleaningSecond`) define `claimed_at`
       (início) e libera o checklist, que só a 1ª vê. A 2ª cancela só a vaga; a 1ª cancela tudo e devolve ao pool.
@@ -3100,7 +3100,7 @@ também é feita em Server Components.
 
 74. **Parte 67 — Histórico e Comissões** (07/11/2026; migração `102` / `supabase/producao/23`): no Histórico, o card "ocorrências e comissão de bar" saiu e Comissão Bar/Comissão Suítes e Café passaram para "Por camareira — serviços e comissões" (CSV junto). Em Comissões das camareiras, a estimativa do mês corrente não tem coluna de nota (mostra o bolo como se todas fossem nota 10) e há o card "Registro mensal das comissões": meses já encerrados além do mês anterior, congelados em `commission_statements` (`bar_amount`, `frozen_at`) por `getCommissionArchive` na abertura da tela (congela os meses com notas gravadas e o mês imediatamente anterior ao mês anterior). O Histórico por período calcula a comissão de suítes e café mês a mês com a nota gravada de cada mês (padrão 10). A nota de `profiles.service_quality_score` deixou de ser usada.
 
-75. **Parte 68 — Nova regra de distribuição da limpeza adicional** (10/11/2026, sem migração): a partir da distribuição de **11/11/2026** (`EXTRA_RULES_V2_START`, `extra-cleaning.ts`): teto do dia = 3 se há até 5 suítes com serviço, 2 se de 6 a 9, 0 se mais de 9 (`dayCapV2`); acabou a folga +1 e o teto 3/2/3 por dia da semana. Ordem de prioridade dos dias: seg, ter, qua, qui, sex, dom, sáb; segunda feriado nacional (`holidays-br.ts`) começa na terça e a segunda vale como o domingo (`dayPriorityTier`). Mantidos: prioridade de quem ficou sem na semana anterior, 1 por suíte por semana, preferência de tipo. Dias anteriores a 11/11 usam a regra antiga (`planExtraCleaning`). `allocateExtraCleaning` conta as suítes com serviço por dia (sem cancelados).
+75. **Parte 68 — Nova regra de distribuição da limpeza adicional** (10/11/2026, sem migração): a partir da distribuição de **11/11/2026** (`EXTRA_RULES_V2_START`, `extra-cleaning.ts`): teto do dia = 3 se há até 5 suítes com serviço, 2 se de 6 a 9, 0 se mais de 9 (`dayCapV2`); acabou a folga +1 e o teto 3/2/3 por dia da semana. Ordem de prioridade dos dias: seg, ter, qua, qui, sex, dom, sáb; segunda feriado nacional (`holidays-br.ts`) começa na terça e a segunda vale como o domingo (`dayPriorityTier`). Mantidos: prioridade de quem ficou sem na semana anterior, 1 por suíte por semana; a preferência de tipo passou a ser somente saída > saída com chegada > troca. Dias anteriores a 11/11 usam a regra antiga (`planExtraCleaning`). `allocateExtraCleaning` conta as suítes com serviço por dia (sem cancelados).
 
 ## Convenções e decisões importantes
 
