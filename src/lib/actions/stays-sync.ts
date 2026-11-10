@@ -32,7 +32,14 @@ import { todayKey, tomorrowKey, yesterdayKey, addDaysKey } from "@/lib/date";
 import { normalizeReview } from "@/lib/stays/reviews";
 import { computeMonthBases, monthsBetween, IND_CHANNELS, type BlockEntry } from "@/lib/stays/indicators";
 import { extractTopicsForPending } from "@/lib/review-topics";
-import { planExtraCleaning, weekStartKey, EXTRA_BASE_TYPES, type ExtraBaseType } from "@/lib/extra-cleaning";
+import {
+  planExtraCleaning,
+  planExtraCleaningV2,
+  EXTRA_RULES_V2_START,
+  weekStartKey,
+  EXTRA_BASE_TYPES,
+  type ExtraBaseType,
+} from "@/lib/extra-cleaning";
 import { revalidatePath } from "next/cache";
 
 // Existe algum lançamento de verdade (frigobar ou bar) numa conta? Usado
@@ -314,7 +321,42 @@ async function allocateExtraCleaning(supabase: ReturnType<typeof createAdminClie
       };
     });
 
-    const chosen = planExtraCleaning({ days: weekDays, flagged, candidates, priorityRooms });
+    // Dias anteriores a EXTRA_RULES_V2_START seguem a regra antiga; a partir dele vale a nova (teto do dia
+    // conforme quantas suítes têm serviço, máximo 3, e ordem de prioridade dos dias da semana).
+    const legacyDays = weekDays.filter((d) => d < EXTRA_RULES_V2_START);
+    const v2Days = weekDays.filter((d) => d >= EXTRA_RULES_V2_START);
+    const chosen: string[] = [];
+    if (legacyDays.length > 0) {
+      chosen.push(...planExtraCleaning({ days: legacyDays, flagged, candidates, priorityRooms }));
+    }
+    if (v2Days.length > 0) {
+      const { data: serviceRows } = await supabase
+        .from("daily_room_tasks")
+        .select("date, room_id")
+        .in("date", v2Days)
+        .neq("status", "cancelado");
+      const roomsByDate = new Map<string, Set<string>>();
+      (serviceRows ?? []).forEach((r) => {
+        const set = roomsByDate.get(r.date as string) ?? new Set<string>();
+        set.add(r.room_id as string);
+        roomsByDate.set(r.date as string, set);
+      });
+      const suitesWithServiceByDate = new Map(Array.from(roomsByDate.entries()).map(([d, s]) => [d, s.size]));
+      // O que a regra antiga acabou de escolher já conta como marcado (uma por suíte por semana).
+      const legacyChosenFlags = chosen.map((id) => {
+        const c = candidates.find((x) => x.taskId === id)!;
+        return { date: c.date, roomId: c.roomId };
+      });
+      chosen.push(
+        ...planExtraCleaningV2({
+          days: v2Days,
+          flagged: [...flagged, ...legacyChosenFlags],
+          candidates: candidates.filter((c) => !chosen.includes(c.taskId)),
+          priorityRooms,
+          suitesWithServiceByDate,
+        })
+      );
+    }
     for (const taskId of chosen) {
       const cand = candidates.find((c) => c.taskId === taskId)!;
       const { error } = await supabase

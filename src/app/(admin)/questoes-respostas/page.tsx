@@ -224,11 +224,13 @@ export default function QuestoesRespostasPage() {
                 e, nas telas da camareira, o nome fica, por exemplo, “Troca com Limpeza adicional”.
               </P>
               <P>
-                O sistema escolhe sozinho, a cada sincronização com a Stays, quais suítes recebem: no máximo 3 por dia de
-                segunda a quarta e 2 na quinta (se algum dia ficar abaixo do máximo, os dias seguintes podem ter uma a
-                mais, para as 11 suítes serem atendidas de segunda a quinta). O que sobrar vai para sexta, sábado e
-                domingo (até 3 por dia). Entre as suítes do dia, a preferência é troca, depois saída com chegada, depois
-                somente saída. Uma suíte que ficou sem a limpeza adicional na semana anterior passa na frente. Serviços
+                O sistema escolhe sozinho, a cada sincronização com a Stays, quais suítes recebem. Desde 11/11/2026 o limite
+                de cada dia depende de quantas suítes têm serviço nele: até 5 suítes, no máximo 3 limpezas adicionais; de
+                6 a 9 suítes, no máximo 2; com mais de 9 suítes, nenhuma — e nunca mais de 3 num mesmo dia. Nenhuma suíte
+                recebe mais de uma por semana, e quem ficou sem na semana anterior passa na frente. A ordem de prioridade
+                dos dias é segunda, terça, quarta, quinta, sexta, domingo e, por último, sábado; se a segunda-feira for
+                feriado nacional, a ordem começa na terça e a segunda passa a valer como o domingo. Entre as suítes do
+                dia, a preferência é troca, depois saída com chegada, depois somente saída. Serviços
                 já escolhidos ou iniciados nunca são alterados.
               </P>
               <P>
