@@ -158,9 +158,9 @@ export function StaysCalendarGrid({
                 key={d.key}
                 className={
                   i === todayIndex
-                    ? "border-x-2 border-red-500 bg-red-500/15"
+                    ? "border-x-2 border-red-500 bg-red-500/15 dark:border-white/80 dark:bg-white/20"
                     : d.weekday === 0 || d.weekday === 6
-                    ? "bg-muted/70"
+                    ? "bg-muted/70 dark:bg-white/[0.08]"
                     : ""
                 }
                 style={{ width: DAY_W, flex: "none" }}
@@ -190,7 +190,7 @@ export function StaysCalendarGrid({
                 <div
                   key={d.key}
                   className={`border-b border-border py-1 text-center text-[11px] leading-tight ${
-                    i === todayIndex ? "font-bold text-red-600" : d.weekday === 0 || d.weekday === 6 ? "text-orange-600" : "text-muted-foreground"
+                    i === todayIndex ? "font-bold text-red-600 dark:text-white" : d.weekday === 0 || d.weekday === 6 ? "text-orange-600 dark:text-amber-300" : "text-muted-foreground"
                   }`}
                   style={{ width: DAY_W, flex: "none" }}
                 >
