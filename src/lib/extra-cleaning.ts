@@ -1,4 +1,4 @@
-import { isNationalHoliday } from "@/lib/holidays-br";
+import { isHolidayForExtraCleaning } from "@/lib/holidays-br";
 
 // Regras de alocação da "Limpeza adicional" (PRD_limpeza_adicional.md). Funções puras, sem I/O.
 // A limpeza adicional é um acréscimo a uma tarefa de troca / saída com chegada / somente saída,
@@ -121,15 +121,18 @@ export function dayCapV2(suitesWithService: number): number {
 }
 
 // Prioridade do dia na semana (menor = alocado primeiro): seg, ter, qua, qui, sex, depois domingo e,
-// por último, sábado. Se a segunda-feira da semana for feriado nacional, a ordem começa na terça e a
-// segunda passa a ter a mesma prioridade do domingo (sábado continua por último).
+// por último, sábado. Se a semana começa com feriados seguidos (segunda; segunda e terça; segunda a
+// quarta... — feriadão que se junta ao fim de semana anterior, e o Carnaval de segunda a quarta), esses
+// dias passam a ter a mesma prioridade do domingo e a contagem normal recomeça no primeiro dia útil
+// seguinte. O sábado continua sempre por último.
 export function dayPriorityTier(dateKey: string): number {
   const idx = weekIndex(dateKey);
-  const mondayHoliday = isNationalHoliday(weekStartKey(dateKey));
   if (idx === 6) return 5; // domingo
   if (idx === 5) return 6; // sábado
-  if (idx === 0) return mondayHoliday ? 5 : 0;
-  return mondayHoliday ? idx - 1 : idx;
+  const wk = weekStartKey(dateKey);
+  let holidayRun = 0;
+  while (holidayRun < 5 && isHolidayForExtraCleaning(addDays(wk, holidayRun))) holidayRun++;
+  return idx < holidayRun ? 5 : idx - holidayRun;
 }
 
 export function planExtraCleaningV2(input: {

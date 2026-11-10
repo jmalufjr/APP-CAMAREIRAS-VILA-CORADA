@@ -3102,6 +3102,8 @@ também é feita em Server Components.
 
 75. **Parte 68 — Nova regra de distribuição da limpeza adicional** (10/11/2026, sem migração): a partir da distribuição de **11/11/2026** (`EXTRA_RULES_V2_START`, `extra-cleaning.ts`): teto do dia = 3 se há até 5 suítes com serviço, 2 se de 6 a 9, 0 se mais de 9 (`dayCapV2`); acabou a folga +1 e o teto 3/2/3 por dia da semana. Ordem de prioridade dos dias: seg, ter, qua, qui, sex, dom, sáb; segunda feriado nacional (`holidays-br.ts`) começa na terça e a segunda vale como o domingo (`dayPriorityTier`). Mantidos: prioridade de quem ficou sem na semana anterior, 1 por suíte por semana; a preferência de tipo passou a ser somente saída > saída com chegada > troca. Dias anteriores a 11/11 usam a regra antiga (`planExtraCleaning`). `allocateExtraCleaning` conta as suítes com serviço por dia (sem cancelados).
 
+76. **Parte 69 — Feriadão na prioridade da limpeza adicional** (10/11/2026): `dayPriorityTier` conta os feriados seguidos no início da semana (nacionais ou Carnaval seg–qua, `isHolidayForExtraCleaning` em `holidays-br.ts`); esses dias ficam com a prioridade do domingo e a ordem normal recomeça no primeiro dia seguinte; sábado sempre por último.
+
 ## Convenções e decisões importantes
 
 - **Modelo de planejamento**: o trabalho de um dia é planejado com um dia de

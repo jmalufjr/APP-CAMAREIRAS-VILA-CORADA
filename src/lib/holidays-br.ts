@@ -30,3 +30,18 @@ export function isNationalHoliday(dateKey: string): boolean {
   const goodFriday = new Date(Date.UTC(year, easter.m - 1, easter.d - 2)).toISOString().slice(0, 10);
   return dateKey === goodFriday;
 }
+
+// Carnaval: segunda, terça e quarta-feira de Cinzas (48, 47 e 46 dias antes da Páscoa).
+export function isCarnivalDay(dateKey: string): boolean {
+  const year = Number(dateKey.slice(0, 4));
+  const easter = easterSunday(year);
+  return [48, 47, 46].some(
+    (n) => new Date(Date.UTC(year, easter.m - 1, easter.d - n)).toISOString().slice(0, 10) === dateKey
+  );
+}
+
+// Dia que conta como feriado para a regra de prioridade da limpeza adicional: feriado nacional ou
+// dia de Carnaval (segunda a quarta).
+export function isHolidayForExtraCleaning(dateKey: string): boolean {
+  return isNationalHoliday(dateKey) || isCarnivalDay(dateKey);
+}

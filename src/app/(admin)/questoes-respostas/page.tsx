@@ -228,8 +228,10 @@ export default function QuestoesRespostasPage() {
                 de cada dia depende de quantas suítes têm serviço nele: até 5 suítes, no máximo 3 limpezas adicionais; de
                 6 a 9 suítes, no máximo 2; com mais de 9 suítes, nenhuma — e nunca mais de 3 num mesmo dia. Nenhuma suíte
                 recebe mais de uma por semana, e quem ficou sem na semana anterior passa na frente. A ordem de prioridade
-                dos dias é segunda, terça, quarta, quinta, sexta, domingo e, por último, sábado; se a segunda-feira for
-                feriado nacional, a ordem começa na terça e a segunda passa a valer como o domingo. Entre as suítes do
+                dos dias é segunda, terça, quarta, quinta, sexta, domingo e, por último, sábado; se a semana começar com
+                feriados seguidos (só a segunda; segunda e terça; segunda a quarta…), esses dias passam a valer como o
+                domingo e a ordem normal recomeça no primeiro dia seguinte; o Carnaval (segunda a quarta) sempre conta
+                assim. Entre as suítes do
                 dia, a preferência é somente saída, depois saída com chegada, depois troca. Serviços
                 já escolhidos ou iniciados nunca são alterados.
               </P>
