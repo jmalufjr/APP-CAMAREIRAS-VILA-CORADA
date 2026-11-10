@@ -179,6 +179,10 @@ export interface DailyRoomTask {
   guest_declined: boolean;
   // Arrumação em que houve troca de roupa de cama e banho a pedido do hóspede.
   bedlinen_changed: boolean;
+  // Revisão habilitada pelo admin/gerente no Planejamento diário (padrão: dispensada).
+  review_required: boolean;
+  // Admin/gerente incluiu ou excluiu a limpeza adicional: a sincronização parcial respeita.
+  extra_cleaning_locked: boolean;
   // Limpeza adicional (PRD_limpeza_adicional.md): acréscimo ao serviço base, feito por duas camareiras.
   extra_cleaning: boolean;
   second_assigned_to: string | null;

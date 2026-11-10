@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { Room, Profile, DailyRoomTask, ChecklistType } from "@/lib/types";
 import { taskStatusLabel } from "@/lib/types";
-import { setRoomTask } from "@/lib/actions/planning";
+import { setRoomTask, setTaskReviewRequired, setTaskExtraCleaning } from "@/lib/actions/planning";
 import { TASK_TYPE_LABELS, TASK_TYPE_OPTIONS } from "@/lib/task-type";
 import {
   Table,
@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 
 export function PlanningBoard({
   date,
@@ -49,6 +50,22 @@ export function PlanningBoard({
     });
   }
 
+  function handleReviewToggle(taskId: string, value: boolean) {
+    startTransition(async () => {
+      const result = await setTaskReviewRequired(taskId, value);
+      if (result?.error) toast.error(result.error);
+      else router.refresh();
+    });
+  }
+
+  function handleExtraToggle(taskId: string, value: boolean) {
+    startTransition(async () => {
+      const result = await setTaskExtraCleaning(taskId, value);
+      if (result?.error) toast.error(result.error);
+      else router.refresh();
+    });
+  }
+
   return (
     <div className="rounded-xl border border-border bg-card overflow-x-auto">
       <Table>
@@ -56,6 +73,8 @@ export function PlanningBoard({
           <TableRow>
             <TableHead>Suíte</TableHead>
             <TableHead>Trabalho do dia</TableHead>
+            <TableHead>Limpeza adicional</TableHead>
+            <TableHead>Revisão</TableHead>
             <TableHead>Camareira responsável</TableHead>
             <TableHead>Status</TableHead>
           </TableRow>
@@ -87,10 +106,29 @@ export function PlanningBoard({
                       ))}
                     </SelectContent>
                   </Select>
-                  {task?.extra_cleaning && (
-                    <Badge variant="outline" className="mt-1">
-                      + Limpeza adicional
-                    </Badge>
+                </TableCell>
+                <TableCell>
+                  {task && ["troca", "preparacao", "somente_saida"].includes(task.task_type) ? (
+                    <Switch
+                      checked={task.extra_cleaning}
+                      disabled={isPending || task.status !== "pendente" || !!task.assigned_to}
+                      onCheckedChange={(v) => handleExtraToggle(task.id, v)}
+                      aria-label="Limpeza adicional"
+                    />
+                  ) : (
+                    <span className="text-muted-foreground text-sm">—</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {task ? (
+                    <Switch
+                      checked={task.review_required}
+                      disabled={isPending || (task.status !== "pendente" && task.status !== "em_andamento")}
+                      onCheckedChange={(v) => handleReviewToggle(task.id, v)}
+                      aria-label="Revisão"
+                    />
+                  ) : (
+                    <span className="text-muted-foreground text-sm">—</span>
                   )}
                 </TableCell>
                 <TableCell>

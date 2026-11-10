@@ -67,3 +67,23 @@ export async function setRoomTask(date: string, roomId: string, taskType: Checkl
   revalidatePath("/tarefas");
   return { success: true };
 }
+
+// Admin/gerente habilitam (ou dispensam) a revisão de uma suíte do dia — padrão: dispensada.
+export async function setTaskReviewRequired(taskId: string, value: boolean) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_task_review_required", { p_task_id: taskId, p_value: value });
+  if (error) return { error: error.message };
+  revalidatePath("/planejamento");
+  return { success: true };
+}
+
+// Admin/gerente incluem ou excluem a limpeza adicional de uma suíte do dia; a edição é respeitada pela
+// sincronização parcial.
+export async function setTaskExtraCleaning(taskId: string, value: boolean) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_task_extra_cleaning", { p_task_id: taskId, p_value: value });
+  if (error) return { error: error.message };
+  revalidatePath("/planejamento");
+  revalidatePath("/tarefas");
+  return { success: true };
+}

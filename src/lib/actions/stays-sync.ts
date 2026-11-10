@@ -263,7 +263,7 @@ export interface SyncOptions {
 // somente saída ainda pendentes e sem camareira, as que recebem o acréscimo nesta semana, e copia os
 // itens extras para o checklist delas. Complementa as vagas que faltam; nunca mexe em tarefa já
 // escolhida, iniciada ou já marcada. Roda a cada sincronização (hoje e amanhã).
-async function allocateExtraCleaning(supabase: ReturnType<typeof createAdminClient>, days: string[]) {
+async function allocateExtraCleaning(supabase: ReturnType<typeof createAdminClient>, days: string[], force = false) {
   const addDays = (key: string, n: number) => {
     const [y, m, d] = key.split("-").map(Number);
     return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
@@ -302,14 +302,17 @@ async function allocateExtraCleaning(supabase: ReturnType<typeof createAdminClie
 
     const { data: taskRows } = await supabase
       .from("daily_room_tasks")
-      .select("id, date, room_id, task_type, rooms(number)")
+      .select("id, date, room_id, task_type, extra_cleaning_locked, rooms(number)")
       .in("date", weekDays)
       .in("task_type", EXTRA_BASE_TYPES)
       .eq("status", "pendente")
       .is("assigned_to", null)
       .eq("extra_cleaning", false);
+    // Tarefas que o admin/gerente editou (incluiu ou excluiu a limpeza adicional) ficam de fora da escolha
+    // automática; só a sincronização total (force) as devolve ao sorteio.
+    const taskRowsFiltered = force ? (taskRows ?? []) : (taskRows ?? []).filter((t) => !(t as { extra_cleaning_locked?: boolean }).extra_cleaning_locked);
 
-    const candidates = (taskRows ?? []).map((t) => {
+    const candidates = taskRowsFiltered.map((t) => {
       const room = t.rooms as unknown as { number: string } | { number: string }[] | null;
       const number = Array.isArray(room) ? room[0]?.number : room?.number;
       return {
@@ -361,7 +364,7 @@ async function allocateExtraCleaning(supabase: ReturnType<typeof createAdminClie
       const cand = candidates.find((c) => c.taskId === taskId)!;
       const { error } = await supabase
         .from("daily_room_tasks")
-        .update({ extra_cleaning: true })
+        .update({ extra_cleaning: true, extra_cleaning_locked: false })
         .eq("id", taskId)
         .eq("status", "pendente")
         .is("assigned_to", null);
@@ -502,7 +505,7 @@ export async function syncStaysPlanning(options?: SyncOptions) {
 
       const { data: existing } = await supabase
         .from("daily_room_tasks")
-        .select("id, task_type, status, assigned_to, stays_locked")
+        .select("id, task_type, status, assigned_to, stays_locked, review_required")
         .eq("date", date)
         .eq("room_id", room.id)
         .maybeSingle();
@@ -545,7 +548,14 @@ export async function syncStaysPlanning(options?: SyncOptions) {
 
       const { data: task, error: insertError } = await supabase
         .from("daily_room_tasks")
-        .insert({ date, room_id: room.id, task_type: desiredType, stays_locked: false })
+        .insert({
+          date,
+          room_id: room.id,
+          task_type: desiredType,
+          stays_locked: false,
+          // Se o admin habilitou a revisão e a tarefa é recriada por mudança de tipo, a escolha é mantida.
+          review_required: existing?.review_required ?? false,
+        })
         .select()
         .single();
       if (insertError || !task) continue;
@@ -566,7 +576,7 @@ export async function syncStaysPlanning(options?: SyncOptions) {
     }
   }
 
-  const extraMarked = await allocateExtraCleaning(supabase, dates);
+  const extraMarked = await allocateExtraCleaning(supabase, dates, force);
 
   revalidatePath("/planejamento");
   revalidatePath("/tarefas");
