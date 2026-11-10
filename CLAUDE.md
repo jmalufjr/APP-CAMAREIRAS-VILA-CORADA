@@ -3120,7 +3120,7 @@ também é feita em Server Components.
   (`npx supabase start`), não contra o banco de produção — testar não polui
   mais dados/estatísticas reais. Passo a passo completo em `README.md`
   seção 4. Login admin local: `admin@camareiras.vilacorada.app` /
-  `admin123`. As credenciais da nuvem ficam em `.env.local.cloud` (não
+  `123456`. As credenciais da nuvem ficam em `.env.local.cloud` (não
   versionado) só para o caso raro de precisar rodar local contra produção.
 - **Testar uma página admin de verdade precisa de sessão real, não só
   bypass de middleware (desde a Parte 32)**: o truque já usado neste

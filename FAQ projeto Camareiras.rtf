@@ -101,12 +101,12 @@ Swagger\par
 \b0 O que fiz:\par
 npx supabase start \emdash  subiu Postgres + Auth isolados no Docker (baixou as imagens, ~alguns minutos).\par
 Apliquei supabase/schema.sql e depois supabase/seed.sql direto no Postgres do container (11 quartos, 9 mesas, cat\'e1logos de frigobar/bar/manuten\'e7\'e3o \emdash  tudo igual ao que existe em produ\'e7\'e3o).\par
-Criei um usu\'e1rio admin local: login admin, senha admin123.\par
+Criei um usu\'e1rio admin local: login admin, senha 123456.\par
 Troquei o .env.local pra apontar pro Supabase local ({{\field{\*\fldinst{HYPERLINK http://127.0.0.1:54321 }}{\fldrslt{http://127.0.0.1:54321\ul0\cf0}}}}\f3\fs22 ) em vez do de produ\'e7\'e3o. Guardei as credenciais reais da nuvem em .env.local.cloud (n\'e3o vai pro Git), s\'f3 pro caso raro de precisar testar contra produ\'e7\'e3o de prop\'f3sito.\par
 Testei: subi o npm run dev, a tela de login carregou e j\'e1 mostrou "admin" como op\'e7\'e3o \emdash  confirmando que o app est\'e1 conversando com o banco local, n\'e3o mais com o de produ\'e7\'e3o.\par
 Documentei tudo no README.md (se\'e7\'e3o 4, passo a passo completo) e no CLAUDE.md, incluindo uma decis\'e3o t\'e9cnica que precisei tomar: desliguei o replay autom\'e1tico de migrations/seed do CLI (supabase/config.toml), porque as migrations deste projeto come\'e7am em 002 (nunca existiu uma 001 \emdash  o schema inicial foi feito direto no painel da nuvem, antes de existir CLI aqui) e tentar reaplic\'e1-las do zero quebraria.\par
 Uso no dia a dia daqui pra frente:\par
-Abrir o Docker Desktop \u8594? npx supabase start (s\'f3 quando for testar) \u8594? npm run dev \u8594? login admin/admin123.\par
+Abrir o Docker Desktop \u8594? npx supabase start (s\'f3 quando for testar) \u8594? npm run dev \u8594? login admin/123456.\par
 Terminou de testar: npx supabase stop (ou s\'f3 feche o Docker Desktop).\par
 Painel visual do banco local (equivalente ao painel do Supabase): {{\field{\*\fldinst{HYPERLINK http://127.0.0.1:54323 }}{\fldrslt{http://127.0.0.1:54323\ul0\cf0}}}}\f3\fs22 .\par
 Nada que voc\'ea fizer a\'ed grava no banco de produ\'e7\'e3o \emdash  pode testar \'e0 vontade.\par
@@ -123,7 +123,7 @@ Eu programo essa mudan\'e7a nos arquivos do projeto, no seu computador.\par
 Antes de qualquer coisa ir pro ar de verdade, testamos ali mesmo, no seu computador:\par
 Voc\'ea abre o Docker Desktop (o programa que "liga" o banco de dados de mentirinha).\par
 Eu rodo os comandos que ligam esse banco e o site local (supabase start, npm run dev).\par
-Voc\'ea abre o navegador em localhost:3000 (um endere\'e7o que s\'f3 existe dentro do seu pr\'f3prio computador, ningu\'e9m de fora acessa) e faz login com admin / admin123.\par
+Voc\'ea abre o navegador em localhost:3000 (um endere\'e7o que s\'f3 existe dentro do seu pr\'f3prio computador, ningu\'e9m de fora acessa) e faz login com admin / 123456.\par
 Voc\'ea mexe no app \'e0 vontade, simulando o uso real \emdash  tudo que voc\'ea clicar/criar ali fica gravado s\'f3 nesse banco de mentirinha.\par
 Quando terminar de testar, \'e9 s\'f3 fechar (ou eu aviso pra desligar).\par
 Ou seja: o "quando" \'e9 sempre "toda vez que eu fizer uma mudan\'e7a e antes de voc\'ea aprovar ela pra valer". O "como" \'e9 sempre essa sequ\'eancia de abrir Docker \u8594? rodar os comandos \u8594? acessar localhost:3000.\par

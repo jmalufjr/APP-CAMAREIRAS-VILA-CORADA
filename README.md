@@ -91,7 +91,7 @@ curl -s -X POST 'http://127.0.0.1:54321/auth/v1/admin/users' \
   -H "apikey: SUPABASE_SERVICE_ROLE_KEY-do-.env.local" \
   -H "Authorization: Bearer SUPABASE_SERVICE_ROLE_KEY-do-.env.local" \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@camareiras.vilacorada.app","password":"admin123","email_confirm":true}'
+  -d '{"email":"admin@camareiras.vilacorada.app","password":"123456","email_confirm":true}'
 ```
 
 e depois insira o perfil (substitua `SEU-UID-AQUI` pelo `id` retornado
@@ -108,7 +108,7 @@ npm install
 npm run dev
 ```
 
-Acesse http://localhost:3000 — login **admin**, senha `admin123` (a que foi
+Acesse http://localhost:3000 — login **admin**, senha `123456` (a que foi
 definida acima). Painel do Studio local (equivalente ao painel do Supabase
 na nuvem, pra ver tabelas visualmente): http://127.0.0.1:54323. E-mails que
 o app tentaria mandar localmente (recibo de PDF) ficam capturados em
