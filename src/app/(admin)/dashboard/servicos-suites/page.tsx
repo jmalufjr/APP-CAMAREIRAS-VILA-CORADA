@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { ServiceLogTable } from "../service-log-table";
 import { getServiceLogRows } from "@/lib/service-log";
 import { TASK_STATUS_LABELS, taskStatusLabel, type TaskStatus, type DailyRoomTask } from "@/lib/types";
-import { formatDateShortPt } from "@/lib/date";
+import { formatDateShortPt, formatTimePt } from "@/lib/date";
 import { taskTypeLabel } from "@/lib/task-type";
 import type { ChecklistType } from "@/lib/types";
 
@@ -18,7 +18,10 @@ export default async function ServicosSuitesPage() {
   const sevenDaysAgo = daysAgoKey(6);
 
   const [{ data: todayTasks }, { data: tomorrowTasks }, serviceLogRows, { data: pendingReview }] = await Promise.all([
-    supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", today),
+    supabase
+      .from("daily_room_tasks")
+      .select("*, rooms(number), chooser:profiles!daily_room_tasks_assigned_to_fkey(name)")
+      .eq("date", today),
     supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", tomorrow),
     // Serviço concluído pelas camareiras nos últimos 7 dias, para a tabela
     // "Serviços dos últimos 7 dias" abaixo dos cards de hoje/amanhã.
@@ -62,7 +65,11 @@ export default async function ServicosSuitesPage() {
                   {taskTypeLabel(t.task_type as ChecklistType, t.extra_cleaning)}
                 </span>
                 <Badge variant={t.status === "concluido" ? "default" : "secondary"}>
-                  {taskStatusLabel(t as unknown as DailyRoomTask)}
+                  {t.status === "pendente" && t.assigned_to
+                    ? `Escolhida por ${(t as unknown as { chooser: { name: string } | null }).chooser?.name ?? "—"}${
+                        t.claimed_at ? ` às ${formatTimePt(t.claimed_at)}` : ""
+                      }`
+                    : taskStatusLabel(t as unknown as DailyRoomTask)}
                 </Badge>
               </div>
             ))}
