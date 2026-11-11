@@ -5,7 +5,6 @@ import { PageHeader } from "@/components/shared/page-header";
 import { todayKey, formatDatePt } from "@/lib/date";
 import { Card, CardContent } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
-import { getItemsNeedingPurchaseCount } from "@/lib/actions/purchase-list";
 import {
   BedDouble,
   AlertTriangle,
@@ -61,13 +60,12 @@ export default async function DashboardPage() {
   const supabase = await createClient();
   const today = todayKey();
 
-  const [{ data: todayTasks }, { count: occurrencesToday }, itemsNeedingPurchaseCount] = await Promise.all([
+  const [{ data: todayTasks }, { count: occurrencesToday }] = await Promise.all([
     supabase.from("daily_room_tasks").select("status").eq("date", today),
     supabase
       .from("daily_room_task_occurrences")
       .select("id, daily_room_tasks!inner(date)", { count: "exact", head: true })
-      .eq("daily_room_tasks.date", today),
-    getItemsNeedingPurchaseCount(),
+      .eq("daily_room_tasks.date", today),
   ]);
 
   const doneToday = (todayTasks ?? []).filter((t) => t.status === "concluido").length;
@@ -106,16 +104,6 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {itemsNeedingPurchaseCount > 0 && (
-        <Link
-          href="/compras/lista"
-          className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive hover:bg-destructive/15 transition-colors w-fit"
-        >
-          <AlertTriangle size={16} />
-          {itemsNeedingPurchaseCount} item(ns) precisam de compra
-          <ChevronRight size={14} />
-        </Link>
-      )}
 
       <nav className="max-w-md space-y-1.5">
         {menuItems.map((item) => (

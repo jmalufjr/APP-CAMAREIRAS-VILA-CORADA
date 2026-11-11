@@ -5,17 +5,10 @@ import { getCashAndBankBalances } from "@/lib/actions/ledger";
 import { getCurrentProfile } from "@/lib/actions/session";
 import {
   ChevronRight,
-  CircleDollarSign,
   Plus,
-  ShoppingBasket,
-  ShoppingCart,
   Archive,
-  Download,
-  Receipt,
-  CalendarClock,
   FileBarChart,
   ListChecks,
-  PackageMinus,
   FileSpreadsheet,
 } from "lucide-react";
 
@@ -27,25 +20,20 @@ import {
 // Permanente, Custos e Despesas) e acrescentou o "Saldo de caixa e
 // bancos" (PRD seção 9.1), lido direto do livro de lançamentos.
 const menuItems = [
-  { href: "/compras/nova", label: "Lançar Compra", icon: Plus },
-  { href: "/compras/relatorio", label: "Relatório de compras", icon: FileSpreadsheet },
-  { href: "/despesas/nova", label: "Lançar Despesa", icon: Receipt },
-  { href: "/compras/lista", label: "Lista de compras", icon: ShoppingBasket },
-  { href: "/compras/validade", label: "Produtos com data de validade próximo ao vencimento", icon: CalendarClock },
-  { href: "/compras/baixa", label: "Baixa de estoque", icon: PackageMinus },
-  { href: "/compras", label: "Estoque", icon: ShoppingCart },
-  { href: "/ativo-permanente", label: "Ativo Permanente", icon: Archive },
-  { href: "/contabil/pagamentos", label: "Pagamentos e recebimentos", icon: CircleDollarSign },
-  { href: "/contabil/demonstrativos", label: "Demonstrativos e Relatórios", icon: FileBarChart },
+  { href: "/contabil/resultado-mensal", label: "Resultado mensal", icon: FileBarChart },
+  { href: "/contabil/compras/caixa", label: "Caixa de conferência de compras (WhatsApp)", icon: ListChecks },
+  { href: "/contabil/custo-produtos", label: "Custo e rentabilidade dos produtos do bar", icon: FileBarChart },
+  { href: "/contabil/compras/nova", label: "Lançar compra ou despesa", icon: Plus },
+  { href: "/contabil/compras/relatorio", label: "Relatório de despesas (regime caixa)", icon: FileSpreadsheet },
+  { href: "/ativo-permanente", label: "Inventário de ativo permanente", icon: Archive },
   { href: "/contabil/listas", label: "Listas contábeis", icon: ListChecks },
-  { href: "/contabil/exportacoes", label: "Exportações para o sistema financeiro", icon: Download },
 ];
 
 function fmt(v: number): string {
   return `R$ ${v.toFixed(2)}`;
 }
 
-const GERENTE_HREFS = new Set(["/compras/nova", "/compras/relatorio", "/compras/lista", "/compras/validade", "/compras/baixa"]);
+const GERENTE_HREFS = new Set(["/contabil/compras/caixa", "/contabil/compras/nova", "/contabil/compras/relatorio"]);
 
 export default async function ModuloContabilPage() {
   const profile = await getCurrentProfile();

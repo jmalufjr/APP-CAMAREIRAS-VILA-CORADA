@@ -437,9 +437,7 @@ export default function QuestoesRespostasPage() {
                 Existe também o papel <strong>“Gerente operacional”</strong>: ele só enxerga o Resumo
                 executivo (com “Serviços nas suítes”, “Suítes vagas e limpas” e o Calendário de reservas), o Módulo
                 operacional (Planejamento diário, Chegadas &amp; saídas, Mesas do café, Consumo de Bar e Frigobar e
-                Comissões das camareiras), a Sincronização e, no Módulo Contábil, só Lançar Compra, Lista
-                de compras, Produtos com validade próxima, e Baixa de estoque. Ele não cadastra produtos
-                nem despesas novos, não vê saldos de caixa e banco e não acessa as demais telas.
+                Comissões das camareiras), a Sincronização e, no Módulo Contábil, só Lançar compra ou despesa, a Caixa de conferência e o Relatório de despesas. Ele não vê o Resultado mensal nem as demais telas contábeis.
               </P>
               <P>
                 O primeiro acesso de administrador (o seu) é o único que precisa ser criado direto no
@@ -713,576 +711,81 @@ export default function QuestoesRespostasPage() {
           </AccordionPanel>
         </AccordionItem>
 
-        {/* 13. Compras */}
+        {/* 13. Compras, despesas e resultado mensal (modelo simplificado, desde 11/11/2026) */}
         <AccordionItem value="compras">
           <AccordionTrigger>
             <span className="font-heading text-base">
-              13. Como funcionam as compras, e como elas se relacionam com o resto do aplicativo?
+              13. Como funcionam as compras, as despesas e o resultado mensal?
             </span>
           </AccordionTrigger>
           <AccordionPanel>
             <div className="space-y-3">
               <P>
-                Todo dinheiro que a pousada gasta é lançado em uma de duas telas do menu{" "}
-                <strong>“Módulo Contábil”</strong>: <strong>“Lançar Compra”</strong> — quando se compra
-                produtos, itens de estoque ou bens (um saco de farinha, uma geladeira), com uma ou mais
-                linhas de item — e <strong>“Lançar Despesa”</strong> — um gasto único numa categoria, sem
-                itens (conta de luz, honorários, a visita de um encanador), com valor, descrição, a
-                divisão entre centros de custo da categoria e a opção de copiar uma despesa anterior
-                (pra gastos que se repetem todo mês; copiar não gera pagamento automático). O funcionário
-                de manutenção também lança compras, no menu dele. A camareira não lança compra nenhuma: ela só avisa
-                quando algo está acabando e dá baixa manual num item (ver pergunta 14).
+                A pousada <strong>não controla estoque</strong>. Tudo o que é comprado ou pago no mês é
+                despesa do mês. A data da compra é também a data do pagamento. O objetivo é chegar, todo mês,
+                perto do lucro operacional gerencial. O novo modelo vale a partir de 01/11/2026.
               </P>
-
-              <SubHeading>Como lançar uma compra (foto ou PDF da nota)</SubHeading>
+              <SubHeading>Lançar uma compra ou despesa</SubHeading>
               <P>
-                A tela “Lançar Compra” abre com dois cards. No primeiro, você tira uma foto (ou escolhe um
-                arquivo, foto ou PDF) da nota e clica em <strong>“Ler nota com IA”</strong>. No segundo
-                aparece o <strong>resumo da nota lida</strong>, só para consulta: no topo a data da nota, o
-                fornecedor, o número (se houver) e o total, e uma linha para cada item comprado, com
-                descrição, preço e quantidade, mais uma caixa para marcar o que é do{" "}
-                <strong>café da manhã</strong>. A data de competência é sempre a data da nota.
+                Em <strong>Módulo Contábil → Lançar compra ou despesa</strong> (ou pela Caixa de conferência,
+                abaixo), cada item da nota recebe uma <strong>categoria de despesa</strong> (Alimentos, Materiais
+                de limpeza, Despesas de consumo etc.). Na categoria Alimentos você pode marcar o{" "}
+                <strong>ingrediente</strong> de produto de bar, quando for o caso.
               </P>
+              <SubHeading>Categorias, prazo de consumo e centros de custo</SubHeading>
               <P>
-                Ao clicar em <strong>“Salvar”</strong>, abre uma janela pedindo a forma de pagamento:{" "}
-                <strong>PIX</strong> e <strong>cartão de débito</strong> saem do banco; <strong>dinheiro</strong>{" "}
-                sai do caixa; <strong>cartão de crédito</strong> e <strong>a prazo</strong> ficam pendentes
-                (contas a pagar) e exigem a data de vencimento. Ao confirmar, a inteligência artificial
-                enquadra cada item num produto ou num bem do ativo permanente que já esteja cadastrado; o que
-                não existir é <strong>cadastrado automaticamente</strong> como produto novo (herdando a conta
-                contábil e a divisão por centro de custo dos produtos da mesma categoria, controlando estoque
-                em unidades) ou como bem novo do ativo permanente. O fornecedor também é cadastrado se ainda
-                não existir. Vale conferir depois, no Cadastro de produtos, o que foi criado automaticamente
-                — a leitura pode errar, principalmente em notas manuscritas ou mal fotografadas. Se o total
-                impresso na nota for diferente da soma dos itens (um desconto no cupom, por exemplo), a
-                diferença é distribuída nos itens como desconto ou frete. Isso vale para o administrador, o
-                gerente operacional e o funcionário de manutenção.
+                Em <strong>Listas contábeis → Categorias de despesa e centros de custo</strong>, cada categoria
+                tem um <strong>prazo de consumo em dias</strong>. Prazo 1 = consumo imediato (cai todo no mês da
+                compra). Prazo maior (ex.: 30 dias para limpeza): o valor da nota é dividido por dia, a partir
+                da data da compra, e distribuído entre os meses. Há quatro centros: <strong>Hospedagem, Bar,
+                Café da manhã e Frigobar</strong>. Alimentos se divide entre Bar e Café (ingrediente de bar segue
+                a divisão cadastrada nele; o resto vai ao Café). Demais bebidas se divide entre Bar e Frigobar
+                pelas quantidades vendidas no mês. Despesas de consumo (luz, água, gás, internet) têm divisão
+                fixa entre Hospedagem, Bar e Café. Bebidas quentes vão ao Bar; as demais categorias, à
+                Hospedagem. Impostos não entram em centro nenhum e aparecem só no final.
               </P>
+              <SubHeading>Ativo permanente</SubHeading>
               <P>
-                O botão <strong>“Inserir manualmente”</strong> abre o formulário completo: dados da nota
-                (data, fornecedor, número, forma de pagamento e o valor total da nota, que você pode
-                editar) e o card “Itens da compra”, onde cada item é lançado e alocado à mão, com desconto,
-                frete e tributos de cada linha. Não existem mais, na compra, os campos de link/código da nota,
-                leitura de QR code e observações.
+                Um item só é ativo permanente (não é despesa do mês) se o valor for igual ou maior que o limite
+                (R$ 1.200, editável) <strong>e</strong> a vida útil for maior que 12 meses (editável). Ele vai para
+                o <strong>Inventário de ativo permanente</strong>. Não há depreciação.
               </P>
-
+              <SubHeading>Itens recorrentes</SubHeading>
               <P>
-                O sistema avisa (sem bloquear) se já existir outra despesa igual — mesmo fornecedor,
-                número do documento, data e valor —, caso de nota lançada duas vezes por engano.
+                Salários, honorários e outras despesas que se repetem ficam em{" "}
+                <strong>Listas contábeis → Itens recorrentes</strong>. Todo mês o sistema cria o lançamento no dia
+                combinado; você só ajusta o valor quando mudar.
               </P>
-
-              <SubHeading>Fornecedores</SubHeading>
+              <SubHeading>Fechamento do mês e lançamentos tardios</SubHeading>
               <P>
-                Cadastro próprio, reaproveitado tanto por compras/despesas quanto por ativo permanente —
-                ao criar o módulo, os nomes de fornecedor já digitados em compras antigas foram
-                automaticamente agrupados num cadastro só (juntando nomes iguais, mesmo escritos com
-                maiúscula/minúscula diferente), sem perder a referência histórica.
+                O mês fecha no último dia. Compras e despesas ainda podem ser lançadas até 30 dias depois: entram
+                sozinhas, com a marca “lançado após o fechamento do mês”. Depois de 30 dias ficam{" "}
+                <strong>em vermelho</strong> no relatório até o admin aprovar ou cancelar. O mesmo vale para a receita
+                de bar, de frigobar e de hospedagem (correções da Stays).
               </P>
-
-              <SubHeading>Compra a prazo e a tela “Pagamentos e recebimentos”</SubHeading>
+              <SubHeading>Caixa de conferência e importação do WhatsApp</SubHeading>
               <P>
-                Uma compra ou despesa lançada como <strong>“A prazo”</strong> ou no{" "}
-                <strong>“Cartão de crédito”</strong> fica pendente até alguém confirmar o pagamento de
-                verdade, na tela <strong>“Pagamentos e recebimentos”</strong> (menu “Módulo Contábil”) — lista
-                todas as pendentes, ordenadas pelo vencimento, com um botão “Registrar pagamento” que pede a
-                forma final (PIX, Dinheiro ou Cartão de débito). Uma compra lançada em PIX, dinheiro ou cartão
-                de débito já nasce paga, sem passar por essa tela.
+                No grupo de compras do WhatsApp, use “Exportar conversa” (com mídia) e envie o arquivo em{" "}
+                <strong>Caixa de conferência → Importar conversa</strong>. Cada foto de nota, com as mensagens do
+                mesmo remetente logo depois, vira um item. A IA sugere data, fornecedor, categoria e ingrediente;{" "}
+                <strong>nada é lançado sem a sua conferência</strong>: você confere com a foto, corrige e lança, ou
+                descarta o que não for compra.
               </P>
-
-              <SubHeading>Pra onde cada linha (ou o valor total) é classificada</SubHeading>
+              <SubHeading>Relatório de despesas e Resultado mensal</SubHeading>
               <P>
-                Toda compra ou despesa precisa cair numa de duas “gavetas”, nunca as duas ao mesmo
-                tempo: um <strong>item de custo</strong> ou um <strong>ativo permanente</strong>.
+                O <strong>Relatório de despesas (regime caixa)</strong> lista cada compra e despesa em ordem da data
+                da compra, para conferir com o extrato do banco. O <strong>Resultado mensal</strong> mostra, por
+                centro de custo, as receitas (hospedagem bruta, comissão dos canais, hospedagem líquida, bar com taxa
+                de serviço, frigobar), as despesas por categoria e o resultado, e no fim o lucro operacional. A
+                receita de bar e de frigobar vale no mês em que o pedido foi lançado, e só entra depois que a conta é
+                fechada.
               </P>
-              <List
-                items={[
-                  <>
-                    <strong>Produto</strong>: um item de custo que a pousada compra e usa de verdade
-                    (vinho, farinha, detergente). Tem tela própria — <strong>Módulo Contábil → Cadastro de
-                    produtos</strong> — onde você define nome, código, categoria, tipo, centros de custo,
-                    se controla estoque, a unidade (litro, quilo, unidade…), as conversões (ex.: 1 garrafa =
-                    0,75 L) e o prazo de validade. Na compra você escolhe a unidade em que comprou (caixa,
-                    garrafa…) e o sistema converte sozinho; na ficha técnica você pode escrever a receita em
-                    ml ou g mesmo que o estoque seja em litros ou quilos. O produto que já teve compra ou
-                    estoque nunca é apagado, só desativado. A tela <strong>Estoque → Validade dos
-                    produtos</strong> avisa os lotes vencidos ou perto de vencer (sai primeiro o que vence
-                    primeiro).
-                  </>,
-                  <>
-                    <strong>Item de custo</strong>: é a etiqueta que diz o que foi comprado — “farinha de
-                    trigo”, “detergente”, “salário das camareiras”, “conta de luz”. Cada item de custo
-                    pertence a um ou mais <strong>centros de custo</strong> (a área grande da pousada:
-                    Hospedagem, Café da manhã, Bar da piscina, Frigobar ou Administração e áreas comuns)
-                    — quando pertence a mais de um,
-                    o valor é repartido entre eles por um percentual (que sempre precisa somar 100%). Esse
-                    cadastro completo fica na tela <strong>“Cadastro de produtos”</strong> (menu
-                    “Módulo Contábil”) para produtos e itens de custo, e em <strong>“Plano de contas e
-                    centros de custos”</strong> para os centros. Ao
-                    lançar a compra, você escolhe um item de custo já existente, ou cria um novo ali
-                    mesmo, sem precisar ir até “Listas operacionais” — nesse momento você também diz se esse item novo
-                    “representa um item de estoque” (pergunta 14) e a quais centros ele pertence.
-                  </>,
-                  <>
-                    <strong>Ativo permanente</strong>: bens que não se consomem (geladeira, televisão,
-                    liquidificador, ferramentas maiores etc.). Ao lançar uma compra desse tipo, você
-                    escolhe a categoria do bem (Máquinas, Aparelhos, Metais e louças de banho),
-                    opcionalmente um item já catalogado (ex.: “Liquidificador”), marca, modelo, garantia e
-                    o local onde vai ficar guardado. Categorias e catálogo são geridos em{" "}
-                    <strong>Módulo Contábil → “Plano de itens de ativo permanente”</strong>; cada bem
-                    comprado nasce sozinho, já com esses dados, na tela{" "}
-                    <strong>“Ativo Permanente”</strong> (menu “Módulo Contábil”), organizada por categoria.
-                  </>,
-                ]}
-              />
-
-              <SubHeading>A tela “Lista de compras”</SubHeading>
+              <SubHeading>Ficha técnica e custo dos produtos do bar</SubHeading>
               <P>
-                Essa tela (menu “Módulo Contábil”) junta dois sinais diferentes de “isso precisa ser
-                comprado”, item por item:
-              </P>
-              <List
-                items={[
-                  <>
-                    <strong>Sugestão calculada pelo sistema</strong>: baseada em quanto o item costuma ser
-                    consumido e na quantidade de “dias de folga” configurada pra ele (quantos dias de
-                    estoque a pousada quer sempre ter de reserva — editável, item por item, na tela
-                    “Cadastro de produtos”, ver pergunta 14). Se o admin sabe que não
-                    precisa comprar aquilo agora, pode “dispensar” essa sugestão — ela só reaparece se o
-                    saldo daquele item mudar de novo (uma compra nova ou mais consumo). As dispensas
-                    ativas aparecem numa seção própria, com um botão “Reativar”.
-                  </>,
-                  <>
-                    <strong>Pedidos da equipe</strong>: a camareira e o funcionário de manutenção têm,
-                    cada um no próprio menu, uma tela <strong>“Pedidos de compra”</strong> onde avisam
-                    “isso está acabando”, escolhendo o item e a quantidade. Na “Lista de compras”, você
-                    vê a soma de todos os pedidos pendentes daquele item e quem pediu. Assim que alguém
-                    lança uma compra desse item em “Lançar Compra”, todos os pedidos
-                    pendentes dele são resolvidos automaticamente — não é preciso marcar nada à parte.
-                  </>,
-                ]}
-              />
-
-              <SubHeading>Todas as relações das compras com o resto do aplicativo</SubHeading>
-              <List
-                items={[
-                  <>
-                    <strong>Estoque</strong>: toda compra de um item marcado “representa estoque” entra
-                    sozinha no saldo e no valor em R$ dele — visível na tela “Itens de estoque e ciclo de
-                    compras”, sem nenhum lançamento separado (pergunta 14).
-                  </>,
-                  <>
-                    <strong>Custos</strong>: toda compra/despesa (menos ativo permanente) alimenta as
-                    telas “Custos” e “Demonstrativo de Despesas” (menu “Módulo Contábil”), que somam os
-                    valores conforme a classificação escolhida no lançamento (pergunta 15).
-                  </>,
-                  <>
-                    <strong>Ativo permanente</strong>: compras lançadas assim nunca entram em nenhum
-                    cálculo de custo — só aparecem na “Relação de Ativo Permanente”.
-                  </>,
-                  <>
-                    <strong>Inventário (contagem física)</strong>: o saldo que nasce das compras (e das
-                    baixas) é exatamente o número comparado contra a contagem física de verdade, na tela
-                    “Inventário” (pergunta 14).
-                  </>,
-                  <>
-                    <strong>Ficha técnica do bar da piscina e do frigobar</strong>: quando um item de
-                    custo representa estoque e é ingrediente de algum petisco/drink/item de frigobar
-                    (ficha técnica cadastrada em “Ficha técnica de petiscos e drinks”, menu “Módulo
-                    Contábil”), comprar esse ingrediente sobe o estoque dele, e pedir o produto numa
-                    comanda (ou lançar o frigobar) desce o estoque sozinho, já no momento do pedido —
-                    pergunta 14 tem o detalhe completo.
-                  </>,
-                  <>
-                    <strong>Lançamento contábil automático</strong>: por trás de toda compra/despesa, o
-                    sistema já gera sozinho o registro contábil formal (débito/crédito) — ninguém
-                    operacional precisa entender isso; é só pro contador, na tela “Livro Diário”
-                    (menu “Módulo Contábil”).
-                  </>,
-                  <>
-                    <strong>Histórico</strong>: toda compra/despesa lançada aparece na tela “Histórico”,
-                    seção “Compras e despesas no período” — com total por centro de custo, total por
-                    fornecedor, a lista completa (com forma de pagamento, status pago/pendente, opção de
-                    editar ou excluir uma despesa já lançada) e exportação em planilha.
-                  </>,
-                  <>
-                    <strong>Resumo executivo</strong>: a tela “Previsão de estoque” (Módulo Contábil → Estoque) mostra os 20 itens mais comprados no mês e desde sempre (por valor), além
-                    do saldo, do custo médio, do valor em R$ e da previsão de dias restantes de cada item
-                    de estoque.
-                  </>,
-                ]}
-              />
-              <P>
-                <strong>Quem pode fazer o quê:</strong> admin e funcionário de manutenção lançam compras
-                em “Lançar Compra”; camareira e funcionário de manutenção registram pedidos
-                de compra e dão baixa de estoque; as telas de relatório e o restante do Módulo Contábil
-                (Custos, Demonstrativo, Histórico, Plano de Contas, Pagamentos e recebimentos, Livro de
-                lançamentos) são só do admin.
-              </P>
-            </div>
-          </AccordionPanel>
-        </AccordionItem>
-
-        {/* 14. Estoques */}
-        <AccordionItem value="estoques">
-          <AccordionTrigger>
-            <span className="font-heading text-base">
-              14. Como funciona o controle de estoque da pousada?
-            </span>
-          </AccordionTrigger>
-          <AccordionPanel>
-            <div className="space-y-3">
-              <P>
-                Nem toda mercadoria comprada é controlada como “estoque” — essa é a primeira coisa
-                importante de entender aqui.
-              </P>
-
-              <SubHeading>Quais mercadorias e produtos são classificados como estoque</SubHeading>
-              <P>
-                Dentro do Cadastro de produtos (menu Módulo Contábil), cada item de
-                custo tem uma marcação chamada “representa estoque”. Só os itens marcados assim têm
-                saldo controlado e entram nas telas de estoque — os demais (salário, conta de luz,
-                honorários de contabilidade, serviços em geral) são só uma despesa, sem quantidade
-                nenhuma pra acompanhar. Essa escolha é feita item por item, no momento em que o item de
-                custo é criado (dentro da própria tela “Lançar Compra”, ou direto no Plano de
-                Contas) — e pode ser revista a qualquer momento.
-              </P>
-
-              <SubHeading>Onde fica registrado o estoque — e o valor em R$ dele</SubHeading>
-              <P>
-                Nenhum número de saldo fica guardado fixo em lugar nenhum. O saldo de qualquer item de
-                estoque é sempre <strong>calculado na hora</strong>, somando todo o histórico de
-                “movimentos” dele desde que foi cadastrado — entradas e saídas, misturadas em ordem
-                cronológica. Desde que o estoque passou a valer em dinheiro (não só em quantidade), cada
-                movimento também carrega seu próprio valor: uma <strong>compra</strong> grava o custo
-                real pago; qualquer <strong>saída</strong> (baixa, venda, ajuste) grava o{" "}
-                <strong>custo médio</strong> vigente naquele momento, sem alterá-lo — só uma compra nova
-                recalcula o custo médio, misturando o que já tinha com o que acabou de entrar. Você vê
-                saldo, custo médio e valor total em estoque, item por item, na tela{" "}
-                <strong>“Cadastro de produtos”</strong> (menu “Módulo Contábil”), junto do
-                centro a que o item pertence (vindo do Plano de Contas) e da unidade de medida dele (un,
-                kg, L etc.). Essa tela é só leitura quanto à identidade/valor do item — os únicos campos
-                editáveis ali são “dias de folga” (explicado mais abaixo) e “é perecível?” (pergunta 15).
-              </P>
-
-              <SubHeading>Os 4 tipos de movimento que alteram o saldo</SubHeading>
-              <List
-                items={[
-                  <>
-                    <strong>Compra</strong>: toda vez que uma compra desse item é lançada em “Lançar
-                    compras e despesas”, o saldo sobe pela quantidade comprada (ver pergunta 13).
-                  </>,
-                  <>
-                    <strong>Baixa manual</strong>: qualquer pessoa da equipe (camareira, funcionário de
-                    manutenção ou admin) pode registrar que usou uma certa quantidade de um item, na tela{" "}
-                    <strong>“Baixa de estoque”</strong> (existe no menu de cada um dos três papéis) —
-                    busca o item pelo nome ou lê o código de barras com a câmera do celular, escolhe a
-                    quantidade usada com um seletor de mais/menos (sem precisar digitar número nenhum), e
-                    o saldo desce na hora.
-                  </>,
-                  <>
-                    <strong>Consumo automático do hóspede</strong>: quando um petisco ou drink do bar da
-                    piscina é pedido (numa comanda) ou uma quantidade de frigobar é lançada, e o produto
-                    tem uma “ficha técnica” cadastrada — quais ingredientes ele usa, e em que quantidade,
-                    na tela “Ficha técnica de petiscos e drinks” (menu “Módulo Contábil”) — o estoque de
-                    cada ingrediente usado desce sozinho, <strong>já no momento do pedido/lançamento</strong>{" "}
-                    (não mais só quando a conta é paga, como era antes). Editar uma comanda devolve o
-                    estoque dos itens antigos e baixa de novo pelos novos; cancelar uma comanda sempre
-                    pergunta se os ingredientes foram <strong>recuperados</strong> (voltam ao estoque) ou{" "}
-                    <strong>perdidos</strong> (o prato já foi preparado/descartado, o estoque continua
-                    baixado) — nenhuma camareira precisa dar baixa manual nesses ingredientes em nenhum
-                    dos casos.
-                  </>,
-                  <>
-                    <strong>Ajuste de contagem física</strong>: ao fechar uma contagem (explicada abaixo),
-                    se o que foi contado de verdade for diferente do saldo calculado, o sistema grava um
-                    ajuste pra igualar o saldo ao número contado.
-                  </>,
-                ]}
-              />
-              <P>
-                Um <strong>pedido de compra</strong> (feito pela camareira ou pela manutenção, na tela
-                “Pedidos de compra” de cada uma) é diferente de tudo isso: é só um aviso visual pro
-                admin, nunca altera saldo nenhum.
-              </P>
-
-              <SubHeading>“Dias de folga” e o ponto de reposição</SubHeading>
-              <P>
-                Cada item de estoque tem uma quantidade de <strong>“dias de folga”</strong> — quantos
-                dias de estoque a pousada quer sempre ter de reserva pra esse item — editável a qualquer
-                momento na tela “Cadastro de produtos”, com um seletor de mais/menos. A
-                partir disso, o sistema calcula sozinho o <strong>ponto de reposição</strong> do item
-                (quanto ele deveria ter em estoque pra nunca faltar), multiplicando quanto o item costuma
-                ser consumido por semana pelos dias de folga configurados. Esse ponto de reposição
-                calculado é o que decide se o item aparece na “Lista de compras” (pergunta 13) — quando o
-                saldo atual fica abaixo dele.
-              </P>
-
-              <SubHeading>Contagem física (o inventário)</SubHeading>
-              <P>
-                É o processo de comparar, de tempos em tempos, o que o sistema calcula que deveria ter em
-                estoque (o “saldo teórico”) com o que realmente existe, contando os produtos físicos de
-                verdade — tela <strong>“Inventário”</strong> (menu “Módulo Contábil”).
-              </P>
-              <P>
-                <strong>Quais produtos se sujeitam a ela:</strong> só os itens de estoque ativos (os
-                marcados “representa estoque” no Plano de Contas), sempre organizados por{" "}
-                <strong>centro de custo inteiro</strong> (Hospedagem, Café da manhã, Bar da piscina,
-                Frigobar ou Administração e áreas comuns — este último só aparece se tiver algum item de
-                estoque ligado a ele) — ou é possível contar “todos os itens” de uma vez, sem separar por
-                centro.
-              </P>
-              <P>
-                <strong>Como é feito:</strong> na tela “Inventário”, clique em “Iniciar
-                contagem” (de um centro específico, ou de tudo) — isso abre uma sessão nova mostrando,
-                lado a lado, cada item do centro com o saldo que o sistema calcula naquele momento
-                (“teórico”). Conte os produtos de verdade (na despensa, no almoxarifado, etc.) e digite,
-                item por item, a quantidade contada. Quando todos os itens estiverem preenchidos, clique
-                em “Fechar contagem e ajustar estoque”: o sistema grava um ajuste pra cada item que ficou
-                diferente (pra mais ou pra menos) e a contagem passa a valer como histórico — não dá mais
-                pra editar os números depois disso.
-              </P>
-              <P>
-                <strong>Quando é feito:</strong> não existe uma data automática fixa. Cada centro pode
-                ter uma “frequência de contagem” configurada, em dias (na própria tela “Contagem de
-                estoque”) — se configurada, a tela avisa com destaque vermelho quando já passou da hora
-                de contar aquele centro de novo. Sem frequência configurada, nenhum aviso aparece, mas a
-                contagem continua podendo ser feita a qualquer momento, por iniciativa própria.
-              </P>
-
-              <SubHeading>Quebra de estoque</SubHeading>
-              <P>
-                Ao fechar uma contagem, cada item ganha uma <strong>“quebra de estoque”</strong>: a
-                diferença, em percentual, entre o que foi contado e o saldo teórico (por exemplo, se o
-                sistema esperava 100 unidades e só havia 92 de verdade, a quebra foi de -8%). Esse
-                percentual é comparado com um limite próprio de cada item — a “quebra máxima admitida”,
-                editável na própria tela de contagem com um seletor de mais/menos, em passos de 1%.
-                Sempre que uma contagem fecha com quebra acima desse limite, o item passa a aparecer na
-                tela <strong>“Quebra de estoque”</strong> (Módulo Contábil → Estoque), como um alerta pra
-                investigar o motivo (furto, erro de lançamento, perda por vencimento, etc.), ordenado do
-                desvio mais grave pro menos grave.
-              </P>
-              <P>
-                O sistema também calcula uma <strong>“quebra média dos últimos 12 meses”</strong> de cada
-                item, visível já durante a própria contagem (pra servir de referência de comparação) —
-                e, pra essa média não ser distorcida por um erro único e grande (alguém que digitou um
-                número errado numa contagem antiga, por exemplo), contagens cuja quebra foi muito fora do
-                padrão normal daquele item são automaticamente deixadas fora da média, sem precisar de
-                nenhuma decisão manual.
-              </P>
-            </div>
-          </AccordionPanel>
-        </AccordionItem>
-
-        {/* 15. Custos */}
-        <AccordionItem value="custos">
-          <AccordionTrigger>
-            <span className="font-heading text-base">
-              15. Como o aplicativo trata os custos da pousada?
-            </span>
-          </AccordionTrigger>
-          <AccordionPanel>
-            <div className="space-y-3">
-              <P>
-                “Despesa” e “custo” não são exatamente a mesma coisa aqui dentro. A despesa é o dinheiro
-                gasto, registrado em “Lançar Compra” (pergunta 13) — já o custo é essa mesma
-                informação, organizada e somada de um jeito que responde perguntas como “quanto custou
-                hospedar um hóspede” ou “quanto custou servir o café da manhã”. Essas contas já prontas
-                ficam nas telas <strong>“Custos”</strong> e <strong>“Demonstrativo de Despesas”</strong>{" "}
-                (menu “Módulo Contábil” → “Demonstrativos e Relatórios” → “Demonstrativo de Custos”).
-              </P>
-
-              <SubHeading>Como o valor de cada despesa chega até o custo de um centro</SubHeading>
-              <P>
-                Toda despesa (menos ativo permanente, ver mais abaixo) é ligada, no momento em que é
-                lançada, a um <strong>item de custo</strong>. Cada item de custo pertence a um ou mais{" "}
-                <strong>centros de custo</strong> (hoje a pousada tem 5: Hospedagem, Café da manhã, Bar
-                da piscina, Frigobar e Administração e áreas comuns — este último pra custos
-                administrativos e gastos compartilhados que não dá pra atribuir diretamente a um dos
-                outros quatro) — tudo isso cadastrado na tela “Cadastro de produtos” (pergunta 13).
-                O sistema soma, automaticamente, o valor de cada despesa espalhado pelos centros a
-                que o item pertence, pelo percentual configurado — é essa soma final, por centro, que
-                aparece nos cards da tela “Custos”.
-              </P>
-              <P>
-                <strong>Exemplo prático:</strong> a conta de água da pousada serve tanto os quartos
-                quanto a cozinha do café da manhã. No Plano de Contas, o item de custo “água” pode estar
-                ligado ao centro Hospedagem e também ao centro Café da manhã, cada um com uma
-                porcentagem (por exemplo, metade pra cada) — é essa divisão que garante que uma única
-                conta de água apareça, com o pedaço certo, no custo de cada parte da pousada, em vez de
-                inflar um centro só ou de ter que lançar a mesma conta duas vezes.
-              </P>
-
-              <SubHeading>O que a tela “Custos” mostra</SubHeading>
-              <List
-                items={[
-                  <>
-                    <strong>Um card por centro de custo</strong>, com o total gasto nele no período
-                    escolhido (pelo regime de caixa — tudo que foi comprado/gasto no período), mais um
-                    card extra, <strong>“Hospedagem (+ café da manhã)”</strong>, que soma os dois juntos —
-                    porque o café da manhã vem incluído na diária (o hóspede não paga por ele
-                    separadamente), então o custo real de hospedar alguém por uma noite precisa somar os
-                    dois. O card “Café da manhã” sozinho continua mostrando o mesmo valor do café, à
-                    parte, só como referência.
-                  </>,
-                  <>
-                    <strong>Custo médio por diária ocupada</strong>: o total de “Hospedagem (+ café da
-                    manhã)” dividido pela quantidade de noites realmente ocupadas no período (contagem que
-                    vem da integração com a Stays).
-                  </>,
-                  <>
-                    <strong>Rateio dos custos, por item de custo</strong>: uma tabela detalhada mostrando,
-                    item por item, quanto foi gasto no total e como esse valor foi dividido entre cada
-                    centro — útil pra confirmar que a divisão configurada no Plano de Contas está
-                    correta.
-                  </>,
-                  <>
-                    <strong>Café da manhã, em detalhe</strong> (card próprio, cálculo mais fino): quanto
-                    cada item custou no período e a razão por <strong>café servido</strong> — um número
-                    por dia, que nasce igual ao total de hóspedes hospedados e só pode ser reduzido (nunca
-                    aumentado), editável em “Mesas do café”, pra quando algum hóspede não tomar café. Cada
-                    item de estoque ligado ao centro entra de um jeito diferente, dependendo de ser
-                    marcado <strong>“é perecível?”</strong> (pergunta 14): um item <strong>perecível</strong>{" "}
-                    (frutas, ovos — exemplos, não uma lista fixa) conta pelo que foi{" "}
-                    <strong>comprado</strong> no período; um item <strong>não perecível</strong>{" "}
-                    (requeijão, manteiga, farinhas — também exemplos) conta pelo que foi{" "}
-                    <strong>baixado manualmente</strong> no período, multiplicado pelo custo médio do
-                    item — já que dá pra guardar e consumir aos poucos, ao contrário de um perecível. São
-                    mostradas duas razões: “custo de insumos por café” (só os ingredientes) e “custo total
-                    por café” (ingredientes + outros gastos do centro, como gás). Esse card pode mostrar um
-                    valor ligeiramente diferente do card “Café da manhã” lá em cima — normal, não é erro:
-                    aquele mede dinheiro gasto no período; este mede o ingrediente realmente consumido.
-                  </>,
-                  <>
-                    <strong>Custo médio por prato/produto servido</strong>: para cada petisco/drink do bar
-                    da piscina e cada item do frigobar que tenha uma “ficha técnica” cadastrada (tela
-                    “Ficha técnica de petiscos e drinks”, pergunta 13), o sistema calcula quanto custou 1
-                    porção dele — multiplicando a quantidade de cada ingrediente pelo custo médio desse
-                    ingrediente no período (nunca um preço fixo digitado à mão, sempre a média real do
-                    que foi pago/baixado). Um produto sem ficha técnica cadastrada aparece como “sem
-                    receita cadastrada”.
-                  </>,
-                ]}
-              />
-
-              <SubHeading>O que a tela “Demonstrativo de Despesas” mostra</SubHeading>
-              <P>
-                É a mesma informação de custos, só que organizada como uma tabela mês a mês: uma linha
-                por centro de custo, uma coluna por mês — útil pra comparar a evolução dos gastos ao
-                longo do tempo (ver se um centro está gastando mais ou menos do que em meses anteriores).
-                O período padrão é os últimos 12 meses, mas pode ser trocado por qualquer outro intervalo.
-              </P>
-
-              <SubHeading>O que nunca entra no cálculo de custo</SubHeading>
-              <P>
-                Uma compra lançada como <strong>ativo permanente</strong> (uma geladeira nova, por
-                exemplo) nunca aparece em nenhum dos cálculos acima — comprar um bem desses não é um
-                custo do período, é um bem que a pousada passa a ter, e por isso só aparece na tela
-                “Relação de Ativo Permanente” (pergunta 13).
-              </P>
-
-              <SubHeading>Quais são os principais itens de custo</SubHeading>
-              <P>
-                Toda essa lista — centros e itens de custo — fica sempre visível e editável na tela
-                “Cadastro de produtos” e “Plano de contas e centros de custos” (Módulo Contábil), e pode crescer: ao lançar uma
-                despesa nova, o admin pode criar um item de custo na hora, se nenhum dos já existentes
-                encaixar. Alguns exemplos reais já cadastrados, pra dar uma ideia do tamanho e da
-                variedade:
-              </P>
-              <List
-                items={[
-                  <>
-                    <strong>Hospedagem</strong>: água, luz, internet e dedetização; amenities, papel
-                    higiênico, secador de cabelo; toalhas, lençóis, fronhas; salário das camareiras e dos
-                    funcionários de manutenção, encargos, cesta básica, plano de saúde, transporte;
-                    materiais de jardim, de piscina e de manutenção, ferramentas; materiais de limpeza.
-                  </>,
-                  <>
-                    <strong>Café da manhã</strong>: água, luz e gás; frutas, ovos, café, pães, queijos,
-                    legumes, verduras e temperos, entre muitos outros; salário e encargos da mão de obra
-                    própria desse centro; materiais de limpeza, também com cadastro próprio aqui.
-                  </>,
-                  <>
-                    <strong>Bar da piscina e Frigobar</strong>: estrutura parecida, cada um com seus
-                    próprios itens de bebida/petisco e materiais específicos.
-                  </>,
-                  <>
-                    <strong>Administração e áreas comuns</strong>: o centro pros custos administrativos e
-                    gastos compartilhados que não dá pra atribuir diretamente a um dos outros quatro.
-                    Hoje guarda, por inteiro, contabilidade, financeiro, Stays, Invictos, outros
-                    honorários administrativos, pró-labore e impostos e taxas; luz, água e internet
-                    continuam repartidos entre os outros centros. O admin pode ligar qualquer outro item
-                    a ele (por inteiro ou dividindo com outro centro) no “Cadastro de produtos”.
-                  </>,
-                ]}
-              />
-
-              <SubHeading>O Módulo Contábil, em 1 parágrafo</SubHeading>
-              <P>
-                Além de tudo isso, existe um registro contábil formal por trás de cada compra/despesa
-                (débito e crédito, automático) — é a base técnica que um contador usaria, acessível em{" "}
-                <strong>“Módulo Contábil” → “Listas contábeis” → “Plano de contas e centros de custo”</strong> (as contas tipo Ativo/Passivo/
-                Receita/Custo/Despesa, diferente do Plano de Contas de centros de custo explicado acima) e{" "}
-                <strong>“Livro Diário”</strong>. Ninguém que só opera o dia a dia (lançar compra,
-                dar baixa, contar estoque) precisa entender essa parte — ela existe pronta, por baixo,
-                sem exigir nenhuma decisão extra de quem usa as telas de todo dia.
-              </P>
-            </div>
-          </AccordionPanel>
-        </AccordionItem>
-
-        {/* 16. Lançamentos automáticos e relatórios contábeis */}
-        <AccordionItem value="lancamentos-automaticos">
-          <AccordionTrigger>
-            <span className="text-left">16. O sistema faz os lançamentos contábeis sozinho? Quais relatórios existem?</span>
-          </AccordionTrigger>
-          <AccordionPanel>
-            <div className="space-y-3">
-              <P>
-                Sim. Cada fato do dia a dia gera, sozinho, um lançamento de débito e crédito (sempre
-                equilibrado) — ninguém precisa digitar nada contábil:
-              </P>
-              <List
-                items={[
-                  <>
-                    <strong>Compra</strong>: o produto entra no estoque centralizado (conta de estoque do
-                    produto). Se a linha estiver marcada <strong>“Para o café da manhã”</strong>, o custo
-                    vai direto pro centro Café da manhã e o item não entra no estoque.
-                  </>,
-                  <>
-                    <strong>Despesa</strong>: lançada numa categoria do Cadastro de despesas e dividida
-                    entre os centros de custo pelo rateio predefinido nesse cadastro. Rateio e conta do
-                    plano de contas só existem nos cadastros (de produtos e de despesas) — nunca se
-                    digitam na hora de lançar a compra ou a despesa.
-                  </>,
-                  <>
-                    <strong>Consumo de bar ou frigobar</strong>: ao pedir, o estoque baixa e o custo vai pro
-                    centro onde o item foi consumido (Bar da piscina ou Frigobar). Ao fechar a conta da
-                    suíte nasce a receita (e a taxa de serviço); ao reabrir, essa receita é estornada; ao
-                    pagar, entra o dinheiro no caixa (dinheiro) ou no banco (PIX, cartão, transferência).
-                  </>,
-                  <>
-                    <strong>Baixa manual de estoque</strong>: quem dá a baixa diz pra onde foi (café da
-                    manhã, hospedagem, bar, frigobar, administração ou perda/quebra) e o custo vai pra lá.
-                  </>,
-                  <>
-                    <strong>Inventário</strong>: ao concluir a contagem, a diferença (falta ou sobra) vira
-                    ajuste em “Perdas e desperdícios de estoque”.
-                  </>,
-                ]}
-              />
-              <P>
-                Os relatórios ficam em <strong>Módulo Contábil → Demonstrativos e Relatórios</strong>:
-                Demonstrativo de despesas, Demonstrativo de Custos, Balancete analítico (saldo de cada
-                conta detalhado por produto e despesa), Balancete sintético (saldo de cada conta), Livro
-                Diário (todos os fatos em ordem de data), Livro Razão (lançamentos de cada conta com
-                saldo corrente) e Livro caixa e bancos (entradas e saídas de dinheiro e de banco, com
-                filtros). Todos têm seletor de período e exportam para CSV, XLSX, RTF e PDF. Todo
-                produto e toda despesa precisa estar ligado a uma conta do plano de contas e a um rateio
-                entre centros de custo — isso é escolhido (e pode ser mudado) só no Cadastro de produtos
-                e no Cadastro de despesas. Ao lançar uma compra ou despesa (ou ao ler uma nota fiscal com
-                a IA), cada item só pode ser enquadrado num produto/despesa já cadastrado; produtos e
-                despesas novos só o administrador cadastra — inclusive durante o lançamento, pelo botão
-                “Cadastrar novo produto/despesa”, que abre o mesmo cadastro completo.
+                Em <strong>Listas contábeis → Ficha técnica</strong> você diz quais ingredientes entram em cada
+                petisco ou drink. Em <strong>Custo e rentabilidade dos produtos do bar</strong> o sistema estima, mês
+                a mês, o custo médio e a margem de cada produto. É uma <strong>estimativa</strong>: divide o que foi
+                comprado de cada ingrediente entre os produtos, pela quantidade vendida.
               </P>
             </div>
           </AccordionPanel>
@@ -1290,7 +793,7 @@ export default function QuestoesRespostasPage() {
 
         <AccordionItem value="indicadores">
           <AccordionTrigger>
-            <span className="text-left">17. Como são calculados os indicadores (ADR, RevPAR, NetRevPAR e ocupação)?</span>
+            <span className="text-left">14. Como são calculados os indicadores (ADR, RevPAR, NetRevPAR e ocupação)?</span>
           </AccordionTrigger>
           <AccordionPanel>
             <div className="space-y-3">

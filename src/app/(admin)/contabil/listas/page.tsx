@@ -4,9 +4,9 @@ import { BackLink } from "@/components/shared/back-link";
 import { Package, Receipt, FolderTree, Boxes, UtensilsCrossed, ChevronRight } from "lucide-react";
 
 const menuItems = [
-  { href: "/contabil/listas/produtos", label: "Cadastro de produtos", icon: Package },
-  { href: "/contabil/listas/despesas", label: "Cadastro de despesas", icon: Receipt },
-  { href: "/contabil/listas/plano-de-contas", label: "Plano de contas e centros de custo", icon: FolderTree },
+  { href: "/contabil/listas/categorias-despesa", label: "Categorias de despesa e centros de custo", icon: FolderTree },
+  { href: "/contabil/listas/ingredientes", label: "Ingredientes de produtos de bar", icon: Package },
+  { href: "/contabil/listas/itens-recorrentes", label: "Itens recorrentes", icon: Receipt },
   { href: "/contabil/listas/plano-ativo-permanente", label: "Plano de itens de ativo permanente", icon: Boxes },
   { href: "/contabil/listas/ficha-tecnica", label: "Ficha técnica de petiscos e drinks", icon: UtensilsCrossed },
 ];
@@ -15,7 +15,7 @@ export default function ListasContabeisPage() {
   return (
     <div className="space-y-6">
       <BackLink href="/contabil" />
-      <PageHeader title="Listas contábeis" subtitle="Os cadastros que alimentam a contabilidade: produtos, despesas, plano de contas, ativo permanente e fichas técnicas." />
+      <PageHeader title="Listas contábeis" subtitle="Os cadastros que alimentam o resultado: categorias de despesa, ingredientes, itens recorrentes, ativo permanente e fichas técnicas." />
       <nav className="max-w-md space-y-1.5">
         {menuItems.map((item) => (
           <Link
