@@ -769,7 +769,10 @@ export default function QuestoesRespostasPage() {
                 <strong>Caixa de conferência → Importar conversa</strong>. Cada foto de nota, com as mensagens do
                 mesmo remetente logo depois, vira um item. A IA sugere data, fornecedor, categoria e ingrediente;{" "}
                 <strong>nada é lançado sem a sua conferência</strong>: você confere com a foto, corrige e lança, ou
-                descarta o que não for compra.
+                descarta o que não for compra. Quando a IA acha que a despesa se repete todo mês (energia, água,
+                internet, honorários, salários…), a nota vem com a etiqueta “parece recorrente” e a opção{" "}
+                <strong>“Cadastrar também como item recorrente”</strong> já marcada (só o admin): é só confirmar e o
+                item passa a ser lançado sozinho todo mês.
               </P>
               <SubHeading>Relatório de despesas e Resultado mensal</SubHeading>
               <P>

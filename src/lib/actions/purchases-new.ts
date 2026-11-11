@@ -7,7 +7,7 @@ import { requireRole } from "@/lib/actions/authz";
 import { todayKey } from "@/lib/date";
 import type { PurchaseRecord } from "@/lib/expense-model-types";
 
-type Result = { error?: string; success?: boolean; id?: string };
+type Result = { error?: string; success?: boolean; id?: string; recurringNote?: string };
 
 export interface PurchaseLineInput {
   description: string;
@@ -28,6 +28,8 @@ export interface PurchaseInput {
   // Se a compra nasceu da caixa de conferência, o id da mensagem de origem
   // (a foto da nota e a marca de "lançada" vêm daí, lidas no servidor).
   inboxId?: string;
+  // Cadastrar também como item recorrente (só admin): o sistema passa a lançar todo mês.
+  recurring?: { name: string; dayOfMonth: number };
   lines: PurchaseLineInput[];
 }
 
@@ -148,6 +150,11 @@ export async function createPurchase(input: PurchaseInput): Promise<Result> {
     return { error: lErr.message };
   }
 
+  let recurringNote: string | undefined;
+  if (input.recurring) {
+    recurringNote = await registerRecurringFromPurchase(input, rows, total);
+  }
+
   if (input.inboxId) {
     await supabase
       .from("purchase_inbox")
@@ -157,7 +164,7 @@ export async function createPurchase(input: PurchaseInput): Promise<Result> {
   }
 
   revalidatePath("/contabil", "layout");
-  return { success: true, id: purchase.id };
+  return { success: true, id: purchase.id, recurringNote };
 }
 
 // Relatório de despesas: tudo em ordem cronológica da data da compra.
@@ -295,4 +302,35 @@ export async function generateDueRecurring(): Promise<number> {
     created++;
   }
   return created;
+}
+
+// Cadastra o item recorrente a partir da compra recém lançada. Só admin (regra de
+// segurança: gerente não altera cadastros). Usa a categoria da primeira linha e o total.
+// Marca o mês da compra como já gerado, para o sistema não duplicar o lançamento.
+async function registerRecurringFromPurchase(
+  input: PurchaseInput,
+  rows: { category_id: string | null }[],
+  total: number
+): Promise<string> {
+  const denied = await requireRole(["admin"]);
+  if (denied) return "Compra lançada, mas só o admin pode cadastrar item recorrente.";
+  const name = input.recurring!.name.trim();
+  if (!name) return "Compra lançada, mas faltou o nome do item recorrente.";
+  const categoryId = rows.find((r) => r.category_id)?.category_id;
+  if (!categoryId) return "Compra lançada, mas o item recorrente precisa de uma categoria de despesa.";
+
+  const admin = createAdminClient();
+  const { data: existing } = await admin.from("recurring_expenses").select("id").ilike("name", name).maybeSingle();
+  if (existing) return `Já existe um item recorrente chamado "${name}" — não foi duplicado.`;
+
+  const day = Math.min(28, Math.max(1, Math.floor(input.recurring!.dayOfMonth) || Number(input.date.slice(8, 10)) || 5));
+  const { error } = await admin.from("recurring_expenses").insert({
+    name,
+    category_id: categoryId,
+    amount: total,
+    day_of_month: day,
+    last_generated_month: `${input.date.slice(0, 7)}-01`,
+  });
+  if (error) return `Compra lançada, mas não foi possível cadastrar o item recorrente: ${error.message}`;
+  return `Item recorrente "${name}" cadastrado (todo dia ${day}).`;
 }

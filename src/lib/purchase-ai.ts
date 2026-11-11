@@ -28,6 +28,8 @@ export interface AiPurchase {
   date: string | null;
   document_number: string | null;
   total_amount: number | null;
+  // Despesa que costuma se repetir todo mês (luz, internet, honorários, salários...).
+  recurring: boolean;
   lines: AiPurchaseLine[];
 }
 
@@ -42,6 +44,7 @@ const SYSTEM = `Você lê notas fiscais, cupons e comprovantes de uma pousada br
   "date": "YYYY-MM-DD" ou null,
   "document_number": string ou null,
   "total_amount": número ou null,
+  "recurring": true ou false,
   "lines": [
     { "description": string, "quantity": número, "amount": número,
       "category_index": número ou null, "ingredient_index": número ou null,
@@ -55,6 +58,7 @@ Regras:
 - "category_index": o número da categoria de despesa mais adequada, SEMPRE entre as listadas. Use o TEXTO que acompanha a nota como pista principal (ex.: "material de limpeza", "para o bar").
 - "ingredient_index": SOMENTE para itens de alimento ou bebida que sejam um dos ingredientes de produtos de bar listados (mesmo produto, mesmo com marca/abreviação diferente; ex.: cachaça, vodka, gim, água tônica, limão); senão null.
 - "useful_life_months": só para bem durável (eletrodoméstico, equipamento, móvel): sua melhor estimativa da vida útil em meses; senão null.
+- "recurring": true SOMENTE se for uma despesa que normalmente se repete todo mês (energia, água, gás, internet, telefone, aluguel, mensalidades e assinaturas, salários, honorários de contador ou de serviços, tráfego pago, impostos mensais); compra de mercadoria ou material é false.
 - "payment_method" é como A POUSADA pagou. Sem indicação clara, null.
 - "date": a data da compra impressa na nota; se não houver, null. Nunca invente valores: prefira null.`;
 
@@ -150,6 +154,7 @@ ${numbered(opts.ingredients.map((i) => i.name))}`;
         date: parsed.date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) ? parsed.date : null,
         document_number: parsed.document_number?.toString().trim() || null,
         total_amount: typeof parsed.total_amount === "number" ? parsed.total_amount : null,
+        recurring: (parsed as { recurring?: unknown }).recurring === true,
         lines,
       },
     };
