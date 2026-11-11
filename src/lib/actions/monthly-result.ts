@@ -174,10 +174,11 @@ export async function getMonthlyResult(month: string): Promise<MonthlyResult | {
   const [{ data: cats }, { data: catCenters }, { data: ingredients }] = await Promise.all([
     supabase.from("expense_categories").select("id, name, consumption_days, rule"),
     supabase.from("expense_category_centers").select("category_id, center_code, pct"),
-    supabase.from("ingredients").select("id, bar_pct"),
+    supabase.from("ingredients").select("id, bar_pct, split_mode"),
   ]);
   const catMap = new Map((cats ?? []).map((c) => [c.id as string, c]));
   const ingMap = new Map((ingredients ?? []).map((i) => [i.id as string, Number(i.bar_pct)]));
+  const ingBarFrigobar = new Set((ingredients ?? []).filter((i) => i.split_mode === "bar_frigobar").map((i) => i.id as string));
 
   const { data: lines } = await supabase
     .from("purchase_lines")
@@ -218,6 +219,7 @@ export async function getMonthlyResult(month: string): Promise<MonthlyResult | {
           .filter((x) => x.category_id === cat.id)
           .map((x) => ({ center_code: x.center_code as CenterCode, pct: Number(x.pct) })),
         ingredientBarPct: l.ingredient_id ? (ingMap.get(l.ingredient_id) ?? null) : null,
+        ingredientBarFrigobar: !!l.ingredient_id && ingBarFrigobar.has(l.ingredient_id),
       },
       barShare
     );

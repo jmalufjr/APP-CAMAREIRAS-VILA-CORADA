@@ -7,6 +7,7 @@ export interface AiCategory {
   id: string;
   name: string;
   rule: string;
+  allows_ingredient?: boolean;
 }
 export interface AiIngredient {
   id: string;
@@ -141,7 +142,7 @@ ${numbered(opts.ingredients.map((i) => i.name))}`;
 
     const lines: AiPurchaseLine[] = (Array.isArray(parsed.lines) ? parsed.lines : []).map((l) => {
       const cat = pick(opts.categories, l.category_index);
-      const ing = (cat?.rule === "alimentos" || cat?.rule === "bebidas") ? pick(opts.ingredients, l.ingredient_index) : null;
+      const ing = cat?.allows_ingredient ? pick(opts.ingredients, l.ingredient_index) : null;
       return {
         description: String(l.description ?? "").trim(),
         quantity: Number(l.quantity) > 0 ? Number(l.quantity) : 1,

@@ -22,6 +22,7 @@ export interface ExpenseCategory {
   name: string;
   consumption_days: number;
   rule: CategoryRule;
+  allows_ingredient: boolean;
   active: boolean;
   position: number;
   centers: { center_code: CenterCode; pct: number }[];
@@ -31,6 +32,7 @@ export interface Ingredient {
   id: string;
   name: string;
   bar_pct: number;
+  split_mode: "bar_cafe" | "bar_frigobar";
   active: boolean;
 }
 

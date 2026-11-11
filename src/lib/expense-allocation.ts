@@ -44,6 +44,8 @@ export interface LineForAllocation {
   fixedCenters: { center_code: CenterCode; pct: number }[];
   // Só para regra "alimentos": % do Bar do ingrediente reconhecido (null = não é ingrediente)
   ingredientBarPct: number | null;
+  // Ingrediente de alimento dividido entre bar e frigobar pelas vendas (ex.: café expresso).
+  ingredientBarFrigobar?: boolean;
 }
 
 // Proporção bar × frigobar do mês para "Demais bebidas": fração do Bar (0..1).
@@ -61,7 +63,8 @@ export function splitAmountByCenters(line: LineForAllocation, barShare: number):
   let parts: [CenterCode, number][];
   if (rule === "alimentos") {
     const bar = line.ingredientBarPct;
-    parts = bar === null ? [["cafe", 100]] : [["bar", bar], ["cafe", 100 - bar]];
+    if (line.ingredientBarFrigobar) parts = [["bar", barShare * 100], ["frigobar", (1 - barShare) * 100]];
+    else parts = bar === null ? [["cafe", 100]] : [["bar", bar], ["cafe", 100 - bar]];
   } else if (rule === "bebidas") {
     parts = [["bar", barShare * 100], ["frigobar", (1 - barShare) * 100]];
   } else {

@@ -75,7 +75,7 @@ export async function getProductCostReport(month: string): Promise<ProductCostRe
   const [{ data: items }, { data: recipes }, { data: ingredients }, { data: settings }] = await Promise.all([
     supabase.from("poolbar_items").select("id, name, category"),
     supabase.from("bar_product_ingredients").select("poolbar_item_id, ingredient_id, quantity"),
-    supabase.from("ingredients").select("id, bar_pct"),
+    supabase.from("ingredients").select("id, bar_pct, split_mode"),
     supabase.from("expense_settings").select("start_date").eq("id", true).single(),
   ]);
   const startDate = settings?.start_date ?? "2026-11-01";
@@ -99,9 +99,11 @@ export async function getProductCostReport(month: string): Promise<ProductCostRe
 
   // Custo do mês de cada ingrediente (parte do Bar), com o mesmo rateio no tempo do resultado.
   const barPct = new Map((ingredients ?? []).map((i) => [i.id as string, Number(i.bar_pct)]));
+  const ingBarFrigobar = new Set((ingredients ?? []).filter((i) => i.split_mode === "bar_frigobar").map((i) => i.id as string));
+  const { data: catCenters } = await supabase.from("expense_category_centers").select("category_id, center_code, pct");
   const { data: lines } = await supabase
     .from("purchase_lines")
-    .select("ingredient_id, amount, expense_categories(consumption_days, rule), purchases!inner(date, status)")
+    .select("ingredient_id, category_id, amount, expense_categories(consumption_days, rule), purchases!inner(date, status)")
     .not("ingredient_id", "is", null)
     .eq("is_asset", false)
     .eq("purchases.status", "registrada")
@@ -119,6 +121,7 @@ export async function getProductCostReport(month: string): Promise<ProductCostRe
   const ingredientCost: Record<string, number> = {};
   for (const l of (lines ?? []) as unknown as {
     ingredient_id: string;
+    category_id: string | null;
     amount: number | string;
     expense_categories: { consumption_days: number; rule: string } | { consumption_days: number; rule: string }[] | null;
     purchases: { date: string } | { date: string }[];
@@ -126,7 +129,15 @@ export async function getProductCostReport(month: string): Promise<ProductCostRe
     const cat = one(l.expense_categories);
     const days = cat?.consumption_days ?? 1;
     const portion = distributeByDays(one(l.purchases)!.date, Number(l.amount), days)[month] ?? 0;
-    const bar = cat?.rule === "bebidas" ? portion * barShare : (portion * (barPct.get(l.ingredient_id) ?? 0)) / 100;
+    // Parte do Bar: bebidas (e café) pelas vendas; alimentos pelo % do ingrediente;
+    // demais categorias (ex.: bebidas quentes) pelo % do Bar cadastrado na categoria.
+    let bar: number;
+    if (cat?.rule === "bebidas" || ingBarFrigobar.has(l.ingredient_id)) bar = portion * barShare;
+    else if (cat?.rule === "alimentos") bar = (portion * (barPct.get(l.ingredient_id) ?? 0)) / 100;
+    else {
+      const barCat = (catCenters ?? []).find((c) => c.category_id === l.category_id && c.center_code === "bar");
+      bar = (portion * Number(barCat?.pct ?? 0)) / 100;
+    }
     if (bar > 0) ingredientCost[l.ingredient_id] = (ingredientCost[l.ingredient_id] ?? 0) + bar;
   }
 

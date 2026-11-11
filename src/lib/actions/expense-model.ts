@@ -31,6 +31,7 @@ export async function getExpenseCategories(): Promise<ExpenseCategory[]> {
     name: c.name,
     consumption_days: c.consumption_days,
     rule: c.rule,
+    allows_ingredient: !!c.allows_ingredient,
     active: c.active,
     position: c.position,
     centers: (centers ?? [])
@@ -110,18 +111,24 @@ export async function deleteExpenseCategory(id: string): Promise<Result> {
 
 export async function getIngredients(): Promise<Ingredient[]> {
   const supabase = await createClient();
-  const { data } = await supabase.from("ingredients").select("id, name, bar_pct, active").order("name");
+  const { data } = await supabase.from("ingredients").select("id, name, bar_pct, split_mode, active").order("name");
   return (data ?? []).map((i) => ({ ...i, bar_pct: Number(i.bar_pct) })) as Ingredient[];
 }
 
-export async function saveIngredient(id: string | null, name: string, barPct: number, active: boolean): Promise<Result> {
+export async function saveIngredient(
+  id: string | null,
+  name: string,
+  barPct: number,
+  active: boolean,
+  splitMode: "bar_cafe" | "bar_frigobar" = "bar_cafe"
+): Promise<Result> {
   const denied = await requireRole([...ROLES]);
   if (denied) return denied;
   name = name.trim();
   if (!name) return { error: "Informe o nome do ingrediente." };
   if (!(barPct >= 0 && barPct <= 100)) return { error: "O percentual do Bar deve ficar entre 0 e 100." };
   const supabase = await createClient();
-  const payload = { name, bar_pct: barPct, active };
+  const payload = { name, bar_pct: barPct, active, split_mode: splitMode };
   const { error } = id
     ? await supabase.from("ingredients").update(payload).eq("id", id)
     : await supabase.from("ingredients").insert(payload);

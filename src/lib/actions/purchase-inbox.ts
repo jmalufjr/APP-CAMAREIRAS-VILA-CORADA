@@ -74,7 +74,7 @@ export async function importInboxEntry(formData: FormData): Promise<ImportResult
   }
 
   const [{ data: cats }, { data: ings }] = await Promise.all([
-    supabase.from("expense_categories").select("id, name, rule").eq("active", true).order("position"),
+    supabase.from("expense_categories").select("id, name, rule, allows_ingredient").eq("active", true).order("position"),
     supabase.from("ingredients").select("id, name").eq("active", true).order("name"),
   ]);
 

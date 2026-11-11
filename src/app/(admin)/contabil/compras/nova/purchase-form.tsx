@@ -172,7 +172,7 @@ export function PurchaseForm({
                   </select>
                 </div>
               </div>
-              {(cat?.rule === "alimentos" || cat?.rule === "bebidas") && !l.isAsset && (
+              {cat?.allows_ingredient && !l.isAsset && (
                 <div className="space-y-1">
                   <Label className="text-xs">Ingrediente / bebida usada em produto do bar (se for)</Label>
                   <select className={selectClass} value={l.ingredientId} onChange={(e) => update(i, { ingredientId: e.target.value })}>

@@ -21,10 +21,11 @@ function IngredientDialog({ ingredient }: { ingredient?: Ingredient }) {
   const [name, setName] = useState(ingredient?.name ?? "");
   const [barPct, setBarPct] = useState(String(ingredient?.bar_pct ?? 50));
   const [active, setActive] = useState(ingredient?.active ?? true);
+  const [splitMode, setSplitMode] = useState<"bar_cafe" | "bar_frigobar">(ingredient?.split_mode ?? "bar_cafe");
 
   function handleSave() {
     startTransition(async () => {
-      const r = await saveIngredient(ingredient?.id ?? null, name, Number(barPct), active);
+      const r = await saveIngredient(ingredient?.id ?? null, name, Number(barPct), active, splitMode);
       if (r?.error) toast.error(r.error);
       else {
         toast.success("Ingrediente salvo.");
@@ -59,9 +60,22 @@ function IngredientDialog({ ingredient }: { ingredient?: Ingredient }) {
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label>% do gasto que vai para o Bar (o resto vai para o Café)</Label>
-            <Input type="number" min={0} max={100} value={barPct} onChange={(e) => setBarPct(e.target.value)} />
+            <Label>Como o gasto se divide (vale para alimentos)</Label>
+            <select
+              className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+              value={splitMode}
+              onChange={(e) => setSplitMode(e.target.value as "bar_cafe" | "bar_frigobar")}
+            >
+              <option value="bar_cafe">Bar × Café da manhã (percentual abaixo)</option>
+              <option value="bar_frigobar">Bar × Frigobar (pelas vendas do mês, ex.: café expresso)</option>
+            </select>
           </div>
+          {splitMode === "bar_cafe" && (
+            <div className="space-y-1.5">
+              <Label>% do gasto que vai para o Bar (o resto vai para o Café)</Label>
+              <Input type="number" min={0} max={100} value={barPct} onChange={(e) => setBarPct(e.target.value)} />
+            </div>
+          )}
           {isEdit && (
             <label className="flex items-center gap-2 text-sm">
               <Switch checked={active} onCheckedChange={setActive} /> Ativo
@@ -93,7 +107,9 @@ export function IngredientsPanel({ ingredients }: { ingredients: Ingredient[] })
                 {!i.active && <span className="ml-1.5 text-xs text-muted-foreground">· Inativo</span>}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Bar {i.bar_pct}% · Café {Math.round((100 - i.bar_pct) * 100) / 100}%
+                {i.split_mode === "bar_frigobar"
+                  ? "Bar × Frigobar (pelas vendas do mês)"
+                  : `Bar ${i.bar_pct}% · Café ${Math.round((100 - i.bar_pct) * 100) / 100}%`}
               </p>
             </div>
             <div className="flex gap-1 shrink-0">

@@ -741,7 +741,7 @@ export default function QuestoesRespostasPage() {
                 Café da manhã e Frigobar</strong>. Alimentos se divide entre Bar e Café (ingrediente de bar segue
                 a divisão cadastrada nele; o resto vai ao Café). Demais bebidas se divide entre Bar e Frigobar
                 pelas quantidades vendidas no mês. Despesas de consumo (luz, água, gás, internet) têm divisão
-                fixa entre Hospedagem, Bar e Café. Bebidas quentes vão ao Bar; as demais categorias, à
+                fixa entre Hospedagem, Bar e Café. Bebidas quentes (destilados e outras bebidas alcoólicas que não são cerveja, mais os vinhos: cachaça, uísque, vodka, gim, Campari…) vão 100% ao Bar. Demais bebidas (cervejas, águas, refrigerantes e água de coco) se dividem entre Bar e Frigobar pelas vendas. O café (em pó) é alimento, mas também se divide entre Bar e Frigobar pelas vendas. As demais categorias vão à
                 Hospedagem. Impostos não entram em centro nenhum e aparecem só no final.
               </P>
               <SubHeading>Ativo permanente</SubHeading>

@@ -73,3 +73,8 @@ Prazos iniciais: limpeza, lavanderia, piscina, jardinagem, amenities, escritóri
 
 ## 14. Status da implementação (11/11/2026)
 Implementado e testado no banco local: cadastros (categorias, ingredientes, itens recorrentes, parâmetros de ativo), lançamento de compra, relatório de despesas, resultado mensal por centro, caixa de conferência + importação do WhatsApp (caminho 3), corte do custo no consumo, ficha técnica e custo mensal por produto. Falta: rodar os SQLs 25–30 na produção (ordem em CLAUDE.md, Parte 71), apagar os lançamentos antigos (SQL 29, por último), o caminho 1 (número oficial), remover definitivamente o código de estoque e, em outra etapa, integração com o sistema financeiro e conciliação bancária.
+
+## 15. Definições de bebidas e café (11/11/2026)
+- **Bebidas quentes** = destilados e demais bebidas alcoólicas que não são cerveja, mais vinhos (cachaça, uísque, vodka, gim, Campari…): 100% Bar; podem ser vendidas em dose ou ser ingredientes de drinks (a categoria aceita ingrediente).
+- **Demais bebidas** = cervejas, águas, refrigerantes e água de coco: Bar × Frigobar pelas vendas do mês.
+- **Café expresso** é alimento, mas o gasto do café (ingrediente "Café em pó (g)") se divide Bar × Frigobar pelas vendas do mês, como as bebidas. Novo modo de divisão do ingrediente (`ingredients.split_mode` = `bar_cafe` | `bar_frigobar`).
