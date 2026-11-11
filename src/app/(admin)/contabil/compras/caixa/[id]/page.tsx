@@ -4,11 +4,13 @@ import { BackLink } from "@/components/shared/back-link";
 import { getInboxItem } from "@/lib/actions/purchase-inbox";
 import { getExpenseCategories, getIngredients, getExpenseSettings } from "@/lib/actions/expense-model";
 import { todayKey } from "@/lib/date";
+import { getCurrentProfile } from "@/lib/actions/session";
 import { PurchaseForm } from "../../nova/purchase-form";
 import { DiscardButton } from "./discard-button";
 
 export default async function ConferirNotaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const profile = await getCurrentProfile();
   const item = await getInboxItem(id);
   if (!item || item.status !== "aguardando") notFound();
 
@@ -62,6 +64,7 @@ export default async function ConferirNotaPage({ params }: { params: Promise<{ i
           settings={settings}
           today={todayKey()}
           inboxId={item.id}
+          isAdmin={profile.role === "admin"}
           initial={{
             date: ai?.date ?? item.message_date,
             supplier: ai?.supplier_name ?? "",

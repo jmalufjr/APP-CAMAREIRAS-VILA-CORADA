@@ -6,6 +6,9 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/actions/authz";
 import { EXPENSE_RECEIPTS_BUCKET, signExpenseReceiptUrl } from "@/lib/expense-receipts";
 import { readPurchaseWithAI, type AiPurchase } from "@/lib/purchase-ai";
+import { createPurchase, type PurchaseLineInput } from "@/lib/actions/purchases-new";
+import { isFixedAsset } from "@/lib/expense-allocation";
+import { todayKey } from "@/lib/date";
 
 const ROLES = ["admin", "gerente_operacional"] as const;
 
@@ -153,4 +156,53 @@ export async function discardInboxItem(id: string): Promise<{ error?: string; su
   if (error) return { error: error.message };
   revalidatePath("/contabil/compras", "layout");
   return { success: true };
+}
+
+
+// Lança a nota exatamente como a IA leu, sem abrir o formulário. Se faltar algo
+// (categoria, valor...), devolve o motivo e a nota continua na caixa.
+export async function quickSaveInboxItem(id: string, recurring: boolean): Promise<{ error?: string; success?: boolean }> {
+  const denied = await requireRole([...ROLES]);
+  if (denied) return denied;
+  const item = await getInboxItem(id);
+  if (!item || item.status !== "aguardando") return { error: "Esta nota já foi lançada ou descartada." };
+  const ai = item.ai_data;
+  if (!ai) return { error: "A IA não leu esta nota: abra o item e preencha." };
+
+  const supabase = await createClient();
+  const { data: s } = await supabase.from("expense_settings").select("asset_threshold, asset_min_life_months").eq("id", true).single();
+  const threshold = Number(s?.asset_threshold ?? 1200);
+  const minLife = s?.asset_min_life_months ?? 12;
+
+  let aiLines = ai.lines;
+  if (aiLines.length === 0 && ai.total_amount) {
+    aiLines = [{ description: ai.supplier_name ?? "Compra", quantity: 1, amount: ai.total_amount, category_id: null, ingredient_id: null, useful_life_months: null }];
+  }
+  if (aiLines.length === 0) return { error: "A IA não encontrou itens: abra o item e preencha." };
+
+  const lines: PurchaseLineInput[] = aiLines.map((l) => {
+    const qty = l.quantity > 0 ? l.quantity : 1;
+    const isAsset = isFixedAsset(l.amount / qty, l.useful_life_months, threshold, minLife);
+    return {
+      description: l.description,
+      categoryId: l.category_id,
+      ingredientId: l.ingredient_id,
+      quantity: qty,
+      amount: l.amount,
+      usefulLifeMonths: l.useful_life_months,
+      isAsset,
+      recurring: recurring && !isAsset,
+    };
+  });
+  const date = ai.date && ai.date <= todayKey() ? ai.date : item.message_date;
+  const r = await createPurchase({
+    date,
+    supplierName: ai.supplier_name ?? "",
+    documentNumber: ai.document_number ?? "",
+    paymentMethod: ai.payment_method ?? "pix",
+    notes: item.note_text ?? "",
+    lines,
+    inboxId: id,
+  });
+  return r.error ? { error: r.error } : { success: true };
 }

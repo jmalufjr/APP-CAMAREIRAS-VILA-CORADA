@@ -19,6 +19,7 @@ interface LineState {
   amount: string;
   usefulLife: string;
   isAsset: boolean;
+  recurring: boolean;
 }
 
 const emptyLine = (): LineState => ({
@@ -29,6 +30,7 @@ const emptyLine = (): LineState => ({
   amount: "",
   usefulLife: "",
   isAsset: false,
+  recurring: false,
 });
 
 const num = (s: string) => Number(s.replace(",", "."));
@@ -51,6 +53,7 @@ export function PurchaseForm({
   today,
   initial,
   inboxId,
+  isAdmin = false,
 }: {
   categories: ExpenseCategory[];
   ingredients: Ingredient[];
@@ -58,6 +61,7 @@ export function PurchaseForm({
   today: string;
   initial?: PurchaseFormInitial;
   inboxId?: string;
+  isAdmin?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -97,6 +101,7 @@ export function PurchaseForm({
       amount: num(l.amount),
       usefulLifeMonths: l.usefulLife ? Number(l.usefulLife) : null,
       isAsset: l.isAsset,
+      recurring: l.recurring && !l.isAsset,
     }));
     startTransition(async () => {
       const r = await createPurchase({
@@ -199,11 +204,19 @@ export function PurchaseForm({
                   <Input type="number" min={1} value={l.usefulLife} onChange={(e) => update(i, { usefulLife: e.target.value })} />
                 </div>
               </div>
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-1.5">
                 <label className="flex items-center gap-2 text-xs text-muted-foreground">
                   <input type="checkbox" checked={l.isAsset} onChange={(e) => setLines((ls) => ls.map((x, idx) => (idx === i ? { ...x, isAsset: e.target.checked } : x)))} />
                   Ativo permanente (não vai para a despesa do mês; sugerido se valor ≥ {brl(settings.asset_threshold)} e vida útil &gt; {settings.asset_min_life_months} meses)
                 </label>
+                {isAdmin && !l.isAsset && (
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <input type="checkbox" checked={l.recurring} onChange={(e) => setLines((ls) => ls.map((x, idx) => (idx === i ? { ...x, recurring: e.target.checked } : x)))} />
+                    Despesa recorrente (cadastra em &quot;Itens recorrentes&quot;; nos próximos meses é lançada sozinha)
+                  </label>
+                )}
+                </div>
                 {lines.length > 1 && (
                   <Button variant="ghost" size="icon-sm" onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}>
                     <Trash2 size={14} />

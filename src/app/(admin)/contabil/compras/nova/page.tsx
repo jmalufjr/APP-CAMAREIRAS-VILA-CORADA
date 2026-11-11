@@ -2,9 +2,11 @@ import { PageHeader } from "@/components/shared/page-header";
 import { BackLink } from "@/components/shared/back-link";
 import { getExpenseCategories, getIngredients, getExpenseSettings } from "@/lib/actions/expense-model";
 import { todayKey } from "@/lib/date";
+import { getCurrentProfile } from "@/lib/actions/session";
 import { PurchaseForm } from "./purchase-form";
 
 export default async function NovaCompraPage() {
+  const profile = await getCurrentProfile();
   const [categories, ingredients, settings] = await Promise.all([
     getExpenseCategories(),
     getIngredients(),
@@ -22,6 +24,7 @@ export default async function NovaCompraPage() {
         ingredients={ingredients.filter((i) => i.active)}
         settings={settings}
         today={todayKey()}
+        isAdmin={profile.role === "admin"}
       />
     </div>
   );

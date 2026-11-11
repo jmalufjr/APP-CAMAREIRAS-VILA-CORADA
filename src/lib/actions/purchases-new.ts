@@ -17,6 +17,8 @@ export interface PurchaseLineInput {
   amount: number;
   usefulLifeMonths: number | null;
   isAsset: boolean;
+  // Também cadastra o item em "Itens recorrentes" (só o admin pode).
+  recurring?: boolean;
 }
 
 export interface PurchaseInput {
@@ -61,6 +63,12 @@ export async function createPurchase(input: PurchaseInput): Promise<Result> {
     if (!(l.amount > 0)) return { error: `Item ${n}: informe o valor.` };
     if (!(l.quantity > 0)) return { error: `Item ${n}: informe a quantidade.` };
     if (!l.isAsset && !l.categoryId) return { error: `Item ${n}: escolha a categoria de despesa.` };
+  }
+
+  const recurringLines = input.lines.filter((l) => l.recurring && !l.isAsset);
+  if (recurringLines.length > 0) {
+    const deniedRec = await requireRole(["admin"]);
+    if (deniedRec) return { error: "Só o administrador pode marcar uma despesa como recorrente." };
   }
 
   const total = Math.round(input.lines.reduce((s, l) => s + l.amount, 0) * 100) / 100;
@@ -154,6 +162,26 @@ export async function createPurchase(input: PurchaseInput): Promise<Result> {
       .update({ status: "lancada", purchase_id: purchase.id })
       .eq("id", input.inboxId)
       .eq("status", "aguardando");
+  }
+
+  // Itens marcados como recorrentes entram em "Itens recorrentes". O mês desta compra
+  // já está lançado pela própria nota, então a geração automática começa no mês seguinte.
+  if (recurringLines.length > 0) {
+    const { data: existing } = await supabase.from("recurring_expenses").select("name");
+    const taken = new Set((existing ?? []).map((e) => String(e.name).trim().toLowerCase()));
+    for (const l of recurringLines) {
+      const name = (input.lines.length > 1 ? l.description : input.supplierName.trim() || l.description).trim();
+      if (!name || taken.has(name.toLowerCase())) continue;
+      const { error: rErr } = await supabase.from("recurring_expenses").insert({
+        name,
+        category_id: l.categoryId,
+        amount: l.amount,
+        day_of_month: Math.min(28, Math.max(1, Number(input.date.slice(8, 10)) || 5)),
+        last_generated_month: `${input.date.slice(0, 7)}-01`,
+      });
+      if (rErr) return { error: `Compra lançada, mas não consegui cadastrar o item recorrente: ${rErr.message}` };
+      taken.add(name.toLowerCase());
+    }
   }
 
   revalidatePath("/contabil", "layout");
