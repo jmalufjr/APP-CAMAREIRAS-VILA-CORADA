@@ -62,10 +62,10 @@ export function MoveButton({
         {mode === "expense" ? (
           <div className="space-y-2">
             <Button className="w-full" variant="outline" disabled={isPending} onClick={() => run(() => moveLineToRecurring(lineId!))}>
-              Despesa recorrente
+              Cadastrar como despesa recorrente
             </Button>
             <p className="text-xs text-muted-foreground">
-              Cadastra em &quot;Itens recorrentes&quot;. A despesa deste mês continua no relatório; a partir do mês seguinte é lançada sozinha.
+              Apenas <strong>cadastra</strong> em &quot;Itens recorrentes&quot; — não move. Esta despesa <strong>permanece no relatório de despesas</strong>; a partir do mês seguinte o item é lançado sozinho.
             </p>
             <Button
               className="w-full"
@@ -75,8 +75,11 @@ export function MoveButton({
                 if (confirm("Mover para o ativo permanente? Deixa de contar como despesa do mês.")) run(() => moveLineToAsset(lineId!));
               }}
             >
-              Ativo permanente
+              Mover para ativo permanente
             </Button>
+            <p className="text-xs text-muted-foreground">
+              <strong>Move de verdade</strong>: o item vira um bem do ativo permanente e <strong>sai do relatório de despesas</strong> (deixa de contar como despesa do mês).
+            </p>
           </div>
         ) : (
           <div className="space-y-3">

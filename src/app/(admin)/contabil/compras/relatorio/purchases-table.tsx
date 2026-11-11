@@ -34,6 +34,13 @@ export function PurchasesTable({
     });
   }
 
+  // Ativo permanente não é despesa do mês: some do relatório e dos totais.
+  purchases = purchases
+    .map((p) => {
+      const lines = p.lines.filter((l) => !l.is_asset);
+      return { ...p, lines, total_amount: lines.reduce((s, l) => s + l.amount, 0) };
+    })
+    .filter((p) => p.lines.length > 0);
   const counted = purchases.filter((p) => p.status === "registrada");
   const total = counted.reduce((s, p) => s + p.total_amount, 0);
 
@@ -80,9 +87,7 @@ export function PurchasesTable({
                   </span>
                   <span className="flex items-center gap-2 shrink-0">
                     {brl(l.amount)}
-                    {isAdmin && p.status === "registrada" && (
-                      <MoveButton mode={l.is_asset ? "asset" : "expense"} lineId={l.id} categories={categories} />
-                    )}
+                    {isAdmin && p.status === "registrada" && <MoveButton mode="expense" lineId={l.id} categories={categories} />}
                   </span>
                 </li>
               ))}
