@@ -26,15 +26,27 @@ drop policy if exists purchases_admin on purchases;
 drop policy if exists purchases_gerente_delete_own on purchases;
 create policy purchases_select on purchases for select using (is_admin_or_gerente());
 create policy purchases_insert on purchases for insert
-  with check (is_admin() or (is_admin_or_gerente() and status = 'registrada'));
+  with check (is_admin() or (is_admin_or_gerente() and status = 'registrada'
+    and created_by = auth.uid() and created_at <= now()));
 create policy purchases_admin on purchases for all using (is_admin()) with check (is_admin());
 create policy purchases_gerente_delete_own on purchases for delete
-  using (is_admin_or_gerente() and created_by = auth.uid() and created_at > now() - interval '10 minutes');
+  using (is_admin_or_gerente() and created_by = auth.uid()
+    and created_at > now() - interval '10 minutes' and created_at <= now());
 
 drop policy if exists purchase_lines_rw on purchase_lines;
 drop policy if exists purchase_lines_select on purchase_lines;
 drop policy if exists purchase_lines_insert on purchase_lines;
 drop policy if exists purchase_lines_admin on purchase_lines;
 create policy purchase_lines_select on purchase_lines for select using (is_admin_or_gerente());
-create policy purchase_lines_insert on purchase_lines for insert with check (is_admin_or_gerente());
+create policy purchase_lines_insert on purchase_lines for insert with check (
+  is_admin() or (
+    is_admin_or_gerente() and exists (
+      select 1 from purchases p
+      where p.id = purchase_lines.purchase_id
+        and p.created_by = auth.uid()
+        and p.status = 'registrada'
+        and p.created_at > now() - interval '10 minutes'
+    )
+  )
+);
 create policy purchase_lines_admin on purchase_lines for all using (is_admin()) with check (is_admin());
