@@ -36,7 +36,6 @@ const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curren
 const selectClass = "h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm";
 
 export interface PurchaseFormInitial {
-  recurring?: boolean;
   date: string;
   supplier: string;
   docNumber: string;
@@ -52,14 +51,12 @@ export function PurchaseForm({
   today,
   initial,
   inboxId,
-  canRegisterRecurring,
 }: {
   categories: ExpenseCategory[];
   ingredients: Ingredient[];
   settings: ExpenseSettings;
   today: string;
   initial?: PurchaseFormInitial;
-  canRegisterRecurring?: boolean;
   inboxId?: string;
 }) {
   const router = useRouter();
@@ -73,8 +70,6 @@ export function PurchaseForm({
     initial && initial.lines.length > 0 ? initial.lines.map((l) => ({ ...emptyLine(), ...l })) : [emptyLine()]
   );
 
-  const [asRecurring, setAsRecurring] = useState(!!initial?.recurring && !!canRegisterRecurring);
-  const [recurringName, setRecurringName] = useState(initial?.supplier ?? "");
   const total = lines.reduce((s, l) => s + (num(l.amount) || 0), 0);
 
   function update(i: number, patch: Partial<LineState>) {
@@ -112,11 +107,10 @@ export function PurchaseForm({
         notes,
         lines: payload,
         inboxId,
-        recurring: asRecurring ? { name: recurringName, dayOfMonth: Number(date.slice(8, 10)) } : undefined,
       });
       if (r?.error) toast.error(r.error);
       else {
-        toast.success(r.recurringNote ? `Compra lançada. ${r.recurringNote}` : "Compra lançada.");
+        toast.success("Compra lançada.");
         router.push(inboxId ? "/contabil/compras/caixa" : "/contabil/compras/relatorio");
       }
     });
@@ -228,23 +222,6 @@ export function PurchaseForm({
         <Label>Observações (opcional)</Label>
         <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
-
-      {canRegisterRecurring && (
-        <div className="space-y-2 rounded-lg border border-border bg-card p-3">
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={asRecurring} onChange={(e) => setAsRecurring(e.target.checked)} />
-            Cadastrar também como item recorrente (o sistema lança todo mês, no mesmo dia, com este valor)
-            {initial?.recurring && <span className="text-xs text-amber-600 dark:text-amber-400">· a IA acha que se repete todo mês</span>}
-          </label>
-          {asRecurring && (
-            <div className="space-y-1">
-              <Label className="text-xs">Nome do item recorrente</Label>
-              <Input value={recurringName} onChange={(e) => setRecurringName(e.target.value)} placeholder="Ex.: Energia elétrica" />
-              <p className="text-xs text-muted-foreground">Usa a categoria do primeiro item e o total da nota. Você ajusta o valor depois em Listas contábeis → Itens recorrentes.</p>
-            </div>
-          )}
-        </div>
-      )}
 
       <div className="flex items-center justify-between">
         <p className="text-sm">

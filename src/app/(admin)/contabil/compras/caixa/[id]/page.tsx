@@ -4,7 +4,6 @@ import { BackLink } from "@/components/shared/back-link";
 import { getInboxItem } from "@/lib/actions/purchase-inbox";
 import { getExpenseCategories, getIngredients, getExpenseSettings } from "@/lib/actions/expense-model";
 import { todayKey } from "@/lib/date";
-import { getCurrentProfile } from "@/lib/actions/session";
 import { PurchaseForm } from "../../nova/purchase-form";
 import { DiscardButton } from "./discard-button";
 
@@ -13,7 +12,6 @@ export default async function ConferirNotaPage({ params }: { params: Promise<{ i
   const item = await getInboxItem(id);
   if (!item || item.status !== "aguardando") notFound();
 
-  const profile = await getCurrentProfile();
   const [categories, ingredients, settings] = await Promise.all([getExpenseCategories(), getIngredients(), getExpenseSettings()]);
   const ai = item.ai_data;
 
@@ -64,9 +62,7 @@ export default async function ConferirNotaPage({ params }: { params: Promise<{ i
           settings={settings}
           today={todayKey()}
           inboxId={item.id}
-          canRegisterRecurring={profile.role === "admin"}
           initial={{
-            recurring: ai?.recurring ?? false,
             date: ai?.date ?? item.message_date,
             supplier: ai?.supplier_name ?? "",
             docNumber: ai?.document_number ?? "",

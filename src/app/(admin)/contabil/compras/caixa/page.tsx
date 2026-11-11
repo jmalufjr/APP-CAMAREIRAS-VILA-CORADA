@@ -47,7 +47,6 @@ export default async function CaixaConferenciaPage() {
                   {it.image_url ? "📷 " : ""}
                   {it.note_text ?? "(sem texto)"}
                 </p>
-                {it.ai_data?.recurring && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">🔁 Parece despesa recorrente (todo mês)</p>}
                 {it.ai_status === "erro" && <p className="text-xs text-red-600 mt-1">A IA não conseguiu ler: preencha manualmente.</p>}
               </Link>
             );
