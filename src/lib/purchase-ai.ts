@@ -53,7 +53,7 @@ Regras:
 - Cada item da nota vira uma linha; "amount" é o VALOR TOTAL da linha (quantidade × preço).
 - Se não der para separar itens (conta de luz, água, gás, comprovante só com valor), devolva UMA linha com o total.
 - "category_index": o número da categoria de despesa mais adequada, SEMPRE entre as listadas. Use o TEXTO que acompanha a nota como pista principal (ex.: "material de limpeza", "para o bar").
-- "ingredient_index": SOMENTE para itens de alimento que sejam um dos ingredientes de produtos de bar listados (mesmo produto, mesmo com marca/abreviação diferente); senão null.
+- "ingredient_index": SOMENTE para itens de alimento ou bebida que sejam um dos ingredientes de produtos de bar listados (mesmo produto, mesmo com marca/abreviação diferente; ex.: cachaça, vodka, gim, água tônica, limão); senão null.
 - "useful_life_months": só para bem durável (eletrodoméstico, equipamento, móvel): sua melhor estimativa da vida útil em meses; senão null.
 - "payment_method" é como A POUSADA pagou. Sem indicação clara, null.
 - "date": a data da compra impressa na nota; se não houver, null. Nunca invente valores: prefira null.`;
@@ -132,7 +132,7 @@ ${numbered(opts.ingredients.map((i) => i.name))}`;
 
     const lines: AiPurchaseLine[] = (Array.isArray(parsed.lines) ? parsed.lines : []).map((l) => {
       const cat = pick(opts.categories, l.category_index);
-      const ing = cat?.rule === "alimentos" ? pick(opts.ingredients, l.ingredient_index) : null;
+      const ing = (cat?.rule === "alimentos" || cat?.rule === "bebidas") ? pick(opts.ingredients, l.ingredient_index) : null;
       return {
         description: String(l.description ?? "").trim(),
         quantity: Number(l.quantity) > 0 ? Number(l.quantity) : 1,

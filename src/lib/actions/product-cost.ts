@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/actions/authz";
 import { nextDayBrasiliaUtcBoundary, startOfDayBrasiliaUtc } from "@/lib/date";
-import { distributeByDays, splitIngredientCostAmongProducts } from "@/lib/expense-allocation";
+import { barShareFromQuantities, distributeByDays, splitIngredientCostAmongProducts } from "@/lib/expense-allocation";
 import type { BarProductRecipe, ProductCostReport, ProductCostRow } from "@/lib/product-cost-types";
 
 type Result = { error?: string; success?: boolean };
@@ -101,23 +101,32 @@ export async function getProductCostReport(month: string): Promise<ProductCostRe
   const barPct = new Map((ingredients ?? []).map((i) => [i.id as string, Number(i.bar_pct)]));
   const { data: lines } = await supabase
     .from("purchase_lines")
-    .select("ingredient_id, amount, expense_categories(consumption_days), purchases!inner(date, status)")
+    .select("ingredient_id, amount, expense_categories(consumption_days, rule), purchases!inner(date, status)")
     .not("ingredient_id", "is", null)
     .eq("is_asset", false)
     .eq("purchases.status", "registrada")
     .gte("purchases.date", startDate)
     .lte("purchases.date", last);
 
+  // Bebidas (cachaça, vodka...): a parte do Bar segue a proporção bar × frigobar do mês.
+  const barBeverageQty = (items ?? [])
+    .filter((it) => /^bebida/i.test(String(it.category ?? "")))
+    .reduce((s, it) => s + (sold[it.id as string]?.qty ?? 0), 0);
+  const { data: launches } = await supabase.from("minibar_launches").select("delta").gte("launched_on", first).lte("launched_on", last);
+  const minibarQty = Math.max(0, (launches ?? []).reduce((s, l) => s + Number(l.delta), 0));
+  const barShare = barShareFromQuantities(barBeverageQty, minibarQty);
+
   const ingredientCost: Record<string, number> = {};
   for (const l of (lines ?? []) as unknown as {
     ingredient_id: string;
     amount: number | string;
-    expense_categories: { consumption_days: number } | { consumption_days: number }[] | null;
+    expense_categories: { consumption_days: number; rule: string } | { consumption_days: number; rule: string }[] | null;
     purchases: { date: string } | { date: string }[];
   }[]) {
-    const days = one(l.expense_categories)?.consumption_days ?? 1;
+    const cat = one(l.expense_categories);
+    const days = cat?.consumption_days ?? 1;
     const portion = distributeByDays(one(l.purchases)!.date, Number(l.amount), days)[month] ?? 0;
-    const bar = (portion * (barPct.get(l.ingredient_id) ?? 0)) / 100;
+    const bar = cat?.rule === "bebidas" ? portion * barShare : (portion * (barPct.get(l.ingredient_id) ?? 0)) / 100;
     if (bar > 0) ingredientCost[l.ingredient_id] = (ingredientCost[l.ingredient_id] ?? 0) + bar;
   }
 

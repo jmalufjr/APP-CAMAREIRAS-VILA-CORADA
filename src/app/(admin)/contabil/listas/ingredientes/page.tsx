@@ -10,7 +10,7 @@ export default async function IngredientesPage() {
       <BackLink href="/contabil/listas" />
       <PageHeader
         title="Ingredientes de produtos de bar"
-        subtitle="Alimentos que entram nos petiscos e drinks do bar. Ao ler uma nota, o sistema reconhece estes nomes e reparte o gasto entre Bar e Café da manhã pelo percentual de cada um. Alimentos que não estão nesta lista vão 100% para o Café."
+        subtitle="Alimentos e bebidas que entram nos petiscos e drinks do bar (o nome traz a unidade de medida da ficha técnica, ex.: “Cachaça (ml)”). Ao ler uma nota, o sistema reconhece estes nomes. Nos alimentos, o gasto se reparte entre Bar e Café da manhã pelo percentual de cada um (alimento que não está na lista vai 100% para o Café). Nas bebidas, a divisão é entre Bar e Frigobar pelas quantidades vendidas no mês."
       />
       <IngredientsPanel ingredients={ingredients} />
     </div>

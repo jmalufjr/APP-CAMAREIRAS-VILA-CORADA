@@ -172,9 +172,9 @@ export function PurchaseForm({
                   </select>
                 </div>
               </div>
-              {cat?.rule === "alimentos" && !l.isAsset && (
+              {(cat?.rule === "alimentos" || cat?.rule === "bebidas") && !l.isAsset && (
                 <div className="space-y-1">
-                  <Label className="text-xs">Ingrediente de produto de bar (se for)</Label>
+                  <Label className="text-xs">Ingrediente / bebida usada em produto do bar (se for)</Label>
                   <select className={selectClass} value={l.ingredientId} onChange={(e) => update(i, { ingredientId: e.target.value })}>
                     <option value="">Não é ingrediente (vai 100% ao Café)</option>
                     {ingredients.map((g) => (
