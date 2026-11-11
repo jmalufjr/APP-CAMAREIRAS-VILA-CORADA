@@ -22,6 +22,7 @@ export function ImportPanel() {
   const [prepared, setPrepared] = useState<Prepared | null>(null);
   const [from, setFrom] = useState("2026-11-01");
   const [busy, setBusy] = useState(false);
+  const [firstImport, setFirstImport] = useState(false);
   const [progress, setProgress] = useState("");
 
   async function onFile(file: File | undefined) {
@@ -63,6 +64,7 @@ export function ImportPanel() {
       fd.set("date", g.date);
       fd.set("time", g.time);
       fd.set("text", g.texts.join("\n"));
+      if (firstImport) fd.set("detectRecurring", "1");
       if (g.image) {
         const entry = findMedia(prepared.zip, g.image);
         if (entry) {
@@ -84,7 +86,7 @@ export function ImportPanel() {
     setBusy(false);
     setProgress("");
     toast.success(`${created} nova(s) na caixa de conferência · ${repeated} já importada(s) antes · ${failed} com problema.`);
-    router.push("/contabil/compras/caixa");
+    router.push(firstImport ? "/contabil/compras/recorrentes-sugeridos" : "/contabil/compras/caixa");
   }
 
   return (
@@ -98,6 +100,14 @@ export function ImportPanel() {
         <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} disabled={busy} />
         <p className="text-xs text-muted-foreground">O novo modelo começa em 01/11/2026; mensagens anteriores são ignoradas.</p>
       </div>
+      <label className="flex items-start gap-2 text-sm rounded-lg border border-border bg-card p-3">
+        <input type="checkbox" className="mt-1" checked={firstImport} onChange={(e) => setFirstImport(e.target.checked)} disabled={busy} />
+        <span>
+          <strong>Primeira importação (desde 01/11/2026)</strong>: além de ler as notas, a IA sugere quais despesas são
+          recorrentes (energia, água, internet, salários, honorários…) para você cadastrar de uma vez em “Itens
+          recorrentes”. Use só no primeiro arquivo; depois o cadastro é manual.
+        </span>
+      </label>
       {prepared && (
         <div className="rounded-lg border border-border bg-card p-3 text-sm space-y-1">
           <p>

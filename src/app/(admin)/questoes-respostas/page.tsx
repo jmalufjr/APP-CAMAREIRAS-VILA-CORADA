@@ -769,7 +769,10 @@ export default function QuestoesRespostasPage() {
                 <strong>Caixa de conferência → Importar conversa</strong>. Cada foto de nota, com as mensagens do
                 mesmo remetente logo depois, vira um item. A IA sugere data, fornecedor, categoria e ingrediente;{" "}
                 <strong>nada é lançado sem a sua conferência</strong>: você confere com a foto, corrige e lança, ou
-                descarta o que não for compra.
+                descarta o que não for compra. No <strong>primeiro arquivo</strong> (com tudo desde 01/11/2026), marque
+                “Primeira importação”: a IA também sugere quais despesas são recorrentes (energia, água, internet,
+                salários, honorários…) e você as cadastra de uma vez em Itens recorrentes. Nas importações seguintes
+                isso não é feito: os itens recorrentes novos são cadastrados à mão.
               </P>
               <SubHeading>Relatório de despesas e Resultado mensal</SubHeading>
               <P>

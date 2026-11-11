@@ -28,6 +28,8 @@ export interface AiPurchase {
   date: string | null;
   document_number: string | null;
   total_amount: number | null;
+  // Só preenchido na primeira importação (sugestão inicial de itens recorrentes).
+  recurring?: boolean;
   lines: AiPurchaseLine[];
 }
 
@@ -65,11 +67,18 @@ export async function readPurchaseWithAI(opts: {
   text: string;
   categories: AiCategory[];
   ingredients: AiIngredient[];
+  detectRecurring?: boolean;
 }): Promise<{ error: string } | { data: AiPurchase }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { error: "Leitura automática não configurada (falta ANTHROPIC_API_KEY)." };
 
-  const system = `${SYSTEM}
+  const recurringRule = opts.detectRecurring
+    ? `
+
+EXTRA: acrescente ao JSON o campo "recurring": true SOMENTE se for uma despesa que normalmente se repete todo mês (energia, água, gás, internet, telefone, aluguel, mensalidades e assinaturas, salários, honorários de contador ou de serviços, tráfego pago, impostos mensais); compra de mercadoria ou material é false.`
+    : "";
+
+  const system = `${SYSTEM}${recurringRule}
 
 CATEGORIAS DE DESPESA (para "category_index"):
 ${numbered(opts.categories.map((c) => c.name))}
@@ -150,6 +159,7 @@ ${numbered(opts.ingredients.map((i) => i.name))}`;
         date: parsed.date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) ? parsed.date : null,
         document_number: parsed.document_number?.toString().trim() || null,
         total_amount: typeof parsed.total_amount === "number" ? parsed.total_amount : null,
+        recurring: opts.detectRecurring ? (parsed as { recurring?: unknown }).recurring === true : undefined,
         lines,
       },
     };

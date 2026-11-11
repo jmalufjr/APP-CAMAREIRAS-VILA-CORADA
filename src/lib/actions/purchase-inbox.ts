@@ -35,6 +35,7 @@ export async function importInboxEntry(formData: FormData): Promise<ImportResult
   const date = String(formData.get("date") ?? "");
   const time = String(formData.get("time") ?? "");
   const text = String(formData.get("text") ?? "");
+  const detectRecurring = formData.get("detectRecurring") === "1";
   const file = formData.get("file");
   if (!key || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Mensagem inválida." };
 
@@ -82,6 +83,7 @@ export async function importInboxEntry(formData: FormData): Promise<ImportResult
     text,
     categories: cats ?? [],
     ingredients: ings ?? [],
+    detectRecurring,
   });
 
   const update =
