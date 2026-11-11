@@ -6,11 +6,20 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { decidePendingPurchase } from "@/lib/actions/purchases-new";
 import type { PurchaseRecord } from "@/lib/expense-model-types";
+import { MoveButton } from "@/components/shared/move-line-button";
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dmy = (d: string) => d.split("-").reverse().join("/");
 
-export function PurchasesTable({ purchases, isAdmin }: { purchases: PurchaseRecord[]; isAdmin: boolean }) {
+export function PurchasesTable({
+  purchases,
+  isAdmin,
+  categories = [],
+}: {
+  purchases: PurchaseRecord[];
+  isAdmin: boolean;
+  categories?: { id: string; name: string }[];
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -64,12 +73,17 @@ export function PurchasesTable({ purchases, isAdmin }: { purchases: PurchaseReco
             </div>
             <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
               {p.lines.map((l) => (
-                <li key={l.id} className="flex justify-between gap-2">
-                  <span>
+                <li key={l.id} className="flex items-center justify-between gap-2">
+                  <span className="min-w-0">
                     {l.description} — {l.is_asset ? "Ativo permanente" : (l.category_name ?? "Sem categoria")}
                     {l.ingredient_name ? ` (ingrediente: ${l.ingredient_name})` : ""}
                   </span>
-                  <span>{brl(l.amount)}</span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    {brl(l.amount)}
+                    {isAdmin && p.status === "registrada" && (
+                      <MoveButton mode={l.is_asset ? "asset" : "expense"} lineId={l.id} categories={categories} />
+                    )}
+                  </span>
                 </li>
               ))}
             </ul>

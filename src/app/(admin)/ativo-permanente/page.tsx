@@ -5,12 +5,18 @@ import { getFixedAssets } from "@/lib/actions/fixed-assets";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { formatDatePt } from "@/lib/date";
+import { getCurrentProfile } from "@/lib/actions/session";
+import { getExpenseCategories } from "@/lib/actions/expense-model";
+import { MoveButton } from "@/components/shared/move-line-button";
 
 // Cada bem é criado ao lançar uma compra de ativo permanente em "Lançar
 // compras e despesas" (ver src/lib/actions/expenses.ts) — esta tela é só
 // a relação, sem CRUD próprio; categorias e catálogo de itens vivem no
 // Plano de Contas (/checklists/plano-de-contas), não aqui.
 export default async function AtivoPermanentePage() {
+  const profile = await getCurrentProfile();
+  const isAdmin = profile.role === "admin";
+  const categories = isAdmin ? (await getExpenseCategories()).filter((c) => c.active).map((c) => ({ id: c.id, name: c.name })) : [];
   const assets = await getFixedAssets();
   const active = assets.filter((a) => a.active);
 
@@ -42,13 +48,14 @@ export default async function AtivoPermanentePage() {
               <TableHead>Valor</TableHead>
               <TableHead>Garantia até</TableHead>
               <TableHead>Fornecedor</TableHead>
+              {isAdmin && <TableHead />}
             </TableRow>
           </TableHeader>
           <TableBody>
             {Array.from(byCategory.entries()).map(([category, items]) => (
               <Fragment key={category}>
                 <TableRow className="bg-muted/40">
-                  <TableCell colSpan={7} className="font-medium text-xs uppercase text-muted-foreground">
+                  <TableCell colSpan={8} className="font-medium text-xs uppercase text-muted-foreground">
                     {category}
                   </TableCell>
                 </TableRow>
@@ -61,6 +68,11 @@ export default async function AtivoPermanentePage() {
                     <TableCell>{a.purchase_value !== null ? `R$ ${a.purchase_value.toFixed(2)}` : "—"}</TableCell>
                     <TableCell>{a.warranty_until ? formatDatePt(a.warranty_until) : "—"}</TableCell>
                     <TableCell>{a.supplier_name ?? "—"}</TableCell>
+                    {isAdmin && (
+                      <TableCell>
+                        <MoveButton mode="asset" assetId={a.id} categories={categories} />
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </Fragment>

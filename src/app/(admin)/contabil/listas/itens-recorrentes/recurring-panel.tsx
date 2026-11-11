@@ -8,9 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, ArrowRightLeft } from "lucide-react";
 import { DeleteButton } from "@/components/shared/delete-button";
 import { saveRecurringExpense, deleteRecurringExpense } from "@/lib/actions/expense-model";
+import { moveRecurringToExpense } from "@/lib/actions/move-expense";
 import type { ExpenseCategory, RecurringExpense } from "@/lib/expense-model-types";
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -110,6 +111,31 @@ function RecurringDialog({ item, categories }: { item?: RecurringExpense; catego
   );
 }
 
+function MoveRecurringButton({ id }: { id: string }) {
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  return (
+    <Button
+      variant="outline"
+      size="xs"
+      disabled={isPending}
+      onClick={() => {
+        if (!confirm("Mover para despesa? O item deixa de ser recorrente e não será mais lançado sozinho; as despesas já lançadas continuam.")) return;
+        startTransition(async () => {
+          const r = await moveRecurringToExpense(id);
+          if (r?.error) toast.error(r.error);
+          else {
+            toast.success(r.message ?? "Movido.");
+            router.refresh();
+          }
+        });
+      }}
+    >
+      <ArrowRightLeft size={12} /> Mover
+    </Button>
+  );
+}
+
 export function RecurringPanel({ items, categories }: { items: RecurringExpense[]; categories: ExpenseCategory[] }) {
   const catName = (id: string) => categories.find((c) => c.id === id)?.name ?? "—";
   return (
@@ -130,6 +156,7 @@ export function RecurringPanel({ items, categories }: { items: RecurringExpense[
               </p>
             </div>
             <div className="flex gap-1 shrink-0">
+              <MoveRecurringButton id={i.id} />
               <RecurringDialog item={i} categories={categories} />
               <DeleteButton action={() => deleteRecurringExpense(i.id)} />
             </div>
