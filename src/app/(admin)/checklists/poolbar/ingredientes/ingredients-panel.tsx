@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Plus, Pencil } from "lucide-react";
 import { DeleteButton } from "@/components/shared/delete-button";
 import { saveIngredient, deleteIngredient } from "@/lib/actions/expense-model";
-import type { Ingredient } from "@/lib/expense-model-types";
+import { INGREDIENT_KIND_LABELS, type Ingredient, type IngredientKind } from "@/lib/expense-model-types";
 
 function IngredientDialog({ ingredient }: { ingredient?: Ingredient }) {
   const [open, setOpen] = useState(false);
@@ -22,11 +22,12 @@ function IngredientDialog({ ingredient }: { ingredient?: Ingredient }) {
   const [barPct, setBarPct] = useState(String(ingredient?.bar_pct ?? 50));
   const [active, setActive] = useState(ingredient?.active ?? true);
   const [days, setDays] = useState(String(ingredient?.consumption_days ?? 30));
+  const [kind, setKind] = useState<IngredientKind>(ingredient?.kind ?? "alimento");
   const [splitMode, setSplitMode] = useState<"bar_cafe" | "bar_frigobar">(ingredient?.split_mode ?? "bar_cafe");
 
   function handleSave() {
     startTransition(async () => {
-      const r = await saveIngredient(ingredient?.id ?? null, name, Number(barPct), active, splitMode, Number(days));
+      const r = await saveIngredient(ingredient?.id ?? null, name, Number(barPct), active, splitMode, Number(days), kind);
       if (r?.error) toast.error(r.error);
       else {
         toast.success("Ingrediente salvo.");
@@ -61,6 +62,25 @@ function IngredientDialog({ ingredient }: { ingredient?: Ingredient }) {
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-1.5">
+            <Label>Tipo</Label>
+            <select
+              className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+              value={kind}
+              onChange={(e) => setKind(e.target.value as IngredientKind)}
+            >
+              {(Object.keys(INGREDIENT_KIND_LABELS) as IngredientKind[]).map((k) => (
+                <option key={k} value={k}>
+                  {INGREDIENT_KIND_LABELS[k]}
+                </option>
+              ))}
+            </select>
+            {kind !== "alimento" && (
+              <p className="text-xs text-muted-foreground">Bebidas seguem o prazo de consumo e o rateio da própria categoria (Bebidas quentes / Demais bebidas).</p>
+            )}
+          </div>
+          {kind === "alimento" && (
+            <>
+          <div className="space-y-1.5">
             <Label>Como o gasto se divide (vale para alimentos)</Label>
             <select
               className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
@@ -81,6 +101,8 @@ function IngredientDialog({ ingredient }: { ingredient?: Ingredient }) {
             <Label>Prazo de consumo (dias) — para compras de Alimentos</Label>
             <Input type="number" min={1} max={365} value={days} onChange={(e) => setDays(e.target.value)} />
           </div>
+            </>
+          )}
           {isEdit && (
             <label className="flex items-center gap-2 text-sm">
               <Switch checked={active} onCheckedChange={setActive} /> Ativo
@@ -112,9 +134,11 @@ export function IngredientsPanel({ ingredients }: { ingredients: Ingredient[] })
                 {!i.active && <span className="ml-1.5 text-xs text-muted-foreground">· Inativo</span>}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {i.split_mode === "bar_frigobar"
-                  ? "Bar × Frigobar (pelas vendas do mês)"
-                  : `Bar ${i.bar_pct}% · Café ${Math.round((100 - i.bar_pct) * 100) / 100}%`}
+                {i.kind !== "alimento"
+                  ? INGREDIENT_KIND_LABELS[i.kind]
+                  : i.split_mode === "bar_frigobar"
+                    ? `Alimento · Bar × Frigobar (pelas vendas do mês) · ${i.consumption_days} dia(s)`
+                    : `Alimento · Bar ${i.bar_pct}% · Café ${Math.round((100 - i.bar_pct) * 100) / 100}% · ${i.consumption_days} dia(s)`}
               </p>
             </div>
             <div className="flex gap-1 shrink-0">

@@ -135,7 +135,7 @@ export function CategoriesPanel({ categories, ingredients = [] }: { categories: 
                   ? c.centers.map((x) => `${CENTER_LABELS[x.center_code]} ${x.pct}%`).join(" · ")
                   : RULE_LABELS[c.rule]}
               </p>
-              {c.rule === "alimentos" && <AlimentosItems ingredients={ingredients} />}
+              {c.rule === "alimentos" && <AlimentosItems ingredients={ingredients.filter((i) => i.kind === "alimento")} />}
             </div>
             <div className="flex gap-1 shrink-0">
               <CategoryDialog category={c} />

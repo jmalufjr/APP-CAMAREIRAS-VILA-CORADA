@@ -28,12 +28,30 @@ export interface ExpenseCategory {
   centers: { center_code: CenterCode; pct: number }[];
 }
 
+export type IngredientKind = "alimento" | "bebida_quente" | "demais_bebidas";
+
+export const INGREDIENT_KIND_LABELS: Record<IngredientKind, string> = {
+  alimento: "Alimento (inclui cafés)",
+  bebida_quente: "Bebida quente (destilados, vinhos…)",
+  demais_bebidas: "Demais bebidas (cervejas, águas, refrigerantes)",
+};
+
+// Que tipo de ingrediente cada categoria de despesa aceita (null = sem restrição).
+export function ingredientKindForCategory(cat: { name: string; rule: string } | null | undefined): IngredientKind | null {
+  if (!cat) return null;
+  if (cat.rule === "alimentos") return "alimento";
+  if (cat.rule === "bebidas") return "demais_bebidas";
+  if (cat.name.trim().toLowerCase() === "bebidas quentes") return "bebida_quente";
+  return null;
+}
+
 export interface Ingredient {
   id: string;
   name: string;
   bar_pct: number;
   split_mode: "bar_cafe" | "bar_frigobar";
   consumption_days: number;
+  kind: IngredientKind;
   active: boolean;
 }
 

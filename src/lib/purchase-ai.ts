@@ -2,6 +2,7 @@
 // Não é "use server": chamado só por Server Actions. Nunca grava nada.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { ingredientKindForCategory } from "@/lib/expense-model-types";
 
 export interface AiCategory {
   id: string;
@@ -12,6 +13,7 @@ export interface AiCategory {
 export interface AiIngredient {
   id: string;
   name: string;
+  kind?: string;
 }
 
 export interface AiPurchaseLine {
@@ -142,7 +144,9 @@ ${numbered(opts.ingredients.map((i) => i.name))}`;
 
     const lines: AiPurchaseLine[] = (Array.isArray(parsed.lines) ? parsed.lines : []).map((l) => {
       const cat = pick(opts.categories, l.category_index);
-      const ing = cat?.allows_ingredient ? pick(opts.ingredients, l.ingredient_index) : null;
+      const picked = cat?.allows_ingredient ? pick(opts.ingredients, l.ingredient_index) : null;
+      const needKind = ingredientKindForCategory(cat);
+      const ing = picked && needKind && picked.kind && picked.kind !== needKind ? null : picked;
       return {
         description: String(l.description ?? "").trim(),
         quantity: Number(l.quantity) > 0 ? Number(l.quantity) : 1,

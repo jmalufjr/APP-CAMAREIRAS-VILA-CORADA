@@ -71,7 +71,7 @@ export function AlimentosItems({ ingredients }: { ingredients: Ingredient[] }) {
         <div className="mt-2 space-y-1.5">
           <p className="text-xs text-muted-foreground">
             O prazo de cada item vale para compras lançadas em Alimentos e ligadas a ele. Item novo nasce com 30 dias. Compras de Alimentos sem item
-            cadastrado seguem o prazo da categoria. Para cadastrar um item novo, use “Ingredientes de bar da piscina”.
+            cadastrado seguem o prazo da categoria. Aqui só aparecem alimentos (cafés inclusive); bebidas seguem o prazo da sua categoria. Para cadastrar um item novo, use “Ingredientes de bar da piscina”.
           </p>
           {ingredients.map((i) => (
             <Row key={`${i.id}-${i.consumption_days}`} ingredient={i} />

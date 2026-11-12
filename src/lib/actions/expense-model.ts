@@ -111,7 +111,7 @@ export async function deleteExpenseCategory(id: string): Promise<Result> {
 
 export async function getIngredients(): Promise<Ingredient[]> {
   const supabase = await createClient();
-  const { data } = await supabase.from("ingredients").select("id, name, bar_pct, split_mode, consumption_days, active").order("name");
+  const { data } = await supabase.from("ingredients").select("id, name, bar_pct, split_mode, consumption_days, kind, active").order("name");
   return (data ?? []).map((i) => ({ ...i, bar_pct: Number(i.bar_pct) })) as Ingredient[];
 }
 
@@ -121,7 +121,8 @@ export async function saveIngredient(
   barPct: number,
   active: boolean,
   splitMode: "bar_cafe" | "bar_frigobar" = "bar_cafe",
-  consumptionDays = 30
+  consumptionDays = 30,
+  kind: "alimento" | "bebida_quente" | "demais_bebidas" = "alimento"
 ): Promise<Result> {
   const denied = await requireRole([...ROLES]);
   if (denied) return denied;
@@ -130,7 +131,8 @@ export async function saveIngredient(
   if (!(barPct >= 0 && barPct <= 100)) return { error: "O percentual do Bar deve ficar entre 0 e 100." };
   const supabase = await createClient();
   if (!Number.isInteger(consumptionDays) || consumptionDays < 1 || consumptionDays > 365) return { error: "O prazo de consumo deve ficar entre 1 e 365 dias." };
-  const payload = { name, bar_pct: barPct, active, split_mode: splitMode, consumption_days: consumptionDays };
+  if (!(["alimento", "bebida_quente", "demais_bebidas"] as string[]).includes(kind)) return { error: "Escolha o tipo do ingrediente." };
+  const payload = { name, bar_pct: barPct, active, split_mode: splitMode, consumption_days: consumptionDays, kind };
   const { error } = id
     ? await supabase.from("ingredients").update(payload).eq("id", id)
     : await supabase.from("ingredients").insert(payload);

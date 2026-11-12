@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Plus, Trash2 } from "lucide-react";
 import { createPurchase, type PurchaseLineInput } from "@/lib/actions/purchases-new";
 import { isFixedAsset } from "@/lib/expense-allocation";
-import type { ExpenseCategory, ExpenseSettings, Ingredient } from "@/lib/expense-model-types";
+import { ingredientKindForCategory, type ExpenseCategory, type ExpenseSettings, type Ingredient } from "@/lib/expense-model-types";
 
 interface LineState {
   description: string;
@@ -182,11 +182,16 @@ export function PurchaseForm({
                   <Label className="text-xs">Ingrediente / bebida usada em produto do bar (se for)</Label>
                   <select className={selectClass} value={l.ingredientId} onChange={(e) => update(i, { ingredientId: e.target.value })}>
                     <option value="">Não é ingrediente (vai 100% ao Café)</option>
-                    {ingredients.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.name} (Bar {g.bar_pct}%)
-                      </option>
-                    ))}
+                    {ingredients
+                      .filter((g) => {
+                        const k = ingredientKindForCategory(cat);
+                        return !k || g.kind === k;
+                      })
+                      .map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.kind === "alimento" ? `${g.name} (Bar ${g.bar_pct}%)` : g.name}
+                        </option>
+                      ))}
                   </select>
                 </div>
               )}
