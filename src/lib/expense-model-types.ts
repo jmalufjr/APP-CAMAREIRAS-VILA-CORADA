@@ -33,6 +33,7 @@ export interface Ingredient {
   name: string;
   bar_pct: number;
   split_mode: "bar_cafe" | "bar_frigobar";
+  consumption_days: number;
   active: boolean;
 }
 

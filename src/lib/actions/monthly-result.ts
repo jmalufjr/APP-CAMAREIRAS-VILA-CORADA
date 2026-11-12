@@ -175,10 +175,11 @@ export async function getMonthlyResult(month: string): Promise<MonthlyResult | {
   const [{ data: cats }, { data: catCenters }, { data: ingredients }] = await Promise.all([
     supabase.from("expense_categories").select("id, name, consumption_days, rule"),
     supabase.from("expense_category_centers").select("category_id, center_code, pct"),
-    supabase.from("ingredients").select("id, bar_pct, split_mode"),
+    supabase.from("ingredients").select("id, bar_pct, split_mode, consumption_days"),
   ]);
   const catMap = new Map((cats ?? []).map((c) => [c.id as string, c]));
   const ingMap = new Map((ingredients ?? []).map((i) => [i.id as string, Number(i.bar_pct)]));
+  const ingDays = new Map((ingredients ?? []).map((i) => [i.id as string, Number(i.consumption_days)]));
   const ingBarFrigobar = new Set((ingredients ?? []).filter((i) => i.split_mode === "bar_frigobar").map((i) => i.id as string));
 
   const { data: lines } = await supabase
@@ -205,7 +206,9 @@ export async function getMonthlyResult(month: string): Promise<MonthlyResult | {
     const cat = l.category_id ? catMap.get(l.category_id) : null;
     if (!cat) continue;
     const date = one(l.purchases)!.date;
-    const portion = distributeByDays(date, Number(l.amount), cat.consumption_days)[month];
+    // Alimentos ligados a um item cadastrado usam o prazo de consumo do próprio item.
+    const days = cat.rule === "alimentos" && l.ingredient_id ? (ingDays.get(l.ingredient_id) ?? cat.consumption_days) : cat.consumption_days;
+    const portion = distributeByDays(date, Number(l.amount), days)[month];
     if (!portion) continue;
     const rule = cat.rule as CategoryRule;
     if (rule === "nao_alocavel") {

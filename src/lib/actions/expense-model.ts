@@ -111,7 +111,7 @@ export async function deleteExpenseCategory(id: string): Promise<Result> {
 
 export async function getIngredients(): Promise<Ingredient[]> {
   const supabase = await createClient();
-  const { data } = await supabase.from("ingredients").select("id, name, bar_pct, split_mode, active").order("name");
+  const { data } = await supabase.from("ingredients").select("id, name, bar_pct, split_mode, consumption_days, active").order("name");
   return (data ?? []).map((i) => ({ ...i, bar_pct: Number(i.bar_pct) })) as Ingredient[];
 }
 
@@ -120,7 +120,8 @@ export async function saveIngredient(
   name: string,
   barPct: number,
   active: boolean,
-  splitMode: "bar_cafe" | "bar_frigobar" = "bar_cafe"
+  splitMode: "bar_cafe" | "bar_frigobar" = "bar_cafe",
+  consumptionDays = 30
 ): Promise<Result> {
   const denied = await requireRole([...ROLES]);
   if (denied) return denied;
@@ -128,11 +129,23 @@ export async function saveIngredient(
   if (!name) return { error: "Informe o nome do ingrediente." };
   if (!(barPct >= 0 && barPct <= 100)) return { error: "O percentual do Bar deve ficar entre 0 e 100." };
   const supabase = await createClient();
-  const payload = { name, bar_pct: barPct, active, split_mode: splitMode };
+  if (!Number.isInteger(consumptionDays) || consumptionDays < 1 || consumptionDays > 365) return { error: "O prazo de consumo deve ficar entre 1 e 365 dias." };
+  const payload = { name, bar_pct: barPct, active, split_mode: splitMode, consumption_days: consumptionDays };
   const { error } = id
     ? await supabase.from("ingredients").update(payload).eq("id", id)
     : await supabase.from("ingredients").insert(payload);
   if (error) return { error: error.code === "23505" ? "Já existe um ingrediente com esse nome." : error.message };
+  refresh();
+  return { success: true };
+}
+
+export async function setIngredientConsumptionDays(id: string, days: number): Promise<Result> {
+  const denied = await requireRole([...ROLES]);
+  if (denied) return denied;
+  if (!Number.isInteger(days) || days < 1 || days > 365) return { error: "O prazo de consumo deve ficar entre 1 e 365 dias." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("ingredients").update({ consumption_days: days }).eq("id", id);
+  if (error) return { error: error.message };
   refresh();
   return { success: true };
 }

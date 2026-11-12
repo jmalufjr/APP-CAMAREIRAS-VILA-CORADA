@@ -21,11 +21,12 @@ function IngredientDialog({ ingredient }: { ingredient?: Ingredient }) {
   const [name, setName] = useState(ingredient?.name ?? "");
   const [barPct, setBarPct] = useState(String(ingredient?.bar_pct ?? 50));
   const [active, setActive] = useState(ingredient?.active ?? true);
+  const [days, setDays] = useState(String(ingredient?.consumption_days ?? 30));
   const [splitMode, setSplitMode] = useState<"bar_cafe" | "bar_frigobar">(ingredient?.split_mode ?? "bar_cafe");
 
   function handleSave() {
     startTransition(async () => {
-      const r = await saveIngredient(ingredient?.id ?? null, name, Number(barPct), active, splitMode);
+      const r = await saveIngredient(ingredient?.id ?? null, name, Number(barPct), active, splitMode, Number(days));
       if (r?.error) toast.error(r.error);
       else {
         toast.success("Ingrediente salvo.");
@@ -76,6 +77,10 @@ function IngredientDialog({ ingredient }: { ingredient?: Ingredient }) {
               <Input type="number" min={0} max={100} value={barPct} onChange={(e) => setBarPct(e.target.value)} />
             </div>
           )}
+          <div className="space-y-1.5">
+            <Label>Prazo de consumo (dias) — para compras de Alimentos</Label>
+            <Input type="number" min={1} max={365} value={days} onChange={(e) => setDays(e.target.value)} />
+          </div>
           {isEdit && (
             <label className="flex items-center gap-2 text-sm">
               <Switch checked={active} onCheckedChange={setActive} /> Ativo

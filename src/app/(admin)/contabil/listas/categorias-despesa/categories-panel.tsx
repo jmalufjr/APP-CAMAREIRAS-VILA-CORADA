@@ -11,7 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Plus, Pencil } from "lucide-react";
 import { DeleteButton } from "@/components/shared/delete-button";
 import { saveExpenseCategory, deleteExpenseCategory } from "@/lib/actions/expense-model";
-import { CENTER_LABELS, RULE_LABELS, type CenterCode, type ExpenseCategory } from "@/lib/expense-model-types";
+import { CENTER_LABELS, RULE_LABELS, type CenterCode, type ExpenseCategory, type Ingredient } from "@/lib/expense-model-types";
+import { AlimentosItems } from "./alimentos-items";
 
 const CENTER_CODES: CenterCode[] = ["hospedagem", "bar", "cafe", "frigobar"];
 
@@ -113,7 +114,7 @@ function CategoryDialog({ category }: { category?: ExpenseCategory }) {
   );
 }
 
-export function CategoriesPanel({ categories }: { categories: ExpenseCategory[] }) {
+export function CategoriesPanel({ categories, ingredients = [] }: { categories: ExpenseCategory[]; ingredients?: Ingredient[] }) {
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between">
@@ -129,11 +130,12 @@ export function CategoriesPanel({ categories }: { categories: ExpenseCategory[] 
                 {!c.active && <span className="ml-1.5 text-xs text-muted-foreground">· Inativa</span>}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Consumo em {c.consumption_days} dia(s) ·{" "}
+                Consumo em {c.consumption_days} dia(s){c.rule === "alimentos" ? " (itens sem cadastro)" : ""} ·{" "}
                 {c.rule === "fixo"
                   ? c.centers.map((x) => `${CENTER_LABELS[x.center_code]} ${x.pct}%`).join(" · ")
                   : RULE_LABELS[c.rule]}
               </p>
+              {c.rule === "alimentos" && <AlimentosItems ingredients={ingredients} />}
             </div>
             <div className="flex gap-1 shrink-0">
               <CategoryDialog category={c} />
