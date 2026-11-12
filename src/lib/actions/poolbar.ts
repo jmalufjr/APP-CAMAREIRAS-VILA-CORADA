@@ -13,6 +13,17 @@ export async function createPoolbarItem(formData: FormData) {
   if (!name) return { error: "Informe o nome do item." };
   if (!Number.isFinite(price) || price < 0) return { error: "Informe um preço válido." };
 
+  let recipe: { ingredientId: string; quantity: number }[] = [];
+  try {
+    recipe = JSON.parse(String(formData.get("recipe") ?? "[]"));
+  } catch {
+    recipe = [];
+  }
+  recipe = recipe.filter((r) => r.ingredientId);
+  if (recipe.length === 0) return { error: "Informe a ficha técnica: pelo menos 1 ingrediente." };
+  if (recipe.some((r) => !(Number(r.quantity) > 0))) return { error: "Informe a quantidade de cada ingrediente (maior que zero)." };
+  if (new Set(recipe.map((r) => r.ingredientId)).size !== recipe.length) return { error: "Há um ingrediente repetido na ficha." };
+
   const supabase = await createClient();
   const { data: max } = await supabase
     .from("poolbar_items")
@@ -28,6 +39,14 @@ export async function createPoolbarItem(formData: FormData) {
     .single();
 
   if (error || !created) return { error: error?.message ?? "Não foi possível criar o item." };
+
+  const { error: rErr } = await supabase
+    .from("bar_product_ingredients")
+    .insert(recipe.map((r) => ({ poolbar_item_id: created.id, ingredient_id: r.ingredientId, quantity: Number(r.quantity) })));
+  if (rErr) {
+    await supabase.from("poolbar_items").delete().eq("id", created.id);
+    return { error: `Não foi possível gravar a ficha técnica: ${rErr.message}` };
+  }
   revalidatePath("/checklists");
   revalidatePath("/bar-piscina");
   revalidatePath("/frigobar");

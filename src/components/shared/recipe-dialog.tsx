@@ -62,7 +62,7 @@ export function RecipeDialog({
           <DialogTitle>Ficha técnica — {productName}</DialogTitle>
           <DialogDescription>
             {isNew
-              ? "Item criado. Agora preencha a ficha técnica: quais ingredientes entram e quanto em uma unidade vendida."
+              ? "Preencha a ficha técnica: quais ingredientes entram e quanto em uma unidade vendida."
               : "Quais ingredientes entram e quanto em uma unidade vendida."}
           </DialogDescription>
         </DialogHeader>

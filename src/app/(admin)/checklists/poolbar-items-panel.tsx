@@ -42,7 +42,7 @@ export function PoolbarItemsPanel({
   return (
     <div className="space-y-6 max-w-lg">
       <div className="flex justify-end">
-        <ItemFormDialog onCreated={(id, name) => setTarget({ id, name, isNew: true })} />
+        <ItemFormDialog ingredients={ingredients} />
       </div>
       {Array.from(groups.entries()).map(([category, categoryItems]) => (
         <div key={category} className="space-y-2">
@@ -92,11 +92,12 @@ export function PoolbarItemsPanel({
   );
 }
 
-function ItemFormDialog({ item, onCreated }: { item?: PoolbarItem; onCreated?: (id: string, name: string) => void }) {
+function ItemFormDialog({ item, ingredients = [] }: { item?: PoolbarItem; ingredients?: Ingredient[] }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const isEdit = !!item;
+  const [rows, setRows] = useState<{ ingredientId: string; quantity: string }[]>([{ ingredientId: "", quantity: "1" }]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -126,10 +127,9 @@ function ItemFormDialog({ item, onCreated }: { item?: PoolbarItem; onCreated?: (
               if (result?.error) toast.error(result.error);
               else {
                 toast.success("Item salvo.");
+                if (!isEdit) setRows([{ ingredientId: "", quantity: "1" }]);
                 setOpen(false);
                 router.refresh();
-                const newId = (result as { id?: string }).id;
-                if (!isEdit && newId) onCreated?.(newId, String(formData.get("name") ?? ""));
               }
             });
           }}
@@ -155,6 +155,48 @@ function ItemFormDialog({ item, onCreated }: { item?: PoolbarItem; onCreated?: (
               required
             />
           </div>
+          {!isEdit && (
+            <div className="space-y-2 rounded-lg border border-border p-3">
+              <input
+                type="hidden"
+                name="recipe"
+                value={JSON.stringify(rows.map((r) => ({ ingredientId: r.ingredientId, quantity: Number(r.quantity.replace(",", ".")) })))}
+              />
+              <Label>Ficha técnica (obrigatória — pelo menos 1 ingrediente)</Label>
+              {rows.map((r, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <select
+                    className="h-9 flex-1 rounded-lg border border-input bg-transparent px-2.5 text-sm"
+                    value={r.ingredientId}
+                    onChange={(e) => setRows((rs) => rs.map((x, idx) => (idx === i ? { ...x, ingredientId: e.target.value } : x)))}
+                  >
+                    <option value="">Ingrediente…</option>
+                    {ingredients.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Input
+                    className="w-24"
+                    inputMode="decimal"
+                    placeholder="Qtd."
+                    value={r.quantity}
+                    onChange={(e) => setRows((rs) => rs.map((x, idx) => (idx === i ? { ...x, quantity: e.target.value } : x)))}
+                  />
+                  {rows.length > 1 && (
+                    <Button type="button" variant="ghost" size="icon-sm" onClick={() => setRows((rs) => rs.filter((_, idx) => idx !== i))}>
+                      <Trash2 size={14} />
+                    </Button>
+                  )}
+                </div>
+              ))}
+              <Button type="button" variant="outline" size="sm" onClick={() => setRows((rs) => [...rs, { ingredientId: "", quantity: "1" }])}>
+                <Plus size={14} /> Adicionar ingrediente
+              </Button>
+              <p className="text-xs text-muted-foreground">Quantidade em uma unidade vendida. Ingredientes novos se cadastram em &quot;Ingredientes de bar da piscina&quot;.</p>
+            </div>
+          )}
           {isEdit && (
             <div className="flex items-center gap-2">
               <Switch id="active" name="active" defaultChecked={item?.active ?? true} />

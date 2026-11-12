@@ -44,6 +44,7 @@ export async function saveBarProductRecipe(
   const denied = await requireRole([...ROLES]);
   if (denied) return denied;
   const clean = ingredients.filter((i) => i.ingredientId);
+  if (clean.length === 0) return { error: "A ficha técnica precisa de pelo menos 1 ingrediente." };
   if (clean.some((i) => !(i.quantity > 0))) return { error: "Informe a quantidade de cada ingrediente (maior que zero)." };
   if (new Set(clean.map((i) => i.ingredientId)).size !== clean.length) return { error: "Há um ingrediente repetido." };
 

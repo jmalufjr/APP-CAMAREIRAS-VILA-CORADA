@@ -18,7 +18,7 @@ export default async function PoolbarItemsPage() {
       <BackLink href="/checklists" />
       <PageHeader
         title="Cardápio de bar da piscina"
-        subtitle="Gerencie os itens, categorias e preços do bar da piscina disponíveis para a camareira registrar. Cada item tem sua ficha técnica (ingredientes e quantidades): ao criar um item novo, a ficha é pedida em seguida."
+        subtitle="Gerencie os itens, categorias e preços do bar da piscina disponíveis para a camareira registrar. Cada item tem sua ficha técnica (ingredientes e quantidades): um item novo só é cadastrado com a ficha técnica (pelo menos 1 ingrediente)."
       />
       <PoolbarItemsPanel items={(items ?? []) as PoolbarItem[]} recipes={recipes} ingredients={ingredients.filter((i) => i.active)} />
     </div>
