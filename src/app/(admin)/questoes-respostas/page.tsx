@@ -787,7 +787,7 @@ export default function QuestoesRespostasPage() {
               <P>
                 Em <strong>Listas operacionais → Cardápio de bar da piscina</strong>, o botão <strong>Ficha técnica</strong> de
                 cada item diz quais ingredientes entram nele (um item novo só é cadastrado com a ficha, com pelo menos 1 ingrediente); os
-                ingredientes ficam em <strong>Listas operacionais → Ingredientes de bar da piscina</strong>. Em <strong>Custo e rentabilidade dos produtos do bar</strong> o sistema estima, mês
+                ingredientes ficam em <strong>Listas operacionais → Ingredientes de bar da piscina</strong>. Em <strong>Rentabilidade de Petiscos e Drinks</strong> o sistema estima, mês
                 a mês, o custo médio e a margem de cada produto. É uma <strong>estimativa</strong>: divide o que foi
                 comprado de cada ingrediente entre os produtos, pela quantidade vendida.
               </P>

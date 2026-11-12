@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/actions/authz";
 import { addDaysKey, dateKeyInBrazil, nextDayBrasiliaUtcBoundary, startOfDayBrasiliaUtc, todayKey } from "@/lib/date";
 import { SERVICE_CHARGE_RATE } from "@/lib/room-bills";
 import { barShareFromQuantities, distributeByDays, splitAmountByCenters } from "@/lib/expense-allocation";
+import { isBeverageCategory } from "@/lib/poolbar-categories";
 import type { CategoryRule, CenterCode } from "@/lib/expense-model-types";
 import type { MonthlyResult, PendingRevenue, CategoryLine } from "@/lib/monthly-result-types";
 
@@ -148,7 +149,7 @@ export async function getMonthlyResult(month: string): Promise<MonthlyResult | {
       const v = it.quantity * Number(it.price_snapshot);
       sub += v;
       const cat = one(it.poolbar_items)?.category ?? "";
-      if (/^bebida/i.test(cat)) barBeverageQty += it.quantity;
+      if (isBeverageCategory(cat)) barBeverageQty += it.quantity;
     }
     const service = bill?.service_charge_waived ? 0 : sub * SERVICE_CHARGE_RATE;
     const state = classify(bill);

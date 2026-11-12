@@ -3,13 +3,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { toDateKey, nowInBrazil, dateKeyInBrazil } from "@/lib/date";
+import { isPoolbarCategory, isProfitabilityCategory } from "@/lib/poolbar-categories";
 
 // ---------- Admin: CRUD do catálogo de itens do bar da piscina ----------
 
 export async function createPoolbarItem(formData: FormData) {
-  const category = String(formData.get("category") ?? "").trim() || null;
+  const category = String(formData.get("category") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const price = Number(formData.get("price"));
+  if (!isPoolbarCategory(category)) return { error: "Escolha a categoria: Petiscos, Drinks ou Outras bebidas." };
   if (!name) return { error: "Informe o nome do item." };
   if (!Number.isFinite(price) || price < 0) return { error: "Informe um preço válido." };
 
@@ -20,7 +22,8 @@ export async function createPoolbarItem(formData: FormData) {
     recipe = [];
   }
   recipe = recipe.filter((r) => r.ingredientId);
-  if (recipe.length === 0) return { error: "Informe a ficha técnica: pelo menos 1 ingrediente." };
+  // Só Petiscos e Drinks têm custo/rentabilidade acompanhados: só eles exigem ficha técnica.
+  if (isProfitabilityCategory(category) && recipe.length === 0) return { error: "Informe a ficha técnica: pelo menos 1 ingrediente." };
   if (recipe.some((r) => !(Number(r.quantity) > 0))) return { error: "Informe a quantidade de cada ingrediente (maior que zero)." };
   if (new Set(recipe.map((r) => r.ingredientId)).size !== recipe.length) return { error: "Há um ingrediente repetido na ficha." };
 
@@ -40,7 +43,7 @@ export async function createPoolbarItem(formData: FormData) {
 
   if (error || !created) return { error: error?.message ?? "Não foi possível criar o item." };
 
-  const { error: rErr } = await supabase
+  const { error: rErr } = recipe.length === 0 ? { error: null } : await supabase
     .from("bar_product_ingredients")
     .insert(recipe.map((r) => ({ poolbar_item_id: created.id, ingredient_id: r.ingredientId, quantity: Number(r.quantity) })));
   if (rErr) {
@@ -54,10 +57,11 @@ export async function createPoolbarItem(formData: FormData) {
 }
 
 export async function updatePoolbarItem(id: string, formData: FormData) {
-  const category = String(formData.get("category") ?? "").trim() || null;
+  const category = String(formData.get("category") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const price = Number(formData.get("price"));
   const active = formData.get("active") === "on";
+  if (!isPoolbarCategory(category)) return { error: "Escolha a categoria: Petiscos, Drinks ou Outras bebidas." };
   if (!name) return { error: "Informe o nome do item." };
   if (!Number.isFinite(price) || price < 0) return { error: "Informe um preço válido." };
 

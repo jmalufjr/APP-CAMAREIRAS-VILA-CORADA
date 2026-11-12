@@ -6,6 +6,7 @@ import { requireRole } from "@/lib/actions/authz";
 import { nextDayBrasiliaUtcBoundary, startOfDayBrasiliaUtc } from "@/lib/date";
 import { barShareFromQuantities, distributeByDays, splitIngredientCostAmongProducts } from "@/lib/expense-allocation";
 import type { BarProductRecipe, ProductCostReport, ProductCostRow } from "@/lib/product-cost-types";
+import { isBeverageCategory, isProfitabilityCategory } from "@/lib/poolbar-categories";
 
 type Result = { error?: string; success?: boolean };
 const ROLES = ["admin", "gerente_operacional"] as const;
@@ -61,7 +62,7 @@ export async function saveBarProductRecipe(
   return { success: true };
 }
 
-// ---------- Custo e rentabilidade mensal por produto (estimativa) ----------
+// ---------- Rentabilidade mensal de Petiscos e Drinks (estimativa) ----------
 
 export async function getProductCostReport(month: string): Promise<ProductCostReport | { error: string }> {
   const denied = await requireRole([...ROLES]);
@@ -113,11 +114,19 @@ export async function getProductCostReport(month: string): Promise<ProductCostRe
 
   // Bebidas (cachaça, vodka...): a parte do Bar segue a proporção bar × frigobar do mês.
   const barBeverageQty = (items ?? [])
-    .filter((it) => /^bebida/i.test(String(it.category ?? "")))
+    .filter((it) => isBeverageCategory(it.category as string | null))
     .reduce((s, it) => s + (sold[it.id as string]?.qty ?? 0), 0);
   const { data: launches } = await supabase.from("minibar_launches").select("delta").gte("launched_on", first).lte("launched_on", last);
   const minibarQty = Math.max(0, (launches ?? []).reduce((s, l) => s + Number(l.delta), 0));
   const barShare = barShareFromQuantities(barBeverageQty, minibarQty);
+
+  // Só Petiscos e Drinks entram na rentabilidade. Ingrediente usado apenas por itens de
+  // "Outras bebidas" não é acompanhado aqui (o custo segue no Resultado mensal).
+  const trackedIds = new Set((items ?? []).filter((it) => isProfitabilityCategory(it.category as string | null)).map((it) => it.id as string));
+  const trackedIngredients = new Set((recipes ?? []).filter((r) => trackedIds.has(r.poolbar_item_id as string)).map((r) => r.ingredient_id as string));
+  const untrackedOnly = new Set(
+    (recipes ?? []).filter((r) => !trackedIds.has(r.poolbar_item_id as string) && !trackedIngredients.has(r.ingredient_id as string)).map((r) => r.ingredient_id as string)
+  );
 
   const ingredientCost: Record<string, number> = {};
   for (const l of (lines ?? []) as unknown as {
@@ -127,6 +136,7 @@ export async function getProductCostReport(month: string): Promise<ProductCostRe
     expense_categories: { consumption_days: number; rule: string } | { consumption_days: number; rule: string }[] | null;
     purchases: { date: string } | { date: string }[];
   }[]) {
+    if (untrackedOnly.has(l.ingredient_id)) continue;
     const cat = one(l.expense_categories);
     const days = cat?.consumption_days ?? 1;
     const portion = distributeByDays(one(l.purchases)!.date, Number(l.amount), days)[month] ?? 0;
@@ -142,7 +152,8 @@ export async function getProductCostReport(month: string): Promise<ProductCostRe
     if (bar > 0) ingredientCost[l.ingredient_id] = (ingredientCost[l.ingredient_id] ?? 0) + bar;
   }
 
-  const products = (items ?? []).map((it) => ({
+  const trackedItems = (items ?? []).filter((it) => trackedIds.has(it.id as string));
+  const products = trackedItems.map((it) => ({
     id: it.id as string,
     sold: sold[it.id]?.qty ?? 0,
     ingredients: (recipes ?? [])
@@ -151,7 +162,7 @@ export async function getProductCostReport(month: string): Promise<ProductCostRe
   }));
   const { costByProduct, unassigned } = splitIngredientCostAmongProducts(products, ingredientCost);
 
-  const rows: ProductCostRow[] = (items ?? [])
+  const rows: ProductCostRow[] = trackedItems
     .map((it) => {
       const s = sold[it.id] ?? { qty: 0, revenue: 0 };
       const cost = round2(costByProduct[it.id] ?? 0);

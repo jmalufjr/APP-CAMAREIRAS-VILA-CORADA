@@ -19,7 +19,7 @@ export default async function CustoProdutosPage({ searchParams }: { searchParams
     <div className="space-y-6 max-w-4xl">
       <BackLink href="/contabil" />
       <PageHeader
-        title="Custo e rentabilidade dos produtos do bar"
+        title="Rentabilidade de Petiscos e Drinks"
         subtitle="Estimativa do mês: o que foi comprado dos ingredientes (parte do Bar) é dividido entre os produtos na proporção das unidades vendidas e da quantidade de cada ingrediente na ficha técnica."
       />
       <div className="flex items-center gap-2">

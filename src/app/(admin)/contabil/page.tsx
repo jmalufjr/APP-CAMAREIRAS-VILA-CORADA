@@ -22,7 +22,7 @@ import {
 const menuItems = [
   { href: "/contabil/resultado-mensal", label: "Resultado mensal", icon: FileBarChart },
   { href: "/contabil/compras/caixa", label: "Caixa de conferência de compras (WhatsApp)", icon: ListChecks },
-  { href: "/contabil/custo-produtos", label: "Custo e rentabilidade dos produtos do bar", icon: FileBarChart },
+  { href: "/contabil/custo-produtos", label: "Rentabilidade de Petiscos e Drinks", icon: FileBarChart },
   { href: "/contabil/compras/nova", label: "Lançar compra ou despesa", icon: Plus },
   { href: "/contabil/compras/relatorio", label: "Relatório de despesas (regime caixa)", icon: FileSpreadsheet },
   { href: "/ativo-permanente", label: "Inventário de ativo permanente", icon: Archive },

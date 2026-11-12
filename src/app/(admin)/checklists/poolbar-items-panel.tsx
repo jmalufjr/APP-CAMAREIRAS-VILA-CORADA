@@ -20,6 +20,7 @@ import {
 import { Plus, Pencil, Trash2, UtensilsCrossed } from "lucide-react";
 import { RecipeDialog, type RecipeRow } from "@/components/shared/recipe-dialog";
 import type { Ingredient } from "@/lib/expense-model-types";
+import { POOLBAR_CATEGORIES, isProfitabilityCategory } from "@/lib/poolbar-categories";
 
 export function PoolbarItemsPanel({
   items,
@@ -39,12 +40,16 @@ export function PoolbarItemsPanel({
     groups.set(key, list);
   });
 
+  const orderedGroups = Array.from(groups.entries()).sort(
+    (a, b) => (POOLBAR_CATEGORIES as readonly string[]).indexOf(a[0]) - (POOLBAR_CATEGORIES as readonly string[]).indexOf(b[0])
+  );
+
   return (
     <div className="space-y-6 max-w-lg">
       <div className="flex justify-end">
         <ItemFormDialog ingredients={ingredients} />
       </div>
-      {Array.from(groups.entries()).map(([category, categoryItems]) => (
+      {orderedGroups.map(([category, categoryItems]) => (
         <div key={category} className="space-y-2">
           <h3 className="font-heading text-lg">{category}</h3>
           {categoryItems.map((item) => (
@@ -59,7 +64,11 @@ export function PoolbarItemsPanel({
                   {!item.active && " · Inativo"}
                 </p>
                 <p className="text-xs mt-0.5 text-muted-foreground">
-                  {(recipes[item.id]?.length ?? 0) === 0 ? <span className="text-amber-600">Sem ficha técnica</span> : `${recipes[item.id].length} ingrediente(s) na ficha`}
+                  {(recipes[item.id]?.length ?? 0) === 0 ? (
+                    isProfitabilityCategory(item.category) ? <span className="text-amber-600">Sem ficha técnica</span> : "Ficha técnica opcional"
+                  ) : (
+                    `${recipes[item.id].length} ingrediente(s) na ficha`
+                  )}
                 </p>
               </div>
               <div className="flex gap-1 shrink-0">
@@ -98,6 +107,7 @@ function ItemFormDialog({ item, ingredients = [] }: { item?: PoolbarItem; ingred
   const router = useRouter();
   const isEdit = !!item;
   const [rows, setRows] = useState<{ ingredientId: string; quantity: string }[]>([{ ingredientId: "", quantity: "1" }]);
+  const [category, setCategory] = useState<string>(item?.category ?? "");
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -137,7 +147,21 @@ function ItemFormDialog({ item, ingredients = [] }: { item?: PoolbarItem; ingred
         >
           <div className="space-y-2">
             <Label htmlFor="category">Categoria</Label>
-            <Input id="category" name="category" defaultValue={item?.category ?? ""} placeholder="Ex.: Petiscos, Bebidas" />
+            <select
+              id="category"
+              name="category"
+              required
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+            >
+              <option value="">Escolha…</option>
+              {POOLBAR_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="name">Nome do item</Label>
@@ -155,7 +179,7 @@ function ItemFormDialog({ item, ingredients = [] }: { item?: PoolbarItem; ingred
               required
             />
           </div>
-          {!isEdit && (
+          {!isEdit && isProfitabilityCategory(category) && (
             <div className="space-y-2 rounded-lg border border-border p-3">
               <input
                 type="hidden"
