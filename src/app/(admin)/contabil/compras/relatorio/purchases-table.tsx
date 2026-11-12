@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { decidePendingPurchase } from "@/lib/actions/purchases-new";
 import type { PurchaseRecord } from "@/lib/expense-model-types";
 import { MoveButton } from "@/components/shared/move-line-button";
+import { EditPurchaseDialog } from "./edit-purchase-dialog";
+import { isPurchaseEditable } from "@/lib/purchase-edit-window";
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dmy = (d: string) => d.split("-").reverse().join("/");
@@ -15,10 +17,14 @@ export function PurchasesTable({
   purchases,
   isAdmin,
   categories = [],
+  today,
+  lateWindowDays = 30,
 }: {
   purchases: PurchaseRecord[];
   isAdmin: boolean;
   categories?: { id: string; name: string }[];
+  today: string;
+  lateWindowDays?: number;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -65,7 +71,12 @@ export function PurchasesTable({
                 {dmy(p.date)} · {p.supplier_name || "Sem fornecedor"}
                 {p.document_number ? ` · nota ${p.document_number}` : ""}
               </p>
-              <p className="font-medium">{brl(p.total_amount)}</p>
+              <p className="font-medium flex items-center gap-2">
+                {brl(p.total_amount)}
+                {isAdmin && p.status === "registrada" && isPurchaseEditable(p.date, today, lateWindowDays) && (
+                  <EditPurchaseDialog key={`${p.date}|${p.supplier_name}|${p.document_number}|${p.payment_method}|${p.notes}|${p.lines.map((l) => `${l.description}${l.amount}${l.quantity}${l.category_id}`).join(",")}`} purchase={p} categories={categories} today={today} />
+                )}
+              </p>
             </div>
             <div className="flex flex-wrap gap-1.5 mt-1">
               {p.posted_after_close && !pending && (

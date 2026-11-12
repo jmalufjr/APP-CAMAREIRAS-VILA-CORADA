@@ -198,7 +198,7 @@ export async function getPurchasesReport(from: string, to: string): Promise<Purc
   const { data } = await supabase
     .from("purchases")
     .select(
-      "id, date, supplier_name, document_number, total_amount, payment_method, notes, source, status, posted_after_close, created_at, purchase_lines(id, description, quantity, amount, is_asset, useful_life_months, expense_categories(name), ingredients(name))"
+      "id, date, supplier_name, document_number, total_amount, payment_method, notes, source, status, posted_after_close, created_at, purchase_lines(id, description, quantity, amount, is_asset, useful_life_months, category_id, expense_categories(name), ingredients(name))"
     )
     .gte("date", from)
     .lte("date", to)
@@ -224,6 +224,7 @@ export async function getPurchasesReport(from: string, to: string): Promise<Purc
       amount: number | string;
       is_asset: boolean;
       useful_life_months: number | null;
+      category_id: string | null;
       expense_categories: { name: string } | { name: string }[] | null;
       ingredients: { name: string } | { name: string }[] | null;
     }[];
@@ -249,6 +250,7 @@ export async function getPurchasesReport(from: string, to: string): Promise<Purc
       amount: Number(l.amount),
       is_asset: l.is_asset,
       useful_life_months: l.useful_life_months,
+      category_id: l.category_id,
       category_name: one(l.expense_categories)?.name ?? null,
       ingredient_name: one(l.ingredients)?.name ?? null,
     })),

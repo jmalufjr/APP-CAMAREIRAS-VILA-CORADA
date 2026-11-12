@@ -59,6 +59,7 @@ export interface PurchaseLineRecord {
   amount: number;
   is_asset: boolean;
   useful_life_months: number | null;
+  category_id: string | null;
   category_name: string | null;
   ingredient_name: string | null;
 }
