@@ -5,47 +5,66 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Plus, Trash2 } from "lucide-react";
 import { saveBarProductRecipe } from "@/lib/actions/product-cost";
 import type { Ingredient } from "@/lib/expense-model-types";
-import type { BarProductRecipe } from "@/lib/product-cost-types";
 
-function RecipeDialog({ product, ingredients }: { product: BarProductRecipe; ingredients: Ingredient[] }) {
-  const [open, setOpen] = useState(false);
+export interface RecipeRow {
+  ingredient_id: string;
+  quantity: number;
+}
+
+// Ficha técnica de UM item do cardápio do bar (ingredientes e quantidade por unidade vendida).
+// Controlada pelo pai (open/onOpenChange); o pai deve recriar o componente (key) ao trocar de item.
+export function RecipeDialog({
+  open,
+  onOpenChange,
+  productId,
+  productName,
+  rows: initialRows,
+  ingredients,
+  isNew = false,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  productId: string;
+  productName: string;
+  rows: RecipeRow[];
+  ingredients: Ingredient[];
+  isNew?: boolean;
+}) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const [rows, setRows] = useState<{ ingredientId: string; quantity: string }[]>(
-    product.ingredients.map((i) => ({ ingredientId: i.ingredient_id, quantity: String(i.quantity) }))
+    initialRows.map((i) => ({ ingredientId: i.ingredient_id, quantity: String(i.quantity) }))
   );
 
   function save() {
     startTransition(async () => {
       const r = await saveBarProductRecipe(
-        product.id,
+        productId,
         rows.map((x) => ({ ingredientId: x.ingredientId, quantity: Number(x.quantity.replace(",", ".")) }))
       );
       if (r?.error) toast.error(r.error);
       else {
-        toast.success("Ficha salva.");
-        setOpen(false);
+        toast.success("Ficha técnica salva.");
+        onOpenChange(false);
         router.refresh();
       }
     });
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button variant="ghost" size="icon-sm">
-            <Pencil size={14} />
-          </Button>
-        }
-      />
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Ficha técnica — {product.name}</DialogTitle>
+          <DialogTitle>Ficha técnica — {productName}</DialogTitle>
+          <DialogDescription>
+            {isNew
+              ? "Item criado. Agora preencha a ficha técnica: quais ingredientes entram e quanto em uma unidade vendida."
+              : "Quais ingredientes entram e quanto em uma unidade vendida."}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
           {rows.map((r, i) => (
@@ -77,7 +96,9 @@ function RecipeDialog({ product, ingredients }: { product: BarProductRecipe; ing
           <Button variant="outline" size="sm" onClick={() => setRows((rs) => [...rs, { ingredientId: "", quantity: "1" }])}>
             <Plus size={14} /> Adicionar ingrediente
           </Button>
-          <p className="text-xs text-muted-foreground">Quantidade em uma unidade vendida. Só entram aqui os ingredientes cadastrados em “Ingredientes de produtos de bar”.</p>
+          <p className="text-xs text-muted-foreground">
+            Só entram aqui os ingredientes cadastrados em “Ingredientes de bar da piscina” (use a mesma medida do ingrediente em todos os produtos).
+          </p>
         </div>
         <DialogFooter>
           <Button onClick={save} disabled={isPending}>
@@ -86,27 +107,5 @@ function RecipeDialog({ product, ingredients }: { product: BarProductRecipe; ing
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-export function RecipesPanel({ products, ingredients }: { products: BarProductRecipe[]; ingredients: Ingredient[] }) {
-  return (
-    <div className="space-y-2 max-w-3xl">
-      {products.map((p) => (
-        <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
-          <div className="min-w-0">
-            <p className="font-medium text-sm">
-              {p.name}
-              {p.category && <span className="ml-1.5 text-xs text-muted-foreground">· {p.category}</span>}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {p.ingredients.length === 0 ? "Sem ingredientes cadastrados" : p.ingredients.map((i) => `${i.ingredient_name} (${i.quantity})`).join(" · ")}
-            </p>
-          </div>
-          <RecipeDialog key={JSON.stringify(p.ingredients)} product={p} ingredients={ingredients} />
-        </div>
-      ))}
-      {products.length === 0 && <p className="text-center text-muted-foreground py-6 text-sm">Nenhum produto do bar cadastrado.</p>}
-    </div>
   );
 }

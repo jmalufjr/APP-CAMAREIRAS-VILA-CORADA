@@ -9,6 +9,7 @@ import {
   Coffee,
   Wine,
   Martini,
+  Package,
   ChevronRight,
 } from "lucide-react";
 
@@ -19,6 +20,7 @@ const menuItems = [
   { href: "/checklists/quartos", label: "Suítes", icon: BedDouble },
   { href: "/checklists/frigobar", label: "Cardápio de frigobar", icon: Wine },
   { href: "/checklists/poolbar", label: "Cardápio de bar da piscina", icon: Martini },
+  { href: "/checklists/poolbar/ingredientes", label: "Ingredientes de bar da piscina", icon: Package },
   { href: "/checklists/mesas", label: "Layout & mesas", icon: Coffee },
 ];
 

@@ -17,9 +17,20 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, UtensilsCrossed } from "lucide-react";
+import { RecipeDialog, type RecipeRow } from "@/components/shared/recipe-dialog";
+import type { Ingredient } from "@/lib/expense-model-types";
 
-export function PoolbarItemsPanel({ items }: { items: PoolbarItem[] }) {
+export function PoolbarItemsPanel({
+  items,
+  recipes,
+  ingredients,
+}: {
+  items: PoolbarItem[];
+  recipes: Record<string, RecipeRow[]>;
+  ingredients: Ingredient[];
+}) {
+  const [target, setTarget] = useState<{ id: string; name: string; isNew: boolean } | null>(null);
   const groups = new Map<string, PoolbarItem[]>();
   items.forEach((item) => {
     const key = item.category ?? "Sem categoria";
@@ -31,7 +42,7 @@ export function PoolbarItemsPanel({ items }: { items: PoolbarItem[] }) {
   return (
     <div className="space-y-6 max-w-lg">
       <div className="flex justify-end">
-        <ItemFormDialog />
+        <ItemFormDialog onCreated={(id, name) => setTarget({ id, name, isNew: true })} />
       </div>
       {Array.from(groups.entries()).map(([category, categoryItems]) => (
         <div key={category} className="space-y-2">
@@ -47,8 +58,14 @@ export function PoolbarItemsPanel({ items }: { items: PoolbarItem[] }) {
                   R$ {item.price.toFixed(2)}
                   {!item.active && " · Inativo"}
                 </p>
+                <p className="text-xs mt-0.5 text-muted-foreground">
+                  {(recipes[item.id]?.length ?? 0) === 0 ? <span className="text-amber-600">Sem ficha técnica</span> : `${recipes[item.id].length} ingrediente(s) na ficha`}
+                </p>
               </div>
               <div className="flex gap-1 shrink-0">
+                <Button variant="outline" size="sm" onClick={() => setTarget({ id: item.id, name: item.name, isNew: false })}>
+                  <UtensilsCrossed size={14} /> Ficha técnica
+                </Button>
                 <ItemFormDialog item={item} />
                 <DeleteButton id={item.id} />
               </div>
@@ -59,11 +76,23 @@ export function PoolbarItemsPanel({ items }: { items: PoolbarItem[] }) {
       {items.length === 0 && (
         <p className="text-center text-muted-foreground py-8 text-sm">Nenhum item cadastrado.</p>
       )}
+      {target && (
+        <RecipeDialog
+          key={target.id + JSON.stringify(recipes[target.id] ?? [])}
+          open
+          onOpenChange={(v) => !v && setTarget(null)}
+          productId={target.id}
+          productName={target.name}
+          rows={recipes[target.id] ?? []}
+          ingredients={ingredients}
+          isNew={target.isNew}
+        />
+      )}
     </div>
   );
 }
 
-function ItemFormDialog({ item }: { item?: PoolbarItem }) {
+function ItemFormDialog({ item, onCreated }: { item?: PoolbarItem; onCreated?: (id: string, name: string) => void }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -99,6 +128,8 @@ function ItemFormDialog({ item }: { item?: PoolbarItem }) {
                 toast.success("Item salvo.");
                 setOpen(false);
                 router.refresh();
+                const newId = (result as { id?: string }).id;
+                if (!isEdit && newId) onCreated?.(newId, String(formData.get("name") ?? ""));
               }
             });
           }}

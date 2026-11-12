@@ -21,15 +21,17 @@ export async function createPoolbarItem(formData: FormData) {
     .limit(1)
     .single();
 
-  const { error } = await supabase
+  const { data: created, error } = await supabase
     .from("poolbar_items")
-    .insert({ category, name, price, position: (max?.position ?? 0) + 1 });
+    .insert({ category, name, price, position: (max?.position ?? 0) + 1 })
+    .select("id")
+    .single();
 
-  if (error) return { error: error.message };
+  if (error || !created) return { error: error?.message ?? "Não foi possível criar o item." };
   revalidatePath("/checklists");
   revalidatePath("/bar-piscina");
   revalidatePath("/frigobar");
-  return { success: true };
+  return { success: true, id: created.id as string };
 }
 
 export async function updatePoolbarItem(id: string, formData: FormData) {

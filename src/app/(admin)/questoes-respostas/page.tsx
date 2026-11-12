@@ -785,8 +785,9 @@ export default function QuestoesRespostasPage() {
               </P>
               <SubHeading>Ficha técnica e custo dos produtos do bar</SubHeading>
               <P>
-                Em <strong>Listas contábeis → Ficha técnica</strong> você diz quais ingredientes entram em cada
-                petisco ou drink. Em <strong>Custo e rentabilidade dos produtos do bar</strong> o sistema estima, mês
+                Em <strong>Listas operacionais → Cardápio de bar da piscina</strong>, o botão <strong>Ficha técnica</strong> de
+                cada item diz quais ingredientes entram nele (ao criar um item novo, a ficha é pedida em seguida); os
+                ingredientes ficam em <strong>Listas operacionais → Ingredientes de bar da piscina</strong>. Em <strong>Custo e rentabilidade dos produtos do bar</strong> o sistema estima, mês
                 a mês, o custo médio e a margem de cada produto. É uma <strong>estimativa</strong>: divide o que foi
                 comprado de cada ingrediente entre os produtos, pela quantidade vendida.
               </P>
