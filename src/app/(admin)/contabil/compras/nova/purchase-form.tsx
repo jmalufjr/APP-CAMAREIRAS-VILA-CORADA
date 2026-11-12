@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Plus, Trash2 } from "lucide-react";
 import { createPurchase, type PurchaseLineInput } from "@/lib/actions/purchases-new";
 import { isFixedAsset } from "@/lib/expense-allocation";
-import { ingredientKindForCategory, type ExpenseCategory, type ExpenseSettings, type Ingredient } from "@/lib/expense-model-types";
+import { INGREDIENT_KIND_LABELS, ingredientKindForCategory, type ExpenseCategory, type ExpenseSettings, type Ingredient } from "@/lib/expense-model-types";
+import { describeDestination } from "@/lib/purchase-routing";
 
 interface LineState {
   description: string;
@@ -20,6 +21,8 @@ interface LineState {
   usefulLife: string;
   isAsset: boolean;
   recurring: boolean;
+  newIngredientName: string; // sugestão da IA (ou digitada)
+  createIngredient: boolean; // cadastrar como ingrediente novo ao salvar
 }
 
 const emptyLine = (): LineState => ({
@@ -31,6 +34,8 @@ const emptyLine = (): LineState => ({
   usefulLife: "",
   isAsset: false,
   recurring: false,
+  newIngredientName: "",
+  createIngredient: false,
 });
 
 const num = (s: string) => Number(s.replace(",", "."));
@@ -102,7 +107,13 @@ export function PurchaseForm({
       usefulLifeMonths: l.usefulLife ? Number(l.usefulLife) : null,
       isAsset: l.isAsset,
       recurring: l.recurring && !l.isAsset,
+      newIngredientName: l.createIngredient && !l.ingredientId && !l.isAsset ? l.newIngredientName.trim() : undefined,
     }));
+    const missingName = lines.find((l) => l.createIngredient && !l.ingredientId && !l.isAsset && !l.newIngredientName.trim());
+    if (missingName) {
+      toast.error("Informe o nome do ingrediente novo (ou desmarque a caixa).");
+      return;
+    }
     startTransition(async () => {
       const r = await createPurchase({
         date,
@@ -165,7 +176,7 @@ export function PurchaseForm({
                   <select
                     className={selectClass}
                     value={l.categoryId}
-                    onChange={(e) => update(i, { categoryId: e.target.value, ingredientId: "" })}
+                    onChange={(e) => update(i, { categoryId: e.target.value, ingredientId: "", createIngredient: false })}
                     disabled={l.isAsset}
                   >
                     <option value="">{l.isAsset ? "Ativo permanente" : "Escolha…"}</option>
@@ -181,7 +192,7 @@ export function PurchaseForm({
                 <div className="space-y-1">
                   <Label className="text-xs">Ingrediente / bebida usada em produto do bar (se for)</Label>
                   <select className={selectClass} value={l.ingredientId} onChange={(e) => update(i, { ingredientId: e.target.value })}>
-                    <option value="">Não é ingrediente (vai 100% ao Café)</option>
+                    <option value="">{cat?.rule === "alimentos" ? "Não é ingrediente (vai 100% ao Café)" : "Sem ingrediente"}</option>
                     {ingredients
                       .filter((g) => {
                         const k = ingredientKindForCategory(cat);
@@ -194,6 +205,43 @@ export function PurchaseForm({
                       ))}
                   </select>
                 </div>
+              )}
+              {cat?.allows_ingredient && !l.isAsset && !l.ingredientId && ingredientKindForCategory(cat) && (
+                <div className="space-y-1.5 rounded-md border border-dashed border-border p-2">
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={l.createIngredient}
+                      onChange={(e) => setLines((ls) => ls.map((x, idx) => (idx === i ? { ...x, createIngredient: e.target.checked } : x)))}
+                    />
+                    Cadastrar como ingrediente novo de produto do bar
+                    {l.newIngredientName && !l.createIngredient && <span className="text-muted-foreground">(sugestão da IA: {l.newIngredientName})</span>}
+                  </label>
+                  {l.createIngredient && (
+                    <>
+                      <Input
+                        placeholder="Nome com a unidade, ex.: Farinha de trigo (g)"
+                        value={l.newIngredientName}
+                        onChange={(e) => setLines((ls) => ls.map((x, idx) => (idx === i ? { ...x, newIngredientName: e.target.value } : x)))}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Será cadastrado como {INGREDIENT_KIND_LABELS[ingredientKindForCategory(cat)!]}, com 0% no Bar e prazo de 30 dias (ajuste depois em Ingredientes de bar da piscina). Só marque se for insumo de petisco ou drink do bar.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+              {!l.isAsset && (
+                <p className={`text-xs rounded px-2 py-1 ${!cat || (cat.rule === "alimentos" && !l.ingredientId && !l.createIngredient) ? "bg-amber-500/15 text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>
+                  {!cat
+                    ? "Escolha a categoria: sem ela não há destino do custo."
+                    : `Destino do custo: ${describeDestination({
+                        rule: cat.rule,
+                        centers: cat.centers,
+                        ingredient: ingredients.find((g) => g.id === l.ingredientId) ?? null,
+                        newIngredient: l.createIngredient && !l.ingredientId,
+                      })}${cat.rule === "alimentos" && !l.ingredientId && !l.createIngredient ? " — confira: se for insumo do bar, escolha ou cadastre o ingrediente." : ""}`}
+                </p>
               )}
               <div className="grid grid-cols-3 gap-2">
                 <div className="space-y-1">

@@ -7,7 +7,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { discardInboxItem, quickSaveInboxItem } from "@/lib/actions/purchase-inbox";
 
-export function InboxActions({ id, canRecurring }: { id: string; canRecurring: boolean }) {
+export function InboxActions({ id, canRecurring, needsReview = false }: { id: string; canRecurring: boolean; needsReview?: boolean }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [recurring, setRecurring] = useState(false);
@@ -43,7 +43,8 @@ export function InboxActions({ id, canRecurring }: { id: string; canRecurring: b
           Despesa recorrente
         </label>
       )}
-      <Button size="sm" disabled={isPending} onClick={save}>
+      {needsReview && <span className="text-xs text-amber-700 dark:text-amber-400">Conferir: abra o item (destino do custo incerto)</span>}
+      <Button size="sm" disabled={isPending || needsReview} onClick={save} title={needsReview ? "Abra o item para conferir categoria e ingrediente" : undefined}>
         {isPending ? "..." : "Salvar"}
       </Button>
       <Button size="icon-sm" variant="outline" disabled={isPending} onClick={discard} aria-label="Descartar">

@@ -8,6 +8,7 @@ import { EXPENSE_RECEIPTS_BUCKET, signExpenseReceiptUrl } from "@/lib/expense-re
 import { readPurchaseWithAI, type AiPurchase } from "@/lib/purchase-ai";
 import { createPurchase, type PurchaseLineInput } from "@/lib/actions/purchases-new";
 import { isFixedAsset } from "@/lib/expense-allocation";
+import { isUnsafeForQuickSave } from "@/lib/purchase-routing";
 import { todayKey } from "@/lib/date";
 
 const ROLES = ["admin", "gerente_operacional"] as const;
@@ -179,6 +180,13 @@ export async function quickSaveInboxItem(id: string, recurring: boolean): Promis
     aiLines = [{ description: ai.supplier_name ?? "Compra", quantity: 1, amount: ai.total_amount, category_id: null, ingredient_id: null, useful_life_months: null }];
   }
   if (aiLines.length === 0) return { error: "A IA não encontrou itens: abra o item e preencha." };
+
+  const { data: catRows } = await supabase.from("expense_categories").select("id, rule");
+  const ruleOf = new Map((catRows ?? []).map((c) => [c.id as string, c.rule as string]));
+  const unsafe = aiLines.some((l) =>
+    isUnsafeForQuickSave({ categoryId: l.category_id, rule: l.category_id ? (ruleOf.get(l.category_id) ?? null) : null, ingredientId: l.ingredient_id })
+  );
+  if (unsafe) return { error: "O destino do custo desta nota não é certo (falta categoria ou ingrediente). Abra o item para conferir." };
 
   const lines: PurchaseLineInput[] = aiLines.map((l) => {
     const qty = l.quantity > 0 ? l.quantity : 1;

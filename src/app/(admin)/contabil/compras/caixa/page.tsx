@@ -4,6 +4,8 @@ import { BackLink } from "@/components/shared/back-link";
 import { Button } from "@/components/ui/button";
 import { listInbox } from "@/lib/actions/purchase-inbox";
 import { getCurrentProfile } from "@/lib/actions/session";
+import { getExpenseCategories } from "@/lib/actions/expense-model";
+import { isUnsafeForQuickSave } from "@/lib/purchase-routing";
 import { InboxActions } from "./inbox-actions";
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -12,6 +14,7 @@ const dmy = (d: string) => d.split("-").reverse().join("/");
 export default async function CaixaConferenciaPage() {
   const items = await listInbox();
   const profile = await getCurrentProfile();
+  const ruleOf = new Map((await getExpenseCategories()).map((c) => [c.id, c.rule as string]));
   return (
     <div className="space-y-6">
       <BackLink href="/contabil" />
@@ -49,7 +52,17 @@ export default async function CaixaConferenciaPage() {
                 </p>
                 {it.ai_status === "erro" && <p className="text-xs text-red-600 mt-1">A IA não conseguiu ler: preencha manualmente.</p>}
               </Link>
-              <InboxActions id={it.id} canRecurring={profile.role === "admin"} />
+              <InboxActions
+                id={it.id}
+                canRecurring={profile.role === "admin"}
+                needsReview={
+                  !it.ai_data ||
+                  it.ai_data.lines.length === 0 ||
+                  it.ai_data.lines.some((l) =>
+                    isUnsafeForQuickSave({ categoryId: l.category_id, rule: l.category_id ? (ruleOf.get(l.category_id) ?? null) : null, ingredientId: l.ingredient_id })
+                  )
+                }
+              />
               </div>
             );
           })}

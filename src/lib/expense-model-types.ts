@@ -81,6 +81,7 @@ export interface PurchaseLineRecord {
   category_id: string | null;
   category_name: string | null;
   ingredient_name: string | null;
+  destination: string;
 }
 
 export interface PurchaseRecord {

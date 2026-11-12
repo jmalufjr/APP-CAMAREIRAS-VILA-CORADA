@@ -95,6 +95,7 @@ export function PurchasesTable({
                   <span className="min-w-0">
                     {l.description} — {l.is_asset ? "Ativo permanente" : (l.category_name ?? "Sem categoria")}
                     {l.ingredient_name ? ` (ingrediente: ${l.ingredient_name})` : ""}
+                    <span className="block text-[11px] opacity-80">→ {l.destination}</span>
                   </span>
                   <span className="flex items-center gap-2 shrink-0">
                     {brl(l.amount)}
