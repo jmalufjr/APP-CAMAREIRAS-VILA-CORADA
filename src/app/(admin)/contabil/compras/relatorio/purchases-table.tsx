@@ -17,12 +17,14 @@ export function PurchasesTable({
   purchases,
   isAdmin,
   categories = [],
+  ingredients = [],
   today,
   lateWindowDays = 30,
 }: {
   purchases: PurchaseRecord[];
   isAdmin: boolean;
-  categories?: { id: string; name: string }[];
+  categories?: { id: string; name: string; rule?: string; allows_ingredient?: boolean }[];
+  ingredients?: { id: string; name: string; kind: string; bar_pct: number }[];
   today: string;
   lateWindowDays?: number;
 }) {
@@ -74,7 +76,7 @@ export function PurchasesTable({
               <p className="font-medium flex items-center gap-2">
                 {brl(p.total_amount)}
                 {isAdmin && p.status === "registrada" && isPurchaseEditable(p.date, today, lateWindowDays) && (
-                  <EditPurchaseDialog key={`${p.date}|${p.supplier_name}|${p.document_number}|${p.payment_method}|${p.notes}|${p.lines.map((l) => `${l.description}${l.amount}${l.quantity}${l.category_id}`).join(",")}`} purchase={p} categories={categories} today={today} />
+                  <EditPurchaseDialog key={`${p.date}|${p.supplier_name}|${p.document_number}|${p.payment_method}|${p.notes}|${p.lines.map((l) => `${l.description}${l.amount}${l.quantity}${l.category_id}`).join(",")}`} purchase={p} categories={categories} ingredients={ingredients} today={today} />
                 )}
               </p>
             </div>

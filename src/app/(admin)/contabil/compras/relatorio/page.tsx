@@ -4,7 +4,7 @@ import { BackLink } from "@/components/shared/back-link";
 import { Button } from "@/components/ui/button";
 import { getPurchasesReport, generateDueRecurring } from "@/lib/actions/purchases-new";
 import { getCurrentProfile } from "@/lib/actions/session";
-import { getExpenseCategories, getExpenseSettings } from "@/lib/actions/expense-model";
+import { getExpenseCategories, getExpenseSettings, getIngredients } from "@/lib/actions/expense-model";
 import { todayKey } from "@/lib/date";
 import { PurchasesTable } from "./purchases-table";
 
@@ -23,7 +23,8 @@ export default async function RelatorioDespesasPage({ searchParams }: { searchPa
   const { from, to } = monthRange(month);
   const purchases = await getPurchasesReport(from, to);
   const settings = await getExpenseSettings();
-  const categories = (await getExpenseCategories()).filter((c) => c.active).map((c) => ({ id: c.id, name: c.name }));
+  const categories = (await getExpenseCategories()).filter((c) => c.active).map((c) => ({ id: c.id, name: c.name, rule: c.rule as string, allows_ingredient: c.allows_ingredient }));
+  const ingredients = (await getIngredients()).filter((i) => i.active).map((i) => ({ id: i.id, name: i.name, kind: i.kind as string, bar_pct: i.bar_pct }));
 
   const [y, m] = month.split("-").map(Number);
   const prev = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);
@@ -48,7 +49,7 @@ export default async function RelatorioDespesasPage({ searchParams }: { searchPa
           <Button size="sm">Lançar compra</Button>
         </Link>
       </div>
-      <PurchasesTable purchases={purchases} isAdmin={profile.role === "admin"} categories={categories} today={todayKey()} lateWindowDays={settings.late_window_days} />
+      <PurchasesTable purchases={purchases} isAdmin={profile.role === "admin"} categories={categories} ingredients={ingredients} today={todayKey()} lateWindowDays={settings.late_window_days} />
     </div>
   );
 }

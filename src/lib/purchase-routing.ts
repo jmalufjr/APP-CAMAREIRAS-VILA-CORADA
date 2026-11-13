@@ -5,7 +5,6 @@ export function describeDestination(p: {
   rule: string | null | undefined;
   centers?: { center_code: CenterCode; pct: number }[];
   ingredient?: { bar_pct: number; split_mode: string; kind?: string } | null;
-  newIngredient?: boolean;
 }): string {
   switch (p.rule) {
     case "nao_alocavel":
@@ -13,7 +12,6 @@ export function describeDestination(p: {
     case "bebidas":
       return "Bar × Frigobar, pelas vendas do mês";
     case "alimentos": {
-      if (p.newIngredient) return "Café 100% (ingrediente novo nasce com 0% no Bar; ajuste depois)";
       const ing = p.ingredient;
       if (!ing) return "Café 100%";
       if (ing.split_mode === "bar_frigobar") return "Bar × Frigobar, pelas vendas do mês";

@@ -24,11 +24,10 @@ export default async function ConferirNotaPage({ params }: { params: Promise<{ i
     quantity: String(l.quantity),
     amount: l.amount ? String(l.amount) : "",
     usefulLife: l.useful_life_months ? String(l.useful_life_months) : "",
-    newIngredientName: l.new_ingredient_name ?? "",
   }));
   // Sem itens lidos mas com total: uma linha só com o total.
   if (lines.length === 0 && ai?.total_amount) {
-    lines.push({ description: ai.supplier_name ?? "Compra", categoryId: "", ingredientId: "", quantity: "1", amount: String(ai.total_amount), usefulLife: "", newIngredientName: "" });
+    lines.push({ description: ai.supplier_name ?? "Compra", categoryId: "", ingredientId: "", quantity: "1", amount: String(ai.total_amount), usefulLife: "" });
   }
 
   return (

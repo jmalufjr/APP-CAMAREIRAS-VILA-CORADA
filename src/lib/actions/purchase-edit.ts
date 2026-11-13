@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/actions/authz";
 import { todayKey } from "@/lib/date";
 import { isPurchaseEditable } from "@/lib/purchase-edit-window";
+import { ingredientKindForCategory } from "@/lib/expense-model-types";
 
 type Result = { error?: string; success?: boolean; message?: string };
 
@@ -15,7 +16,7 @@ export interface PurchaseEditInput {
   documentNumber: string;
   paymentMethod: string;
   notes: string;
-  lines: { id: string; description: string; categoryId: string | null; quantity: number; amount: number }[];
+  lines: { id: string; description: string; categoryId: string | null; ingredientId: string | null; quantity: number; amount: number }[];
 }
 
 // Edita uma despesa até 30 dias (janela configurável) depois do fim do mês dela.
@@ -55,6 +56,15 @@ export async function updatePurchase(input: PurchaseEditInput): Promise<Result> 
     if (!l.categoryId) return { error: `Escolha a categoria de "${l.description}".` };
     if (!(l.amount > 0)) return { error: `Informe o valor de "${l.description}".` };
     if (!(l.quantity > 0)) return { error: `Informe a quantidade de "${l.description}".` };
+    if (l.ingredientId) {
+      const [{ data: cat }, { data: ing }] = await Promise.all([
+        admin.from("expense_categories").select("name, rule, allows_ingredient").eq("id", l.categoryId).maybeSingle(),
+        admin.from("ingredients").select("kind").eq("id", l.ingredientId).maybeSingle(),
+      ]);
+      if (!cat || !cat.allows_ingredient) return { error: `A categoria de "${l.description}" não aceita ingrediente.` };
+      const need = ingredientKindForCategory(cat);
+      if (!ing || (need && ing.kind !== need)) return { error: `O ingrediente de "${l.description}" não combina com a categoria escolhida.` };
+    }
   }
 
   // Item recorrente ligado a esta despesa (pelo nome), identificado ANTES de editar.
@@ -83,14 +93,13 @@ export async function updatePurchase(input: PurchaseEditInput): Promise<Result> 
 
   // Atualiza as linhas editadas.
   for (const l of input.lines) {
-    const old = dbLines.find((x) => x.id === l.id)!;
     const patch: Record<string, unknown> = {
       description: l.description.trim(),
       category_id: l.categoryId,
       quantity: l.quantity,
       amount: l.amount,
     };
-    if (old.category_id !== l.categoryId) patch.ingredient_id = null; // o ingrediente pertence à categoria antiga
+    patch.ingredient_id = l.ingredientId ?? null;
     const { error } = await admin.from("purchase_lines").update(patch).eq("id", l.id);
     if (error) return { error: error.message };
   }

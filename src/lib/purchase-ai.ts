@@ -23,8 +23,6 @@ export interface AiPurchaseLine {
   category_id: string | null;
   ingredient_id: string | null;
   useful_life_months: number | null;
-  // Sugestão da IA de cadastrar um ingrediente novo (nome com a unidade); nunca é cadastrado sozinho.
-  new_ingredient_name?: string | null;
 }
 
 export interface AiPurchase {
@@ -52,7 +50,7 @@ const SYSTEM = `Você lê notas fiscais, cupons e comprovantes de uma pousada br
   "lines": [
     { "description": string, "quantity": número, "amount": número,
       "category_index": número ou null, "ingredient_index": número ou null,
-      "new_ingredient_name": string ou null, "useful_life_months": número ou null }
+      "useful_life_months": número ou null }
   ]
 }
 
@@ -60,8 +58,7 @@ Regras:
 - Cada item da nota vira uma linha; "amount" é o VALOR TOTAL da linha (quantidade × preço).
 - Se não der para separar itens (conta de luz, água, gás, comprovante só com valor), devolva UMA linha com o total.
 - "category_index": o número da categoria de despesa mais adequada, SEMPRE entre as listadas. Use o TEXTO que acompanha a nota como pista principal (ex.: "material de limpeza", "para o bar").
-- "ingredient_index": SOMENTE para itens de alimento ou bebida que sejam um dos ingredientes de produtos de bar listados (mesmo produto, mesmo com marca/abreviação diferente; ex.: cachaça, vodka, gim, água tônica, limão); senão null.
-- "new_ingredient_name": SOMENTE quando o item é alimento ou bebida que provavelmente é insumo de petisco ou drink do bar, NÃO está na lista de ingredientes (ingredient_index null) e a categoria escolhida é de alimento ou bebida: um nome curto no padrão da lista, com a unidade entre parênteses (ex.: "Farinha de trigo (g)", "Cachaça (ml)", "Limão (un)"); senão null. Itens só do café da manhã, material e despesas: null.
+- "ingredient_index": SOMENTE para itens de alimento ou bebida que sejam um dos ingredientes de produtos de bar listados (mesmo produto, mesmo com marca/abreviação diferente; ex.: cachaça, vodka, gim, água tônica, limão); se não houver correspondência na lista, null (o item segue só pela categoria de despesa).
 - "useful_life_months": só para bem durável (eletrodoméstico, equipamento, móvel): sua melhor estimativa da vida útil em meses; senão null.
 - "payment_method" é como A POUSADA pagou. Sem indicação clara, null.
 - "date": a data da compra impressa na nota; se não houver, null. Nunca invente valores: prefira null.`;
@@ -138,7 +135,6 @@ ${numbered(opts.ingredients.map((i) => i.name))}`;
         amount?: number;
         category_index?: number | null;
         ingredient_index?: number | null;
-        new_ingredient_name?: string | null;
         useful_life_months?: number | null;
       }[];
     };
@@ -160,14 +156,12 @@ ${numbered(opts.ingredients.map((i) => i.name))}`;
           if (fix) cat = fix;
         }
       }
-      const newName = !ing && cat?.allows_ingredient && ingredientKindForCategory(cat) ? String(l.new_ingredient_name ?? "").trim() : "";
       return {
         description: String(l.description ?? "").trim(),
         quantity: Number(l.quantity) > 0 ? Number(l.quantity) : 1,
         amount: Number(l.amount) || 0,
         category_id: cat?.id ?? null,
         ingredient_id: ing?.id ?? null,
-        new_ingredient_name: newName || null,
         useful_life_months: Number.isInteger(l.useful_life_months) && Number(l.useful_life_months) > 0 ? Number(l.useful_life_months) : null,
       };
     });

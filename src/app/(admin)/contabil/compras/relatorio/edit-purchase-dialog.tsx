@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { updatePurchase } from "@/lib/actions/purchase-edit";
-import type { PurchaseRecord } from "@/lib/expense-model-types";
+import { ingredientKindForCategory, type PurchaseRecord } from "@/lib/expense-model-types";
 
 const selectClass = "h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm";
 const num = (s: string) => Number(s.replace(",", "."));
@@ -17,10 +17,12 @@ const num = (s: string) => Number(s.replace(",", "."));
 export function EditPurchaseDialog({
   purchase,
   categories,
+  ingredients = [],
   today,
 }: {
   purchase: PurchaseRecord;
-  categories: { id: string; name: string }[];
+  categories: { id: string; name: string; rule?: string; allows_ingredient?: boolean }[];
+  ingredients?: { id: string; name: string; kind: string; bar_pct: number }[];
   today: string;
 }) {
   const router = useRouter();
@@ -34,7 +36,7 @@ export function EditPurchaseDialog({
   const [lines, setLines] = useState(
     purchase.lines
       .filter((l) => !l.is_asset)
-      .map((l) => ({ id: l.id, description: l.description, categoryId: l.category_id ?? "", quantity: String(l.quantity), amount: String(l.amount) }))
+      .map((l) => ({ id: l.id, description: l.description, categoryId: l.category_id ?? "", ingredientId: l.ingredient_id ?? "", quantity: String(l.quantity), amount: String(l.amount) }))
   );
   const isRecurring = purchase.source === "recorrente";
 
@@ -51,6 +53,7 @@ export function EditPurchaseDialog({
           id: l.id,
           description: l.description,
           categoryId: l.categoryId || null,
+          ingredientId: l.ingredientId || null,
           quantity: num(l.quantity),
           amount: num(l.amount),
         })),
@@ -117,7 +120,7 @@ export function EditPurchaseDialog({
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Categoria</Label>
-                  <select className={selectClass} value={l.categoryId} onChange={(e) => setLines((ls) => ls.map((x, idx) => (idx === i ? { ...x, categoryId: e.target.value } : x)))}>
+                  <select className={selectClass} value={l.categoryId} onChange={(e) => setLines((ls) => ls.map((x, idx) => (idx === i ? { ...x, categoryId: e.target.value, ingredientId: "" } : x)))}>
                     <option value="">Escolha…</option>
                     {categories.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -127,6 +130,30 @@ export function EditPurchaseDialog({
                   </select>
                 </div>
               </div>
+              {(() => {
+                const cat = categories.find((c) => c.id === l.categoryId);
+                if (!cat?.allows_ingredient) return null;
+                const kind = ingredientKindForCategory({ name: cat.name, rule: cat.rule ?? "" });
+                return (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Ingrediente de produto do bar (se for)</Label>
+                    <select
+                      className={selectClass}
+                      value={l.ingredientId}
+                      onChange={(e) => setLines((ls) => ls.map((x, idx) => (idx === i ? { ...x, ingredientId: e.target.value } : x)))}
+                    >
+                      <option value="">{cat.rule === "alimentos" ? "Não é ingrediente (vai 100% ao Café)" : "Sem ingrediente"}</option>
+                      {ingredients
+                        .filter((g) => !kind || g.kind === kind)
+                        .map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {g.kind === "alimento" ? `${g.name} (Bar ${g.bar_pct}%)` : g.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                );
+              })()}
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <Label className="text-xs">Quantidade</Label>

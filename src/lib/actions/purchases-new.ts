@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/actions/authz";
 import { todayKey } from "@/lib/date";
-import { ingredientKindForCategory, type CenterCode, type PurchaseRecord } from "@/lib/expense-model-types";
+import type { CenterCode, PurchaseRecord } from "@/lib/expense-model-types";
 import { describeDestination } from "@/lib/purchase-routing";
 
 type Result = { error?: string; success?: boolean; id?: string };
@@ -20,8 +20,6 @@ export interface PurchaseLineInput {
   isAsset: boolean;
   // Também cadastra o item em "Itens recorrentes" (só o admin pode).
   recurring?: boolean;
-  // Cadastra um ingrediente novo (tipo da categoria, 0% no Bar, 30 dias) e liga a linha a ele.
-  newIngredientName?: string;
 }
 
 export interface PurchaseInput {
@@ -89,33 +87,6 @@ export async function createPurchase(input: PurchaseInput): Promise<Result> {
     receiptPath = inbox.image_storage_path;
   }
 
-  // Ingredientes novos sugeridos (conferidos pela pessoa antes de salvar): resolvidos ANTES de criar a compra.
-  const adminClient = createAdminClient();
-  const resolvedIngredient: (string | null)[] = [];
-  for (const l of input.lines) {
-    let ingredientId = l.ingredientId;
-    const nm = (l.newIngredientName ?? "").trim();
-    if (!ingredientId && nm && !l.isAsset && l.categoryId) {
-      const { data: cat } = await adminClient.from("expense_categories").select("name, rule").eq("id", l.categoryId).maybeSingle();
-      const kind = cat ? ingredientKindForCategory(cat) : null;
-      if (kind) {
-        const escaped = nm.replace(/[\\%_]/g, (m) => "\\" + m);
-        const { data: existing } = await adminClient.from("ingredients").select("id").ilike("name", escaped).limit(1);
-        if (existing && existing.length > 0) ingredientId = existing[0].id;
-        else {
-          const { data: created, error: iErr } = await adminClient
-            .from("ingredients")
-            .insert({ name: nm, kind, bar_pct: 0, split_mode: "bar_cafe", consumption_days: 30 })
-            .select("id")
-            .single();
-          if (iErr || !created) return { error: `Não foi possível cadastrar o ingrediente "${nm}": ${iErr?.message ?? ""}` };
-          ingredientId = created.id;
-        }
-      }
-    }
-    resolvedIngredient.push(ingredientId);
-  }
-
   // Ativo permanente: cria o bem no inventário (editável depois).
   const admin = createAdminClient();
   let assetCategoryId: string | null = null;
@@ -147,7 +118,7 @@ export async function createPurchase(input: PurchaseInput): Promise<Result> {
   if (pErr || !purchase) return { error: pErr?.message ?? "Não foi possível salvar a compra." };
 
   const rows = [];
-  for (const [li, l] of input.lines.entries()) {
+  for (const l of input.lines) {
     let fixedAssetId: string | null = null;
     if (l.isAsset && assetCategoryId) {
       const { data: asset, error: aErr } = await admin
@@ -170,7 +141,7 @@ export async function createPurchase(input: PurchaseInput): Promise<Result> {
     rows.push({
       purchase_id: purchase.id,
       category_id: l.isAsset ? null : l.categoryId,
-      ingredient_id: l.isAsset ? null : resolvedIngredient[li],
+      ingredient_id: l.isAsset ? null : l.ingredientId,
       fixed_asset_id: fixedAssetId,
       description: l.description.trim(),
       quantity: l.quantity,
@@ -228,7 +199,7 @@ export async function getPurchasesReport(from: string, to: string): Promise<Purc
   const { data } = await supabase
     .from("purchases")
     .select(
-      "id, date, supplier_name, document_number, total_amount, payment_method, notes, source, status, posted_after_close, created_at, purchase_lines(id, description, quantity, amount, is_asset, useful_life_months, category_id, expense_categories(name, rule, expense_category_centers(center_code, pct)), ingredients(name, bar_pct, split_mode))"
+      "id, date, supplier_name, document_number, total_amount, payment_method, notes, source, status, posted_after_close, created_at, purchase_lines(id, description, quantity, amount, is_asset, useful_life_months, category_id, ingredient_id, expense_categories(name, rule, expense_category_centers(center_code, pct)), ingredients(name, bar_pct, split_mode))"
     )
     .gte("date", from)
     .lte("date", to)
@@ -255,6 +226,7 @@ export async function getPurchasesReport(from: string, to: string): Promise<Purc
       is_asset: boolean;
       useful_life_months: number | null;
       category_id: string | null;
+      ingredient_id: string | null;
       expense_categories: CatEmb | CatEmb[] | null;
       ingredients: IngEmb | IngEmb[] | null;
     }[];
@@ -283,6 +255,7 @@ export async function getPurchasesReport(from: string, to: string): Promise<Purc
       is_asset: l.is_asset,
       useful_life_months: l.useful_life_months,
       category_id: l.category_id,
+      ingredient_id: l.ingredient_id,
       category_name: one(l.expense_categories)?.name ?? null,
       ingredient_name: one(l.ingredients)?.name ?? null,
       destination: l.is_asset
