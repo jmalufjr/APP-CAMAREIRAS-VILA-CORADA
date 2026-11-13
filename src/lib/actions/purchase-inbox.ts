@@ -9,6 +9,7 @@ import { readPurchaseWithAI, type AiPurchase } from "@/lib/purchase-ai";
 import { createPurchase, type PurchaseLineInput } from "@/lib/actions/purchases-new";
 import { isFixedAsset } from "@/lib/expense-allocation";
 import { classifyInboxLines } from "@/lib/purchase-routing";
+import { findDuplicates, describeMatch } from "@/lib/purchase-duplicates";
 import { todayKey } from "@/lib/date";
 
 const ROLES = ["admin", "gerente_operacional"] as const;
@@ -199,6 +200,12 @@ async function quickSaveCore(id: string, recurring: boolean, allowFoodWithoutIng
     aiLines = [{ description: ai.supplier_name ?? "Compra", quantity: 1, amount: ai.total_amount, category_id: null, ingredient_id: null, useful_life_months: null }];
   }
   if (aiLines.length === 0) return { error: "A IA não encontrou itens: abra o item e preencha." };
+
+  const dupTotal = ai.total_amount ?? aiLines.reduce((s, l) => s + l.amount, 0);
+  const dups = await findDuplicates(supabase, [
+    { key: id, date: ai.date ?? item.message_date, supplier: ai.supplier_name ?? "", docNumber: ai.document_number ?? "", total: dupTotal },
+  ]);
+  if (dups[id]?.length) return { error: `Parece duplicada (${describeMatch(dups[id][0])}). Abra o item para confirmar.` };
 
   const { data: catRows } = await supabase.from("expense_categories").select("id, rule");
   const ruleOf = new Map((catRows ?? []).map((c) => [c.id as string, c.rule as string]));

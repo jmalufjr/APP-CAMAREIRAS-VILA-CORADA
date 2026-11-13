@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, Trash2 } from "lucide-react";
-import { createPurchase, type PurchaseLineInput } from "@/lib/actions/purchases-new";
+import { createPurchase, checkPurchaseDuplicates, type PurchaseLineInput } from "@/lib/actions/purchases-new";
 import { isFixedAsset } from "@/lib/expense-allocation";
 import { ingredientKindForCategory, type ExpenseCategory, type ExpenseSettings, type Ingredient } from "@/lib/expense-model-types";
 import { describeDestination } from "@/lib/purchase-routing";
@@ -105,6 +105,8 @@ export function PurchaseForm({
       recurring: l.recurring && !l.isAsset,
     }));
     startTransition(async () => {
+      const dups = await checkPurchaseDuplicates({ date, supplierName: supplier, documentNumber: docNumber, total });
+      if (dups.length > 0 && !confirm(`Esta compra parece já estar lançada:\n\n- ${dups.join("\n- ")}\n\nLançar mesmo assim (é outra compra)?`)) return;
       const r = await createPurchase({
         date,
         supplierName: supplier,

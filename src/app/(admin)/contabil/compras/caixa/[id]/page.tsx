@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { BackLink } from "@/components/shared/back-link";
-import { getInboxItem } from "@/lib/actions/purchase-inbox";
+import { getInboxItem, listInbox } from "@/lib/actions/purchase-inbox";
+import { createClient } from "@/lib/supabase/server";
+import { findDuplicates, describeMatch, type DupCandidate } from "@/lib/purchase-duplicates";
 import { getExpenseCategories, getIngredients, getExpenseSettings } from "@/lib/actions/expense-model";
 import { todayKey } from "@/lib/date";
 import { getCurrentProfile } from "@/lib/actions/session";
@@ -16,6 +18,15 @@ export default async function ConferirNotaPage({ params }: { params: Promise<{ i
 
   const [categories, ingredients, settings] = await Promise.all([getExpenseCategories(), getIngredients(), getExpenseSettings()]);
   const ai = item.ai_data;
+  const all = await listInbox();
+  const cands: DupCandidate[] = all.map((it) => ({
+    key: it.id,
+    date: it.ai_data?.date ?? it.message_date,
+    supplier: it.ai_data?.supplier_name ?? "",
+    docNumber: it.ai_data?.document_number ?? "",
+    total: it.ai_data ? (it.ai_data.total_amount ?? it.ai_data.lines.reduce((sum, l) => sum + l.amount, 0)) : null,
+  }));
+  const dups = (await findDuplicates(await createClient(), cands, { compareAmongThemselves: true }))[item.id] ?? [];
 
   const lines = (ai?.lines ?? []).map((l) => ({
     description: l.description,
@@ -53,6 +64,17 @@ export default async function ConferirNotaPage({ params }: { params: Promise<{ i
             <div className="rounded-lg border border-border bg-card p-3 text-sm whitespace-pre-wrap">
               <p className="text-xs text-muted-foreground mb-1">Mensagem que acompanhou a nota</p>
               {item.note_text}
+            </div>
+          )}
+          {dups.length > 0 && (
+            <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
+              <p className="font-medium">⚠ Possível duplicata</p>
+              <ul className="mt-1 list-disc pl-5 text-xs">
+                {dups.map((m, i) => (
+                  <li key={i}>{describeMatch(m)}</li>
+                ))}
+              </ul>
+              <p className="text-xs mt-1 text-muted-foreground">Se for outra compra, lance normalmente (o sistema pede confirmação); se for a mesma, descarte.</p>
             </div>
           )}
           {item.ai_status === "erro" && <p className="text-sm text-red-600">A IA não conseguiu ler esta nota: {item.ai_error}</p>}

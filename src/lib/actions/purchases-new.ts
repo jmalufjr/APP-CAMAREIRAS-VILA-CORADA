@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/actions/authz";
 import { todayKey } from "@/lib/date";
 import type { CenterCode, PurchaseRecord } from "@/lib/expense-model-types";
 import { describeDestination } from "@/lib/purchase-routing";
+import { findDuplicates, describeMatch } from "@/lib/purchase-duplicates";
 
 type Result = { error?: string; success?: boolean; id?: string };
 
@@ -40,6 +41,15 @@ async function currentUserId(): Promise<string | null> {
     data: { user },
   } = await supabase.auth.getUser();
   return user?.id ?? null;
+}
+
+// Antes de salvar: avisa se a compra parece já estar lançada (mesmo nº de nota, ou mesmo valor em data próxima).
+export async function checkPurchaseDuplicates(input: { date: string; supplierName: string; documentNumber: string; total: number }): Promise<string[]> {
+  const denied = await requireRole(["admin", "gerente_operacional"]);
+  if (denied) return [];
+  const supabase = await createClient();
+  const res = await findDuplicates(supabase, [{ key: "x", date: input.date, supplier: input.supplierName, docNumber: input.documentNumber, total: input.total }]);
+  return (res.x ?? []).map(describeMatch);
 }
 
 // Cria a compra/despesa no modelo novo. Data da compra = data do pagamento.
