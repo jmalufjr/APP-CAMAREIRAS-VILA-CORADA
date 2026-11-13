@@ -98,7 +98,7 @@ export async function updateSession(request: NextRequest) {
         "/compras/validade",
         "/compras/baixa",
       ];
-      // Módulo gerencial: só Resultado mensal e Relatório de despesas (somente leitura).
+      // Módulo gerencial: só Resultado mensal, Rentabilidade de Petiscos e Drinks e Relatório de despesas (somente leitura).
       const prefixes = [
         "/dashboard/servicos-suites",
         "/dashboard/suites-disponiveis",
@@ -106,6 +106,7 @@ export async function updateSession(request: NextRequest) {
         "/dashboard/tarefas",
         "/checklists",
         "/contabil/resultado-mensal",
+        "/contabil/custo-produtos",
         "/contabil/compras/relatorio",
       ];
       // Dentro das Listas operacionais, estes dois menus não são do gerente.

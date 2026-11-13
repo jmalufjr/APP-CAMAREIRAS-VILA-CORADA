@@ -437,13 +437,13 @@ export default function QuestoesRespostasPage() {
                 Existe também o papel <strong>“Gerente operacional”</strong>. Ele enxerga o Resumo executivo
                 (menos “Ticket médio de canais de venda” e “Indicadores”, que são só do administrador), o Módulo operacional
                 (inclusive as Comissões das camareiras e as Listas operacionais, mas, dentro das Listas operacionais, sem
-                “Ocorrências Manutenção” e “Manutenção Preventiva”), a Sincronização e, no Módulo gerencial, apenas dois
-                itens, <strong>só para consulta</strong>: o <strong>Resultado mensal</strong> e o{" "}
-                <strong>Relatório de despesas</strong>. O gerente <strong>não lança compras nem despesas</strong>, não usa a
+                “Ocorrências Manutenção” e “Manutenção Preventiva”), a Sincronização e, no Módulo gerencial, apenas três
+                itens, <strong>só para consulta</strong>: o <strong>Resultado mensal</strong>, a{" "}
+                <strong>Rentabilidade de Petiscos e Drinks</strong> e o <strong>Relatório de despesas</strong>. O gerente <strong>não lança compras nem despesas</strong>, não usa a
                 Caixa de conferência, não importa a conversa do WhatsApp e não pode editar, mover nem aprovar nada: tudo isso
                 é só do administrador. A divisão de trabalho é esta: o gerente manda as fotos das notas para o grupo do
-                WhatsApp e exporta a conversa; o administrador importa o arquivo, confere e lança. O gerente também não vê a
-                Rentabilidade de Petiscos e Drinks, o Inventário de ativo permanente nem as Listas gerenciais.
+                WhatsApp e exporta a conversa; o administrador importa o arquivo, confere e lança. O gerente também não vê o
+                Inventário de ativo permanente nem as Listas gerenciais.
               </P>
               <P>
                 O primeiro acesso de administrador (o seu) é o único que precisa ser criado direto no
@@ -1372,7 +1372,8 @@ export default function QuestoesRespostasPage() {
             <div className="space-y-3">
               <P>
                 A tela <strong>Rentabilidade de Petiscos e Drinks</strong> (<strong>Módulo gerencial → Rentabilidade de
-                Petiscos e Drinks</strong>, só para o administrador) responde a uma pergunta: <strong>quanto cada petisco e
+                Petiscos e Drinks</strong>, para o administrador e, só para consulta, para o gerente operacional) responde a uma
+                pergunta: <strong>quanto cada petisco e
                 cada drink do cardápio custou no mês, e quanto sobrou da venda dele?</strong> Use as setas no alto para
                 trocar de mês. É uma <strong>estimativa</strong>, e ela só considera os <strong>ingredientes</strong>.
               </P>

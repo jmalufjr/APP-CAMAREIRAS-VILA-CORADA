@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/actions/authz";
 import { nextDayBrasiliaUtcBoundary, startOfDayBrasiliaUtc } from "@/lib/date";
@@ -65,11 +66,13 @@ export async function saveBarProductRecipe(
 // ---------- Rentabilidade mensal de Petiscos e Drinks (estimativa) ----------
 
 export async function getProductCostReport(month: string): Promise<ProductCostReport | { error: string }> {
-  const denied = await requireRole(["admin"]);
+  // Leitura para admin e gerente operacional. O acesso já foi conferido acima; as leituras usam o
+  // cliente do sistema para não depender das regras de cada tabela.
+  const denied = await requireRole([...ROLES]);
   if (denied) return { error: denied.error };
   if (!/^\d{4}-\d{2}$/.test(month)) return { error: "Mês inválido." };
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const [y, m] = month.split("-").map(Number);
   const last = `${month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
   const first = `${month}-01`;
