@@ -8,7 +8,7 @@ import { EXPENSE_RECEIPTS_BUCKET, signExpenseReceiptUrl } from "@/lib/expense-re
 import { readPurchaseWithAI, type AiPurchase } from "@/lib/purchase-ai";
 import { createPurchase, type PurchaseLineInput } from "@/lib/actions/purchases-new";
 import { isFixedAsset } from "@/lib/expense-allocation";
-import { isUnsafeForQuickSave } from "@/lib/purchase-routing";
+import { classifyInboxLines } from "@/lib/purchase-routing";
 import { todayKey } from "@/lib/date";
 
 const ROLES = ["admin", "gerente_operacional"] as const;
@@ -165,6 +165,25 @@ export async function discardInboxItem(id: string): Promise<{ error?: string; su
 export async function quickSaveInboxItem(id: string, recurring: boolean): Promise<{ error?: string; success?: boolean }> {
   const denied = await requireRole([...ROLES]);
   if (denied) return denied;
+  return quickSaveCore(id, recurring, false);
+}
+
+// Confirmação em lote: notas de Alimentos sem ingrediente reconhecido, lançadas como Café 100%.
+export async function confirmInboxBatch(ids: string[]): Promise<{ saved: number; failed: { id: string; error: string }[] }> {
+  const denied = await requireRole([...ROLES]);
+  if (denied) return { saved: 0, failed: ids.map((id) => ({ id, error: denied.error })) };
+  const list = Array.from(new Set(ids)).slice(0, 60);
+  let saved = 0;
+  const failed: { id: string; error: string }[] = [];
+  for (const id of list) {
+    const r = await quickSaveCore(id, false, true);
+    if (r.error) failed.push({ id, error: r.error });
+    else saved++;
+  }
+  return { saved, failed };
+}
+
+async function quickSaveCore(id: string, recurring: boolean, allowFoodWithoutIngredient: boolean): Promise<{ error?: string; success?: boolean }> {
   const item = await getInboxItem(id);
   if (!item || item.status !== "aguardando") return { error: "Esta nota já foi lançada ou descartada." };
   const ai = item.ai_data;
@@ -183,10 +202,11 @@ export async function quickSaveInboxItem(id: string, recurring: boolean): Promis
 
   const { data: catRows } = await supabase.from("expense_categories").select("id, rule");
   const ruleOf = new Map((catRows ?? []).map((c) => [c.id as string, c.rule as string]));
-  const unsafe = aiLines.some((l) =>
-    isUnsafeForQuickSave({ categoryId: l.category_id, rule: l.category_id ? (ruleOf.get(l.category_id) ?? null) : null, ingredientId: l.ingredient_id })
+  const kind = classifyInboxLines(
+    aiLines.map((l) => ({ categoryId: l.category_id, rule: l.category_id ? (ruleOf.get(l.category_id) ?? null) : null, ingredientId: l.ingredient_id }))
   );
-  if (unsafe) return { error: "O destino do custo desta nota não é certo (falta categoria ou ingrediente). Abra o item para conferir." };
+  if (kind === "abrir") return { error: "Falta a categoria desta nota. Abra o item para conferir." };
+  if (kind === "lote" && !allowFoodWithoutIngredient) return { error: "Alimento sem ingrediente do bar: confirme em lote ou abra o item." };
 
   const lines: PurchaseLineInput[] = aiLines.map((l) => {
     const qty = l.quantity > 0 ? l.quantity : 1;

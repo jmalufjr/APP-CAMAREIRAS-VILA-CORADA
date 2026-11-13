@@ -33,3 +33,14 @@ export function isUnsafeForQuickSave(l: { categoryId: string | null; rule: strin
   if (!l.categoryId) return true;
   return l.rule === "alimentos" && !l.ingredientId;
 }
+
+// Como uma nota da caixa pode ser lançada sem abrir o formulário:
+//  "ok"    = destino certo ("Salvar" rápido);
+//  "lote"  = só falta confirmar que o alimento NÃO é ingrediente do bar (Café 100%): confirmação em lote;
+//  "abrir" = falta categoria ou a leitura falhou: precisa abrir a nota.
+export function classifyInboxLines(lines: { categoryId: string | null; rule: string | null; ingredientId: string | null }[]): "ok" | "lote" | "abrir" {
+  if (lines.length === 0) return "abrir";
+  if (lines.some((l) => !l.categoryId)) return "abrir";
+  if (lines.some((l) => l.rule === "alimentos" && !l.ingredientId)) return "lote";
+  return "ok";
+}
