@@ -29,17 +29,15 @@ function RecurringDialog({ item, categories }: { item?: RecurringExpense; catego
 
   function handleSave() {
     startTransition(async () => {
-      const r = await saveRecurringExpense(
-        item?.id ?? null,
-        name,
-        categoryId,
-        Number(amount.replace(",", ".")),
-        Number(day),
-        active
-      );
+      const values = [item?.id ?? null, name, categoryId, Number(amount.replace(",", ".")), Number(day), active] as const;
+      let r = await saveRecurringExpense(...values);
+      if (r?.similar) {
+        if (!confirm(`Já existe um item recorrente parecido: ${r.similar}.\n\nEdite-o em vez de criar outro, para a despesa não ser lançada em duplicidade todo mês.\n\nCriar mesmo assim?`)) return;
+        r = await saveRecurringExpense(...values, true);
+      }
       if (r?.error) toast.error(r.error);
       else {
-        toast.success("Item salvo.");
+        toast.success(r?.message ?? "Item salvo.");
         setOpen(false);
         router.refresh();
       }

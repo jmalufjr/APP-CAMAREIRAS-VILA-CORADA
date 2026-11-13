@@ -163,7 +163,7 @@ export async function discardInboxItem(id: string): Promise<{ error?: string; su
 
 // Lança a nota exatamente como a IA leu, sem abrir o formulário. Se faltar algo
 // (categoria, valor...), devolve o motivo e a nota continua na caixa.
-export async function quickSaveInboxItem(id: string, recurring: boolean): Promise<{ error?: string; success?: boolean }> {
+export async function quickSaveInboxItem(id: string, recurring: boolean): Promise<{ error?: string; success?: boolean; message?: string }> {
   const denied = await requireRole([...ROLES]);
   if (denied) return denied;
   return quickSaveCore(id, recurring, false);
@@ -184,7 +184,7 @@ export async function confirmInboxBatch(ids: string[]): Promise<{ saved: number;
   return { saved, failed };
 }
 
-async function quickSaveCore(id: string, recurring: boolean, allowFoodWithoutIngredient: boolean): Promise<{ error?: string; success?: boolean }> {
+async function quickSaveCore(id: string, recurring: boolean, allowFoodWithoutIngredient: boolean): Promise<{ error?: string; success?: boolean; message?: string }> {
   const item = await getInboxItem(id);
   if (!item || item.status !== "aguardando") return { error: "Esta nota já foi lançada ou descartada." };
   const ai = item.ai_data;
@@ -205,7 +205,8 @@ async function quickSaveCore(id: string, recurring: boolean, allowFoodWithoutIng
   const dups = await findDuplicates(supabase, [
     { key: id, date: ai.date ?? item.message_date, supplier: ai.supplier_name ?? "", docNumber: ai.document_number ?? "", total: dupTotal },
   ]);
-  if (dups[id]?.length) return { error: `Parece duplicada (${describeMatch(dups[id][0])}). Abra o item para confirmar.` };
+  const realDups = (dups[id] ?? []).filter((m) => m.source !== "recorrente");
+  if (realDups.length) return { error: `Parece duplicada (${describeMatch(realDups[0])}). Abra o item para confirmar.` };
 
   const { data: catRows } = await supabase.from("expense_categories").select("id, rule");
   const ruleOf = new Map((catRows ?? []).map((c) => [c.id as string, c.rule as string]));
@@ -239,5 +240,5 @@ async function quickSaveCore(id: string, recurring: boolean, allowFoodWithoutIng
     lines,
     inboxId: id,
   });
-  return r.error ? { error: r.error } : { success: true };
+  return r.error ? { error: r.error } : { success: true, message: r.message };
 }

@@ -3,6 +3,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/actions/authz";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { todayKey, monthYearLabelPt } from "@/lib/date";
+import { findSimilarRecurringItem, describeRecurring, findAvulsoInMonth, generateRecurringExpenses, nextMonthKey } from "@/lib/recurring";
 import type {
   CenterCode,
   ExpenseCategory,
@@ -211,8 +214,9 @@ export async function saveRecurringExpense(
   categoryId: string,
   amount: number,
   dayOfMonth: number,
-  active: boolean
-): Promise<Result> {
+  active: boolean,
+  force = false
+): Promise<Result & { similar?: string; message?: string }> {
   const denied = await requireRole([...ROLES]);
   if (denied) return denied;
   name = name.trim();
@@ -222,12 +226,36 @@ export async function saveRecurringExpense(
   if (!Number.isInteger(dayOfMonth) || dayOfMonth < 1 || dayOfMonth > 28) return { error: "O dia deve ficar entre 1 e 28." };
   const supabase = await createClient();
   const payload = { name, category_id: categoryId, amount, day_of_month: dayOfMonth, active };
-  const { error } = id
-    ? await supabase.from("recurring_expenses").update(payload).eq("id", id)
-    : await supabase.from("recurring_expenses").insert(payload);
-  if (error) return { error: error.message };
+  if (id) {
+    const { error } = await supabase.from("recurring_expenses").update(payload).eq("id", id);
+    if (error) return { error: error.message };
+    refresh();
+    return { success: true };
+  }
+
+  // Item novo: 1) não cria um segundo item parecido sem avisar; 2) se já há um lançamento avulso
+  // parecido neste mês, o item começa no mês seguinte; senão, vale já neste mês.
+  if (!force) {
+    const similar = await findSimilarRecurringItem(supabase, { name, categoryId, amount });
+    if (similar) return { similar: describeRecurring(similar) };
+  }
+  const { data: created, error } = await supabase.from("recurring_expenses").insert(payload).select("id").single();
+  if (error || !created) return { error: error?.message ?? "Não foi possível cadastrar o item." };
+
+  const admin = createAdminClient();
+  const month = todayKey().slice(0, 7);
+  let message = "Item cadastrado. Ele é lançado automaticamente todo mês, no dia combinado.";
+  const avulso = active ? await findAvulsoInMonth(admin, { name, categoryId, month }) : null;
+  if (avulso) {
+    await admin.from("recurring_expenses").update({ last_generated_month: `${month}-01` }).eq("id", created.id);
+    const v = avulso.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    message = `Já havia um lançamento deste mês (${avulso.supplier}, ${v}, em ${avulso.date.split("-").reverse().join("/")}). O item passa a valer em ${monthYearLabelPt(`${nextMonthKey(month)}-01`)}.`;
+  } else if (active) {
+    const r = await generateRecurringExpenses(admin);
+    if (r.created > 0) message = "Item cadastrado e o lançamento deste mês já foi criado. Os próximos serão lançados todo mês, no dia combinado.";
+  }
   refresh();
-  return { success: true };
+  return { success: true, message };
 }
 
 export async function deleteRecurringExpense(id: string): Promise<Result> {

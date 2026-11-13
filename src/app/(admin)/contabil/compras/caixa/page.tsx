@@ -28,8 +28,10 @@ export default async function CaixaConferenciaPage() {
     total: it.ai_data ? (it.ai_data.total_amount ?? it.ai_data.lines.reduce((sum, l) => sum + l.amount, 0)) : null,
   }));
   const dups = await findDuplicates(await createClient(), cands, { compareAmongThemselves: true });
+  const blocking = (id: string) => (dups[id] ?? []).filter((m) => m.source !== "recorrente");
+  const infos = (id: string) => (dups[id] ?? []).filter((m) => m.source === "recorrente");
   const kindOf = (it: (typeof items)[number]) =>
-    dups[it.id]?.length || !it.ai_data
+    blocking(it.id).length || !it.ai_data
       ? "abrir"
       : classifyInboxLines(
           it.ai_data.lines.map((l) => ({ categoryId: l.category_id, rule: l.category_id ? (ruleOf.get(l.category_id) ?? null) : null, ingredientId: l.ingredient_id }))
@@ -81,9 +83,14 @@ export default async function CaixaConferenciaPage() {
                   {it.note_text ?? "(sem texto)"}
                 </p>
                 {it.ai_status === "erro" && <p className="text-xs text-red-600 mt-1">A IA não conseguiu ler: preencha manualmente.</p>}
-                {dups[it.id]?.length ? (
+                {blocking(it.id).length ? (
                   <p className="text-xs mt-1 rounded bg-amber-500/15 px-2 py-1 text-amber-700 dark:text-amber-400">
-                    ⚠ Possível duplicata — {dups[it.id].map(describeMatch).join(" | ")}
+                    ⚠ Possível duplicata — {blocking(it.id).map(describeMatch).join(" | ")}
+                  </p>
+                ) : null}
+                {infos(it.id).length ? (
+                  <p className="text-xs mt-1 rounded bg-muted px-2 py-1 text-muted-foreground">
+                    ℹ Comprovante de item recorrente — {infos(it.id).map(describeMatch).join(" | ")}
                   </p>
                 ) : null}
               </Link>

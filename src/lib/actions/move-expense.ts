@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/actions/authz";
 import { todayKey } from "@/lib/date";
+import { findSimilarRecurringItem, describeRecurring } from "@/lib/recurring";
 
 type Result = { error?: string; success?: boolean; message?: string };
 
@@ -47,8 +48,8 @@ export async function moveLineToRecurring(lineId: string): Promise<Result> {
   const { count } = await admin.from("purchase_lines").select("id", { count: "exact", head: true }).eq("purchase_id", line.purchase_id);
   const name = ((count ?? 1) > 1 ? line.description : p.supplier_name?.trim() || line.description).trim();
 
-  const { data: existing } = await admin.from("recurring_expenses").select("id").ilike("name", name).limit(1);
-  if (existing && existing.length > 0) return { error: `Já existe um item recorrente chamado "${name}".` };
+  const similar = await findSimilarRecurringItem(admin, { name, categoryId: line.category_id, amount: Number(line.amount) });
+  if (similar) return { error: `Já existe o item recorrente ${describeRecurring(similar)}. Edite-o em vez de criar outro.` };
 
   const { error } = await admin.from("recurring_expenses").insert({
     name,

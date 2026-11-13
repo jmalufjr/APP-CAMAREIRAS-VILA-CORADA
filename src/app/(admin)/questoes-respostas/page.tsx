@@ -846,7 +846,7 @@ export default function QuestoesRespostasPage() {
 
               <P>
                 <strong>Caminho C — Lançamento automático dos itens recorrentes.</strong> As despesas que se repetem todo mês
-                são criadas pelo próprio sistema (tópico 9).
+                são criadas pelo próprio sistema, todo dia de manhã, sem você precisar fazer nada (tópico 9).
               </P>
 
               <SubHeading>3. O que a IA preenche, e o que ela nunca faz</SubHeading>
@@ -897,6 +897,14 @@ export default function QuestoesRespostasPage() {
                 duas compras no mesmo dia, no mesmo valor), e você decide. Atenção: o aviso pode não aparecer se a nota não tem
                 número, se o nome do fornecedor está muito diferente ou se o valor mudou. Por isso vale conferir o Relatório de
                 despesas de vez em quando.
+              </P>
+              <P>
+                <strong>Um caso à parte: a nota que é o comprovante de uma despesa recorrente.</strong> Muitas despesas fixas
+                (energia, internet, salários) também chegam como comprovante no grupo do WhatsApp. Se o fornecedor ou a
+                descrição de uma nota é parecido com o nome de um <strong>item recorrente</strong>, a Caixa mostra o aviso
+                informativo <strong>“Comprovante de item recorrente”</strong>. Isso <strong>não</strong> é duplicata: ao lançar a
+                nota, o lançamento automático daquele mês é <strong>substituído</strong> por ela (tópico 9). Esse aviso não
+                impede o “Salvar” rápido nem o lote, mas fica visível para você conferir antes.
               </P>
               <P>
                 <strong>Contra erro de categoria e de destino do custo:</strong>
@@ -1005,9 +1013,9 @@ export default function QuestoesRespostasPage() {
                 ]}
               />
               <P>
-                O relatório também tem o botão <strong>Lançar compra</strong>. E há um detalhe importante: é{" "}
-                <strong>ao abrir o Relatório de despesas</strong> que o sistema cria os lançamentos dos itens recorrentes do mês
-                (tópico 9).
+                O relatório também tem o botão <strong>Lançar compra</strong>. Os itens recorrentes do mês aparecem aqui sozinhos,
+                com o selo “Recorrente” (tópico 9). Uma despesa recorrente que foi substituída pela nota real aparece como
+                “Cancelado”, com a observação “Substituída pela nota de …”.
               </P>
 
               <SubHeading>8. Categorias de despesa, prazo de consumo e centros de custo</SubHeading>
@@ -1090,19 +1098,61 @@ export default function QuestoesRespostasPage() {
                 ajusta nome, categoria, valor e dia e cadastra os marcados de uma vez).
               </P>
               <P>
-                <strong>Como o lançamento acontece:</strong> toda vez que alguém abre o <strong>Relatório de despesas</strong>,
-                o sistema olha cada item recorrente ativo e, se o <strong>dia combinado já chegou</strong> neste mês e o item
-                ainda <strong>não foi lançado neste mês</strong>, ele cria a despesa, com a data do dia combinado, o valor
-                cadastrado e o selo “Recorrente”. Cada item é lançado <strong>uma única vez por mês</strong>, mesmo que o
-                relatório seja aberto muitas vezes. Se o dia combinado ainda não chegou, o lançamento só aparece quando ele
-                chegar. Por isso: <strong>abra o Relatório de despesas</strong> antes de olhar o Resultado mensal, para que os
-                recorrentes do mês já estejam lançados.
+                <strong>Como o lançamento acontece:</strong> <strong>todo dia de manhã</strong>, junto com a atualização com a
+                Stays, o sistema olha cada item recorrente <strong>ativo</strong> e cria a despesa do mês cujo{" "}
+                <strong>dia combinado já chegou</strong>, com a data do dia combinado, o valor cadastrado e o selo
+                “Recorrente”. Cada item é lançado <strong>uma única vez por mês</strong>. Você não precisa abrir nenhuma tela
+                para isso. (A mesma conferência também acontece quando você cadastra um item e quando abre o Relatório de
+                despesas, para o lançamento aparecer sem esperar a manhã seguinte.)
               </P>
               <P>
-                Quando um item recorrente é cadastrado a partir de uma compra que você já lançou, o mês dessa compra já está
-                coberto e o sistema só passa a lançar o item a partir do mês seguinte. Para mudar o valor combinado, edite o
-                item (vale a partir dos próximos lançamentos). Se o lançamento do mês já foi criado com o valor errado, use{" "}
-                <strong>Editar</strong> na despesa do relatório: ela corrige o lançamento e atualiza o item recorrente.
+                <strong>Meses que ficaram sem lançamento.</strong> Se algum mês não foi lançado (por exemplo, o item foi
+                cadastrado depois do dia combinado, ou o sistema ficou algum tempo fora do ar), o sistema lança os meses que
+                faltam, até 12 meses para trás. Ele nunca lança nada antes de 01/11/2026 nem antes do mês em que o item foi
+                cadastrado. Um lançamento recuperado de um mês já encerrado há mais de 30 dias fica pendente (em vermelho) no
+                relatório até você aprovar ou cancelar.
+              </P>
+              <P>
+                <strong>Como o sistema evita itens e lançamentos em duplicidade.</strong> Ao cadastrar um item recorrente novo
+                (em qualquer dos caminhos), o sistema faz duas verificações <strong>automáticas</strong>, sem perguntar o
+                que você já sabe:
+              </P>
+              <List
+                items={[
+                  <>
+                    <strong>Procura um item recorrente parecido</strong> (ativo ou desativado): nome parecido, ou a mesma
+                    categoria com o mesmo valor. Se achar, <strong>não cria um segundo item</strong>, porque os dois lançariam
+                    a despesa todo mês. Na tela “Itens recorrentes”, ele mostra o item parecido e pergunta se você quer criar
+                    mesmo assim (útil para casos legítimos, como dois salários diferentes). Na caixa “Despesa recorrente”, no
+                    botão Mover e nas sugestões da primeira importação, ele não cria o segundo item e avisa que já existe.
+                    Para mudar um item que já existe, edite-o.
+                  </>,
+                  <>
+                    <strong>Procura um lançamento avulso parecido neste mês</strong> (feito à mão ou por nota do WhatsApp,
+                    com fornecedor ou nome parecido e a mesma categoria). Se existir, o item recorrente <strong>começa a
+                    valer no mês seguinte</strong>: um lançamento avulso não se repete, então não há duplicidade, e o sistema
+                    informa isso na hora. Se não existir, o item já vale neste mês: o lançamento é criado na hora (se o dia
+                    combinado já passou) ou no dia combinado.
+                  </>,
+                ]}
+              />
+              <P>
+                <strong>A nota real prevalece sobre o lançamento automático.</strong> Muitas despesas recorrentes também chegam
+                como comprovante no WhatsApp. Para não contar duas vezes, o lançamento automático funciona como um{" "}
+                <strong>marcador provisório</strong>. Quando você lança a nota real daquele mês (com fornecedor ou descrição
+                parecida com o item), o sistema <strong>cancela o lançamento automático desse mês</strong> e fica a nota, com o
+                valor, a data e a foto verdadeiros, <strong>mesmo que o valor seja diferente</strong> (energia e água variam
+                todo mês). Se o lançamento automático daquele mês ainda não tinha sido criado, o sistema marca o mês como
+                coberto e não o cria depois. Na Caixa de conferência, essas notas ganham o aviso “Comprovante de item
+                recorrente”. O valor cadastrado no item <strong>não muda sozinho</strong>: se a conta passou para outro
+                patamar, edite o item. Se o sistema reconhecer uma nota errada como comprovante (por nomes parecidos), o
+                administrador corrige no relatório.
+              </P>
+              <P>
+                Para <strong>mudar o valor combinado</strong>, edite o item (vale a partir dos próximos lançamentos). Se o
+                lançamento do mês já foi criado com o valor errado, use <strong>Editar</strong> na despesa do relatório: ela
+                corrige o lançamento e atualiza o item recorrente. Quando um item é cadastrado a partir de uma compra que você
+                já lançou, o mês dessa compra já está coberto e o sistema só passa a lançar a partir do mês seguinte.
               </P>
 
               <SubHeading>10. Ativo permanente</SubHeading>
@@ -1300,8 +1350,8 @@ export default function QuestoesRespostasPage() {
               <P>
                 Para conferir as despesas, abra o <strong>Relatório de despesas</strong> do mesmo mês: cada compra mostra o
                 destino do custo. Para conferir a hospedagem, compare com a tela <strong>Indicadores</strong>. Para conferir
-                o bar e o frigobar, veja “Consumo de Bar e Frigobar”. Lembre-se de abrir o Relatório de despesas antes, para
-                os itens recorrentes do mês já estarem lançados.
+                o bar e o frigobar, veja “Consumo de Bar e Frigobar”. Os itens recorrentes do mês entram sozinhos, no dia
+                combinado, e aparecem no Relatório de despesas.
               </P>
             </div>
           </AccordionPanel>

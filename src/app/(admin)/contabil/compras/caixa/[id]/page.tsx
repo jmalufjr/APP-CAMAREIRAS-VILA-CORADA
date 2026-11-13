@@ -26,7 +26,9 @@ export default async function ConferirNotaPage({ params }: { params: Promise<{ i
     docNumber: it.ai_data?.document_number ?? "",
     total: it.ai_data ? (it.ai_data.total_amount ?? it.ai_data.lines.reduce((sum, l) => sum + l.amount, 0)) : null,
   }));
-  const dups = (await findDuplicates(await createClient(), cands, { compareAmongThemselves: true }))[item.id] ?? [];
+  const allMatches = (await findDuplicates(await createClient(), cands, { compareAmongThemselves: true }))[item.id] ?? [];
+  const dups = allMatches.filter((m) => m.source !== "recorrente");
+  const recurringInfos = allMatches.filter((m) => m.source === "recorrente");
 
   const lines = (ai?.lines ?? []).map((l) => ({
     description: l.description,
@@ -75,6 +77,16 @@ export default async function ConferirNotaPage({ params }: { params: Promise<{ i
                 ))}
               </ul>
               <p className="text-xs mt-1 text-muted-foreground">Se for outra compra, lance normalmente (o sistema pede confirmação); se for a mesma, descarte.</p>
+            </div>
+          )}
+          {recurringInfos.length > 0 && (
+            <div className="rounded-lg border border-border bg-muted/50 p-3 text-xs">
+              <p className="font-medium">ℹ Comprovante de item recorrente</p>
+              <ul className="mt-1 list-disc pl-5">
+                {recurringInfos.map((m, i) => (
+                  <li key={i}>{describeMatch(m)}</li>
+                ))}
+              </ul>
             </div>
           )}
           {item.ai_status === "erro" && <p className="text-sm text-red-600">A IA não conseguiu ler esta nota: {item.ai_error}</p>}

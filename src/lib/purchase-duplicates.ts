@@ -11,7 +11,7 @@ export interface DupCandidate {
 }
 
 export interface DupMatch {
-  source: "compra" | "caixa";
+  source: "compra" | "caixa" | "recorrente";
   date: string;
   supplier: string;
   total: number;
@@ -80,14 +80,17 @@ export async function findDuplicates(
   const start = (settings?.start_date as string | undefined) ?? "2026-11-01";
   const { data: purchases } = await supabase
     .from("purchases")
-    .select("date, supplier_name, document_number, total_amount")
+    .select("date, supplier_name, document_number, total_amount, source")
     .gte("date", start)
     .neq("status", "cancelada")
     .limit(3000);
 
+  const { data: recurringItems } = await supabase.from("recurring_expenses").select("name, amount").eq("active", true);
+
   usable.forEach((c, i) => {
     const matches: DupMatch[] = [];
     for (const p of purchases ?? []) {
+      if ((p.source as string | null) === "recorrente") continue; // coberto pelo reconhecimento do item recorrente, abaixo
       const reason = matchReason(c, {
         date: p.date as string,
         supplier: (p.supplier_name as string | null) ?? "",
@@ -95,6 +98,11 @@ export async function findDuplicates(
         total: Number(p.total_amount),
       });
       if (reason) matches.push({ source: "compra", date: p.date as string, supplier: (p.supplier_name as string | null) ?? "Sem fornecedor", total: Number(p.total_amount), reason });
+    }
+    for (const it of recurringItems ?? []) {
+      if (similarSupplier(c.supplier, it.name as string)) {
+        matches.push({ source: "recorrente", date: c.date, supplier: it.name as string, total: Number(it.amount), reason: "comprovante de item recorrente" });
+      }
     }
     if (options.compareAmongThemselves) {
       for (let j = 0; j < i; j++) {
@@ -109,6 +117,10 @@ export async function findDuplicates(
 }
 
 export function describeMatch(m: DupMatch): string {
+  if (m.source === "recorrente") {
+    const v0 = m.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    return `item recorrente «${m.supplier}» (${v0}): ao lançar esta nota, o lançamento automático do mês é substituído`;
+  }
   const d = m.date.split("-").reverse().join("/");
   const v = m.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   return `${m.source === "compra" ? "compra já lançada" : "outra nota na caixa"}: ${m.supplier}, ${v}, ${d} (${m.reason})`;

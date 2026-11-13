@@ -8,8 +8,9 @@ import { todayKey } from "@/lib/date";
 import type { CenterCode, PurchaseRecord } from "@/lib/expense-model-types";
 import { describeDestination } from "@/lib/purchase-routing";
 import { findDuplicates, describeMatch } from "@/lib/purchase-duplicates";
+import { generateRecurringExpenses, findSimilarRecurringItem, applyReceiptToRecurring, describeRecurring } from "@/lib/recurring";
 
-type Result = { error?: string; success?: boolean; id?: string };
+type Result = { error?: string; success?: boolean; id?: string; message?: string };
 
 export interface PurchaseLineInput {
   description: string;
@@ -49,7 +50,7 @@ export async function checkPurchaseDuplicates(input: { date: string; supplierNam
   if (denied) return [];
   const supabase = await createClient();
   const res = await findDuplicates(supabase, [{ key: "x", date: input.date, supplier: input.supplierName, docNumber: input.documentNumber, total: input.total }]);
-  return (res.x ?? []).map(describeMatch);
+  return (res.x ?? []).filter((m) => m.source !== "recorrente").map(describeMatch);
 }
 
 // Cria a compra/despesa no modelo novo. Data da compra = data do pagamento.
@@ -177,12 +178,16 @@ export async function createPurchase(input: PurchaseInput): Promise<Result> {
 
   // Itens marcados como recorrentes entram em "Itens recorrentes". O mês desta compra
   // já está lançado pela própria nota, então a geração automática começa no mês seguinte.
+  const messages: string[] = [];
   if (recurringLines.length > 0) {
-    const { data: existing } = await supabase.from("recurring_expenses").select("name");
-    const taken = new Set((existing ?? []).map((e) => String(e.name).trim().toLowerCase()));
     for (const l of recurringLines) {
       const name = (input.lines.length > 1 ? l.description : input.supplierName.trim() || l.description).trim();
-      if (!name || taken.has(name.toLowerCase())) continue;
+      if (!name) continue;
+      const similar = await findSimilarRecurringItem(supabase, { name, categoryId: l.categoryId, amount: l.amount });
+      if (similar) {
+        messages.push(`Já existe o item recorrente ${describeRecurring(similar)}; não foi criado outro.`);
+        continue;
+      }
       const { error: rErr } = await supabase.from("recurring_expenses").insert({
         name,
         category_id: l.categoryId,
@@ -191,12 +196,19 @@ export async function createPurchase(input: PurchaseInput): Promise<Result> {
         last_generated_month: `${input.date.slice(0, 7)}-01`,
       });
       if (rErr) return { error: `Compra lançada, mas não consegui cadastrar o item recorrente: ${rErr.message}` };
-      taken.add(name.toLowerCase());
     }
   }
 
+  // A nota real prevalece sobre o lançamento automático do item recorrente do mesmo mês.
+  const receiptMsg = await applyReceiptToRecurring(createAdminClient(), {
+    date: input.date,
+    supplierName: input.supplierName,
+    descriptions: input.lines.map((l) => l.description),
+  });
+  if (receiptMsg) messages.push(receiptMsg);
+
   revalidatePath("/contabil", "layout");
-  return { success: true, id: purchase.id };
+  return { success: true, id: purchase.id, message: messages.join(" ") || undefined };
 }
 
 // Relatório de despesas: tudo em ordem cronológica da data da compra.
@@ -298,53 +310,6 @@ export async function decidePendingPurchase(id: string, decision: "aprovar" | "c
 export async function generateDueRecurring(): Promise<number> {
   const denied = await requireRole(["admin", "gerente_operacional"]);
   if (denied) return 0;
-  const admin = createAdminClient();
-  const today = todayKey();
-  const monthStart = `${today.slice(0, 7)}-01`;
-  const day = Number(today.slice(8, 10));
-
-  const { data: settings } = await admin.from("expense_settings").select("start_date").eq("id", true).single();
-  const startDate = settings?.start_date ?? "2026-11-01";
-
-  const { data: items } = await admin
-    .from("recurring_expenses")
-    .select("id, name, category_id, amount, day_of_month, last_generated_month")
-    .eq("active", true);
-
-  let created = 0;
-  for (const it of items ?? []) {
-    if (it.day_of_month > day) continue;
-    if (it.last_generated_month && it.last_generated_month >= monthStart) continue;
-    const date = `${today.slice(0, 7)}-${String(it.day_of_month).padStart(2, "0")}`;
-    if (date < startDate) continue;
-
-    // Marca primeiro (evita duplicar se duas telas abrirem ao mesmo tempo).
-    const { data: claimed } = await admin
-      .from("recurring_expenses")
-      .update({ last_generated_month: monthStart })
-      .eq("id", it.id)
-      .or(`last_generated_month.is.null,last_generated_month.lt.${monthStart}`)
-      .select("id");
-    if (!claimed || claimed.length === 0) continue;
-
-    const { data: p, error } = await admin
-      .from("purchases")
-      .insert({ date, supplier_name: it.name, total_amount: it.amount, source: "recorrente" })
-      .select("id")
-      .single();
-    if (error || !p) {
-      await admin.from("recurring_expenses").update({ last_generated_month: it.last_generated_month }).eq("id", it.id);
-      continue;
-    }
-    const { error: lErr } = await admin
-      .from("purchase_lines")
-      .insert({ purchase_id: p.id, category_id: it.category_id, description: it.name, quantity: 1, amount: it.amount });
-    if (lErr) {
-      await admin.from("purchases").delete().eq("id", p.id);
-      await admin.from("recurring_expenses").update({ last_generated_month: it.last_generated_month }).eq("id", it.id);
-      continue;
-    }
-    created++;
-  }
-  return created;
+  const r = await generateRecurringExpenses(createAdminClient());
+  return r.created;
 }

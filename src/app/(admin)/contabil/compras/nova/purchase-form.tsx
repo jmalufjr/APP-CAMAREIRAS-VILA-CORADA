@@ -119,6 +119,7 @@ export function PurchaseForm({
       if (r?.error) toast.error(r.error);
       else {
         toast.success("Compra lançada.");
+        if (r.message) toast.info(r.message);
         router.push(inboxId ? "/contabil/compras/caixa" : "/contabil/compras/relatorio");
       }
     });

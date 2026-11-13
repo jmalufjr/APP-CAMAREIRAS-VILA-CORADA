@@ -18,6 +18,7 @@ export function InboxActions({ id, canRecurring, needsReview = false }: { id: st
       if (r?.error) toast.error(r.error);
       else {
         toast.success(recurring ? "Lançada e cadastrada como recorrente." : "Compra lançada.");
+        if (r.message) toast.info(r.message);
         router.refresh();
       }
     });

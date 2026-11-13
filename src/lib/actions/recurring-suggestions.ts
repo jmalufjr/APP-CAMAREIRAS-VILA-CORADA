@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/actions/authz";
+import { similarRecurringIn } from "@/lib/recurring";
 import type { AiPurchase } from "@/lib/purchase-ai";
 
 export interface RecurringSuggestion {
@@ -71,8 +72,8 @@ export async function registerRecurringSuggestions(
   if (items.length === 0) return { error: "Marque pelo menos um item." };
 
   const supabase = await createClient();
-  const { data: existing } = await supabase.from("recurring_expenses").select("name");
-  const taken = new Set((existing ?? []).map((e) => String(e.name).trim().toLowerCase()));
+  const { data: existing } = await supabase.from("recurring_expenses").select("id, name, category_id, amount");
+  const known: { id: string; name: string; category_id: string; amount: number | string }[] = (existing ?? []) as never;
 
   let created = 0;
   let skipped = 0;
@@ -80,7 +81,7 @@ export async function registerRecurringSuggestions(
     const name = it.name.trim();
     if (!name || !it.categoryId) return { error: `Escolha a categoria de "${name || "item sem nome"}".` };
     if (!(it.amount >= 0)) return { error: `Valor inválido em "${name}".` };
-    if (taken.has(name.toLowerCase())) {
+    if (similarRecurringIn(known, { name, categoryId: it.categoryId, amount: it.amount })) {
       skipped++;
       continue;
     }
@@ -93,7 +94,7 @@ export async function registerRecurringSuggestions(
       last_generated_month: /^\d{4}-\d{2}-\d{2}$/.test(it.lastDate) ? `${it.lastDate.slice(0, 7)}-01` : null,
     });
     if (error) return { error: error.message };
-    taken.add(name.toLowerCase());
+    known.push({ id: "novo" + created, name, category_id: it.categoryId, amount: it.amount });
     created++;
   }
   revalidatePath("/contabil", "layout");

@@ -8,6 +8,7 @@ import {
   syncStaysIndicators,
 } from "@/lib/actions/stays-sync";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { generateRecurringExpenses } from "@/lib/recurring";
 
 // Sincronização automática (Vercel Cron, ver vercel.json) do Planejamento
 // Diário, Chegadas & Saídas e Mesas do Café — as três, hoje+amanhã, na
@@ -39,5 +40,8 @@ export async function GET(request: NextRequest) {
   const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
   await supabase.from("room_bill_change_events").delete().lt("occurred_at", cutoff);
 
-  return NextResponse.json({ planning, arrivalsDepartures, breakfastTables, channelStats, guestReviews, indicators });
+  // Itens recorrentes: cria os lançamentos do mês (e recupera meses que ficaram sem lançamento).
+  const recurring = await generateRecurringExpenses(supabase);
+
+  return NextResponse.json({ planning, arrivalsDepartures, breakfastTables, channelStats, guestReviews, indicators, recurring });
 }

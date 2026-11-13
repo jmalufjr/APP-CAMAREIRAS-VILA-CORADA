@@ -10,7 +10,7 @@ export default async function ItensRecorrentesPage() {
       <BackLink href="/contabil/listas" />
       <PageHeader
         title="Itens recorrentes"
-        subtitle="Despesas que se repetem todo mês (salários, honorários, internet etc.). Todo mês o sistema cria o lançamento no dia combinado, e você só ajusta o valor quando mudar."
+        subtitle="Despesas que se repetem todo mês (salários, honorários, internet etc.). Todo mês o sistema cria o lançamento no dia combinado (a verificação roda todo dia de manhã), e você só ajusta o valor quando mudar. Quando a nota real do mês chega, ela substitui o lançamento automático."
       />
       <RecurringPanel items={items} categories={categories.filter((c) => c.active)} />
     </div>
