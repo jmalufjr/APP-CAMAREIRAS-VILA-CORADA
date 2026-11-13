@@ -26,7 +26,7 @@ const menuItems = [
   { href: "/contabil/compras/nova", label: "Lançar compra ou despesa", icon: Plus },
   { href: "/contabil/compras/relatorio", label: "Relatório de despesas (regime caixa)", icon: FileSpreadsheet },
   { href: "/ativo-permanente", label: "Inventário de ativo permanente", icon: Archive },
-  { href: "/contabil/listas", label: "Listas contábeis", icon: ListChecks },
+  { href: "/contabil/listas", label: "Listas gerenciais", icon: ListChecks },
 ];
 
 function fmt(v: number): string {
@@ -44,8 +44,8 @@ export default async function ModuloContabilPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Módulo Contábil"
-        subtitle="Compras, fornecedores, estoque, ativo permanente, plano de contas e partidas dobradas — tudo que envolve dinheiro, num lugar só."
+        title="Módulo gerencial"
+        subtitle="Compras e despesas, resultado mensal, rentabilidade de petiscos e drinks e ativo permanente — tudo que envolve dinheiro, num lugar só."
       />
 
       {!isGerente && (

@@ -17,7 +17,7 @@ export default async function RecorrentesSugeridosPage() {
       <BackLink href="/contabil/compras/caixa" />
       <PageHeader
         title="Itens recorrentes sugeridos (cadastro inicial)"
-        subtitle="Na primeira importação, a IA apontou as despesas que parecem se repetir todo mês. Marque as que são de fato recorrentes, ajuste nome, categoria, valor e dia, e cadastre de uma vez. Depois disso o cadastro de itens recorrentes é manual, em Listas contábeis → Itens recorrentes."
+        subtitle="Na primeira importação, a IA apontou as despesas que parecem se repetir todo mês. Marque as que são de fato recorrentes, ajuste nome, categoria, valor e dia, e cadastre de uma vez. Depois disso o cadastro de itens recorrentes é manual, em Listas gerenciais → Itens recorrentes."
       />
       {!isAdmin ? (
         <p className="text-sm text-muted-foreground">Só o administrador cadastra itens recorrentes.</p>

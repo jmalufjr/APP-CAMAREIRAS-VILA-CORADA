@@ -357,8 +357,8 @@ export default function QuestoesRespostasPage() {
               </P>
               <P>
                 Ao ser paga, a conta gera automaticamente um recibo em PDF e tenta enviá-lo por e-mail
-                para o endereço cadastrado em “Cadastrar e-mail de envio” (menu “Integração”,
-                pergunta 9 — sem precisar mexer em nada técnico). Se o envio falhar por algum motivo,
+                para o endereço cadastrado em “Cadastrar e-mail de envio” (menu “Integração” — sem
+                precisar mexer em nada técnico). Se o envio falhar por algum motivo,
                 você vê um aviso na tela e pode reenviar manualmente. O hóspede pode pagar via PIX
                 direto por uma tela que a camareira abre, mostrando um QR code fixo da pousada.
               </P>
@@ -434,10 +434,13 @@ export default function QuestoesRespostasPage() {
                 histórico do que essa pessoa já fez no sistema.
               </P>
               <P>
-                Existe também o papel <strong>“Gerente operacional”</strong>: ele só enxerga o Resumo
-                executivo (com “Serviços nas suítes”, “Suítes vagas e limpas” e o Calendário de reservas), o Módulo
-                operacional (Planejamento diário, Chegadas &amp; saídas, Mesas do café, Consumo de Bar e Frigobar e
-                Comissões das camareiras), a Sincronização e, no Módulo Contábil, só Lançar compra ou despesa, a Caixa de conferência e o Relatório de despesas. Ele não vê o Resultado mensal nem as demais telas contábeis.
+                Existe também o papel <strong>“Gerente operacional”</strong>. Ele enxerga o Resumo executivo
+                (menos “Ticket médio de canais de venda” e “Indicadores”, que são só do administrador), o Módulo operacional
+                completo (inclusive as Listas operacionais e as Comissões das camareiras), a Sincronização e, no Módulo
+                gerencial, só <strong>Lançar compra ou despesa</strong>, a <strong>Caixa de conferência</strong> e o{" "}
+                <strong>Relatório de despesas</strong> (sem poder editar, mover nem aprovar lançamentos: isso é só do
+                administrador). Ele não vê o Resultado mensal, a Rentabilidade de Petiscos e Drinks, o Inventário de ativo
+                permanente nem as Listas gerenciais.
               </P>
               <P>
                 O primeiro acesso de administrador (o seu) é o único que precisa ser criado direto no
@@ -458,11 +461,11 @@ export default function QuestoesRespostasPage() {
               <P>
                 É a primeira tela que você vê ao entrar. No topo ficam 2 cards de “Consulta rápida”:
                 suítes concluídas hoje e ocorrências de manutenção hoje. (As comissões ficam na tela
-                “Comissões das camareiras”, explicadas na pergunta 11.) Logo abaixo ficam os botões de sincronização com a Stays
-                (ver pergunta 1).
+                “Comissões das camareiras”, no Módulo operacional, explicadas na pergunta 11; os botões de sincronização com a Stays
+                ficam no menu “Sincronização”, pergunta 1.)
               </P>
               <P>
-                Mais abaixo tem um menu levando a 6 telas com mais detalhes, cada uma com um botão pra
+                Mais abaixo tem um menu levando a 8 telas com mais detalhes, cada uma com um botão pra
                 voltar:
               </P>
               <List
@@ -520,13 +523,17 @@ export default function QuestoesRespostasPage() {
                     separadamente, tanto nas tabelas quanto nos gráficos.
                   </>,
                   <>
-                    <strong>Comissões das camareiras</strong>: as duas comissões da equipe, de bar e de
-                    serviços nas suítes e no café — explicado com detalhe na pergunta 11.
+                    <strong>Avaliações dos hóspedes</strong>: três telas com as avaliações que os hóspedes deixam nos
+                    canais (Booking, Airbnb, Expedia e o formulário da própria Stays). Em “Avaliações: conteúdo e
+                    resposta” você vê cada avaliação, com as notas por item e os comentários, e pode escrever uma resposta
+                    (ela fica registrada só no aplicativo). “Médias” mostra as notas por suíte, por canal e por item.
+                    “Assuntos citados pelos hóspedes” mostra os temas mais elogiados e mais criticados, lidos dos comentários
+                    pela IA. Avaliações novas dos últimos 7 dias ganham uma marca. O gerente operacional também vê essas
+                    telas.
                   </>,
                   <>
-                    <strong>Cadastrar e-mail de envio</strong>: o e-mail que recebe automaticamente o
-                    recibo de uma conta paga (ver pergunta 5) e pra onde você pode enviar o demonstrativo
-                    de comissões (pergunta 11).
+                    <strong>Indicadores</strong>: ocupação, diária média e as demais medidas de desempenho da hospedagem —
+                    explicado com detalhe na pergunta 16 (só para o administrador).
                   </>,
                 ]}
               />
@@ -654,7 +661,7 @@ export default function QuestoesRespostasPage() {
                 uma <strong>estimativa</strong> que muda dia a dia, sem notas (considera todas com nota 10). A do <strong>mês anterior</strong> é a
                 oficial: a nota de cada camareira é editada direto nela (começa em 10), os valores se
                 atualizam na hora — não há botão de calcular — e dá pra baixar um PDF ou enviar por e-mail
-                (pra “Cadastrar e-mail de envio”, pergunta 9) o demonstrativo com as duas comissões de cada
+                (pra “Cadastrar e-mail de envio”, no menu “Integração”) o demonstrativo com as duas comissões de cada
                 camareira e o total geral. No fim da tela, o card <strong>“Registro mensal das comissões”</strong>
                 guarda os meses mais antigos: quando o mês vira, o mês que era “mês anterior” passa pra esse
                 registro, com os valores (notas e comissões) congelados, e o mês que acabou de fechar assume o
@@ -711,93 +718,765 @@ export default function QuestoesRespostasPage() {
           </AccordionPanel>
         </AccordionItem>
 
-        {/* 13. Compras, despesas e resultado mensal (modelo simplificado, desde 11/11/2026) */}
+        {/* 13. Lançar compras e despesas (modelo simplificado, desde 01/11/2026) */}
         <AccordionItem value="compras">
           <AccordionTrigger>
             <span className="font-heading text-base">
-              13. Como funcionam as compras, as despesas e o resultado mensal?
+              13. Como lançar uma compra ou despesa, e o que o sistema faz com ela?
             </span>
           </AccordionTrigger>
           <AccordionPanel>
             <div className="space-y-3">
               <P>
-                A pousada <strong>não controla estoque</strong>. Tudo o que é comprado ou pago no mês é
-                despesa do mês. A data da compra é também a data do pagamento. O objetivo é chegar, todo mês,
-                perto do lucro operacional gerencial. O novo modelo vale a partir de 01/11/2026.
+                Este item é o manual de lançamento de compras e despesas. Ele explica, na ordem: as regras de base, as três
+                formas de lançar, as verificações que evitam lançamento duplicado e erro de categoria, o prazo para lançar, o
+                Relatório de despesas, as categorias de despesa e os centros de custo, os itens recorrentes e o ativo
+                permanente. O que acontece com o dinheiro depois do lançamento (o resultado do mês) está na pergunta 14. O
+                cálculo da rentabilidade de petiscos e drinks está na pergunta 15. Tudo isto vale para compras e despesas a
+                partir de 01/11/2026.
               </P>
-              <SubHeading>Lançar uma compra ou despesa</SubHeading>
+
+              <SubHeading>1. As regras de base</SubHeading>
+              <List
+                items={[
+                  <>
+                    O sistema <strong>não controla estoque</strong>. Ninguém “dá baixa” em nada. Tudo o que a pousada compra
+                    ou paga no mês é <strong>despesa daquele mês</strong>. A única exceção é o ativo permanente (veja o
+                    tópico 10).
+                  </>,
+                  <>
+                    A <strong>data da compra é também a data do pagamento</strong>. Não existe compra a prazo nem parcelada:
+                    lance a compra no dia em que ela foi paga.
+                  </>,
+                  <>
+                    O sistema não aceita data <strong>futura</strong> nem data <strong>anterior a 01/11/2026</strong>.
+                  </>,
+                  <>
+                    A <strong>forma de pagamento</strong> (PIX, dinheiro, cartão de débito, cartão de crédito, transferência
+                    ou boleto) é só um registro, para você conferir com o extrato do banco. Ela não muda nenhum cálculo.
+                  </>,
+                  <>
+                    <strong>Quem lança:</strong> o administrador e o gerente operacional. <strong>Editar</strong> um lançamento
+                    antigo, <strong>mover</strong> uma despesa e <strong>aprovar</strong> lançamento atrasado é só do
+                    administrador.
+                  </>,
+                ]}
+              />
+
+              <SubHeading>2. As formas de lançar uma compra ou despesa</SubHeading>
+              <P>Existem três caminhos.</P>
+
               <P>
-                Em <strong>Módulo Contábil → Lançar compra ou despesa</strong> (ou pela Caixa de conferência,
-                abaixo), cada item da nota recebe uma <strong>categoria de despesa</strong> (Alimentos, Materiais
-                de limpeza, Despesas de consumo etc.). Na categoria Alimentos você pode marcar o{" "}
-                <strong>ingrediente</strong> de produto de bar, quando for o caso.
+                <strong>Caminho A — Lançamento manual.</strong> Vá em <strong>Módulo gerencial → Lançar compra ou
+                despesa</strong>. Preencha, nesta ordem:
               </P>
-              <SubHeading>Categorias, prazo de consumo e centros de custo</SubHeading>
+              <List
+                items={[
+                  <>
+                    <strong>Data da compra</strong> (que é a data do pagamento), <strong>Fornecedor</strong>,{" "}
+                    <strong>Número da nota</strong> (opcional) e <strong>Forma de pagamento</strong>.
+                  </>,
+                  <>
+                    Para <strong>cada item da nota</strong>: <strong>Descrição</strong>, <strong>Categoria</strong>,{" "}
+                    <strong>Quantidade</strong> e <strong>Valor total (R$)</strong> daquela linha (a quantidade vezes o preço
+                    de cada unidade). Se a categoria aceitar ingrediente, aparece também o campo{" "}
+                    <strong>Ingrediente</strong> (veja o tópico 4). Use “Adicionar item” para notas com vários itens.
+                  </>,
+                  <>
+                    <strong>Vida útil (meses)</strong>: só para bens duráveis, como um eletrodoméstico. Serve para o sistema
+                    decidir se o item é ativo permanente (tópico 10).
+                  </>,
+                  <>
+                    As caixas <strong>Ativo permanente</strong> e, só para o administrador, <strong>Despesa recorrente</strong>{" "}
+                    (tópico 9). Em <strong>Observações</strong> você escreve o que quiser guardar sobre a compra.
+                  </>,
+                  <>
+                    Confira o <strong>Total da nota</strong> que aparece embaixo e clique em <strong>Lançar compra</strong>.
+                  </>,
+                ]}
+              />
+
               <P>
-                Em <strong>Listas contábeis → Categorias de despesa e centros de custo</strong>, cada categoria
-                tem um <strong>prazo de consumo em dias</strong>. Prazo 1 = consumo imediato (cai todo no mês da
-                compra). Prazo maior (ex.: 30 dias para limpeza): o valor da nota é dividido por dia, a partir
-                da data da compra, e distribuído entre os meses. Há quatro centros: <strong>Hospedagem, Bar,
-                Café da manhã e Frigobar</strong>. Alimentos se divide entre Bar e Café (ingrediente de bar segue
-                a divisão cadastrada nele; o resto vai ao Café). Demais bebidas se divide entre Bar e Frigobar
-                pelas quantidades vendidas no mês. Despesas de consumo (luz, água, gás, internet) têm divisão
-                fixa entre Hospedagem, Bar e Café. Bebidas quentes (destilados e outras bebidas alcoólicas que não são cerveja, mais os vinhos: cachaça, uísque, vodka, gim, Campari…) vão 100% ao Bar. Demais bebidas (cervejas, águas, refrigerantes e água de coco) se dividem entre Bar e Frigobar pelas vendas. O café (em pó) é alimento, mas também se divide entre Bar e Frigobar pelas vendas. As demais categorias vão à
-                Hospedagem. Impostos não entram em centro nenhum e aparecem só no final.
+                <strong>Caminho B — Pelo WhatsApp (Caixa de conferência).</strong> É o caminho para os recibos e notas que o
+                pessoal fotografa e envia no grupo de compras. Siga esta ordem:
               </P>
-              <SubHeading>Ativo permanente</SubHeading>
+              <List
+                items={[
+                  <>
+                    <strong>No celular</strong> (não no computador), abra o grupo de notas e toque em ⋮ → Mais → Exportar
+                    conversa → <strong>Incluir mídia</strong>. O WhatsApp Web e o WhatsApp do computador exportam só o texto,
+                    sem as fotos e sem os PDFs; por isso o celular é obrigatório.
+                  </>,
+                  <>
+                    Envie o arquivo <strong>.zip</strong> que foi gerado para o computador (por e-mail ou Google Drive, por
+                    exemplo).
+                  </>,
+                  <>
+                    Vá em <strong>Módulo gerencial → Caixa de conferência de compras → Importar conversa do WhatsApp</strong> e
+                    escolha o arquivo. Aguarde: cada nota é lida uma de cada vez e isso leva alguns instantes. Não feche a tela
+                    até terminar.
+                  </>,
+                  <>
+                    No <strong>primeiro arquivo</strong> (aquele que traz tudo desde 01/11/2026), marque a caixa{" "}
+                    <strong>Primeira importação</strong>. Nesse caso a IA também aponta quais despesas parecem se repetir todo
+                    mês (energia, água, internet, salários etc.) e, no fim, você cadastra as recorrentes de uma vez. Nas
+                    importações seguintes não marque: os itens recorrentes novos passam a ser cadastrados à mão.
+                  </>,
+                  <>
+                    Cada <strong>foto de nota</strong>, junto com as mensagens escritas pela mesma pessoa logo depois dela
+                    (que servem de explicação, como “material de limpeza”), vira um <strong>cartão</strong> na Caixa de
+                    conferência.
+                  </>,
+                  <>
+                    Em cada cartão você tem estas opções: <strong>abrir o item</strong> (a foto fica ao lado de um formulário
+                    já preenchido pela IA; você corrige o que precisar e clica em Lançar compra); <strong>Salvar</strong>{" "}
+                    (lança a nota exatamente como a IA leu, sem abrir); <strong>X</strong> (descarta o que não é compra, como
+                    uma conversa solta ou um comprovante repetido); e a caixa <strong>Despesa recorrente</strong> (só o
+                    administrador).
+                  </>,
+                  <>
+                    Para os cartões em que a IA classificou como Alimentos mas não achou ingrediente do bar, existe um quadro
+                    à parte no topo, <strong>“Confirmar em lote”</strong> (tópico 5).
+                  </>,
+                ]}
+              />
               <P>
-                Um item só é ativo permanente (não é despesa do mês) se o valor for igual ou maior que o limite
-                (R$ 1.200, editável) <strong>e</strong> a vida útil for maior que 12 meses (editável). Ele vai para
-                o <strong>Inventário de ativo permanente</strong>. Não há depreciação.
+                <strong>A IA nunca lança nada sozinha.</strong> Ela só prepara o cartão. Quem lança é você.
               </P>
-              <SubHeading>Itens recorrentes</SubHeading>
+
               <P>
-                Salários, honorários e outras despesas que se repetem ficam em{" "}
-                <strong>Listas contábeis → Itens recorrentes</strong>. Todo mês o sistema cria o lançamento no dia
-                combinado; você só ajusta o valor quando mudar.
+                <strong>Caminho C — Lançamento automático dos itens recorrentes.</strong> As despesas que se repetem todo mês
+                são criadas pelo próprio sistema (tópico 9).
               </P>
-              <SubHeading>Fechamento do mês e lançamentos tardios</SubHeading>
+
+              <SubHeading>3. O que a IA preenche, e o que ela nunca faz</SubHeading>
               <P>
-                O mês fecha no último dia. Compras e despesas ainda podem ser lançadas até 30 dias depois: entram
-                sozinhas, com a marca “lançado após o fechamento do mês”. Depois de 30 dias ficam{" "}
-                <strong>em vermelho</strong> no relatório até o admin aprovar ou cancelar. O mesmo vale para a receita
-                de bar, de frigobar e de hospedagem (correções da Stays).
+                A IA preenche, em cada cartão: a data, o fornecedor, o número da nota, a forma de pagamento, o total, os itens
+                da nota, a <strong>categoria</strong> de cada item, o <strong>ingrediente</strong> (somente quando o item é
+                um dos ingredientes cadastrados em Ingredientes de bar da piscina) e, para bens duráveis, uma estimativa da
+                vida útil. Ela <strong>só escolhe categorias que já existem</strong>. Ela <strong>nunca cria categoria nem
+                ingrediente novo</strong>. Quando o item não corresponde a nenhum ingrediente, ela apenas escolhe a categoria
+                de despesa. A foto e o texto sempre ficam disponíveis para você conferir.
               </P>
-              <SubHeading>Caixa de conferência e importação do WhatsApp</SubHeading>
+
+              <SubHeading>4. Ingrediente e categoria: o que o campo “Ingrediente” faz</SubHeading>
               <P>
-                No grupo de compras do WhatsApp, use “Exportar conversa” (com mídia) e envie o arquivo em{" "}
-                <strong>Caixa de conferência → Importar conversa</strong>. Cada foto de nota, com as mensagens do
-                mesmo remetente logo depois, vira um item. A IA sugere data, fornecedor, categoria e ingrediente;{" "}
-                <strong>nada é lançado sem a sua conferência</strong>: você confere com a foto, corrige e lança, ou
-                descarta o que não for compra. No <strong>primeiro arquivo</strong> (com tudo desde 01/11/2026), marque
-                “Primeira importação”: a IA também sugere quais despesas são recorrentes (energia, água, internet,
-                salários, honorários…) e você as cadastra de uma vez em Itens recorrentes. Nas importações seguintes
-                isso não é feito: os itens recorrentes novos são cadastrados à mão.
+                O campo “Ingrediente” só aparece nas categorias <strong>Alimentos</strong>,{" "}
+                <strong>Bebidas quentes</strong> e <strong>Demais bebidas</strong>. Ele serve para marcar que aquele item é
+                um insumo de algum petisco ou drink do cardápio do bar. Em Alimentos, marcar o ingrediente muda para onde vai o
+                custo (parte para o Bar, parte para o Café). Nas duas categorias de bebidas, o centro de custo é o mesmo com ou
+                sem ingrediente; o ingrediente só decide se aquele gasto entra na rentabilidade dos drinks (pergunta 15).
               </P>
-              <SubHeading>Relatório de despesas e Resultado mensal</SubHeading>
+
+              <SubHeading>5. As verificações que evitam lançamento duplicado e erro de categoria</SubHeading>
               <P>
-                O <strong>Relatório de despesas (regime caixa)</strong> lista cada compra e despesa em ordem da data
-                da compra, para conferir com o extrato do banco. O <strong>Resultado mensal</strong> mostra, por
-                centro de custo, as receitas (hospedagem bruta, comissão dos canais, hospedagem líquida, bar com taxa
-                de serviço, frigobar), as despesas por categoria e o resultado, e no fim o lucro operacional. A
-                receita de bar e de frigobar vale no mês em que o pedido foi lançado, e só entra depois que a conta é
-                fechada.
+                <strong>Contra lançamento duplicado, o sistema faz duas verificações:</strong>
               </P>
-              <SubHeading>Ficha técnica e custo dos produtos do bar</SubHeading>
+              <List
+                items={[
+                  <>
+                    <strong>Mesma mensagem.</strong> Na importação do WhatsApp, o sistema guarda a identificação de cada
+                    mensagem (dia, hora, quem enviou e o nome do arquivo da foto). Se você ler o mesmo arquivo de novo, as
+                    mensagens que já entraram são puladas. Isso vale mesmo para as que você já lançou ou descartou.
+                  </>,
+                  <>
+                    <strong>Compra parecida.</strong> Para cada nota, o sistema compara o conteúdo com as compras já lançadas
+                    e com as outras notas que estão na Caixa. Ele considera <strong>possível duplicata</strong> quando: (a)
+                    o número da nota é o mesmo e o fornecedor é parecido ou o valor é o mesmo; ou (b) o valor total é o mesmo,
+                    a data tem no máximo 3 dias de diferença e o fornecedor é parecido (ou está em branco). “Parecido”
+                    ignora acentos, maiúsculas e palavras como “Ltda” e “S/A”.
+                  </>,
+                ]}
+              />
               <P>
-                Em <strong>Listas operacionais → Cardápio de bar da piscina</strong>, o botão <strong>Ficha técnica</strong> de
-                cada item diz quais ingredientes entram nele (um item novo só é cadastrado com a ficha, com pelo menos 1 ingrediente); os
-                ingredientes ficam em <strong>Listas operacionais → Ingredientes de bar da piscina</strong>. Em <strong>Rentabilidade de Petiscos e Drinks</strong> o sistema estima, mês
-                a mês, o custo médio e a margem de cada produto. É uma <strong>estimativa</strong>: divide o que foi
-                comprado de cada ingrediente entre os produtos, pela quantidade vendida.
+                Quando acha uma possível duplicata, o sistema mostra um aviso em âmbar, “Possível duplicata”, na lista da Caixa
+                e dentro da nota, dizendo qual compra parece igual. Essa nota <strong>sai do “Confirmar em lote” e do botão
+                “Salvar” rápido</strong>: ela só é lançada se você abrir o item. Ao clicar em Lançar compra (numa nota da
+                Caixa ou no lançamento manual), o sistema abre uma pergunta: “Esta compra parece já estar lançada. Lançar
+                mesmo assim?”. O sistema <strong>só avisa</strong>: duas compras iguais de verdade são possíveis (por exemplo,
+                duas compras no mesmo dia, no mesmo valor), e você decide. Atenção: o aviso pode não aparecer se a nota não tem
+                número, se o nome do fornecedor está muito diferente ou se o valor mudou. Por isso vale conferir o Relatório de
+                despesas de vez em quando.
               </P>
+              <P>
+                <strong>Contra erro de categoria e de destino do custo:</strong>
+              </P>
+              <List
+                items={[
+                  <>
+                    Cada item mostra a linha <strong>“Destino do custo”</strong>, que diz para onde o gasto vai. Exemplos:
+                    “Café 100%”, “Bar 100%”, “Hospedagem 100%”, “Bar × Frigobar, pelas vendas do mês”.
+                  </>,
+                  <>
+                    Quando a categoria é Alimentos e não há ingrediente, o aviso fica em <strong>âmbar</strong> e diz “confira:
+                    se for insumo do bar, escolha o ingrediente”. Sem ingrediente, o gasto vai 100% para o Café da manhã.
+                  </>,
+                  <>
+                    O seletor de ingrediente mostra <strong>só os ingredientes do tipo da categoria</strong>: em Alimentos
+                    só aparecem alimentos (cafés inclusive); em Bebidas quentes só bebidas quentes; em Demais bebidas só
+                    demais bebidas.
+                  </>,
+                  <>
+                    Na leitura pela IA, o <strong>ingrediente manda na categoria</strong>: se a IA identifica um ingrediente
+                    (por exemplo, cachaça) e a categoria que ela escolheu não combina com o tipo dele, o sistema troca a
+                    categoria pela correta (Bebidas quentes, no exemplo).
+                  </>,
+                  <>
+                    O botão <strong>“Salvar” rápido</strong> só funciona quando o destino do custo é certo. Se falta a
+                    categoria, é preciso abrir o item. Se a categoria é Alimentos e não há ingrediente, o cartão vai para o
+                    quadro <strong>“Confirmar em lote”</strong>.
+                  </>,
+                  <>
+                    <strong>Confirmar em lote:</strong> o quadro lista essas notas, com data, fornecedor, total e itens. Você
+                    marca as que quiser (ou usa “Selecionar todas”) e clica em <strong>Confirmar selecionadas</strong>. O
+                    sistema lança todas como despesa do <strong>Café da manhã (100%)</strong>, sem ingrediente. Se algum item
+                    for, na verdade, insumo do bar, abra aquela nota (link “Abrir para conferir ou editar”) e escolha o
+                    ingrediente antes de lançar. Notas sem categoria nunca entram no lote.
+                  </>,
+                  <>
+                    <strong>Campos obrigatórios:</strong> cada item precisa de descrição, categoria (exceto ativo permanente),
+                    quantidade maior que zero e valor maior que zero.
+                  </>,
+                  <>
+                    Se mesmo assim um lançamento sair errado, o administrador corrige com o botão <strong>Editar</strong> do
+                    Relatório de despesas (tópico 7).
+                  </>,
+                ]}
+              />
+
+              <SubHeading>6. O prazo para lançar: o mês fecha, mas há 30 dias de tolerância</SubHeading>
+              <P>
+                O mês “fecha” no último dia. Mesmo assim, você ainda pode lançar compras daquele mês por mais{" "}
+                <strong>30 dias</strong>: elas entram sozinhas, com o selo <strong>“Lançado após o fechamento do mês”</strong>
+                no relatório. Depois de 30 dias, a compra fica <strong>pendente de aprovação</strong>, em{" "}
+                <strong>vermelho</strong> no relatório, e <strong>não conta no resultado do mês</strong> enquanto o
+                administrador não clicar em <strong>Aprovar</strong> (ela passa a contar) ou <strong>Cancelar</strong> (ela é
+                descartada). O mesmo prazo vale para <strong>editar</strong> uma despesa. A receita de bar, de frigobar e de
+                hospedagem segue a mesma regra (pergunta 14). Esses 30 dias são a regra padrão do sistema.
+              </P>
+
+              <SubHeading>7. O Relatório de despesas (regime caixa)</SubHeading>
+              <P>
+                Fica em <strong>Módulo gerencial → Relatório de despesas</strong>. “Regime caixa” significa que cada compra
+                aparece no dia em que foi paga. A tela mostra o <strong>mês</strong> que você escolher (use as setas para
+                trocar de mês) e lista <strong>cada compra e despesa, uma por vez, em ordem da data</strong>. Ela serve para
+                você <strong>conferir com o extrato do banco</strong> e para auditar o que foi lançado.
+              </P>
+              <P>Para cada compra, o relatório mostra:</P>
+              <List
+                items={[
+                  <>
+                    A <strong>data</strong>, o <strong>fornecedor</strong>, o <strong>número da nota</strong> (se houver) e o{" "}
+                    <strong>valor total</strong>.
+                  </>,
+                  <>
+                    Selos: “Lançado após o fechamento do mês”, “WhatsApp” ou “Recorrente” (de onde veio o lançamento), a forma
+                    de pagamento, “Cancelado” e, em vermelho, “Mais de 30 dias após o fechamento — aguarda aprovação”.
+                  </>,
+                  <>
+                    Os <strong>itens</strong> da compra, cada um com a categoria, o ingrediente (se houver), o valor e a linha{" "}
+                    <strong>“→ destino do custo”</strong>.
+                  </>,
+                  <>
+                    No fim, o <strong>Total do mês</strong>, que <strong>não inclui</strong> compras canceladas nem pendentes.
+                    Os itens de <strong>ativo permanente</strong> não aparecem aqui, porque não são despesa do mês.
+                  </>,
+                ]}
+              />
+              <P>O administrador tem mais três recursos no relatório:</P>
+              <List
+                items={[
+                  <>
+                    <strong>Editar</strong>, em cada compra, até 30 dias depois do fim do mês dela. Dá para alterar a data, o
+                    fornecedor, o número da nota, a forma de pagamento e as observações; e, em cada item, a descrição, a
+                    categoria, o ingrediente, a quantidade e o valor. O total é recalculado. Se a despesa é recorrente, o item
+                    recorrente correspondente (nome, categoria, valor e dia) é atualizado junto. Ao trocar a categoria de um
+                    item, escolha o ingrediente de novo.
+                  </>,
+                  <>
+                    <strong>Mover</strong>, em cada item: “Cadastrar como despesa recorrente” (cria o item recorrente; a
+                    despesa deste mês <strong>continua</strong> no relatório) ou “Mover para ativo permanente” (o item vira um
+                    bem do inventário e <strong>sai</strong> do relatório). O caminho de volta, de ativo permanente para
+                    despesa, fica no Inventário de ativo permanente.
+                  </>,
+                  <>
+                    <strong>Aprovar</strong> ou <strong>Cancelar</strong> as compras pendentes em vermelho.
+                  </>,
+                ]}
+              />
+              <P>
+                O relatório também tem o botão <strong>Lançar compra</strong>. E há um detalhe importante: é{" "}
+                <strong>ao abrir o Relatório de despesas</strong> que o sistema cria os lançamentos dos itens recorrentes do mês
+                (tópico 9).
+              </P>
+
+              <SubHeading>8. Categorias de despesa, prazo de consumo e centros de custo</SubHeading>
+              <P>
+                As categorias ficam em <strong>Módulo gerencial → Listas gerenciais → Categorias de despesa e centros de
+                custo</strong>. Toda compra é classificada em uma categoria, e cada categoria tem duas características: um{" "}
+                <strong>prazo de consumo</strong> e uma <strong>regra de divisão entre os centros de custo</strong>.
+              </P>
+              <P>
+                <strong>Prazo de consumo (em dias).</strong> Prazo 1 significa consumo imediato: a compra cai inteira no mês em
+                que foi paga. Prazo maior (por exemplo, 30 dias para material de limpeza) significa que a compra é consumida
+                aos poucos: o sistema divide o valor igualmente pelos dias, <strong>a partir da data da compra</strong>, e
+                distribui entre os meses. Exemplo: uma compra de R$ 300,00 de material de limpeza paga no dia 20 de novembro,
+                com prazo de 30 dias, vale R$ 10,00 por dia. De 20 a 30 de novembro são 11 dias, ou seja, R$ 110,00 em
+                novembro; os outros R$ 190,00 caem em dezembro.
+              </P>
+              <P>
+                <strong>Centros de custo.</strong> Existem quatro: <strong>Hospedagem, Bar, Café da manhã e Frigobar</strong>.
+                O custo de cada compra é dividido entre eles pela regra da categoria. As categorias já cadastradas são estas
+                (os valores iniciais podem ser editados por você):
+              </P>
+              <List
+                items={[
+                  <>
+                    <strong>Alimentos</strong> (prazo de 1 dia para itens sem ingrediente): se o item tem ingrediente, o custo
+                    se divide entre Bar e Café conforme o percentual do Bar cadastrado no ingrediente; sem ingrediente, vai
+                    100% para o Café. Cada ingrediente de alimento tem o seu próprio prazo de consumo (30 dias quando
+                    cadastrado). Você o ajusta na própria tela: clique em “Itens de Alimentos e prazo de consumo de cada um”,
+                    dentro do card Alimentos. Os cafés (em pó, em cápsula, expresso) são tratados como alimentos.
+                  </>,
+                  <>
+                    <strong>Bebidas quentes</strong> (prazo de 1 dia): destilados, vinhos e outras bebidas alcoólicas que não
+                    são cerveja (cachaça, uísque, vodka, gim, Campari, vinhos…). Vão <strong>100% para o Bar</strong>.
+                  </>,
+                  <>
+                    <strong>Demais bebidas</strong> (prazo de 1 dia): cervejas, águas, refrigerantes e água de coco. O custo se
+                    divide entre <strong>Bar e Frigobar</strong> na proporção das quantidades vendidas no mês: as bebidas
+                    vendidas nas comandas do bar contra as unidades lançadas no frigobar. Sem nenhuma venda no mês, divide
+                    meio a meio.
+                  </>,
+                  <>
+                    <strong>Materiais de limpeza, Amenities, Materiais de piscina, Materiais de lavanderia, Materiais de
+                    jardinagem e Materiais de escritório</strong> (prazo de 30 dias): 100% Hospedagem.
+                  </>,
+                  <>
+                    <strong>Despesas de consumo</strong> (luz, água, gás, internet; prazo de 1 dia): 40% Hospedagem, 30% Café
+                    da manhã e 30% Bar.
+                  </>,
+                  <>
+                    <strong>Despesas de pessoal administrativo, Despesas de marketing, Despesas de pessoal operacional e
+                    Despesas de reforma e manutenção</strong> (prazo de 1 dia): 100% Hospedagem.
+                  </>,
+                  <>
+                    <strong>Impostos</strong> (prazo de 1 dia): <strong>não entram em nenhum centro</strong>. Aparecem só no fim
+                    do Resultado mensal, antes do lucro final.
+                  </>,
+                ]}
+              />
+              <P>
+                Nesta tela você também pode <strong>criar categorias novas</strong> (botão “Nova categoria”, com nome, prazo de
+                consumo e o percentual de cada centro, que deve somar 100) e desativar categorias que não usa mais. Nas
+                categorias de divisão por percentuais (como Despesas de consumo e Bebidas quentes) você pode mudar o prazo e os
+                percentuais. Em <strong>Alimentos</strong> e <strong>Demais bebidas</strong> a regra de divisão é fixa do
+                sistema (explicada acima): só o prazo, o nome e a chave de ativa se editam. A mudança vale para os cálculos dali em diante e também quando você olha meses já lançados, porque
+                o resultado é sempre recalculado com as regras do momento.
+              </P>
+
+              <SubHeading>9. Itens recorrentes</SubHeading>
+              <P>
+                São as despesas que se repetem todo mês, como salários, honorários, internet e aluguel. Você cadastra uma vez
+                e o sistema cria o lançamento sozinho a cada mês, sem precisar digitar.
+              </P>
+              <P>
+                <strong>Onde cadastrar:</strong> <strong>Módulo gerencial → Listas gerenciais → Itens recorrentes</strong>. O
+                botão “Novo item” pede: <strong>nome</strong>, <strong>categoria</strong>, <strong>valor</strong> e{" "}
+                <strong>dia do mês</strong> (de 1 a 28). Cada item tem uma chave <strong>Ativo</strong> (desligue para parar de
+                lançar, sem apagar) e botões de editar, excluir e mover. Há outros três jeitos de cadastrar um item
+                recorrente: marcar a caixa “Despesa recorrente” ao lançar uma compra; usar o botão Mover no Relatório de
+                despesas; e a sugestão da “Primeira importação” do WhatsApp (tela “Itens recorrentes sugeridos”, onde você
+                ajusta nome, categoria, valor e dia e cadastra os marcados de uma vez).
+              </P>
+              <P>
+                <strong>Como o lançamento acontece:</strong> toda vez que alguém abre o <strong>Relatório de despesas</strong>,
+                o sistema olha cada item recorrente ativo e, se o <strong>dia combinado já chegou</strong> neste mês e o item
+                ainda <strong>não foi lançado neste mês</strong>, ele cria a despesa, com a data do dia combinado, o valor
+                cadastrado e o selo “Recorrente”. Cada item é lançado <strong>uma única vez por mês</strong>, mesmo que o
+                relatório seja aberto muitas vezes. Se o dia combinado ainda não chegou, o lançamento só aparece quando ele
+                chegar. Por isso: <strong>abra o Relatório de despesas</strong> antes de olhar o Resultado mensal, para que os
+                recorrentes do mês já estejam lançados.
+              </P>
+              <P>
+                Quando um item recorrente é cadastrado a partir de uma compra que você já lançou, o mês dessa compra já está
+                coberto e o sistema só passa a lançar o item a partir do mês seguinte. Para mudar o valor combinado, edite o
+                item (vale a partir dos próximos lançamentos). Se o lançamento do mês já foi criado com o valor errado, use{" "}
+                <strong>Editar</strong> na despesa do relatório: ela corrige o lançamento e atualiza o item recorrente.
+              </P>
+
+              <SubHeading>10. Ativo permanente</SubHeading>
+              <P>
+                Ativo permanente é um bem durável, como uma geladeira ou uma televisão. Ele <strong>não é despesa do
+                mês</strong>: o dinheiro gasto não entra no Resultado mensal, porque o bem continua existindo e sendo usado.
+                O sistema <strong>não calcula depreciação</strong>.
+              </P>
+              <P>
+                <strong>O critério.</strong> Um item é ativo permanente quando as duas condições abaixo são verdadeiras ao
+                mesmo tempo:
+              </P>
+              <List
+                items={[
+                  <>
+                    o <strong>valor de cada unidade</strong> (o valor da linha dividido pela quantidade) é{" "}
+                    <strong>igual ou maior que R$ 1.200,00</strong>; e
+                  </>,
+                  <>
+                    a <strong>vida útil</strong> é <strong>maior que 12 meses</strong>.
+                  </>,
+                ]}
+              />
+              <P>
+                Os dois números (R$ 1.200,00 e 12 meses) podem ser alterados em <strong>Listas gerenciais → Categorias de
+                despesa e centros de custo</strong>, no card <strong>“Ativo permanente”</strong> (campos “Valor mínimo do
+                item” e “Vida útil mínima”, e o botão “Salvar parâmetros”).
+              </P>
+              <P>
+                <strong>Como o item é marcado.</strong> Ao preencher o valor, a quantidade e a vida útil de um item, o sistema
+                marca sozinho a caixa “Ativo permanente” se o critério for atendido. A IA estima a vida útil dos bens
+                duráveis que lê na nota. Você pode marcar ou desmarcar a caixa à mão, e o botão <strong>Mover</strong> do
+                Relatório de despesas também faz essa mudança depois do lançamento.
+              </P>
+              <P>
+                <strong>O que acontece.</strong> O item não entra como despesa e some do Relatório de despesas. O sistema
+                cria o bem no <strong>Inventário de ativo permanente</strong> (<strong>Módulo gerencial → Inventário de ativo
+                permanente</strong>), com o nome, a data e o valor da compra. O inventário mostra os bens agrupados por
+                categoria, com marca e modelo, local, data da compra, valor, garantia e fornecedor (quando essas informações
+                existem), e o valor total. Cada bem tem um botão <strong>Mover</strong> que o devolve para despesa (você
+                escolhe a categoria da despesa; o sistema só aceita isso para compras a partir de 01/11/2026).
+              </P>
+              <P>
+                <strong>Categorias e tipos de bens.</strong> Ficam em <strong>Listas gerenciais → Plano de itens de ativo
+                permanente</strong>: você organiza as categorias (por exemplo, “Máquinas”) e, dentro de cada uma, os tipos de
+                bem (por exemplo, “Liquidificador”). Um bem novo, quando criado a partir de uma compra, entra na primeira
+                categoria da lista.
+              </P>
+            </div>
+          </AccordionPanel>
+        </AccordionItem>
+
+        {/* 14. Resultado mensal */}
+        <AccordionItem value="resultado-mensal">
+          <AccordionTrigger>
+            <span className="font-heading text-base">14. Como é calculado o Resultado mensal?</span>
+          </AccordionTrigger>
+          <AccordionPanel>
+            <div className="space-y-3">
+              <P>
+                O <strong>Resultado mensal</strong> (<strong>Módulo gerencial → Resultado mensal</strong>, só para o
+                administrador) mostra, mês a mês, quanto a pousada ganhou e quanto gastou, separado por{" "}
+                <strong>centro de custo</strong>, e termina com o <strong>lucro operacional gerencial</strong> do mês. Use as
+                setas no alto para trocar de mês. O resultado é calculado na hora, sempre que você abre a tela, a partir das
+                compras lançadas, das contas de bar e frigobar e dos dados da Stays. Nada precisa ser “fechado” à mão.
+              </P>
+              <P>
+                No alto da tela, uma linha de status diz em que fase está o mês: <strong>“Mês em andamento — resultado
+                parcial”</strong> (o mês ainda não acabou), <strong>“Mês fechado”</strong> (acabou, mas ainda aceita
+                lançamentos tardios por 30 dias) ou <strong>“Mês consolidado”</strong> (a tolerância de 30 dias terminou). Ela
+                também informa quantas despesas foram lançadas depois do fechamento.
+              </P>
+
+              <SubHeading>1. O bloco “Receitas”</SubHeading>
+              <List
+                items={[
+                  <>
+                    <strong>Hospedagem bruta:</strong> a soma do valor das diárias vendidas no mês, vindo da Stays (é a mesma
+                    base da tela Indicadores). Entram reservas confirmadas, pré-reservas e contratos; reservas canceladas não
+                    entram; diárias gratuitas valem zero; taxas e impostos da reserva ficam de fora. Cada diária pertence ao
+                    dia em que começa, então uma reserva que atravessa a virada do mês dá a cada mês a sua parte.
+                  </>,
+                  <>
+                    <strong>(−) Comissão dos canais de venda:</strong> o que os canais cobram da pousada. Para Booking, Airbnb
+                    e Decolar, é o valor em reais que a própria Stays informa em cada reserva. Para a Expedia, é o percentual
+                    cadastrado na tela Indicadores, aplicado sobre a receita dela. Reservas diretas não têm comissão.
+                  </>,
+                  <>
+                    <strong>Hospedagem líquida:</strong> a hospedagem bruta menos a comissão dos canais. É esse valor que
+                    conta como receita do centro Hospedagem.
+                  </>,
+                  <>
+                    <strong>Bar — consumo:</strong> a soma de (quantidade × preço no momento do pedido) de todas as comandas
+                    do bar da piscina <strong>lançadas no mês</strong>, sem as comandas canceladas. A data que vale é a data
+                    em que a comanda foi lançada, não a do pagamento.
+                  </>,
+                  <>
+                    <strong>Bar — taxa de serviço:</strong> 10% sobre o consumo do bar, salvo nas contas em que a camareira
+                    isentou a taxa (nessas, é zero).
+                  </>,
+                  <>
+                    <strong>Frigobar:</strong> a soma de (quantidade × preço) de tudo o que foi lançado no frigobar{" "}
+                    <strong>naquele mês</strong>.
+                  </>,
+                  <>
+                    <strong>Total das receitas:</strong> hospedagem líquida + bar (consumo e taxa) + frigobar.
+                  </>,
+                ]}
+              />
+              <P>
+                <strong>Regra importante sobre bar e frigobar:</strong> só contam as contas já <strong>fechadas ou
+                pagas</strong>. Uma conta ainda aberta ou reaberta não entra enquanto não for fechada. O que está nessa
+                situação aparece numa frase abaixo das receitas: “Contas ainda abertas, a fechar (não contam enquanto não
+                fecharem): bar R$ … · frigobar R$ …”. Se uma conta só for fechada <strong>depois de 30 dias do fim do
+                mês</strong>, a receita dela fica num quadro vermelho no alto, <strong>“Aguardando aprovação do
+                admin”</strong>, e só entra no resultado se você clicar em <strong>Aprovar</strong> (clicando em Cancelar,
+                ela é descartada). Com a hospedagem é parecido: passados os 30 dias, o valor do mês fica “congelado”; se a
+                Stays corrigir esse mês depois (por exemplo, uma reserva alterada), a diferença aparece no quadro vermelho com
+                o botão <strong>Aceitar correção</strong>.
+              </P>
+
+              <SubHeading>2. Um bloco para cada centro de custo</SubHeading>
+              <P>
+                Em seguida vêm quatro blocos: <strong>Hospedagem, Bar, Café da manhã e Frigobar</strong>. Cada um mostra:
+              </P>
+              <List
+                items={[
+                  <>
+                    <strong>Receita:</strong> Hospedagem = a hospedagem líquida; Bar = consumo mais taxa de serviço;
+                    Frigobar = o total do frigobar; <strong>Café da manhã = zero</strong>, porque o café é oferecido junto
+                    com a diária e não tem venda própria.
+                  </>,
+                  <>
+                    Uma linha <strong>“(−) nome da categoria”</strong> para cada categoria de despesa que teve gasto nesse
+                    centro no mês, já com a parte que cabe a ele.
+                  </>,
+                  <>
+                    <strong>Total das despesas</strong> do centro e <strong>Resultado do centro</strong> (receita menos
+                    despesas). O resultado do Café da manhã sai <strong>negativo</strong> e isso é normal: ele mostra quanto o
+                    café custou no mês.
+                  </>,
+                ]}
+              />
+              <P>
+                <strong>De onde vêm as despesas de cada centro.</strong> O sistema pega cada compra do mês e faz três passos:
+                (1) <strong>descobre quanto da compra pertence a este mês</strong>, pelo prazo de consumo da categoria
+                (uma compra com prazo de 30 dias é dividida por dia entre os meses; veja o tópico 8 da pergunta 13); (2){" "}
+                <strong>divide esse valor entre os centros</strong>, pela regra da categoria (por exemplo, Despesas de
+                consumo: 40% Hospedagem, 30% Café, 30% Bar; Alimentos com ingrediente: conforme o percentual do Bar do
+                ingrediente); (3) <strong>soma</strong> tudo por categoria e centro. Exemplo: R$ 1.000,00 de energia
+                elétrica pagos no mês viram R$ 400,00 de despesa da Hospedagem, R$ 300,00 do Café da manhã e R$ 300,00 do
+                Bar.
+              </P>
+              <P>
+                O custo das categorias “Demais bebidas” se divide entre Bar e Frigobar na proporção das quantidades vendidas
+                no mês. Essa proporção aparece, em porcentagem do Bar, na nota no pé da tela (“Demais bebidas foram divididas
+                entre Bar e Frigobar na proporção das quantidades do mês (Bar X%)”).
+              </P>
+
+              <SubHeading>3. O bloco “Resultado total”</SubHeading>
+              <List
+                items={[
+                  <>
+                    <strong>Receitas:</strong> o total das receitas.
+                  </>,
+                  <>
+                    <strong>(−) Despesas dos centros:</strong> a soma das despesas dos quatro centros.
+                  </>,
+                  <>
+                    <strong>Resultado antes dos impostos:</strong> receitas menos despesas dos centros.
+                  </>,
+                  <>
+                    <strong>(−) Impostos:</strong> tudo o que foi lançado na categoria Impostos, que não pertence a nenhum
+                    centro.
+                  </>,
+                  <>
+                    <strong>Lucro operacional gerencial do mês:</strong> o resultado antes dos impostos menos os impostos.
+                    É o número final do mês.
+                  </>,
+                ]}
+              />
+
+              <SubHeading>4. O que não entra no resultado</SubHeading>
+              <List
+                items={[
+                  <>Itens de <strong>ativo permanente</strong> e qualquer <strong>depreciação</strong>.</>,
+                  <>Controle de <strong>estoque</strong> (não existe).</>,
+                  <>Compras <strong>canceladas</strong> e compras <strong>pendentes de aprovação</strong>.</>,
+                  <>Compras com data <strong>anterior a 01/11/2026</strong>.</>,
+                  <>Contas de bar e frigobar ainda <strong>não fechadas</strong>.</>,
+                ]}
+              />
+
+              <SubHeading>5. Como conferir um número</SubHeading>
+              <P>
+                Para conferir as despesas, abra o <strong>Relatório de despesas</strong> do mesmo mês: cada compra mostra o
+                destino do custo. Para conferir a hospedagem, compare com a tela <strong>Indicadores</strong>. Para conferir
+                o bar e o frigobar, veja “Consumo de Bar e Frigobar”. Lembre-se de abrir o Relatório de despesas antes, para
+                os itens recorrentes do mês já estarem lançados.
+              </P>
+            </div>
+          </AccordionPanel>
+        </AccordionItem>
+
+        {/* 15. Rentabilidade de Petiscos e Drinks */}
+        <AccordionItem value="rentabilidade">
+          <AccordionTrigger>
+            <span className="font-heading text-base">15. Como é calculada a Rentabilidade de Petiscos e Drinks?</span>
+          </AccordionTrigger>
+          <AccordionPanel>
+            <div className="space-y-3">
+              <P>
+                A tela <strong>Rentabilidade de Petiscos e Drinks</strong> (<strong>Módulo gerencial → Rentabilidade de
+                Petiscos e Drinks</strong>, só para o administrador) responde a uma pergunta: <strong>quanto cada petisco e
+                cada drink do cardápio custou no mês, e quanto sobrou da venda dele?</strong> Use as setas no alto para
+                trocar de mês. É uma <strong>estimativa</strong>, e ela só considera os <strong>ingredientes</strong>.
+              </P>
+
+              <SubHeading>1. As três peças que alimentam o cálculo</SubHeading>
+              <P>
+                <strong>Peça 1 — O Cardápio de bar da piscina</strong> (<strong>Módulo operacional → Listas operacionais →
+                Cardápio de bar da piscina</strong>). É a lista de tudo o que o bar vende, com o preço. Cada item tem uma
+                categoria, e só há três opções: <strong>Petiscos</strong>, <strong>Drinks</strong> e{" "}
+                <strong>Outras bebidas</strong>. Os Drinks atuais são as caipirinhas, caipiroskas e caipifrutas, o gin
+                tônica, o Campari e a taxa de rolha; as demais bebidas (cervejas, águas, refrigerantes, sucos…) são Outras
+                bebidas. <strong>Só Petiscos e Drinks aparecem na Rentabilidade.</strong> Os itens de Outras bebidas não têm
+                custo nem margem acompanhados aqui. O custo deles continua entrando normalmente no Resultado mensal, no centro
+                de custo que corresponde a eles. Ao cadastrar um item novo, você escolhe a categoria, escreve o nome, define o
+                preço e, para Petiscos e Drinks, preenche a ficha técnica.
+              </P>
+              <P>
+                <strong>Peça 2 — Os Ingredientes de bar da piscina</strong> (<strong>Listas operacionais → Ingredientes de
+                bar da piscina</strong>, logo abaixo do Cardápio). É a lista de todos os insumos usados nas receitas. O nome
+                traz a unidade de medida, por exemplo “Cachaça (ml)”, “Farinha de trigo (g)” ou “Limão (un)”. Para cada
+                ingrediente você informa:
+              </P>
+              <List
+                items={[
+                  <>
+                    O <strong>Tipo</strong>: Alimento (cafés inclusive), Bebida quente (destilados, vinhos…) ou Demais bebidas
+                    (cervejas, águas, refrigerantes).
+                  </>,
+                  <>
+                    Para os <strong>alimentos</strong>: como o gasto se divide e o prazo de consumo. A divisão pode ser{" "}
+                    <strong>Bar × Café da manhã</strong> (você informa o percentual que vai para o Bar; o resto vai para o
+                    Café) ou <strong>Bar × Frigobar pelas vendas do mês</strong> (usada no café, que também é vendido no
+                    frigobar). O <strong>prazo de consumo</strong> (em dias) começa em 30 e pode ser ajustado.
+                  </>,
+                  <>
+                    Para as <strong>bebidas</strong>: nada além do tipo, porque elas seguem o prazo e a divisão da categoria
+                    de despesa (Bebidas quentes ou Demais bebidas).
+                  </>,
+                ]}
+              />
+              <P>
+                Os ingredientes são cadastrados <strong>antes</strong> de criar o petisco ou drink que os usa. O sistema
+                nunca cria ingrediente sozinho.
+              </P>
+              <P>
+                <strong>Peça 3 — A ficha técnica</strong> (botão <strong>“Ficha técnica”</strong> em cada item do Cardápio). É
+                a receita do item: quais ingredientes entram e <strong>quanto de cada um vai em uma unidade vendida</strong>
+                (por exemplo, um pastel de queijo leva 90 g de farinha de trigo e 120 g de queijo muçarela). Regras: use{" "}
+                <strong>a mesma medida do ingrediente em todos os produtos</strong> (se o ingrediente é em gramas, escreva
+                sempre em gramas); <strong>Petiscos e Drinks só são cadastrados com a ficha técnica</strong> (pelo menos um
+                ingrediente) e a ficha nunca pode ficar vazia; para Outras bebidas a ficha é opcional. Na lista do Cardápio, o
+                item sem ficha aparece com o aviso “Sem ficha técnica”.
+              </P>
+
+              <SubHeading>2. Como a compra entra no cálculo</SubHeading>
+              <P>
+                Ao lançar uma compra (pergunta 13), a linha que é um insumo do cardápio é ligada a um{" "}
+                <strong>ingrediente</strong>. <strong>Só as compras ligadas a um ingrediente entram na Rentabilidade.</strong>{" "}
+                Uma compra sem ingrediente (por exemplo, gás ou papel) entra no Resultado mensal, mas não aqui. A{" "}
+                <strong>quantidade comprada não é usada</strong> em nenhuma conta; vale o <strong>valor em reais</strong>.
+              </P>
+
+              <SubHeading>3. O cálculo, passo a passo</SubHeading>
+              <List
+                items={[
+                  <>
+                    <strong>Passo 1 — Vendas do mês.</strong> Para cada produto, o sistema soma as unidades vendidas e a
+                    receita (unidades × preço na hora do pedido), nas comandas lançadas no mês, sem as canceladas.
+                  </>,
+                  <>
+                    <strong>Passo 2 — Custo do mês de cada ingrediente.</strong> O sistema pega as compras ligadas ao
+                    ingrediente e <strong>distribui o valor pelo prazo de consumo</strong> (alimentos: o prazo do próprio
+                    ingrediente; bebidas: o prazo da categoria). Do valor que cabe ao mês, fica só a <strong>parte do
+                    Bar</strong>: nos alimentos, o percentual do Bar cadastrado no ingrediente (ou a proporção Bar × Frigobar
+                    das vendas, no caso do café); nas Bebidas quentes, 100%; nas Demais bebidas, a proporção Bar × Frigobar
+                    das vendas do mês.
+                  </>,
+                  <>
+                    <strong>Passo 3 — Divisão entre os produtos.</strong> O custo do ingrediente é repartido entre os
+                    produtos que o usam, <strong>proporcionalmente ao “peso” de cada um</strong>: o peso é as{" "}
+                    <strong>unidades vendidas × a quantidade do ingrediente na ficha técnica</strong>.
+                  </>,
+                  <>
+                    <strong>Passo 4 — Os números da tela.</strong> O sistema soma o que cada produto recebeu de todos os
+                    ingredientes (isso é o <strong>Custo estimado</strong>), divide pelas unidades vendidas (o{" "}
+                    <strong>Custo médio por unidade</strong>), subtrai da receita (o <strong>Resultado</strong>) e divide o
+                    resultado pela receita (a <strong>Margem</strong>, em porcentagem).
+                  </>,
+                ]}
+              />
+              <P>
+                <strong>Exemplo.</strong> Em um mês, a parte do Bar da farinha de trigo foi R$ 50,00. Os produtos que usam
+                farinha venderam: Pastel de Queijo, 10 unidades (90 g cada, peso 900); Pastel de Camarão, 5 unidades (90 g,
+                peso 450); Filé de Camarão com Macaxeira, 5 unidades (30 g, peso 150). O peso total é 1.500. Então o Pastel de
+                Queijo recebe R$ 30,00, o Pastel de Camarão R$ 15,00 e o Filé de Camarão R$ 5,00 do custo da farinha. O
+                mesmo é feito com cada ingrediente, e os resultados de cada produto são somados.
+              </P>
+
+              <SubHeading>4. O que a tela mostra</SubHeading>
+              <P>
+                Uma tabela com uma linha por produto: <strong>Produto</strong>, <strong>Vendidos</strong>,{" "}
+                <strong>Receita</strong>, <strong>Custo estimado</strong>, <strong>Custo médio / un.</strong>,{" "}
+                <strong>Resultado</strong> e <strong>Margem</strong>. Produtos sem ficha técnica trazem o aviso “sem ficha
+                técnica”. Embaixo aparece o custo total de ingredientes do Bar no mês. Se algum valor ficou{" "}
+                <strong>sem produto</strong> para receber (ingrediente comprado, mas que nenhum produto vendido no mês usa na
+                ficha), a tela informa o valor “não atribuído a nenhum produto”.
+              </P>
+
+              <SubHeading>5. Os limites da estimativa</SubHeading>
+              <List
+                items={[
+                  <>
+                    O custo é <strong>o que foi gasto no mês dividido entre os produtos vendidos</strong>, e não o custo
+                    exato de cada porção. Comprar muito de um ingrediente num mês e vender pouco faz o custo médio daquele mês
+                    subir.
+                  </>,
+                  <>
+                    Só entram <strong>ingredientes</strong>. Gás, gelo, mão de obra e outras despesas do bar não fazem parte
+                    do custo mostrado aqui (elas aparecem no Resultado mensal).
+                  </>,
+                  <>
+                    Sobras e perdas não são consideradas.
+                  </>,
+                  <>
+                    A tela usa a <strong>ficha técnica atual</strong> para qualquer mês que você consultar. Se você mudar uma
+                    receita, os meses antigos também passam a ser calculados com a receita nova.
+                  </>,
+                ]}
+              />
+
+              <SubHeading>6. Quando algo parece errado</SubHeading>
+              <List
+                items={[
+                  <>
+                    <strong>Um produto aparece sem custo:</strong> confira se ele tem ficha técnica e se as compras dos
+                    ingredientes dele foram lançadas <strong>ligadas ao ingrediente</strong>.
+                  </>,
+                  <>
+                    <strong>Uma compra de insumo foi lançada sem o ingrediente:</strong> o administrador abre o Relatório de
+                    despesas, clica em <strong>Editar</strong> (até 30 dias depois do fim do mês) e escolhe o ingrediente.
+                  </>,
+                  <>
+                    <strong>Item novo no cardápio:</strong> faça, nesta ordem: (1) cadastre os ingredientes novos em
+                    Ingredientes de bar da piscina; (2) crie o item no Cardápio de bar da piscina, preenchendo a ficha técnica;
+                    (3) ao lançar as próximas compras, ligue cada insumo ao ingrediente.
+                  </>,
+                  <>
+                    <strong>O Resultado mensal não muda por causa disto:</strong> os custos de todas as compras continuam
+                    entrando nele, de acordo com os centros de custo. A Rentabilidade apenas olha mais de perto os petiscos e
+                    drinks.
+                  </>,
+                ]}
+              />
             </div>
           </AccordionPanel>
         </AccordionItem>
 
         <AccordionItem value="indicadores">
           <AccordionTrigger>
-            <span className="text-left">14. Como são calculados os indicadores (ADR, RevPAR, NetRevPAR e ocupação)?</span>
+            <span className="text-left">16. Como são calculados os indicadores (ADR, RevPAR, NetRevPAR e ocupação)?</span>
           </AccordionTrigger>
           <AccordionPanel>
             <div className="space-y-3">

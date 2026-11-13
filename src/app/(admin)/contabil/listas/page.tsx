@@ -13,7 +13,7 @@ export default function ListasContabeisPage() {
   return (
     <div className="space-y-6">
       <BackLink href="/contabil" />
-      <PageHeader title="Listas contábeis" subtitle="Os cadastros que alimentam o resultado: categorias de despesa, itens recorrentes e ativo permanente. Ingredientes e fichas técnicas do bar ficam em Listas operacionais, no cardápio de bar da piscina." />
+      <PageHeader title="Listas gerenciais" subtitle="Os cadastros que alimentam o resultado: categorias de despesa, itens recorrentes e ativo permanente. Ingredientes e fichas técnicas do bar ficam em Listas operacionais, no cardápio de bar da piscina." />
       <nav className="max-w-md space-y-1.5">
         {menuItems.map((item) => (
           <Link

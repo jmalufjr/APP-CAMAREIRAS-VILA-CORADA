@@ -52,7 +52,7 @@ export function SuggestionsPanel({ suggestions, categories }: { suggestions: Rec
       <div className="space-y-3 text-sm">
         <p className="text-muted-foreground">
           A IA não encontrou nenhuma despesa que pareça recorrente (ou todas já estão cadastradas). Você pode cadastrar à mão em
-          Listas contábeis → Itens recorrentes.
+          Listas gerenciais → Itens recorrentes.
         </p>
         <Link href="/contabil/compras/caixa">
           <Button variant="outline" size="sm">Ir para a caixa de conferência</Button>

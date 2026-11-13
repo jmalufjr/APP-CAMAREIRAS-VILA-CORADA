@@ -95,7 +95,7 @@ export function CostItemDialog({
             </label>
           )}
           <p className="text-xs text-muted-foreground">
-            Este cadastro é pra gastos que não são produtos (salário, luz, honorários). Produtos são cadastrados em Módulo Contábil → Cadastro de produtos.
+            Este cadastro é pra gastos que não são produtos (salário, luz, honorários). Produtos são cadastrados em Módulo gerencial → Cadastro de produtos.
           </p>
           <PctLinksEditor options={centerOptions} value={links} onChange={setLinks} />
           <div className="space-y-1.5">

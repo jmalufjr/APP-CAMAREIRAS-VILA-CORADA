@@ -59,7 +59,7 @@ const adminNav: NavItem[] = [
   },
   {
     href: "/contabil",
-    label: "Módulo Contábil",
+    label: "Módulo gerencial",
     icon: BookOpen,
     matchPrefixes: ["/contabil", "/compras", "/despesas", "/ativo-permanente"],
   },
@@ -72,7 +72,7 @@ const adminNav: NavItem[] = [
 const gerenteNav: NavItem[] = [
   adminNav[0], // Resumo executivo
   adminNav[1], // Módulo operacional
-  adminNav[2], // Módulo Contábil
+  adminNav[2], // Módulo gerencial
   { href: "/sincronizacao", label: "Sincronização", icon: RefreshCw },
 ];
 

@@ -747,7 +747,7 @@ export function ExpenseForm({
                 return (
                   <p className="text-xs text-muted-foreground">
                     Rateio entre centros de custo (cadastro da categoria): {opt.centers.map((c) => `${c.name} ${c.pct}%`).join(" · ")}. Pra mudar a
-                    divisão, ajuste o item em Módulo Contábil → Listas contábeis → Cadastro de despesas.
+                    divisão, ajuste o item em Módulo gerencial → Listas gerenciais → Cadastro de despesas.
                   </p>
                 );
               })()}
