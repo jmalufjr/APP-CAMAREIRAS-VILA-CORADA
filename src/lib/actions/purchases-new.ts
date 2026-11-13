@@ -204,6 +204,7 @@ export async function createPurchase(input: PurchaseInput): Promise<Result> {
     date: input.date,
     supplierName: input.supplierName,
     descriptions: input.lines.map((l) => l.description),
+    categoryIds: input.lines.map((l) => l.categoryId),
   });
   if (receiptMsg) messages.push(receiptMsg);
 

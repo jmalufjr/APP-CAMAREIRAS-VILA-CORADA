@@ -2,7 +2,7 @@
 // parecidos e substituição do lançamento automático pela nota real. Não é "use server":
 // recebe o cliente do banco como parâmetro (use o cliente admin nas rotinas automáticas).
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { dateKeyInBrazil, monthYearLabelPt, todayKey } from "@/lib/date";
+import { addDaysKey, dateKeyInBrazil, monthYearLabelPt, todayKey } from "@/lib/date";
 import { similarSupplier } from "@/lib/purchase-duplicates";
 
 export interface RecurringLite {
@@ -148,23 +148,33 @@ export async function generateRecurringExpenses(db: SupabaseClient): Promise<{ c
 
 // A nota real prevalece: se ela parece ser o comprovante de um item recorrente, o lançamento
 // automático daquele mês é cancelado (ou, se ainda não existia, o mês é marcado como coberto).
+// Limites de segurança (esta função roda com o cliente admin, inclusive a pedido do gerente):
+// só age quando (1) a nota tem uma linha na MESMA categoria do item, (2) o mês ainda está dentro
+// do prazo de lançamento (fechamento + tolerância), e (3) só cancela lançamentos automáticos
+// registrados e com o nome exato do item — nunca compras normais nem pendentes de aprovação.
 export async function applyReceiptToRecurring(
   db: SupabaseClient,
-  p: { date: string; supplierName: string; descriptions: string[] }
+  p: { date: string; supplierName: string; descriptions: string[]; categoryIds: (string | null)[] }
 ): Promise<string | null> {
-  const { data: items } = await db.from("recurring_expenses").select("id, name, amount, last_generated_month").eq("active", true);
+  const { data: items } = await db.from("recurring_expenses").select("id, name, category_id, amount, last_generated_month").eq("active", true);
   const item = (items ?? []).find(
-    (it) => similarSupplier(p.supplierName, it.name as string) || p.descriptions.some((d) => similarSupplier(d, it.name as string))
+    (it) =>
+      p.categoryIds.includes(it.category_id as string) &&
+      (similarSupplier(p.supplierName, it.name as string) || p.descriptions.some((d) => similarSupplier(d, it.name as string)))
   );
   if (!item) return null;
 
   const month = p.date.slice(0, 7);
   const monthStart = `${month}-01`;
+  const { data: settings } = await db.from("expense_settings").select("late_window_days").eq("id", true).maybeSingle();
+  const windowDays = (settings?.late_window_days as number | undefined) ?? 30;
+  if (todayKey() > addDaysKey(monthEndKey(month), windowDays)) return null; // mês fora do prazo: nada é alterado
+
   const { data: autos } = await db
     .from("purchases")
     .select("id, supplier_name, total_amount")
     .eq("source", "recorrente")
-    .neq("status", "cancelada")
+    .eq("status", "registrada")
     .gte("date", monthStart)
     .lte("date", monthEndKey(month));
   const mine = (autos ?? []).filter((a) => String(a.supplier_name ?? "").trim().toLowerCase() === String(item.name).trim().toLowerCase());
