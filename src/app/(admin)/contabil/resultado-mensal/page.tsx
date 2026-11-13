@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { BackLink } from "@/components/shared/back-link";
 import { Button } from "@/components/ui/button";
 import { getMonthlyResult } from "@/lib/actions/monthly-result";
+import { getCurrentProfile } from "@/lib/actions/session";
 import { todayKey } from "@/lib/date";
 import { CENTER_LABELS } from "@/lib/expense-model-types";
 import { PendingRevenuePanel } from "./pending-revenue-panel";
@@ -27,6 +28,7 @@ export default async function ResultadoMensalPage({ searchParams }: { searchPara
   const next = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7);
 
   const r = await getMonthlyResult(month);
+  const canDecide = (await getCurrentProfile()).role === "admin";
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -58,7 +60,7 @@ export default async function ResultadoMensalPage({ searchParams }: { searchPara
             {r.lateExpensesCount > 0 && ` · ${r.lateExpensesCount} despesa(s) lançada(s) após o fechamento.`}
           </p>
 
-          {(r.pendingRevenue.length > 0 || r.lodging.pendingDiff) && <PendingRevenuePanel result={r} />}
+          {(r.pendingRevenue.length > 0 || r.lodging.pendingDiff) && <PendingRevenuePanel result={r} canDecide={canDecide} />}
 
           <section className="rounded-lg border border-border bg-card p-4 space-y-1">
             <h3 className="font-heading text-lg mb-1">Receitas</h3>

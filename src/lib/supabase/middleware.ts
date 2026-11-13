@@ -91,8 +91,6 @@ export async function updateSession(request: NextRequest) {
         "/chegadas-saidas/gerenciar",
         "/mesas/gerenciar",
         "/checklists",
-        "/compras/nova",
-        "/compras/relatorio",
         "/dashboard/avaliacoes-hospedes",
         "/dashboard/avaliacoes",
         "/dashboard/avaliacoes-medias",
@@ -100,8 +98,19 @@ export async function updateSession(request: NextRequest) {
         "/compras/validade",
         "/compras/baixa",
       ];
-      const prefixes = ["/dashboard/servicos-suites", "/dashboard/suites-disponiveis", "/dashboard/calendario-stays", "/dashboard/tarefas", "/checklists", "/compras/lista", "/contabil/compras"];
-      if (!exact.includes(path) && !prefixes.some(matchesPrefix)) {
+      // Módulo gerencial: só Resultado mensal e Relatório de despesas (somente leitura).
+      const prefixes = [
+        "/dashboard/servicos-suites",
+        "/dashboard/suites-disponiveis",
+        "/dashboard/calendario-stays",
+        "/dashboard/tarefas",
+        "/checklists",
+        "/contabil/resultado-mensal",
+        "/contabil/compras/relatorio",
+      ];
+      // Dentro das Listas operacionais, estes dois menus não são do gerente.
+      const gerenteBlocked = ["/checklists/ocorrencias", "/checklists/manutencao-preventiva"];
+      if (gerenteBlocked.some(matchesPrefix) || (!exact.includes(path) && !prefixes.some(matchesPrefix))) {
         const url = request.nextUrl.clone();
         url.pathname = "/dashboard";
         return NextResponse.redirect(url);

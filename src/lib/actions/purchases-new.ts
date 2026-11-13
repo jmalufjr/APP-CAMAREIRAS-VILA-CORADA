@@ -46,7 +46,7 @@ async function currentUserId(): Promise<string | null> {
 
 // Antes de salvar: avisa se a compra parece já estar lançada (mesmo nº de nota, ou mesmo valor em data próxima).
 export async function checkPurchaseDuplicates(input: { date: string; supplierName: string; documentNumber: string; total: number }): Promise<string[]> {
-  const denied = await requireRole(["admin", "gerente_operacional"]);
+  const denied = await requireRole(["admin"]);
   if (denied) return [];
   const supabase = await createClient();
   const res = await findDuplicates(supabase, [{ key: "x", date: input.date, supplier: input.supplierName, docNumber: input.documentNumber, total: input.total }]);
@@ -57,7 +57,7 @@ export async function checkPurchaseDuplicates(input: { date: string; supplierNam
 // O banco marca sozinho "lançado após o fechamento" (até 30 dias) ou
 // "pendente de aprovação" (depois disso) — ver purchases_set_status.
 export async function createPurchase(input: PurchaseInput): Promise<Result> {
-  const denied = await requireRole(["admin", "gerente_operacional"]);
+  const denied = await requireRole(["admin"]);
   if (denied) return denied;
 
   const supabase = await createClient();

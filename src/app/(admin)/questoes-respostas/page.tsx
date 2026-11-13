@@ -436,11 +436,14 @@ export default function QuestoesRespostasPage() {
               <P>
                 Existe também o papel <strong>“Gerente operacional”</strong>. Ele enxerga o Resumo executivo
                 (menos “Ticket médio de canais de venda” e “Indicadores”, que são só do administrador), o Módulo operacional
-                completo (inclusive as Listas operacionais e as Comissões das camareiras), a Sincronização e, no Módulo
-                gerencial, só <strong>Lançar compra ou despesa</strong>, a <strong>Caixa de conferência</strong> e o{" "}
-                <strong>Relatório de despesas</strong> (sem poder editar, mover nem aprovar lançamentos: isso é só do
-                administrador). Ele não vê o Resultado mensal, a Rentabilidade de Petiscos e Drinks, o Inventário de ativo
-                permanente nem as Listas gerenciais.
+                (inclusive as Comissões das camareiras e as Listas operacionais, mas, dentro das Listas operacionais, sem
+                “Ocorrências Manutenção” e “Manutenção Preventiva”), a Sincronização e, no Módulo gerencial, apenas dois
+                itens, <strong>só para consulta</strong>: o <strong>Resultado mensal</strong> e o{" "}
+                <strong>Relatório de despesas</strong>. O gerente <strong>não lança compras nem despesas</strong>, não usa a
+                Caixa de conferência, não importa a conversa do WhatsApp e não pode editar, mover nem aprovar nada: tudo isso
+                é só do administrador. A divisão de trabalho é esta: o gerente manda as fotos das notas para o grupo do
+                WhatsApp e exporta a conversa; o administrador importa o arquivo, confere e lança. O gerente também não vê a
+                Rentabilidade de Petiscos e Drinks, o Inventário de ativo permanente nem as Listas gerenciais.
               </P>
               <P>
                 O primeiro acesso de administrador (o seu) é o único que precisa ser criado direto no
@@ -756,9 +759,11 @@ export default function QuestoesRespostasPage() {
                     ou boleto) é só um registro, para você conferir com o extrato do banco. Ela não muda nenhum cálculo.
                   </>,
                   <>
-                    <strong>Quem lança:</strong> o administrador e o gerente operacional. <strong>Editar</strong> um lançamento
-                    antigo, <strong>mover</strong> uma despesa e <strong>aprovar</strong> lançamento atrasado é só do
-                    administrador.
+                    <strong>Quem lança:</strong> somente o <strong>administrador</strong>. Lançar, usar a Caixa de conferência,
+                    importar a conversa do WhatsApp, <strong>editar</strong> um lançamento antigo, <strong>mover</strong> uma
+                    despesa e <strong>aprovar</strong> lançamento atrasado são ações dele. O gerente operacional só consulta o
+                    Relatório de despesas e o Resultado mensal, e é quem envia as fotos das notas ao grupo do WhatsApp e exporta
+                    a conversa.
                   </>,
                 ]}
               />
@@ -798,7 +803,8 @@ export default function QuestoesRespostasPage() {
 
               <P>
                 <strong>Caminho B — Pelo WhatsApp (Caixa de conferência).</strong> É o caminho para os recibos e notas que o
-                pessoal fotografa e envia no grupo de compras. Siga esta ordem:
+                pessoal fotografa e envia no grupo de compras. O gerente exporta a conversa e o administrador faz o resto.
+                Siga esta ordem:
               </P>
               <List
                 items={[
@@ -1213,8 +1219,8 @@ export default function QuestoesRespostasPage() {
           <AccordionPanel>
             <div className="space-y-3">
               <P>
-                O <strong>Resultado mensal</strong> (<strong>Módulo gerencial → Resultado mensal</strong>, só para o
-                administrador) mostra, mês a mês, quanto a pousada ganhou e quanto gastou, separado por{" "}
+                O <strong>Resultado mensal</strong> (<strong>Módulo gerencial → Resultado mensal</strong>, para o
+                administrador e, só para consulta, para o gerente operacional) mostra, mês a mês, quanto a pousada ganhou e quanto gastou, separado por{" "}
                 <strong>centro de custo</strong>, e termina com o <strong>lucro operacional gerencial</strong> do mês. Use as
                 setas no alto para trocar de mês. O resultado é calculado na hora, sempre que você abre a tela, a partir das
                 compras lançadas, das contas de bar e frigobar e dos dados da Stays. Nada precisa ser “fechado” à mão.

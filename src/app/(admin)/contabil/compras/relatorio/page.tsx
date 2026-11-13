@@ -45,9 +45,11 @@ export default async function RelatorioDespesasPage({ searchParams }: { searchPa
         <Link href={`/contabil/compras/relatorio?mes=${next}`}>
           <Button variant="outline" size="sm">{next.split("-").reverse().join("/")} →</Button>
         </Link>
-        <Link href="/contabil/compras/nova" className="ml-auto">
-          <Button size="sm">Lançar compra</Button>
-        </Link>
+        {profile.role === "admin" && (
+          <Link href="/contabil/compras/nova" className="ml-auto">
+            <Button size="sm">Lançar compra</Button>
+          </Link>
+        )}
       </div>
       <PurchasesTable purchases={purchases} isAdmin={profile.role === "admin"} categories={categories} ingredients={ingredients} today={todayKey()} lateWindowDays={settings.late_window_days} />
     </div>

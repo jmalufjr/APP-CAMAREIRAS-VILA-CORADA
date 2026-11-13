@@ -14,7 +14,8 @@ import type { MonthlyResult, PendingRevenue, CategoryLine } from "@/lib/monthly-
 type Result = { error?: string; success?: boolean };
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
-const ROLES = ["admin"] as const;
+// O gerente operacional só LÊ o resultado (aprovar receita/correção continua só do admin).
+const READ_ROLES = ["admin", "gerente_operacional"] as const;
 
 function monthBounds(month: string) {
   const [y, m] = month.split("-").map(Number);
@@ -39,12 +40,14 @@ interface BillInfo {
 }
 
 export async function getMonthlyResult(month: string): Promise<MonthlyResult | { error: string }> {
-  const denied = await requireRole([...ROLES]);
+  const denied = await requireRole([...READ_ROLES]);
   if (denied) return { error: denied.error };
   if (!/^\d{4}-\d{2}$/.test(month)) return { error: "Mês inválido." };
 
-  const supabase = await createClient();
+  // Acesso já conferido acima (admin ou gerente): as leituras usam o cliente do sistema, porque
+  // algumas tabelas (como os indicadores da Stays) só o admin lê pelas regras do banco.
   const admin = createAdminClient();
+  const supabase = admin;
   const { first, last } = monthBounds(month);
   const monthDate = first;
   const today = todayKey();

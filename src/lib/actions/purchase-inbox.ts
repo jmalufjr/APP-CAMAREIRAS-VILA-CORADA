@@ -12,7 +12,8 @@ import { classifyInboxLines } from "@/lib/purchase-routing";
 import { findDuplicates, describeMatch } from "@/lib/purchase-duplicates";
 import { todayKey } from "@/lib/date";
 
-const ROLES = ["admin", "gerente_operacional"] as const;
+// Lançar compras/despesas e a Caixa de conferência são só do administrador.
+const ROLES = ["admin"] as const;
 
 export interface InboxItem {
   id: string;

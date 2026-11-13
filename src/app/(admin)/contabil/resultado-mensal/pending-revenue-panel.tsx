@@ -9,7 +9,7 @@ import type { MonthlyResult } from "@/lib/monthly-result-types";
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-export function PendingRevenuePanel({ result }: { result: MonthlyResult }) {
+export function PendingRevenuePanel({ result, canDecide = true }: { result: MonthlyResult; canDecide?: boolean }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -36,9 +36,11 @@ export function PendingRevenuePanel({ result }: { result: MonthlyResult }) {
             Hospedagem: a Stays corrigiu o mês depois do prazo (bruta {brl(result.lodging.pendingDiff.gross)}, comissão{" "}
             {brl(result.lodging.pendingDiff.commission)}).
           </span>
-          <Button size="sm" disabled={isPending} onClick={() => run(() => approveLodgingDifference(result.month), "Correção aprovada.")}>
-            Aceitar correção
-          </Button>
+          {canDecide && (
+            <Button size="sm" disabled={isPending} onClick={() => run(() => approveLodgingDifference(result.month), "Correção aprovada.")}>
+              Aceitar correção
+            </Button>
+          )}
         </div>
       )}
       {result.pendingRevenue.map((p) => (
@@ -47,14 +49,16 @@ export function PendingRevenuePanel({ result }: { result: MonthlyResult }) {
             {p.kind === "bar" ? "Bar" : "Frigobar"} · {p.guest ?? "conta"} · {brl(p.amount)}
             {p.closed_day ? ` · conta fechada em ${p.closed_day.split("-").reverse().join("/")}` : ""}
           </span>
-          <span className="flex gap-2">
-            <Button size="sm" disabled={isPending} onClick={() => run(() => decideLateRevenue(p.bill_id, result.month, "aprovada"), "Receita aprovada.")}>
-              Aprovar
-            </Button>
-            <Button size="sm" variant="outline" disabled={isPending} onClick={() => run(() => decideLateRevenue(p.bill_id, result.month, "cancelada"), "Receita cancelada.")}>
-              Cancelar
-            </Button>
-          </span>
+          {canDecide && (
+            <span className="flex gap-2">
+              <Button size="sm" disabled={isPending} onClick={() => run(() => decideLateRevenue(p.bill_id, result.month, "aprovada"), "Receita aprovada.")}>
+                Aprovar
+              </Button>
+              <Button size="sm" variant="outline" disabled={isPending} onClick={() => run(() => decideLateRevenue(p.bill_id, result.month, "cancelada"), "Receita cancelada.")}>
+                Cancelar
+              </Button>
+            </span>
+          )}
         </div>
       ))}
     </section>

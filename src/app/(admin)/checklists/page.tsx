@@ -1,6 +1,7 @@
 import { BackLink } from "@/components/shared/back-link";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
+import { getCurrentProfile } from "@/lib/actions/session";
 import {
   ListChecks,
   Wrench,
@@ -24,13 +25,18 @@ const menuItems = [
   { href: "/checklists/mesas", label: "Layout & mesas", icon: Coffee },
 ];
 
-export default function ChecklistsPage() {
+// Ocorrências Manutenção e Manutenção Preventiva não aparecem para o gerente operacional.
+const GERENTE_HIDDEN = new Set(["/checklists/ocorrencias", "/checklists/manutencao-preventiva"]);
+
+export default async function ChecklistsPage() {
+  const profile = await getCurrentProfile();
+  const items = profile.role === "gerente_operacional" ? menuItems.filter((i) => !GERENTE_HIDDEN.has(i.href)) : menuItems;
   return (
     <div className="space-y-6">
       <BackLink href="/operacional" />
       <PageHeader title="Listas operacionais" subtitle="Escolha o que deseja gerenciar." />
       <nav className="max-w-md space-y-1.5">
-        {menuItems.map((item) => (
+        {items.map((item) => (
           <Link
             key={item.href}
             href={item.href}

@@ -27,7 +27,8 @@ const menuItems = [
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-const GERENTE_HREFS = new Set(["/contabil/compras/caixa", "/contabil/compras/nova", "/contabil/compras/relatorio"]);
+// O gerente operacional só consulta: Resultado mensal e Relatório de despesas.
+const GERENTE_HREFS = new Set(["/contabil/resultado-mensal", "/contabil/compras/relatorio"]);
 
 export default async function ModuloContabilPage() {
   const profile = await getCurrentProfile();
