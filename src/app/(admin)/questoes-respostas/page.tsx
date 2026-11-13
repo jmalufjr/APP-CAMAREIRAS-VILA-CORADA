@@ -1474,7 +1474,8 @@ export default function QuestoesRespostasPage() {
 
               <SubHeading>4. O que a tela mostra</SubHeading>
               <P>
-                Uma tabela com uma linha por produto: <strong>Produto</strong>, <strong>Vendidos</strong>,{" "}
+                Dois cards, um para os <strong>Petiscos</strong> e outro para os <strong>Drinks</strong>. Cada card tem uma
+                tabela com uma linha por produto e, no fim, uma linha de total do card. As colunas são: <strong>Produto</strong>, <strong>Vendidos</strong>,{" "}
                 <strong>Receita</strong>, <strong>Custo estimado</strong>, <strong>Custo médio / un.</strong>,{" "}
                 <strong>Resultado</strong> e <strong>Margem</strong>. Produtos sem ficha técnica trazem o aviso “sem ficha
                 técnica”. Embaixo aparece o custo total de ingredientes do Bar no mês. Se algum valor ficou{" "}
