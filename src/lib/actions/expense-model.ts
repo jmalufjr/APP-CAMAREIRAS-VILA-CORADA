@@ -15,7 +15,10 @@ import type {
 } from "@/lib/expense-model-types";
 
 type Result = { error?: string; success?: boolean };
+// Ingredientes pertencem às Listas operacionais (admin e gerente). Categorias, parâmetros de ativo
+// permanente e itens recorrentes pertencem às Listas gerenciais: só o admin.
 const ROLES = ["admin", "gerente_operacional"] as const;
+const ADMIN_ONLY = ["admin"] as const;
 
 function refresh() {
   revalidatePath("/contabil", "layout");
@@ -50,7 +53,7 @@ export async function saveExpenseCategory(
   active: boolean,
   centers: { center_code: CenterCode; pct: number }[]
 ): Promise<Result> {
-  const denied = await requireRole([...ROLES]);
+  const denied = await requireRole([...ADMIN_ONLY]);
   if (denied) return denied;
   name = name.trim();
   if (!name) return { error: "Informe o nome da categoria." };
@@ -96,7 +99,7 @@ export async function saveExpenseCategory(
 }
 
 export async function deleteExpenseCategory(id: string): Promise<Result> {
-  const denied = await requireRole([...ROLES]);
+  const denied = await requireRole([...ADMIN_ONLY]);
   if (denied) return denied;
   const supabase = await createClient();
   const { count } = await supabase
@@ -183,7 +186,7 @@ export async function getExpenseSettings(): Promise<ExpenseSettings> {
 }
 
 export async function updateExpenseSettings(assetThreshold: number, minLifeMonths: number): Promise<Result> {
-  const denied = await requireRole([...ROLES]);
+  const denied = await requireRole([...ADMIN_ONLY]);
   if (denied) return denied;
   if (!(assetThreshold > 0)) return { error: "Informe um valor de limite maior que zero." };
   if (!Number.isInteger(minLifeMonths) || minLifeMonths < 1) return { error: "Informe a vida útil mínima em meses." };
@@ -217,7 +220,7 @@ export async function saveRecurringExpense(
   active: boolean,
   force = false
 ): Promise<Result & { similar?: string; message?: string }> {
-  const denied = await requireRole([...ROLES]);
+  const denied = await requireRole([...ADMIN_ONLY]);
   if (denied) return denied;
   name = name.trim();
   if (!name) return { error: "Informe o nome do item." };
@@ -259,7 +262,7 @@ export async function saveRecurringExpense(
 }
 
 export async function deleteRecurringExpense(id: string): Promise<Result> {
-  const denied = await requireRole([...ROLES]);
+  const denied = await requireRole([...ADMIN_ONLY]);
   if (denied) return denied;
   const supabase = await createClient();
   const { error } = await supabase.from("recurring_expenses").delete().eq("id", id);

@@ -65,7 +65,7 @@ export async function saveBarProductRecipe(
 // ---------- Rentabilidade mensal de Petiscos e Drinks (estimativa) ----------
 
 export async function getProductCostReport(month: string): Promise<ProductCostReport | { error: string }> {
-  const denied = await requireRole([...ROLES]);
+  const denied = await requireRole(["admin"]);
   if (denied) return { error: denied.error };
   if (!/^\d{4}-\d{2}$/.test(month)) return { error: "Mês inválido." };
 

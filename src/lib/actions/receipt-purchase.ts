@@ -43,7 +43,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // exige o papel de quem lança (admin, gerente operacional ou funcionário de manutenção) e usa o
 // client admin só para esses cadastros automáticos. A competência é sempre a data da nota.
 export async function createReceiptPurchase(formData: FormData) {
-  const denied = await requireRole(["admin", "gerente_operacional", "manutencao"]);
+  const denied = await requireRole(["admin"]);
   if (denied) return denied;
 
   let input: ReceiptPurchaseInput;
