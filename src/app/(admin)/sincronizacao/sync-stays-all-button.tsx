@@ -26,7 +26,8 @@ import { RefreshCw } from "lucide-react";
 //   (sem esperar o cron do dia), mas continua respeitando `stays_locked`
 //   nas três telas — só preenche os campos que o admin ainda não editou
 //   hoje/amanhã.
-export function SyncStaysAllButton() {
+// `canForce` = pode usar a sincronização Total (só o administrador); o gerente operacional vê só a Parcial.
+export function SyncStaysAllButton({ canForce = true }: { canForce?: boolean }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -78,23 +79,25 @@ export function SyncStaysAllButton() {
 
   return (
     <div className="flex flex-wrap gap-2">
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={isPending}
-        onClick={() => {
-          if (
-            !confirm(
-              "Isso vai forçar a sincronização com a Stays no Planejamento Diário, em Chegadas & Saídas e em Mesas do Café, sobrescrevendo qualquer edição manual sua em campos sincronizados nas três telas. Continuar?"
+      {canForce && (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={isPending}
+          onClick={() => {
+            if (
+              !confirm(
+                "Isso vai forçar a sincronização com a Stays no Planejamento Diário, em Chegadas & Saídas e em Mesas do Café, sobrescrevendo qualquer edição manual sua em campos sincronizados nas três telas. Continuar?"
+              )
             )
-          )
-            return;
-          runSync(true);
-        }}
-      >
-        <RefreshCw size={14} className={isPending ? "animate-spin" : undefined} />
-        Sincronização Stays Total - sobrescreve alterações inseridas pelo Admin
-      </Button>
+              return;
+            runSync(true);
+          }}
+        >
+          <RefreshCw size={14} className={isPending ? "animate-spin" : undefined} />
+          Sincronização Stays Total - sobrescreve alterações inseridas pelo Admin
+        </Button>
+      )}
       <Button variant="outline" size="sm" disabled={isPending} onClick={() => runSync(false)}>
         <RefreshCw size={14} className={isPending ? "animate-spin" : undefined} />
         Sincronização Stays Parcial - preserva alterações inseridas pelo Admin

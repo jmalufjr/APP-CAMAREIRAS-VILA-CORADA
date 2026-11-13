@@ -388,6 +388,11 @@ async function allocateExtraCleaning(supabase: ReturnType<typeof createAdminClie
 }
 
 export async function syncStaysPlanning(options?: SyncOptions) {
+  if (options?.force) {
+    // Sincronização Total (sobrescreve edições do admin): só o administrador.
+    const deniedForce = await requireRole(["admin"]);
+    if (deniedForce) return { error: deniedForce.error };
+  }
   const force = options?.force ?? false;
   const supabase = createAdminClient();
   const dates = [todayKey(), tomorrowKey()];
@@ -591,6 +596,11 @@ export async function syncStaysPlanning(options?: SyncOptions) {
 // um quarto/dia, o que não deveria acontecer mas é barato de evitar).
 // `force` (ver `SyncOptions`) ignora `stays_locked` em ambas as tabelas.
 export async function syncStaysArrivalsDepartures(options?: SyncOptions) {
+  if (options?.force) {
+    // Sincronização Total (sobrescreve edições do admin): só o administrador.
+    const deniedForce = await requireRole(["admin"]);
+    if (deniedForce) return { error: deniedForce.error };
+  }
   const force = options?.force ?? false;
   const supabase = createAdminClient();
   const dates = [todayKey(), tomorrowKey()];
@@ -757,6 +767,11 @@ function tablesAvailableForAlgorithm(
 // quem chega naquele dia, que só terá café no dia seguinte). `force` (ver
 // `SyncOptions`) ignora `stays_locked` nas três tabelas envolvidas.
 export async function syncStaysBreakfastTables(options?: SyncOptions) {
+  if (options?.force) {
+    // Sincronização Total (sobrescreve edições do admin): só o administrador.
+    const deniedForce = await requireRole(["admin"]);
+    if (deniedForce) return { error: deniedForce.error };
+  }
   const force = options?.force ?? false;
   const supabase = createAdminClient();
   const dates = [todayKey(), tomorrowKey()];
@@ -986,7 +1001,8 @@ export async function syncStaysBreakfastTables(options?: SyncOptions) {
 // hóspedes, mesas), uma falha na Stays num deles não deve impedir as
 // outras duas de completarem.
 export async function syncStaysAll(options?: SyncOptions) {
-  const denied = await requireRole(["admin", "gerente_operacional"]);
+  // O gerente operacional só pode a sincronização Parcial (sem force); a Total é só do admin.
+  const denied = await requireRole(options?.force ? ["admin"] : ["admin", "gerente_operacional"]);
   if (denied) {
     const e = { error: denied.error };
     return { planning: e, arrivalsDepartures: e, breakfastTables: e, channelStats: e, guestReviews: e, indicators: e };

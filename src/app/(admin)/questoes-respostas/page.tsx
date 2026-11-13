@@ -68,7 +68,8 @@ export default function QuestoesRespostasPage() {
                 exatamente o mesmo efeito nos três lugares). Ele tem um comportamento importante:{" "}
                 <strong>ignora qualquer edição manual que você já tenha feito</strong> e substitui pelo
                 que a Stays informa naquele momento. Por isso, ao clicar, o sistema pede uma confirmação
-                antes de prosseguir.
+                antes de prosseguir. Este botão é <strong>só do administrador</strong>: o gerente operacional vê apenas o
+                botão “Parcial”, descrito logo abaixo.
               </P>
               <P>
                 <strong>Exemplo:</strong> você percebeu que uma suíte estava marcada errado no
