@@ -1214,6 +1214,7 @@ export async function syncStaysIndicators(options?: { full?: boolean }) {
           month: m,
           channel: key,
           paid_nights: c.paid,
+          paid_guest_nights: c.paidGuests,
           free_nights: c.free,
           revenue: Math.round(c.revenue * 100) / 100,
           commission_actual: Math.round(c.commissionActual * 100) / 100,

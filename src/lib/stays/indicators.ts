@@ -25,6 +25,7 @@ export const IND_CHANNELS: { key: IndChannel; label: string }[] = [
 
 export interface ChannelMonthBase {
   paid: number; // diárias vendidas (com cobrança)
+  paidGuests: number; // soma de hóspedes nas diárias vendidas (hóspedes-diária)
   free: number; // diárias gratuitas (valor 0 ou sem preço)
   revenue: number; // receita bruta de hospedagem dessas diárias (sem impostos/taxas)
   // Comissão que a própria Stays informa na reserva (R$), repartida entre as diárias na proporção do
@@ -48,12 +49,12 @@ export interface BlockEntry {
 }
 
 const emptyChannels = (): Record<IndChannel, ChannelMonthBase> => ({
-  booking: { paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
-  airbnb: { paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
-  expedia: { paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
-  decolar: { paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
-  direta: { paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
-  outros: { paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
+  booking: { paid: 0, paidGuests: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
+  airbnb: { paid: 0, paidGuests: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
+  expedia: { paid: 0, paidGuests: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
+  decolar: { paid: 0, paidGuests: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
+  direta: { paid: 0, paidGuests: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
+  outros: { paid: 0, paidGuests: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 },
 });
 
 // Meses de `fromMonth` a `toMonth` (inclusive), como "YYYY-MM-01".
@@ -109,6 +110,7 @@ export function computeMonthBases(
       const price = prices ? prices[i] : 0;
       if (price > 0) {
         cell.paid += 1;
+        cell.paidGuests += Math.max(1, Number(r.guests) || 1);
         cell.revenue += price;
         if (typeof commissionTotal === "number" && commissionTotal > 0 && priceSum > 0) {
           cell.commissionActual += (commissionTotal * price) / priceSum;

@@ -81,6 +81,7 @@ export interface ReservationForStats {
   checkOutDate: string;
   _idlisting: string;
   type: CalendarEntryType;
+  guests?: number; // hóspedes da reserva
   // `commission._mcval.BRL`: valor (R$) da comissão do canal nessa reserva, quando a Stays informa.
   partner?: { name?: string; commission?: { _mcval?: { BRL?: number } } };
   price?: { hostingDetails?: { _f_nightPrice?: number; pricePeriods?: PricePeriodRaw[] } };

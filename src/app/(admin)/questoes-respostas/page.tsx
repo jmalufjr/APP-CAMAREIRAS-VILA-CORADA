@@ -1283,23 +1283,21 @@ export default function QuestoesRespostasPage() {
 
               <SubHeading>2. Um bloco para cada centro de custo</SubHeading>
               <P>
-                Em seguida vêm quatro blocos: <strong>Hospedagem, Bar, Café da manhã e Frigobar</strong>. Cada um mostra:
+                Em seguida vêm três blocos: <strong>Hospedagem com café da manhã, Bar e Frigobar</strong>. O café é oferecido dentro da diária (não é cobrado à parte), por isso ele não é um centro separado: aparece como despesa do bloco de Hospedagem. Cada bloco mostra:
               </P>
               <List
                 items={[
                   <>
                     <strong>Receita:</strong> Hospedagem = a hospedagem líquida; Bar = consumo mais taxa de serviço;
-                    Frigobar = o total do frigobar; <strong>Café da manhã = zero</strong>, porque o café é oferecido junto
-                    com a diária e não tem venda própria.
+                    Frigobar = o total do frigobar.
                   </>,
                   <>
-                    Uma linha <strong>“(−) nome da categoria”</strong> para cada categoria de despesa que teve gasto nesse
+                    Abaixo de “Receita”, o título <strong>“Despesas”</strong> e uma linha <strong>“(−) nome da categoria”</strong> para cada categoria de despesa que teve gasto nesse
                     centro no mês, já com a parte que cabe a ele.
                   </>,
                   <>
                     <strong>Total das despesas</strong> do centro e <strong>Resultado do centro</strong> (receita menos
-                    despesas). O resultado do Café da manhã sai <strong>negativo</strong> e isso é normal: ele mostra quanto o
-                    café custou no mês.
+                    despesas). No bloco de Hospedagem, depois do total das despesas vêm as <strong>Despesas de café da manhã</strong> (categorias e total), o <strong>custo de café da manhã por diária</strong> (total do café ÷ diárias vendidas no mês, não importa quantos hóspedes) e o <strong>custo por hóspede</strong> (total do café ÷ hóspedes-diária: em cada diária vendida conta o número de hóspedes da reserva, com 1, 2 ou 3 pessoas, dado que vem da Stays). Por fim, o <strong>total das despesas de hospedagem + café</strong> e o <strong>resultado da Hospedagem com café da manhã</strong>.
                   </>,
                 ]}
               />

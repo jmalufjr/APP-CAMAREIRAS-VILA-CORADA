@@ -31,11 +31,11 @@ export async function getIndicators(): Promise<{ error: string } | IndicatorsDat
 
   const [{ data: months, error }, { data: chans }] = await Promise.all([
     supabase.from("indicator_months").select("month, blocked_nights, maintenance_nights, synced_at").order("month"),
-    supabase.from("indicator_month_channels").select("month, channel, paid_nights, free_nights, revenue, commission_actual, revenue_with_commission"),
+    supabase.from("indicator_month_channels").select("month, channel, paid_nights, paid_guest_nights, free_nights, revenue, commission_actual, revenue_with_commission"),
   ]);
   if (error) return { error: error.message };
 
-  const emptyChannel = () => ({ paid: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 });
+  const emptyChannel = () => ({ paid: 0, paidGuests: 0, free: 0, revenue: 0, commissionActual: 0, revenueWithCommission: 0 });
   const bases = new Map<string, MonthBase>();
   (months ?? []).forEach((m) =>
     bases.set(m.month as string, {
@@ -57,6 +57,7 @@ export async function getIndicators(): Promise<{ error: string } | IndicatorsDat
     if (!b) return;
     b.channels[c.channel as IndChannel] = {
       paid: c.paid_nights as number,
+      paidGuests: Number(c.paid_guest_nights ?? 0),
       free: c.free_nights as number,
       revenue: Number(c.revenue),
       commissionActual: Number(c.commission_actual),

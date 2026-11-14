@@ -20,6 +20,24 @@ function Row({ label, value, bold, indent }: { label: string; value: number; bol
   );
 }
 
+// Cabeçalho de bloco (mesmo formato e tamanho das linhas, como "Receita"), sem valor.
+function Head({ label }: { label: string }) {
+  return (
+    <div className="flex justify-between gap-3 py-0.5 text-sm">
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function RowOrDash({ label, value }: { label: string; value: number | null }) {
+  return (
+    <div className="flex justify-between gap-3 py-0.5 text-sm">
+      <span>{label}</span>
+      <span>{value === null ? "—" : brl(value)}</span>
+    </div>
+  );
+}
+
 export default async function ResultadoMensalPage({ searchParams }: { searchParams: Promise<{ mes?: string }> }) {
   const sp = await searchParams;
   const month = sp.mes && /^\d{4}-\d{2}$/.test(sp.mes) ? sp.mes : todayKey().slice(0, 7);
@@ -78,17 +96,49 @@ export default async function ResultadoMensalPage({ searchParams }: { searchPara
             )}
           </section>
 
-          {r.byCenter.map((c) => (
-            <section key={c.center} className="rounded-lg border border-border bg-card p-4 space-y-1">
-              <h3 className="font-heading text-lg mb-1">{CENTER_LABELS[c.center]}</h3>
-              <Row label="Receita" value={c.revenue} />
-              {c.categories.map((cat) => (
-                <Row key={cat.name} label={`(−) ${cat.name}`} value={-cat.amount} indent />
-              ))}
-              <Row label="Total das despesas" value={-c.expenses} />
-              <Row label="Resultado do centro" value={c.result} bold />
-            </section>
-          ))}
+          {r.byCenter
+            .filter((c) => c.center !== "cafe")
+            .map((c) => {
+              // O café da manhã vem dentro da diária: é despesa do centro Hospedagem, não um centro à parte.
+              const cafe = r.byCenter.find((x) => x.center === "cafe");
+              const isLodging = c.center === "hospedagem" && cafe;
+              const totalExp = isLodging ? c.expenses + cafe.expenses : c.expenses;
+              const totalRes = isLodging ? c.revenue + cafe.revenue - totalExp : c.result;
+              const perNight = isLodging && r.breakfast.paidNights > 0 ? Math.round((cafe.expenses / r.breakfast.paidNights) * 100) / 100 : null;
+              const perGuest = isLodging && r.breakfast.guestNights > 0 ? Math.round((cafe.expenses / r.breakfast.guestNights) * 100) / 100 : null;
+              return (
+                <section key={c.center} className="rounded-lg border border-border bg-card p-4 space-y-1">
+                  <h3 className="font-heading text-lg mb-1">{isLodging ? "Hospedagem com café da manhã" : CENTER_LABELS[c.center]}</h3>
+                  <Row label="Receita" value={c.revenue} />
+                  <Head label="Despesas" />
+                  {c.categories.map((cat) => (
+                    <Row key={cat.name} label={`(−) ${cat.name}`} value={-cat.amount} indent />
+                  ))}
+                  <Row label="Total das despesas" value={-c.expenses} />
+                  {isLodging && (
+                    <>
+                      <div className="pt-2">
+                        <Head label="Despesas de café da manhã" />
+                      </div>
+                      {cafe.categories.map((cat) => (
+                        <Row key={cat.name} label={`(−) ${cat.name}`} value={-cat.amount} indent />
+                      ))}
+                      <Row label="Total das despesas de café da manhã" value={-cafe.expenses} />
+                      <RowOrDash label="Custo de café da manhã por diária" value={perNight} />
+                      <RowOrDash label="Custo de café da manhã por hóspede" value={perGuest} />
+                      <p className="text-xs text-muted-foreground">
+                        Por diária: despesas de café ÷ {r.breakfast.paidNights} diárias vendidas no mês. Por hóspede: ÷ {r.breakfast.guestNights} hóspedes-diária (soma, em cada diária vendida, do número de hóspedes da reserva).
+                        {r.breakfast.paidNights > 0 && r.breakfast.guestNights === 0 && " Os hóspedes ainda não foram trazidos da Stays: rode a sincronização (Parcial) e abra a tela de novo."}
+                      </p>
+                      <div className="pt-2">
+                        <Row label="Total das despesas (hospedagem + café da manhã)" value={-totalExp} bold />
+                      </div>
+                    </>
+                  )}
+                  <Row label={isLodging ? "Resultado do centro de Hospedagem com café da manhã" : "Resultado do centro"} value={totalRes} bold />
+                </section>
+              );
+            })}
 
           <section className="rounded-lg border border-border bg-card p-4 space-y-1">
             <h3 className="font-heading text-lg mb-1">Resultado total</h3>

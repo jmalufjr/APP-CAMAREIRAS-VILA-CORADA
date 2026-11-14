@@ -30,4 +30,6 @@ export interface MonthlyResult {
   pendingRevenue: PendingRevenue[];
   lateExpensesCount: number;
   barShare: number;
+  // Base do custo do café da manhã: diárias vendidas e hóspedes-diária do mês (Stays).
+  breakfast: { paidNights: number; guestNights: number };
 }

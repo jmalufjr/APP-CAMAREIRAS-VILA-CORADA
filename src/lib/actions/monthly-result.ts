@@ -62,8 +62,10 @@ export async function getMonthlyResult(month: string): Promise<MonthlyResult | {
   // ---------- Hospedagem (Stays) ----------
   const { data: lodgingRows } = await supabase
     .from("indicator_month_channels")
-    .select("revenue, commission_actual")
+    .select("revenue, commission_actual, paid_nights, paid_guest_nights")
     .eq("month", monthDate);
+  const paidNights = (lodgingRows ?? []).reduce((s, r) => s + Number(r.paid_nights ?? 0), 0);
+  const guestNights = (lodgingRows ?? []).reduce((s, r) => s + Number(r.paid_guest_nights ?? 0), 0);
   const liveGross = round2((lodgingRows ?? []).reduce((s, r) => s + Number(r.revenue), 0));
   const liveCommission = round2((lodgingRows ?? []).reduce((s, r) => s + Number(r.commission_actual), 0));
 
@@ -286,6 +288,7 @@ export async function getMonthlyResult(month: string): Promise<MonthlyResult | {
     pendingRevenue: [...pendingMap.values()],
     lateExpensesCount: lateCount.count ?? 0,
     barShare,
+    breakfast: { paidNights, guestNights },
   };
 }
 
