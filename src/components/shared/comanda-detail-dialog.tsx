@@ -6,6 +6,12 @@ import type { ComandaListItem } from "@/lib/actions/comandas";
 import { comandaDisplayStatus } from "@/lib/comanda-status";
 import { formatDateTimePt } from "@/lib/date";
 
+const ACTION_LABELS = { lancada: "lançou", editada: "editou", cancelada: "cancelou" } as const;
+function itemsText(items: { item: string; quantity: number }[] | null): string {
+  if (!items || items.length === 0) return "nenhum item";
+  return items.map((i) => `${i.item} ×${i.quantity}`).join(", ");
+}
+
 export function ComandaDetailDialog({
   comanda,
   onOpenChange,
@@ -42,6 +48,25 @@ export function ComandaDetailDialog({
             <div className="flex items-center justify-between border-t border-border pt-2 font-medium text-sm">
               <span>Total</span>
               <span>R$ {comanda.total.toFixed(2)}</span>
+            </div>
+            <div className="space-y-1.5 border-t border-border pt-2">
+              <p className="text-xs font-medium text-muted-foreground">Histórico da comanda</p>
+              {comanda.history.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Sem histórico registrado (comanda anterior ao recurso).</p>
+              ) : (
+                <ul className="space-y-1.5 text-xs">
+                  {comanda.history.map((h) => (
+                    <li key={h.id}>
+                      <span className="font-medium">{formatDateTimePt(h.occurredAt)} — {h.actorName} {ACTION_LABELS[h.action]}</span>
+                      {h.action === "lancada" && <span className="text-muted-foreground">: {itemsText(h.after)}</span>}
+                      {h.action === "editada" && (
+                        <span className="block text-muted-foreground">antes: {itemsText(h.before)} → depois: {itemsText(h.after)}</span>
+                      )}
+                      {h.action === "cancelada" && <span className="text-muted-foreground">: {itemsText(h.before)}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div className="space-y-1.5 border-t border-border pt-2">
               <p className="text-xs font-medium text-muted-foreground">Assinatura do hóspede</p>

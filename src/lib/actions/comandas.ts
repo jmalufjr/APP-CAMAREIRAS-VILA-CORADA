@@ -126,6 +126,8 @@ export interface ComandaListItem {
   last_action_at: string;
   last_action_by_name: string;
   items: ComandaListItemLine[];
+  // Lançamento, edições (antes e depois) e cancelamento — quem e quando.
+  history: ComandaHistoryEvent[];
   total: number;
   // Só preenchido para comandas inativas cuja conta foi paga (permite a UI
   // rotular como "Paga" em vez de "Original"/"Editada", já que não existe
@@ -139,6 +141,15 @@ export interface ComandaListItem {
   // Assinatura do hóspede (imagem PNG em data URL) e quando foi assinada; nulos em comandas antigas.
   signaturePng: string | null;
   signedAt: string | null;
+}
+
+export interface ComandaHistoryEvent {
+  id: number;
+  action: "lancada" | "editada" | "cancelada";
+  actorName: string;
+  occurredAt: string;
+  before: { item: string; quantity: number }[] | null;
+  after: { item: string; quantity: number }[] | null;
 }
 
 export interface ComandaListItemLine {
@@ -194,6 +205,26 @@ async function attachItemsAndMap(
     .select("comanda_id, id, quantity, price_snapshot, poolbar_items(name, category)")
     .in("comanda_id", comandaIds);
 
+  const { data: historyRows } = await supabase
+    .from("bar_comanda_history")
+    .select("id, comanda_id, action, occurred_at, items_before, items_after, profiles(name)")
+    .in("comanda_id", comandaIds)
+    .order("id", { ascending: true });
+  const historyByComanda = new Map<string, ComandaHistoryEvent[]>();
+  ((historyRows ?? []) as unknown as {
+    id: number;
+    comanda_id: string;
+    action: ComandaHistoryEvent["action"];
+    occurred_at: string;
+    items_before: ComandaHistoryEvent["before"];
+    items_after: ComandaHistoryEvent["after"];
+    profiles: { name: string } | null;
+  }[]).forEach((h) => {
+    const list = historyByComanda.get(h.comanda_id) ?? [];
+    list.push({ id: h.id, action: h.action, actorName: h.profiles?.name ?? "—", occurredAt: h.occurred_at, before: h.items_before, after: h.items_after });
+    historyByComanda.set(h.comanda_id, list);
+  });
+
   const itemsByComanda = new Map<string, ComandaListItemLine[]>();
   ((itemRows ?? []) as unknown as ComandaItemRow[]).forEach((r) => {
     const list = itemsByComanda.get(r.comanda_id) ?? [];
@@ -223,6 +254,7 @@ async function attachItemsAndMap(
       last_action_at: r.last_action_at,
       last_action_by_name: r.last_action_by_profile?.name ?? "—",
       items,
+      history: historyByComanda.get(r.id) ?? [],
       total: items.reduce((sum, i) => sum + i.subtotal, 0),
       bill_paid_at: r.room_bills?.paid_at ?? null,
       guestNameHint: r.room_bills?.guest_name_hint ?? null,
