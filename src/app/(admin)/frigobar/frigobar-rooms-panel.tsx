@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type { RoomBillOverview, RecentlyPaidBill } from "@/lib/actions/room-bills";
+import type { RecentlyPaidBill } from "@/lib/actions/room-bills";
 import { resendRoomBillReceipt } from "@/lib/actions/room-bills";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,75 +17,25 @@ import { roomSlotLabel } from "@/lib/room-bill-label";
 // camareira, na tela "Consumo por quartos" dela (ver Parte 05 do CLAUDE.md).
 // O card de e-mail (antes "E-mail da contabilidade") saiu daqui e virou a
 // tela "Cadastrar e-mail de envio" no menu do Resumo Executivo (Parte 34).
-export function FrigobarRoomsPanel({
-  overview,
-  recentlyPaid,
-}: {
-  overview: RoomBillOverview[];
-  recentlyPaid: RecentlyPaidBill[];
-}) {
-  const inHouse = overview.filter((r) => r.group === "in_house");
-  const former = overview.filter((r) => r.group === "former");
-
+// Card de contas pagas (com PDF e reenvio do e-mail) — usado em Consumo por suítes e no Histórico.
+export function PaidBillsCard({ bills, title, emptyText }: { bills: RecentlyPaidBill[]; title: string; emptyText: string }) {
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Hóspedes na pousada</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Contas abertas ou fechadas (ainda sem pagamento) de quem está hospedado, inclusive quem sai e quem chega hoje.
-          </p>
-        </CardHeader>
-        <CardContent>
-          {inHouse.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma conta de hóspede na pousada.</p>
-          ) : (
-            <Accordion className="space-y-2">
-              {inHouse.map((room) => (
-                <RoomAccordionItem key={room.bill_id} room={room} />
-              ))}
-            </Accordion>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Hóspedes que já saíram</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Contas abertas ou fechadas que ainda não foram pagas, de hóspedes cujo check-out já passou.
-          </p>
-        </CardHeader>
-        <CardContent>
-          {former.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma conta pendente de hóspede que já saiu.</p>
-          ) : (
-            <Accordion className="space-y-2">
-              {former.map((room) => (
-                <RoomAccordionItem key={room.bill_id} room={room} />
-              ))}
-            </Accordion>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Contas pagas nos últimos 7 dias</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {recentlyPaid.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma conta paga nos últimos 7 dias.</p>
-          ) : (
-            <Accordion className="space-y-2">
-              {recentlyPaid.map((bill) => (
-                <PaidBillAccordionItem key={bill.bill_id} bill={bill} />
-              ))}
-            </Accordion>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {bills.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">{emptyText}</p>
+        ) : (
+          <Accordion className="space-y-2">
+            {bills.map((bill) => (
+              <PaidBillAccordionItem key={bill.bill_id} bill={bill} />
+            ))}
+          </Accordion>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -208,93 +158,6 @@ function PaidBillAccordionItem({ bill }: { bill: RecentlyPaidBill }) {
               </Button>
             )}
           </div>
-        </div>
-      </AccordionPanel>
-    </AccordionItem>
-  );
-}
-
-function RoomAccordionItem({ room }: { room: RoomBillOverview }) {
-  return (
-    <AccordionItem value={room.bill_id}>
-      <AccordionTrigger>
-        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <span className="font-heading text-base">{roomSlotLabel(room, { withDates: true })}</span>
-          {room.status === "fechada" && <Badge variant="secondary">Conta fechada</Badge>}
-          {room.status === "reaberta" && <Badge variant="outline">Conta reaberta</Badge>}
-        </span>
-        <span className="text-xs text-muted-foreground mr-2">R$ {room.grandTotal.toFixed(2)}</span>
-      </AccordionTrigger>
-      <AccordionPanel>
-        <div className="space-y-3 pt-3">
-          {room.isWalkin && room.walkinPhone && (
-            <p className="text-xs text-muted-foreground">Telefone: {room.walkinPhone}</p>
-          )}
-          <div className={room.isWalkin ? "grid gap-4" : "grid sm:grid-cols-2 gap-x-8 gap-y-4"}>
-            {!room.isWalkin && (
-            <div className="space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground">Frigobar</p>
-              <div className="space-y-1.5">
-                {room.minibarItems.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between text-sm">
-                    <span>
-                      {item.name} <span className="text-muted-foreground">× {item.quantity}</span>
-                    </span>
-                    <span>R$ {item.subtotal.toFixed(2)}</span>
-                  </div>
-                ))}
-                {room.minibarItems.length === 0 && (
-                  <p className="text-sm text-muted-foreground py-2">Sem consumo em aberto.</p>
-                )}
-              </div>
-            </div>
-            )}
-            <div className="space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground">Bar da piscina</p>
-              <div className="space-y-1.5">
-                {room.poolbarItems.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between text-sm">
-                    <span>
-                      {item.name} <span className="text-muted-foreground">× {item.quantity}</span>
-                    </span>
-                    <span>R$ {item.subtotal.toFixed(2)}</span>
-                  </div>
-                ))}
-                {room.poolbarItems.length === 0 && (
-                  <p className="text-sm text-muted-foreground py-2">Sem consumo em aberto.</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-border pt-2 space-y-1 text-sm max-w-md">
-            {!room.isWalkin && (
-              <div className="flex items-center justify-between">
-                <span>Total frigobar</span>
-                <span>R$ {room.minibarTotal.toFixed(2)}</span>
-              </div>
-            )}
-            <div className="flex items-center justify-between">
-              <span>Total bar da piscina</span>
-              <span>R$ {room.poolbarSubtotal.toFixed(2)}</span>
-            </div>
-            <div className="flex items-center justify-between text-muted-foreground text-xs">
-              <span>Taxa de serviço (10% sobre o bar){room.serviceChargeWaived && " · isenta"}</span>
-              <span>R$ {room.serviceCharge.toFixed(2)}</span>
-            </div>
-            <div className="flex items-center justify-between text-muted-foreground text-xs">
-              <span>Bar da piscina com taxa</span>
-              <span>R$ {room.poolbarTotalWithCharge.toFixed(2)}</span>
-            </div>
-            <div className="flex items-center justify-between font-medium pt-1">
-              <span>Total bar e frigobar</span>
-              <span>R$ {room.grandTotal.toFixed(2)}</span>
-            </div>
-          </div>
-
-          {room.closedByName && (
-            <p className="text-xs text-muted-foreground">Fechada por: {room.closedByName}</p>
-          )}
         </div>
       </AccordionPanel>
     </AccordionItem>

@@ -3,15 +3,20 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { getRoomBillsOverview, getRecentlyPaidRoomBills } from "@/lib/actions/room-bills";
 import { getActiveComandas, getInactiveComandas } from "@/lib/actions/comandas";
-import { FrigobarRoomsPanel } from "./frigobar-rooms-panel";
+import { PaidBillsCard } from "./frigobar-rooms-panel";
+import { ConsumoQuartosPanel } from "@/app/(camareira)/bar-piscina/consumo-quartos-panel";
+import { createClient } from "@/lib/supabase/server";
+import type { MinibarItem } from "@/lib/types";
 import { ComandasListPanel } from "./comandas-list-panel";
 
 export default async function FrigobarPage() {
-  const [overview, recentlyPaid, activeComandas, inactiveComandas] = await Promise.all([
+  const supabase = await createClient();
+  const [overview, recentlyPaid, activeComandas, inactiveComandas, { data: minibarItems }] = await Promise.all([
     getRoomBillsOverview(),
     getRecentlyPaidRoomBills(),
     getActiveComandas(),
     getInactiveComandas(),
+    supabase.from("minibar_items").select("*").eq("active", true).order("position"),
   ]);
 
   return (
@@ -19,7 +24,7 @@ export default async function FrigobarPage() {
       <BackLink href="/operacional" />
       <PageHeader
         title="Consumo de Bar e Frigobar"
-        subtitle="Consulta de consumo de frigobar e do bar da piscina por suíte — fechar conta, reabrir e registrar pagamento agora são ações da camareira."
+        subtitle="Consumo de frigobar e do bar da piscina por suíte. O administrador pode fechar, reabrir e registrar o pagamento de qualquer conta, além de editar e cancelar comandas."
       />
       <Tabs defaultValue="comandas">
         <TabsList>
@@ -30,7 +35,12 @@ export default async function FrigobarPage() {
           <ComandasListPanel activeComandas={activeComandas} inactiveComandas={inactiveComandas} />
         </TabsContent>
         <TabsContent value="quartos" className="pt-4">
-          <FrigobarRoomsPanel overview={overview} recentlyPaid={recentlyPaid} />
+          <ConsumoQuartosPanel
+            overview={overview}
+            minibarItems={(minibarItems ?? []) as MinibarItem[]}
+            recentlyPaid={recentlyPaid}
+            paidCard={<PaidBillsCard bills={recentlyPaid} title="Contas pagas nos últimos 30 dias" emptyText="Nenhuma conta paga nos últimos 30 dias." />}
+          />
         </TabsContent>
       </Tabs>
     </div>

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ComandaDetailDialog } from "@/components/shared/comanda-detail-dialog";
 import { roomSlotLabel } from "@/lib/room-bill-label";
 
-export function ComandasList({ comandas }: { comandas: ComandaListItem[] }) {
+export function ComandasList({ comandas, meId, isAdmin }: { comandas: ComandaListItem[]; meId: string; isAdmin: boolean }) {
   const router = useRouter();
   const [detail, setDetail] = useState<ComandaListItem | null>(null);
 
@@ -36,6 +36,7 @@ export function ComandasList({ comandas }: { comandas: ComandaListItem[] }) {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-sm font-medium">R$ {c.total.toFixed(2)}</span>
+              {(isAdmin || c.created_by_id === meId) && (
               <Button
                 size="icon-sm"
                 variant="outline"
@@ -46,6 +47,7 @@ export function ComandasList({ comandas }: { comandas: ComandaListItem[] }) {
               >
                 <Pencil size={14} />
               </Button>
+              )}
             </div>
           </div>
         ))}

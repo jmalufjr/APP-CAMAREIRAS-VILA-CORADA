@@ -8,7 +8,10 @@ import { MinibarSummaryTable } from "@/components/shared/minibar-summary-table";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { getMinibarConsumptionForPeriod } from "@/lib/actions/minibar";
 import { getPoolbarConsumptionForPeriod } from "@/lib/actions/poolbar";
-import { getBarCommissionByCamareiraForPeriod } from "@/lib/actions/comandas";
+import { getBarCommissionByCamareiraForPeriod, getInactiveComandasForPeriod } from "@/lib/actions/comandas";
+import { getPaidRoomBillsForPeriod } from "@/lib/actions/room-bills";
+import { PaidBillsCard } from "@/app/(admin)/frigobar/frigobar-rooms-panel";
+import { InactiveComandasList } from "@/app/(admin)/frigobar/comandas-list-panel";
 import { getSuitesCafeCommissionForPeriod } from "@/lib/actions/commission";
 import { getExpenses, getExpenseSummaryBySupplier } from "@/lib/actions/expenses";
 import { getExpenseDemonstrativoForPeriod } from "@/lib/actions/cost-accounting";
@@ -70,6 +73,8 @@ export default async function HistoricoPage({
     expenseBySupplier,
     inventoryShrinkageHistory,
     serviceLogRows,
+    paidBills,
+    inactiveComandas,
   ] = await Promise.all([
     // Comissão = quantidade de suítes elegíveis pro café da manhã por dia
     // (independente de terem sido de fato alocadas a uma mesa) × valor por
@@ -100,6 +105,8 @@ export default async function HistoricoPage({
     getExpenseSummaryBySupplier(from, to),
     getInventoryCountHistoryForPeriod(from, to),
     getServiceLogRows(supabase, from, to),
+    getPaidRoomBillsForPeriod(from, to),
+    getInactiveComandasForPeriod(from, to),
   ]);
 
   const commissionRate = Number(commissionSettings?.value_per_table ?? 0);
@@ -178,6 +185,22 @@ export default async function HistoricoPage({
         </CardHeader>
         <CardContent>
           <MinibarSummaryTable items={poolbarSummary.items} total={poolbarSummary.total} />
+        </CardContent>
+      </Card>
+
+      <PaidBillsCard
+        bills={paidBills}
+        title={`Contas pagas no período · ${paidBills.length}`}
+        emptyText="Nenhuma conta paga no período."
+      />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-lg">Comandas inativas de bar no período · {inactiveComandas.length}</CardTitle>
+          <p className="text-xs text-muted-foreground">Canceladas ou de contas pagas dentro do período consultado.</p>
+        </CardHeader>
+        <CardContent>
+          <InactiveComandasList comandas={inactiveComandas} emptyText="Nenhuma comanda inativa no período." />
         </CardContent>
       </Card>
 

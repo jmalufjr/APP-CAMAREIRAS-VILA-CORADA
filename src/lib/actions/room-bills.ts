@@ -541,11 +541,19 @@ export interface RecentlyPaidBill {
 // Contas pagas nos últimos `days` dias (uma linha por conta paga, não só a
 // mais recente de cada quarto — pode haver mais de uma conta paga do mesmo
 // quarto na janela de 7 dias).
-export async function getRecentlyPaidRoomBills(days = 7): Promise<RecentlyPaidBill[]> {
-  const supabase = await createClient();
-  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+export async function getRecentlyPaidRoomBills(days = 30): Promise<RecentlyPaidBill[]> {
+  return fetchPaidRoomBills(new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString(), null);
+}
 
-  const { data: bills } = await supabase
+// Contas pagas dentro de um período de datas (Histórico).
+export async function getPaidRoomBillsForPeriod(from: string, to: string): Promise<RecentlyPaidBill[]> {
+  return fetchPaidRoomBills(startOfDayBrasiliaUtc(from), nextDayBrasiliaUtcBoundary(to));
+}
+
+async function fetchPaidRoomBills(cutoff: string, until: string | null): Promise<RecentlyPaidBill[]> {
+  const supabase = await createClient();
+
+  let billsQuery = supabase
     .from("room_bills")
     .select(
       "id, room_id, paid_at, payment_method, receipt_email_sent, service_charge_waived, guest_name_hint, is_walkin, stay_check_in, stay_check_out, rooms(number), paid_by_profile:profiles!room_bills_paid_by_fkey(name)"
@@ -553,6 +561,8 @@ export async function getRecentlyPaidRoomBills(days = 7): Promise<RecentlyPaidBi
     .eq("status", "paga")
     .gte("paid_at", cutoff)
     .order("paid_at", { ascending: false });
+  if (until) billsQuery = billsQuery.lt("paid_at", until);
+  const { data: bills } = await billsQuery;
 
   type PaidBillRow = {
     id: string;

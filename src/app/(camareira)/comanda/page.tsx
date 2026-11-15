@@ -3,9 +3,10 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { getActiveComandas } from "@/lib/actions/comandas";
 import { ComandasList } from "./comandas-list";
+import { getCurrentProfile } from "@/lib/actions/session";
 
 export default async function ComandaPage() {
-  const comandas = await getActiveComandas();
+  const [comandas, profile] = await Promise.all([getActiveComandas(), getCurrentProfile()]);
 
   return (
     <div className="space-y-6">
@@ -16,7 +17,7 @@ export default async function ComandaPage() {
       <Button render={<Link href="/comanda/novo">Novo pedido</Link>} nativeButton={false} />
       <div className="space-y-3">
         <p className="text-sm font-medium">Lista de comandas</p>
-        <ComandasList comandas={comandas} />
+        <ComandasList comandas={comandas} meId={profile.id} isAdmin={profile.role === "admin"} />
       </div>
     </div>
   );

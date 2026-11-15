@@ -33,10 +33,13 @@ export function ConsumoQuartosPanel({
   overview,
   minibarItems,
   recentlyPaid,
+  paidCard,
 }: {
   overview: RoomBillOverview[];
   minibarItems: MinibarItem[];
   recentlyPaid: RecentlyPaidBill[];
+  // Admin: no lugar do card simples de contas pagas, passa o card com PDF e reenvio de e-mail.
+  paidCard?: React.ReactNode;
 }) {
   const inHouse = overview.filter((r) => r.group === "in_house");
   const former = overview.filter((r) => r.group === "former");
@@ -86,13 +89,14 @@ export function ConsumoQuartosPanel({
         </CardContent>
       </Card>
 
+      {paidCard ?? (
       <Card>
         <CardHeader>
-          <CardTitle>Contas pagas nos últimos 7 dias</CardTitle>
+          <CardTitle>Contas pagas nos últimos 30 dias</CardTitle>
         </CardHeader>
         <CardContent>
           {recentlyPaid.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma conta paga nos últimos 7 dias.</p>
+            <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma conta paga nos últimos 30 dias.</p>
           ) : (
             <div className="space-y-2">
               {recentlyPaid.map((bill) => (
@@ -116,6 +120,7 @@ export function ConsumoQuartosPanel({
           )}
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

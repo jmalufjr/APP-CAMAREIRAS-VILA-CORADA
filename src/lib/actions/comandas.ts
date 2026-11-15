@@ -121,6 +121,7 @@ export interface ComandaListItem {
   monthly_number: number | null;
   status: ComandaStatus;
   created_at: string;
+  created_by_id: string | null;
   created_by_name: string;
   last_action_at: string;
   last_action_by_name: string;
@@ -151,6 +152,7 @@ export interface ComandaListItemLine {
 
 type ComandaRow = {
   id: string;
+  created_by: string | null;
   room_id: string | null;
   sequence_number: number;
   monthly_number: number | null;
@@ -174,7 +176,7 @@ type ComandaItemRow = {
 };
 
 const COMANDA_ROW_SELECT =
-  "id, room_id, sequence_number, monthly_number, status, created_at, last_action_at, signature_png, signed_at, rooms(number), created_by_profile:profiles!bar_comandas_created_by_fkey(name), last_action_by_profile:profiles!bar_comandas_last_action_by_fkey(name), room_bills!inner(status, paid_at, guest_name_hint, is_walkin)";
+  "id, created_by, room_id, sequence_number, monthly_number, status, created_at, last_action_at, signature_png, signed_at, rooms(number), created_by_profile:profiles!bar_comandas_created_by_fkey(name), last_action_by_profile:profiles!bar_comandas_last_action_by_fkey(name), room_bills!inner(status, paid_at, guest_name_hint, is_walkin)";
 
 // Busca os itens de um conjunto de comandas já embutidos no resultado da
 // lista (em vez de buscar item a item quando o usuário abre o modal de
@@ -216,6 +218,7 @@ async function attachItemsAndMap(
       monthly_number: r.monthly_number,
       status: r.status,
       created_at: r.created_at,
+      created_by_id: r.created_by,
       created_by_name: r.created_by_profile?.name ?? "—",
       last_action_at: r.last_action_at,
       last_action_by_name: r.last_action_by_profile?.name ?? "—",
@@ -256,23 +259,21 @@ export async function getActiveComandas(): Promise<ComandaListItem[]> {
 // sequencial de uma comanda ativa é preservada ao virar inativa, podendo
 // se repetir entre contas diferentes do mesmo quarto — só não pode se
 // repetir dentro da lista de comandas ativas.
-export async function getInactiveComandas(days = 7): Promise<ComandaListItem[]> {
+async function fetchInactiveComandas(fromIso: string, toIso: string | null): Promise<ComandaListItem[]> {
   const supabase = await createClient();
-  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-  const [{ data: cancelled, error: cancelledError }, { data: paid, error: paidError }] = await Promise.all([
-    supabase
-      .from("bar_comandas")
-      .select(COMANDA_ROW_SELECT)
-      .eq("status", "cancelada")
-      .gte("last_action_at", cutoff),
-    supabase
-      .from("bar_comandas")
-      .select(COMANDA_ROW_SELECT)
-      .neq("status", "cancelada")
-      .eq("room_bills.status", "paga")
-      .gte("room_bills.paid_at", cutoff),
-  ]);
+  let cancelledQ = supabase.from("bar_comandas").select(COMANDA_ROW_SELECT).eq("status", "cancelada").gte("last_action_at", fromIso);
+  let paidQ = supabase
+    .from("bar_comandas")
+    .select(COMANDA_ROW_SELECT)
+    .neq("status", "cancelada")
+    .eq("room_bills.status", "paga")
+    .gte("room_bills.paid_at", fromIso);
+  if (toIso) {
+    cancelledQ = cancelledQ.lt("last_action_at", toIso);
+    paidQ = paidQ.lt("room_bills.paid_at", toIso);
+  }
+  const [{ data: cancelled, error: cancelledError }, { data: paid, error: paidError }] = await Promise.all([cancelledQ, paidQ]);
 
   if (cancelledError) throw new Error(cancelledError.message);
   if (paidError) throw new Error(paidError.message);
@@ -283,13 +284,22 @@ export async function getInactiveComandas(days = 7): Promise<ComandaListItem[]> 
   ];
   // Mais recente primeiro: data do cancelamento para as canceladas, data do
   // pagamento da conta para as demais.
-  rows.sort((a, b) => {
-    const dateA = a.status === "cancelada" ? a.last_action_at : a.room_bills?.paid_at ?? a.last_action_at;
-    const dateB = b.status === "cancelada" ? b.last_action_at : b.room_bills?.paid_at ?? b.last_action_at;
-    return dateB.localeCompare(dateA);
+  rows.sort((x, y) => {
+    const dateX = x.status === "cancelada" ? x.last_action_at : x.room_bills?.paid_at ?? x.last_action_at;
+    const dateY = y.status === "cancelada" ? y.last_action_at : y.room_bills?.paid_at ?? y.last_action_at;
+    return dateY.localeCompare(dateX);
   });
 
-  return attachItemsAndMap(supabase, rows);
+  return attachItemsAndMap(await createClient(), rows);
+}
+
+export async function getInactiveComandas(days = 30): Promise<ComandaListItem[]> {
+  return fetchInactiveComandas(new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString(), null);
+}
+
+// Comandas inativas de um período (Histórico): canceladas ou de contas pagas dentro das datas.
+export async function getInactiveComandasForPeriod(from: string, to: string): Promise<ComandaListItem[]> {
+  return fetchInactiveComandas(startOfDayBrasiliaUtc(from), nextDayBrasiliaUtcBoundary(to));
 }
 
 // ---------- Leitura: dados para o formulário "Novo pedido" / edição ----------
@@ -306,13 +316,15 @@ export interface ComandaFormData {
   bill_status: "aberta" | "fechada" | "reaberta" | "paga";
   // Conta (suíte + hóspede + reserva) a que esta comanda pertence hoje.
   bill_id: string;
+  // Só quem lançou a comanda (ou o admin) pode editar/cancelar.
+  can_modify: boolean;
 }
 
 export async function getComandaForEdit(comandaId: string): Promise<ComandaFormData | null> {
   const supabase = await createClient();
   const { data: comanda } = await supabase
     .from("bar_comandas")
-    .select("room_id, bill_id, status, room_bills(status)")
+    .select("room_id, bill_id, status, created_by, room_bills(status)")
     .eq("id", comandaId)
     .single();
   if (!comanda) return null;
@@ -323,6 +335,13 @@ export async function getComandaForEdit(comandaId: string): Promise<ComandaFormD
     }
   ).room_bills;
   const billStatus = billInfo?.status;
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: me } = user ? await supabase.from("profiles").select("role").eq("id", user.id).single() : { data: null };
+  const canModify =
+    me?.role === "admin" || (!!user && (comanda as unknown as { created_by: string | null }).created_by === user.id);
 
   const { data: itemRows } = await supabase
     .from("bar_comanda_items")
@@ -340,6 +359,7 @@ export async function getComandaForEdit(comandaId: string): Promise<ComandaFormD
     comanda_status: comanda.status,
     bill_status: billStatus ?? "aberta",
     bill_id: (comanda as unknown as { bill_id: string }).bill_id,
+    can_modify: canModify,
   };
 }
 

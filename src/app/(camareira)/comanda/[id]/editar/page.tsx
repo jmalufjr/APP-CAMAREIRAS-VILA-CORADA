@@ -29,6 +29,7 @@ export default async function EditarComandaPage({ params }: { params: Promise<{ 
         initialQuantities={formData.quantities}
         initialComandaStatus={formData.comanda_status}
         initialBillStatus={formData.bill_status}
+        canModify={formData.can_modify}
       />
     </div>
   );

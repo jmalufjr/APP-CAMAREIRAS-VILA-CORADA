@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { ComandaListItem } from "@/lib/actions/comandas";
 import { Badge } from "@/components/ui/badge";
 import { ComandaDetailDialog } from "@/components/shared/comanda-detail-dialog";
@@ -8,7 +11,8 @@ import { comandaDisplayStatus } from "@/lib/comanda-status";
 import { formatDateTimePt } from "@/lib/date";
 import { roomSlotLabel } from "@/lib/room-bill-label";
 
-function ComandaRow({ comanda, onClick }: { comanda: ComandaListItem; onClick: () => void }) {
+function ComandaRow({ comanda, onClick, canEdit }: { comanda: ComandaListItem; onClick: () => void; canEdit?: boolean }) {
+  const router = useRouter();
   return (
     <div
       role="button"
@@ -28,7 +32,21 @@ function ComandaRow({ comanda, onClick }: { comanda: ComandaListItem; onClick: (
             {comandaDisplayStatus(comanda)}
           </Badge>
         </p>
-        <span className="text-sm font-medium">R$ {comanda.total.toFixed(2)}</span>
+        <span className="flex items-center gap-2 text-sm font-medium">
+          R$ {comanda.total.toFixed(2)}
+          {canEdit && (
+            <Button
+              size="icon-sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                router.push(`/comanda/${comanda.id}/editar`);
+              }}
+            >
+              <Pencil size={14} />
+            </Button>
+          )}
+        </span>
       </div>
       <p className="text-xs text-muted-foreground mt-1">
         Original: {comanda.created_by_name} em {formatDateTimePt(comanda.created_at)} · Última ação:{" "}
@@ -57,7 +75,7 @@ export function ComandasListPanel({
         ) : (
           <div className="space-y-2">
             {activeComandas.map((c) => (
-              <ComandaRow key={c.id} comanda={c} onClick={() => setDetail(c)} />
+              <ComandaRow key={c.id} comanda={c} onClick={() => setDetail(c)} canEdit />
             ))}
           </div>
         )}
@@ -65,9 +83,9 @@ export function ComandasListPanel({
 
       <div className="space-y-2">
         <p className="text-sm font-medium">Comandas inativas</p>
-        <p className="text-xs text-muted-foreground">Canceladas ou de contas pagas, dos últimos 7 dias.</p>
+        <p className="text-xs text-muted-foreground">Canceladas ou de contas pagas, dos últimos 30 dias.</p>
         {inactiveComandas.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma comanda inativa nos últimos 7 dias.</p>
+          <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma comanda inativa nos últimos 30 dias.</p>
         ) : (
           <div className="space-y-2">
             {inactiveComandas.map((c) => (
@@ -79,5 +97,21 @@ export function ComandasListPanel({
 
       <ComandaDetailDialog comanda={detail} onOpenChange={(open) => !open && setDetail(null)} />
     </div>
+  );
+}
+
+// Lista de comandas inativas com o detalhe ao clicar — usada também no Histórico (por período).
+export function InactiveComandasList({ comandas, emptyText }: { comandas: ComandaListItem[]; emptyText: string }) {
+  const [detail, setDetail] = useState<ComandaListItem | null>(null);
+  if (comandas.length === 0) return <p className="text-sm text-muted-foreground py-4 text-center">{emptyText}</p>;
+  return (
+    <>
+      <div className="space-y-2">
+        {comandas.map((c) => (
+          <ComandaRow key={c.id} comanda={c} onClick={() => setDetail(c)} />
+        ))}
+      </div>
+      <ComandaDetailDialog comanda={detail} onOpenChange={(open) => !open && setDetail(null)} />
+    </>
   );
 }

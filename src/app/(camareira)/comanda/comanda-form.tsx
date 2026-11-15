@@ -32,6 +32,7 @@ export function ComandaForm({
   initialQuantities,
   initialComandaStatus,
   initialBillStatus,
+  canModify = true,
 }: {
   mode: "create" | "edit";
   comandaId?: string;
@@ -41,6 +42,8 @@ export function ComandaForm({
   initialQuantities?: Record<string, number>;
   initialComandaStatus?: "original" | "cancelada" | "editada";
   initialBillStatus?: "aberta" | "fechada" | "reaberta" | "paga";
+  // Só quem lançou a comanda (ou o admin) pode editar/cancelar.
+  canModify?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -68,7 +71,8 @@ export function ComandaForm({
   // tela proativamente em vez de só reagir a um erro do servidor.
   const isLocked =
     mode === "edit" &&
-    (initialComandaStatus === "cancelada" ||
+    (!canModify ||
+      initialComandaStatus === "cancelada" ||
       (initialBillStatus !== undefined && initialBillStatus !== "aberta" && initialBillStatus !== "reaberta"));
 
   const groups = new Map<string, PoolbarItem[]>();
@@ -144,6 +148,7 @@ export function ComandaForm({
 
   function handleEditSubmit() {
     if (!validateOrder() || !selectedRoom) return;
+    if (!confirm("Confirma salvar a edição desta comanda? As quantidades anteriores serão substituídas e não ficam registradas.")) return;
     startTransition(async () => {
       const result = await editComanda(comandaId!, selectedRoom.room_id, orderItems, selectedRoom.bill_id);
       if (result?.error) {
@@ -162,6 +167,7 @@ export function ComandaForm({
   // prato pronto que foi jogado fora não pode ser "recuperado" de volta.
   function handleCancelComanda(ingredientsRecovered: boolean) {
     if (!comandaId || isLocked) return;
+    if (!confirm("Confirma o cancelamento desta comanda? Ela deixará de contar no consumo da conta.")) return;
     startTransition(async () => {
       const result = await cancelComanda(comandaId, ingredientsRecovered);
       if (result?.error) {
@@ -179,7 +185,9 @@ export function ComandaForm({
     <div className="space-y-6">
       {isLocked && (
         <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          {initialComandaStatus === "cancelada"
+          {!canModify
+            ? "Somente quem lançou esta comanda (ou o administrador) pode alterá-la."
+            : initialComandaStatus === "cancelada"
             ? "Esta comanda já está cancelada."
             : "A conta a que esta comanda pertence está fechada ou já foi paga."}{" "}
           Não é possível editar nem cancelar esta comanda.
