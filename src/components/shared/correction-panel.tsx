@@ -3,9 +3,11 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type { DailyRoomTask, DailyRoomTaskCheck, RoomBillGuestSlot } from "@/lib/types";
+import type { DailyRoomTask, DailyRoomTaskCheck, OccurrenceCategory } from "@/lib/types";
+import { OccurrencesCard, type OccurrenceRow } from "@/components/shared/occurrences-card";
+import type { TaskMinibarRow } from "@/components/shared/checklist-detail";
 import { startCorrection, setCorrectionCheck, setCorrectionMinibarDone, finishCorrection } from "@/lib/actions/tasks";
-import type { MinibarRoomConsumption } from "@/lib/actions/minibar";
+import type { MinibarTaskContext } from "@/lib/actions/minibar";
 import { QuantityStepper } from "@/components/shared/quantity-stepper";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -22,13 +24,18 @@ export function CorrectionPanel({
   task,
   checks,
   minibar,
-  minibarGuestSlot,
+  taskMinibar,
+  occurrences,
+  categories,
   reviewerName,
 }: {
   task: DailyRoomTask;
   checks: CheckRow[];
-  minibar?: MinibarRoomConsumption;
-  minibarGuestSlot: RoomBillGuestSlot;
+  minibar?: MinibarTaskContext;
+  // Consumo de frigobar DO DIA lançado pela executora (é este valor que ela corrige).
+  taskMinibar: TaskMinibarRow[];
+  occurrences: OccurrenceRow[];
+  categories: OccurrenceCategory[];
   reviewerName: string | null;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -42,7 +49,7 @@ export function CorrectionPanel({
   );
   const [minibarDone, setMinibarDone] = useState(task.correction_minibar_done);
   const items = minibar?.items ?? [];
-  const initialQuantities = Object.fromEntries(items.map((i) => [i.id, i.quantity]));
+  const initialQuantities = Object.fromEntries(items.map((i) => [i.id, taskMinibar.find((t) => t.itemId === i.id)?.quantity ?? 0]));
   const [quantities, setQuantities] = useState<Record<string, number>>(initialQuantities);
   const isMinibarClosed = minibar?.billStatus === "fechada";
 
@@ -115,6 +122,17 @@ export function CorrectionPanel({
     <div className="space-y-6">
       {reviewBox}
 
+      {task.notes && (
+        <Card>
+          <CardContent className="space-y-1">
+            <h3 className="font-heading text-lg">Suas observações</h3>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{task.notes}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      <OccurrencesCard taskId={task.id} occurrences={occurrences} categories={categories} canEdit={false} />
+
       <div className="space-y-2">
         {incompleteChecks.map((check) => (
           <label
@@ -139,8 +157,8 @@ export function CorrectionPanel({
               {isMinibarClosed && <Badge variant="secondary">Conta fechada</Badge>}
             </div>
             <p className="text-xs text-muted-foreground">
-              Os valores abaixo são os que já estavam registrados. Edite se precisar; o consumo só é atualizado quando você
-              finalizar a correção.
+              Os valores abaixo são o consumo do dia que você lançou neste serviço (não o total da conta). Corrija o número
+              se precisar; a conta do hóspede só é ajustada, pela diferença, quando você finalizar a correção.
               {isMinibarClosed && " A conta está fechada, então o consumo não poderá ser alterado — o administrador ajusta depois."}
             </p>
             <div className="space-y-2">
@@ -178,7 +196,7 @@ export function CorrectionPanel({
             const changes = minibarIncomplete && !isMinibarClosed
               ? items.filter((i) => (quantities[i.id] ?? 0) !== (initialQuantities[i.id] ?? 0)).map((i) => ({ itemId: i.id, quantity: quantities[i.id] ?? 0 }))
               : [];
-            const r = await finishCorrection(task.id, task.room_id, minibarGuestSlot, changes);
+            const r = await finishCorrection(task.id, minibar?.billId ?? null, changes);
             if (r?.error) {
               toast.error(r.error);
               return;

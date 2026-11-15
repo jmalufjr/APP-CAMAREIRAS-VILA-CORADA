@@ -8,7 +8,8 @@ import { resendRoomBillReceipt } from "@/lib/actions/room-bills";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
-import { formatDateShortPt, formatDateTimePt, dateKeyInBrazil } from "@/lib/date";
+import { formatDateTimePt } from "@/lib/date";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment-method";
 import { roomSlotLabel } from "@/lib/room-bill-label";
 
@@ -23,33 +24,67 @@ export function FrigobarRoomsPanel({
   overview: RoomBillOverview[];
   recentlyPaid: RecentlyPaidBill[];
 }) {
-  return (
-    <div className="space-y-8">
-      <div className="space-y-2">
-        <p className="text-sm font-medium">Contas em aberto ou fechadas</p>
-        {overview.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma suíte ativa cadastrada.</p>
-        ) : (
-          <Accordion className="space-y-2">
-            {overview.map((room) => (
-              <RoomAccordionItem key={room.bill_id} room={room} />
-            ))}
-          </Accordion>
-        )}
-      </div>
+  const inHouse = overview.filter((r) => r.group === "in_house");
+  const former = overview.filter((r) => r.group === "former");
 
-      <div className="space-y-2">
-        <p className="text-sm font-medium">Contas pagas (últimos 7 dias)</p>
-        {recentlyPaid.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma conta paga nos últimos 7 dias.</p>
-        ) : (
-          <Accordion className="space-y-2">
-            {recentlyPaid.map((bill) => (
-              <PaidBillAccordionItem key={bill.bill_id} bill={bill} />
-            ))}
-          </Accordion>
-        )}
-      </div>
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Hóspedes na pousada</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Contas abertas ou fechadas (ainda sem pagamento) de quem está hospedado, inclusive quem sai e quem chega hoje.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {inHouse.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma conta de hóspede na pousada.</p>
+          ) : (
+            <Accordion className="space-y-2">
+              {inHouse.map((room) => (
+                <RoomAccordionItem key={room.bill_id} room={room} />
+              ))}
+            </Accordion>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Hóspedes que já saíram</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Contas abertas ou fechadas que ainda não foram pagas, de hóspedes cujo check-out já passou.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {former.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma conta pendente de hóspede que já saiu.</p>
+          ) : (
+            <Accordion className="space-y-2">
+              {former.map((room) => (
+                <RoomAccordionItem key={room.bill_id} room={room} />
+              ))}
+            </Accordion>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Contas pagas nos últimos 7 dias</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {recentlyPaid.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma conta paga nos últimos 7 dias.</p>
+          ) : (
+            <Accordion className="space-y-2">
+              {recentlyPaid.map((bill) => (
+                <PaidBillAccordionItem key={bill.bill_id} bill={bill} />
+              ))}
+            </Accordion>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -73,7 +108,12 @@ function PaidBillAccordionItem({ bill }: { bill: RecentlyPaidBill }) {
     <AccordionItem value={bill.bill_id}>
       <AccordionTrigger>
         <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <span className="font-heading text-base">Suíte {bill.room_number}</span>
+          <span className="font-heading text-base">
+            {roomSlotLabel(
+              { room_number: bill.room_number, guestNameHint: bill.guestNameHint, stayCheckIn: bill.stayCheckIn, stayCheckOut: bill.stayCheckOut },
+              { withDates: true }
+            )}
+          </span>
           <span className="text-xs text-muted-foreground">Paga em {formatDateTimePt(bill.paid_at)}</span>
           {!bill.receiptEmailSent && <Badge variant="destructive">E-mail não enviado</Badge>}
         </span>
@@ -175,7 +215,7 @@ function RoomAccordionItem({ room }: { room: RoomBillOverview }) {
     <AccordionItem value={room.bill_id}>
       <AccordionTrigger>
         <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <span className="font-heading text-base">{roomSlotLabel(room)}</span>
+          <span className="font-heading text-base">{roomSlotLabel(room, { withDates: true })}</span>
           {room.status === "fechada" && <Badge variant="secondary">Conta fechada</Badge>}
           {room.status === "reaberta" && <Badge variant="outline">Conta reaberta</Badge>}
         </span>
@@ -240,15 +280,6 @@ function RoomAccordionItem({ room }: { room: RoomBillOverview }) {
               <span>R$ {room.grandTotal.toFixed(2)}</span>
             </div>
           </div>
-
-          {room.lastPaidBill && (
-            <p className="text-xs text-muted-foreground">
-              Última conta paga: R$ {room.lastPaidBill.total.toFixed(2)} em{" "}
-              {formatDateShortPt(dateKeyInBrazil(room.lastPaidBill.paid_at))}
-              {room.lastPaidBill.payment_method &&
-                ` · ${PAYMENT_METHOD_LABELS[room.lastPaidBill.payment_method]}`}
-            </p>
-          )}
 
           {room.closedByName && (
             <p className="text-xs text-muted-foreground">Fechada por: {room.closedByName}</p>

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type { RoomBillOverview } from "@/lib/actions/room-bills";
+import type { RoomBillOverview, RecentlyPaidBill } from "@/lib/actions/room-bills";
 import { closeRoomBill, reopenRoomBill, markRoomBillPaid, setServiceChargeWaived } from "@/lib/actions/room-bills";
 import { setMinibarConsumption } from "@/lib/actions/minibar";
 import type { MinibarItem } from "@/lib/types";
@@ -13,7 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
-import { formatDateShortPt, dateKeyInBrazil } from "@/lib/date";
+import { formatDateTimePt } from "@/lib/date";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -30,20 +31,88 @@ import { roomSlotLabel } from "@/lib/room-bill-label";
 export function ConsumoQuartosPanel({
   overview,
   minibarItems,
+  recentlyPaid,
 }: {
   overview: RoomBillOverview[];
   minibarItems: MinibarItem[];
+  recentlyPaid: RecentlyPaidBill[];
 }) {
-  if (overview.length === 0) {
-    return <p className="text-sm text-muted-foreground py-8 text-center">Nenhuma suíte ativa cadastrada.</p>;
-  }
+  const inHouse = overview.filter((r) => r.group === "in_house");
+  const former = overview.filter((r) => r.group === "former");
 
   return (
-    <Accordion className="space-y-2">
-      {overview.map((room) => (
-        <RoomAccordionItem key={room.bill_id} room={room} minibarItems={minibarItems} />
-      ))}
-    </Accordion>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Hóspedes na pousada</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Contas abertas ou fechadas (ainda sem pagamento) de quem está hospedado, inclusive quem sai e quem chega hoje.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {inHouse.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma conta de hóspede na pousada.</p>
+          ) : (
+            <Accordion className="space-y-2">
+              {inHouse.map((room) => (
+                <RoomAccordionItem key={room.bill_id} room={room} minibarItems={minibarItems} />
+              ))}
+            </Accordion>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Hóspedes que já saíram</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Contas abertas ou fechadas que ainda não foram pagas, de hóspedes cujo check-out já passou.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {former.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma conta pendente de hóspede que já saiu.</p>
+          ) : (
+            <Accordion className="space-y-2">
+              {former.map((room) => (
+                <RoomAccordionItem key={room.bill_id} room={room} minibarItems={minibarItems} />
+              ))}
+            </Accordion>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Contas pagas nos últimos 7 dias</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {recentlyPaid.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma conta paga nos últimos 7 dias.</p>
+          ) : (
+            <div className="space-y-2">
+              {recentlyPaid.map((bill) => (
+                <div key={bill.bill_id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm">
+                  <div className="min-w-0">
+                    <p className="font-medium">
+                      {roomSlotLabel(
+                        { room_number: bill.room_number, guestNameHint: bill.guestNameHint, stayCheckIn: bill.stayCheckIn, stayCheckOut: bill.stayCheckOut },
+                        { withDates: true }
+                      )}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Paga em {formatDateTimePt(bill.paid_at)}
+                      {bill.paymentMethod && ` · ${PAYMENT_METHOD_LABELS[bill.paymentMethod]}`}
+                    </p>
+                  </div>
+                  <span className="shrink-0">R$ {bill.grandTotal.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -120,7 +189,7 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
       return;
     }
     runAction(
-      () => setServiceChargeWaived(room.room_id, waived, room.guestSlot),
+      () => setServiceChargeWaived(room.room_id, waived, room.bill_id),
       waived ? "Taxa de serviço isentada nesta conta." : "Taxa de serviço voltou a ser cobrada nesta conta."
     );
   }
@@ -130,7 +199,7 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
   // suíte, em vez de sobrescrevê-lo.
   function handleAdditionalChange(itemId: string, v: number) {
     setAdditionalQty((prev) => ({ ...prev, [itemId]: v }));
-    runAction(() => setMinibarConsumption(room.room_id, itemId, (baseQty[itemId] ?? 0) + v, room.guestSlot));
+    runAction(() => setMinibarConsumption(room.bill_id, itemId, (baseQty[itemId] ?? 0) + v));
   }
 
   function handleStartLaunchingAdditional(checked: boolean) {
@@ -152,7 +221,7 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
       }
       startTransition(async () => {
         const results = await Promise.all(
-          minibarItems.map((item) => setMinibarConsumption(room.room_id, item.id, 0, room.guestSlot))
+          minibarItems.map((item) => setMinibarConsumption(room.bill_id, item.id, 0))
         );
         const failed = results.find((r) => r?.error);
         if (failed?.error) {
@@ -178,7 +247,7 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
       toast.error("Selecione a forma de pagamento.");
       return;
     }
-    runAction(() => markRoomBillPaid(room.room_id, paymentMethod, room.guestSlot), "Pagamento registrado.");
+    runAction(() => markRoomBillPaid(room.room_id, paymentMethod, room.bill_id), "Pagamento registrado.");
     setPaymentDialogOpen(false);
     setPaymentMethod("");
   }
@@ -190,7 +259,7 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
     <AccordionItem value={room.bill_id}>
       <AccordionTrigger>
         <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <span className="font-heading text-base">{roomSlotLabel(room)}</span>
+          <span className="font-heading text-base">{roomSlotLabel(room, { withDates: true })}</span>
           {room.status === "fechada" && <Badge variant="secondary">Conta fechada</Badge>}
           {room.status === "reaberta" && <Badge variant="outline">Conta reaberta</Badge>}
         </span>
@@ -219,16 +288,6 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
                   </div>
                 )}
               </div>
-              {room.departureFrigobarStatus === "confirmed_via_checklist" && (
-                <p className="text-xs text-muted-foreground">
-                  ✓ Consumo de frigobar do hóspede que saiu já foi conferido pela camareira no checklist.
-                </p>
-              )}
-              {room.departureFrigobarStatus === "pending_needs_manual_entry" && (
-                <p className="text-xs text-destructive">
-                  Ainda não foi lançado o consumo de frigobar do hóspede que saiu — confira e lance aqui.
-                </p>
-              )}
               {room.status === "reaberta" && (
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Lançamento adicional de consumo</p>
@@ -359,7 +418,7 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
                   size="sm"
                   variant="outline"
                   disabled={isPending}
-                  onClick={() => runAction(() => reopenRoomBill(room.room_id, room.guestSlot), "Conta reaberta.")}
+                  onClick={() => runAction(() => reopenRoomBill(room.room_id, room.bill_id), "Conta reaberta.")}
                 >
                   Editar/reabrir conta
                 </Button>
@@ -371,20 +430,12 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
                 size="sm"
                 variant="outline"
                 disabled={isPending}
-                onClick={() => runAction(() => closeRoomBill(room.room_id, room.guestSlot), "Conta fechada.")}
+                onClick={() => runAction(() => closeRoomBill(room.room_id, room.bill_id), "Conta fechada.")}
               >
                 Fechar a conta
               </Button>
             )}
 
-            {room.lastPaidBill && (
-              <p className="text-xs text-muted-foreground">
-                Última conta paga: R$ {room.lastPaidBill.total.toFixed(2)} em{" "}
-                {formatDateShortPt(dateKeyInBrazil(room.lastPaidBill.paid_at))}
-                {room.lastPaidBill.payment_method &&
-                  ` · ${PAYMENT_METHOD_LABELS[room.lastPaidBill.payment_method]}`}
-              </p>
-            )}
           </div>
         </div>
       </AccordionPanel>

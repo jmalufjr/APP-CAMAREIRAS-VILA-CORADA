@@ -11,6 +11,7 @@ import {
   finishReview,
 } from "@/lib/actions/tasks";
 import { OccurrencesCard, type OccurrenceRow } from "@/components/shared/occurrences-card";
+import type { TaskMinibarRow } from "@/components/shared/checklist-detail";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
@@ -46,12 +47,14 @@ export function ReviewPanel({
   occurrences,
   categories,
   executorName,
+  taskMinibar,
 }: {
   task: DailyRoomTask;
   checks: CheckRow[];
   occurrences: OccurrenceRow[];
   categories: OccurrenceCategory[];
   executorName: string | null;
+  taskMinibar: TaskMinibarRow[];
 }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -121,6 +124,26 @@ export function ReviewPanel({
           <ResultSelect value={minibarResult} onChange={handleMinibar} />
         </div>
       </div>
+
+      {task.task_type !== "somente_chegada" && (
+        <Card>
+          <CardContent className="space-y-3">
+            <h3 className="font-heading text-lg">Consumo de frigobar do dia (lançado pela executora)</h3>
+            {taskMinibar.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum consumo de frigobar registrado neste serviço.</p>
+            ) : (
+              <div className="space-y-1.5 max-w-md">
+                {taskMinibar.map((row) => (
+                  <div key={row.id} className="flex items-center justify-between text-sm">
+                    <span>{row.name}</span>
+                    <span className="text-muted-foreground">× {row.quantity}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {task.notes && (
         <Card>

@@ -1,19 +1,16 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type {
-  DailyRoomTask,
-  DailyRoomTaskCheck,
-  OccurrenceCategory,
-  RoomBillGuestSlot,
-} from "@/lib/types";
+import type { DailyRoomTask, DailyRoomTaskCheck, OccurrenceCategory } from "@/lib/types";
 import { TASK_STATUS_LABELS, isTaskInExecution } from "@/lib/types";
-import { toggleCheck, releaseTask, setBedlinenChanged as setBedlinenChangedAction } from "@/lib/actions/tasks";
+import { finalizeService } from "@/lib/actions/tasks";
 import { OccurrencesCard, type OccurrenceRow } from "@/components/shared/occurrences-card";
-import { setMinibarConsumption, type MinibarRoomConsumption } from "@/lib/actions/minibar";
-import type { RoomBillSnapshot } from "@/lib/actions/room-bills";
+import { DraftOccurrencesCard, type DraftOccurrence } from "@/components/shared/draft-occurrences-card";
+import { uploadOccurrencePhotos } from "@/lib/actions/occurrence-photos";
+import { compressImageForUpload } from "@/lib/image-compression";
+import type { MinibarTaskContext } from "@/lib/actions/minibar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,111 +24,100 @@ import { CheckCircle2, Info } from "lucide-react";
 
 type CheckRow = DailyRoomTaskCheck & { checklist_items: { label: string; description: string | null } };
 
+// Consumo de frigobar DO DIA registrado neste serviço (só leitura).
+export type TaskMinibarRow = { id: string; itemId: string; name: string; quantity: number };
+
 export function ChecklistDetail({
   task,
   checks,
   occurrences,
   categories,
   minibar,
-  minibarGuestSlot,
-  minibarSnapshot,
+  taskMinibar,
+  readOnly = false,
 }: {
   task: DailyRoomTask;
   checks: CheckRow[];
   occurrences: OccurrenceRow[];
   categories: OccurrenceCategory[];
-  // Só passado pela tela da camareira: consumo editável da conta corrente
-  // do quarto (steppers, grava a cada clique).
-  minibar?: MinibarRoomConsumption;
-  // A conta certa pra lançar esse frigobar (resolvida pela página, a
-  // partir das contas que já existem pra suíte — ver
-  // resolveAutoMinibarGuestSlot em room-bills.ts) — sempre passado junto
-  // com `minibar`.
-  minibarGuestSlot?: RoomBillGuestSlot;
-  // Só passado pela visão somente-leitura do admin: retrato (não editável)
-  // da conta vigente na data da tarefa, no mesmo formato usado em
-  // "Consumo de Bar e Frigobar" > Consumo por quartos. Ver
-  // getRoomBillSnapshotForDate — é o acumulado da conta até aquele ponto,
-  // não só o que foi lançado exatamente naquele dia.
-  minibarSnapshot?: RoomBillSnapshot;
+  // Só passado pela execução da camareira (serviço ainda aberto): itens de frigobar e a conta de quem
+  // dormiu na suíte na noite anterior. Nunca mostra o consumo acumulado da conta.
+  minibar?: MinibarTaskContext;
+  // Serviço já finalizado (camareira ou admin, só leitura): o consumo de frigobar que foi lançado NESTE
+  // serviço. Bar da piscina não tem relação com o serviço e nunca aparece aqui.
+  taskMinibar?: TaskMinibarRow[];
+  // Visão do admin: nunca permite finalizar nem editar nada.
+  readOnly?: boolean;
 }) {
-  const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const [notes, setNotes] = useState(task.notes ?? "");
   const [bedlinenChanged, setBedlinenChanged] = useState(task.bedlinen_changed);
-  // Estado local dos checks: a fonte de verdade da UI, atualizada de forma
-  // otimista no clique. Evita esperar o round trip ao servidor + um
-  // router.refresh() de página inteira só para o "xisinho" aparecer.
+  // Tudo o que a camareira preenche fica só na tela: nada é gravado (itens, frigobar, ocorrências,
+  // observações) até ela tocar em "Serviço na suíte finalizado". Voltar de tela não grava nada.
   const [localChecks, setLocalChecks] = useState(checks);
-  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
-  // Ressincroniza o estado local sempre que a prop `checks` mudar de
-  // identidade (task diferente / dados recarregados do servidor), sem usar
-  // useEffect (padrão "adjusting state during render" do React).
+  const [drafts, setDrafts] = useState<DraftOccurrence[]>([]);
+  const [finalizing, setFinalizing] = useState(false);
   const [syncedChecks, setSyncedChecks] = useState(checks);
   if (checks !== syncedChecks) {
     setSyncedChecks(checks);
     setLocalChecks(checks);
   }
 
-  const allChecked = localChecks.length > 0 && localChecks.every((c) => c.checked);
-  // Depois de liberada pela executora (revisão, correção ou concluído), o checklist dela é só leitura.
-  const isReleased = !isTaskInExecution(task.status);
+  // Depois de finalizada pela executora (revisão, correção ou concluído), o checklist dela é só leitura.
+  const isReleased = readOnly || !isTaskInExecution(task.status);
 
-  // Consumo de frigobar: quantidade por item, iniciada a partir do que já
-  // está lançado na conta corrente deste quarto (compartilhada entre
-  // qualquer camareira/tarefa). O toggle "houve consumo?" é só uma
-  // conveniência de UI (default "Sim" se já existir alguma quantidade > 0
-  // salva), não precisa de uma coluna própria no banco.
+  // Consumo DIFERENCIAL do dia: começa sempre em zero (a camareira não vê o acumulado da conta).
+  // Somente Chegada não tem frigobar: a suíte estava vazia na noite anterior.
+  const showMinibarEntry = !!minibar && !isReleased && task.task_type !== "somente_chegada";
   const minibarItems = minibar?.items ?? [];
   const isMinibarClosed = minibar?.billStatus === "fechada";
-  const initialQuantities = Object.fromEntries(minibarItems.map((item) => [item.id, item.quantity]));
-  const [minibarQuantities, setMinibarQuantities] = useState<Record<string, number>>(initialQuantities);
-  const [hasMinibarConsumption, setHasMinibarConsumption] = useState(
-    Object.values(initialQuantities).some((q) => q > 0)
-  );
-  const [minibarPendingIds, setMinibarPendingIds] = useState<Set<string>>(new Set());
-
-  // Recebe a quantidade explicitamente (em vez de reler o estado) para
-  // evitar salvar um valor obsoleto quando chamada logo após uma mudança de
-  // estado ainda não aplicada (ex.: zerar tudo ao desligar o toggle).
-  function saveMinibarQuantity(itemId: string, quantity: number) {
-    setMinibarPendingIds((prev) => new Set(prev).add(itemId));
-    startTransition(async () => {
-      const result = await setMinibarConsumption(task.room_id, itemId, quantity, minibarGuestSlot ?? "unica");
-      setMinibarPendingIds((prev) => {
-        const copy = new Set(prev);
-        copy.delete(itemId);
-        return copy;
-      });
-      if (result?.error) toast.error(result.error);
-    });
-  }
-
-  // Cada clique no stepper (+/-) já é a ação final do usuário (não há
-  // "blur" como num campo de texto), então atualiza e salva no mesmo passo.
-  function handleMinibarQuantityChange(itemId: string, quantity: number) {
-    const safeQuantity = Math.max(0, Math.floor(quantity) || 0);
-    setMinibarQuantities((prev) => ({ ...prev, [itemId]: safeQuantity }));
-    saveMinibarQuantity(itemId, safeQuantity);
-  }
+  const [dayQuantities, setDayQuantities] = useState<Record<string, number>>({});
+  const [hasMinibarConsumption, setHasMinibarConsumption] = useState(false);
 
   function handleToggle(checkId: string, next: boolean) {
     setLocalChecks((prev) => prev.map((c) => (c.id === checkId ? { ...c, checked: next } : c)));
-    setPendingIds((prev) => new Set(prev).add(checkId));
+  }
 
-    startTransition(async () => {
-      const result = await toggleCheck(checkId, next);
-      setPendingIds((prev) => {
-        const copy = new Set(prev);
-        copy.delete(checkId);
-        return copy;
+  async function handleFinalize() {
+    if (!localChecks.every((c) => c.checked)) {
+      toast.error("Marque todos os itens do checklist antes de finalizar o serviço.");
+      return;
+    }
+    setFinalizing(true);
+    try {
+      const minibarToSend = hasMinibarConsumption && !isMinibarClosed
+        ? Object.entries(dayQuantities)
+            .filter(([, q]) => q > 0)
+            .map(([itemId, quantity]) => ({ itemId, quantity }))
+        : [];
+      const result = await finalizeService({
+        taskId: task.id,
+        checkedIds: localChecks.filter((c) => c.checked).map((c) => c.id),
+        notes,
+        bedlinenChanged,
+        occurrences: drafts.map((d) => ({ categoryId: d.categoryId, description: d.description })),
+        minibar: minibarToSend,
       });
       if (result?.error) {
         toast.error(result.error);
-        // reverte apenas este item, sem recarregar a página inteira
-        setLocalChecks((prev) => prev.map((c) => (c.id === checkId ? { ...c, checked: !next } : c)));
+        return;
       }
-    });
+      // Fotos das ocorrências: só agora que as ocorrências existem.
+      const ids = result.occurrenceIds ?? [];
+      for (let i = 0; i < drafts.length; i++) {
+        const draft = drafts[i];
+        if (draft.photos.length === 0 || !ids[i]) continue;
+        const compressed = await Promise.all(draft.photos.map((p) => compressImageForUpload(p.file)));
+        const formData = new FormData();
+        compressed.forEach((blob, n) => formData.append("files", blob, `foto-${n + 1}.jpg`));
+        const upload = await uploadOccurrencePhotos(ids[i], formData);
+        if (upload?.error) toast.error(`Serviço finalizado, mas houve erro ao enviar fotos de uma ocorrência: ${upload.error}`);
+      }
+      toast.success("Serviço na suíte finalizado.");
+      router.refresh();
+    } finally {
+      setFinalizing(false);
+    }
   }
 
   return (
@@ -152,7 +138,7 @@ export function ChecklistDetail({
             <label className="flex min-w-0 flex-1 items-center gap-3 cursor-pointer">
               <Checkbox
                 checked={check.checked}
-                disabled={pendingIds.has(check.id) || isReleased}
+                disabled={isReleased || finalizing}
                 onCheckedChange={(v) => handleToggle(check.id, !!v)}
               />
               <span className="text-base font-medium">{check.checklist_items.label}</span>
@@ -175,136 +161,83 @@ export function ChecklistDetail({
         ))}
       </div>
 
-      {minibar && (
-      <Card>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-heading text-lg">Consumo de frigobar</h3>
-            <div className="flex items-center gap-2">
-              {isMinibarClosed && <Badge variant="secondary">Conta fechada</Badge>}
-              <Label htmlFor="minibar-consumption" className="text-sm font-normal">
-                Houve consumo de frigobar?
-              </Label>
-              <Switch
-                id="minibar-consumption"
-                checked={hasMinibarConsumption}
-                disabled={isReleased || isMinibarClosed}
-                onCheckedChange={(checked) => {
-                  setHasMinibarConsumption(!!checked);
-                  if (!checked) {
-                    // Zera e salva todas as quantidades ao responder "Não".
-                    minibarItems.forEach((item) => {
-                      if ((minibarQuantities[item.id] ?? 0) > 0) {
-                        handleMinibarQuantityChange(item.id, 0);
-                        saveMinibarQuantity(item.id, 0);
-                      }
-                    });
-                  }
-                }}
-              />
-            </div>
-          </div>
-          {isMinibarClosed && (
-            <p className="text-xs text-muted-foreground">
-              Lance esse consumo em Consumo por quartos &gt; Lançar consumo adicional.
-            </p>
-          )}
-          {hasMinibarConsumption && (
-            <div className="space-y-2">
-              {minibarItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3"
-                >
-                  <div>
-                    <p className="text-sm font-medium">{item.name}</p>
-                    <p className="text-xs text-muted-foreground">R$ {item.price.toFixed(2)}</p>
-                  </div>
-                  <QuantityStepper
-                    value={minibarQuantities[item.id] ?? 0}
-                    disabled={minibarPendingIds.has(item.id) || isReleased || isMinibarClosed}
-                    onChange={(v) => handleMinibarQuantityChange(item.id, v)}
-                  />
-                </div>
-              ))}
-              {minibarItems.length === 0 && (
-                <p className="text-sm text-muted-foreground">Nenhum item de frigobar cadastrado.</p>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-      )}
-
-      {minibarSnapshot && (
+      {showMinibarEntry && (
         <Card>
           <CardContent className="space-y-4">
-            <div>
-              <h3 className="font-heading text-lg">Consumo de frigobar e bar</h3>
-              <p className="text-xs text-muted-foreground">
-                Estado acumulado da conta da suíte vigente nessa data — não é só o que foi lançado
-                exatamente nesse dia, e sim tudo que já constava na conta até esse ponto.
-              </p>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="font-heading text-lg">Consumo de frigobar</h3>
+              <div className="flex items-center gap-2">
+                {isMinibarClosed && <Badge variant="secondary">Conta fechada</Badge>}
+                <Label htmlFor="minibar-consumption" className="text-sm font-normal">
+                  Houve consumo de frigobar?
+                </Label>
+                <Switch
+                  id="minibar-consumption"
+                  checked={hasMinibarConsumption}
+                  disabled={isMinibarClosed || finalizing}
+                  onCheckedChange={(checked) => {
+                    setHasMinibarConsumption(!!checked);
+                    // Desligar descarta só o que foi marcado nesta tela; nada que já esteja na conta é tocado.
+                    if (!checked) setDayQuantities({});
+                  }}
+                />
+              </div>
             </div>
-            {!minibarSnapshot.found ? (
-              <p className="text-sm text-muted-foreground">
-                Não foi encontrada nenhuma conta dessa suíte pra essa data.
+            {isMinibarClosed ? (
+              <p className="text-xs text-muted-foreground">
+                A conta do hóspede está fechada: lance esse consumo em Consumo por suítes &gt; Lançar consumo adicional.
               </p>
             ) : (
-              <>
-                <div className="grid sm:grid-cols-2 gap-x-8 gap-y-4">
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-muted-foreground">Frigobar</p>
-                    <div className="space-y-1.5">
-                      {minibarSnapshot.minibarItems.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between text-sm">
-                          <span>
-                            {item.name} <span className="text-muted-foreground">× {item.quantity}</span>
-                          </span>
-                          <span>R$ {item.subtotal.toFixed(2)}</span>
-                        </div>
-                      ))}
-                      {minibarSnapshot.minibarItems.length === 0 && (
-                        <p className="text-sm text-muted-foreground py-2">Sem consumo.</p>
-                      )}
+              <p className="text-xs text-muted-foreground">
+                Marque só o que foi consumido desde o último serviço{minibar?.guestName ? ` (conta de ${minibar.guestName})` : ""}.
+                O consumo é gravado quando você finalizar o serviço.
+                {!minibar?.resolved && " Não foi possível identificar o hóspede agora; o sistema tentará de novo ao finalizar."}
+              </p>
+            )}
+            {hasMinibarConsumption && !isMinibarClosed && (
+              <div className="space-y-2">
+                {minibarItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3"
+                  >
+                    <div>
+                      <p className="text-sm font-medium">{item.name}</p>
+                      <p className="text-xs text-muted-foreground">R$ {item.price.toFixed(2)}</p>
                     </div>
+                    <QuantityStepper
+                      value={dayQuantities[item.id] ?? 0}
+                      disabled={finalizing}
+                      onChange={(v) =>
+                        setDayQuantities((prev) => ({ ...prev, [item.id]: Math.max(0, Math.floor(v) || 0) }))
+                      }
+                    />
                   </div>
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-muted-foreground">Bar da piscina</p>
-                    <div className="space-y-1.5">
-                      {minibarSnapshot.poolbarItems.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between text-sm">
-                          <span>
-                            {item.name} <span className="text-muted-foreground">× {item.quantity}</span>
-                          </span>
-                          <span>R$ {item.subtotal.toFixed(2)}</span>
-                        </div>
-                      ))}
-                      {minibarSnapshot.poolbarItems.length === 0 && (
-                        <p className="text-sm text-muted-foreground py-2">Sem consumo.</p>
-                      )}
-                    </div>
+                ))}
+                {minibarItems.length === 0 && (
+                  <p className="text-sm text-muted-foreground">Nenhum item de frigobar cadastrado.</p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {isReleased && taskMinibar && task.task_type !== "somente_chegada" && (
+        <Card>
+          <CardContent className="space-y-3">
+            <h3 className="font-heading text-lg">Consumo de frigobar do dia</h3>
+            {taskMinibar.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum consumo de frigobar registrado neste serviço.</p>
+            ) : (
+              <div className="space-y-1.5 max-w-md">
+                {taskMinibar.map((row) => (
+                  <div key={row.id} className="flex items-center justify-between text-sm">
+                    <span>{row.name}</span>
+                    <span className="text-muted-foreground">× {row.quantity}</span>
                   </div>
-                </div>
-                <div className="border-t border-border pt-2 space-y-1 text-sm max-w-md">
-                  <div className="flex items-center justify-between">
-                    <span>Total frigobar</span>
-                    <span>R$ {minibarSnapshot.minibarTotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Total bar da piscina</span>
-                    <span>R$ {minibarSnapshot.poolbarSubtotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-muted-foreground text-xs">
-                    <span>Taxa de serviço (10% sobre o bar){minibarSnapshot.serviceChargeWaived && " · isenta"}</span>
-                    <span>R$ {minibarSnapshot.serviceCharge.toFixed(2)}</span>
-                  </div>
-                  <div className="flex items-center justify-between font-medium pt-1">
-                    <span>Total bar e frigobar</span>
-                    <span>R$ {minibarSnapshot.grandTotal.toFixed(2)}</span>
-                  </div>
-                </div>
-              </>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -318,18 +251,8 @@ export function ChecklistDetail({
                 type="checkbox"
                 className="mt-0.5 size-5 shrink-0"
                 checked={bedlinenChanged}
-                disabled={isReleased || isPending}
-                onChange={(e) => {
-                  const value = e.target.checked;
-                  setBedlinenChanged(value);
-                  startTransition(async () => {
-                    const result = await setBedlinenChangedAction(task.id, value);
-                    if (result?.error) {
-                      toast.error(result.error);
-                      setBedlinenChanged(!value);
-                    }
-                  });
-                }}
+                disabled={isReleased || finalizing}
+                onChange={(e) => setBedlinenChanged(e.target.checked)}
               />
               <span>
                 <span className="font-medium">Houve troca de roupa de cama e banho a pedido do hóspede</span>
@@ -342,7 +265,11 @@ export function ChecklistDetail({
         </Card>
       )}
 
-      <OccurrencesCard taskId={task.id} occurrences={occurrences} categories={categories} canEdit={!isReleased} />
+      {isReleased ? (
+        <OccurrencesCard taskId={task.id} occurrences={occurrences} categories={categories} canEdit={false} />
+      ) : (
+        <DraftOccurrencesCard drafts={drafts} onChange={setDrafts} categories={categories} saved={occurrences} />
+      )}
 
       {!isReleased && (
         <Card>
@@ -353,21 +280,8 @@ export function ChecklistDetail({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />
-            <Button
-              className="w-full"
-              disabled={!allChecked || isPending}
-              onClick={() =>
-                startTransition(async () => {
-                  const result = await releaseTask(task.id, notes);
-                  if (result?.error) toast.error(result.error);
-                  else {
-                    toast.success("Suíte liberada.");
-                    router.refresh();
-                  }
-                })
-              }
-            >
-              {allChecked ? "Liberar suíte" : "Marque todos os itens para liberar"}
+            <Button className="w-full" disabled={finalizing} onClick={handleFinalize}>
+              {finalizing ? "Finalizando..." : "Serviço na suíte finalizado"}
             </Button>
           </CardContent>
         </Card>

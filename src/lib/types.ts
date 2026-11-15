@@ -26,7 +26,7 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
 
 // Rótulo do status de um serviço, com o motivo quando o hóspede não quis o serviço.
 export function taskStatusLabel(task: { status: TaskStatus; guest_declined?: boolean | null }): string {
-  if (task.status === "cancelado" && task.guest_declined) return "Cancelado a pedido do hóspede";
+  if (task.status === "cancelado" && task.guest_declined) return "Hóspede não quis o serviço";
   return TASK_STATUS_LABELS[task.status];
 }
 

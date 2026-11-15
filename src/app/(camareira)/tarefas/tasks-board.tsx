@@ -6,13 +6,13 @@ import { toast } from "sonner";
 import Link from "next/link";
 import type { DailyRoomTask, Profile } from "@/lib/types";
 import { TASK_STATUS_LABELS } from "@/lib/types";
-import { claimTask, cancelTask, unclaimTask, claimReview, claimExtraCleaningSecond, declineServiceByGuest } from "@/lib/actions/tasks";
+import { claimTask, unclaimTask, startTask, claimReview, claimExtraCleaningSecond, declineServiceByGuest } from "@/lib/actions/tasks";
 import { taskTypeLabel } from "@/lib/task-type";
 import { formatDateShortPt } from "@/lib/date";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { BedDouble, ChevronRight, ClipboardCheck, Hand, Undo2, UserX, X } from "lucide-react";
+import { BedDouble, ChevronRight, ClipboardCheck, Hand, Play, Undo2, UserX } from "lucide-react";
 
 export type TaskWithRoom = DailyRoomTask & {
   rooms: { number: string; name: string | null };
@@ -226,27 +226,6 @@ function AvailableTaskCard({ task, isPast }: { task: TaskWithRoom; isPast?: bool
         <div className="flex items-center gap-2">
           <p className="font-medium flex-1 min-w-0 truncate">Suíte {task.rooms.number}</p>
           <div className="flex items-center gap-1 shrink-0">
-            {isPast && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-auto flex-col gap-0.5 rounded-xl px-2 py-1 text-[10px] leading-tight [&_svg:not([class*='size-'])]:size-3.5"
-                disabled={isPending}
-                onClick={() =>
-                  startTransition(async () => {
-                    const result = await cancelTask(task.id);
-                    if (result?.error) toast.error(result.error);
-                    else {
-                      toast.success("Serviço cancelado.");
-                      router.refresh();
-                    }
-                  })
-                }
-              >
-                <X size={14} />
-                <span>Cancelar</span>
-              </Button>
-            )}
             <Button
               size="sm"
               className="h-auto flex-col gap-0.5 rounded-xl px-2 py-1 text-[10px] leading-tight [&_svg:not([class*='size-'])]:size-3.5"
@@ -256,8 +235,8 @@ function AvailableTaskCard({ task, isPast }: { task: TaskWithRoom; isPast?: bool
                   const result = await claimTask(task.id);
                   if (result?.error) toast.error(result.error);
                   else {
-                    toast.success("Suíte escolhida!");
-                    router.push(`/tarefas/${task.id}`);
+                    toast.success("Suíte escolhida! Toque em Começar quando for iniciar o serviço.");
+                    router.refresh();
                   }
                 })
               }
@@ -276,97 +255,118 @@ function AvailableTaskCard({ task, isPast }: { task: TaskWithRoom; isPast?: bool
   );
 }
 
-// Card de "Minhas suítes" com o botão "Cancelar escolha" — só a parte de
-// ícone+texto é um Link (não o card inteiro), pra o botão poder ficar fora
-// dele sem aninhar um <button> dentro de um <a> (inválido em HTML e causa
-// conflito de clique).
+// Card de "Minhas suítes": depois de escolher a suíte a camareira vem pra cá e decide —
+// "Começar" (abre o checklist; o horário de início é o do primeiro clique), "Cancelar escolha"
+// (devolve o serviço pra caixa de escolha de todas) ou "Hóspede não quis o serviço" (só
+// arrumação/troca). Antes de finalizar, nada do checklist é gravado.
 function MyTaskCard({ task, today, meId }: { task: TaskWithRoom; today: string; meId: string }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const isPast = task.date !== today;
-  const canCancel = task.status === "pendente" || task.status === "em_andamento";
+  const inExecution = task.status === "pendente" || task.status === "em_andamento";
   // Sou a 2ª camareira da limpeza adicional: não tenho o checklist, só acompanho.
   const isSecond = task.second_assigned_to === meId && task.assigned_to !== meId;
-  const waitingSecond = task.extra_cleaning && !task.second_assigned_to && canCancel;
+  const waitingSecond = task.extra_cleaning && !task.second_assigned_to && inExecution;
+  const started = !!task.started_at;
   // Arrumação/troca que eu escolhi: posso informar que o hóspede não quis o serviço.
-  const canDecline = canCancel && !isSecond && (task.task_type === "arrumacao" || task.task_type === "troca");
+  const canDecline = inExecution && !isSecond && (task.task_type === "arrumacao" || task.task_type === "troca");
+
+  const info = (
+    <div className="flex min-w-0 flex-1 items-center gap-3">
+      <div className="size-10 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
+        <BedDouble size={18} />
+      </div>
+      <div className="min-w-0">
+        <p className="font-medium">Suíte {task.rooms.number}</p>
+        <p className="text-xs text-muted-foreground">
+          {taskTypeLabel(task.task_type, task.extra_cleaning)}
+          {isPast && ` · ${formatDateShortPt(task.date)}`}
+          {isSecond && ` · você é a 2ª camareira (checklist com ${task.first?.name ?? "a 1ª"})`}
+          {waitingSecond && " · aguardando a 2ª camareira"}
+        </p>
+      </div>
+    </div>
+  );
 
   return (
-    <Card className={isSecond ? undefined : "hover:border-primary transition-colors"}>
+    <Card className={isSecond || inExecution ? undefined : "hover:border-primary transition-colors"}>
       <CardContent className="flex items-center justify-between gap-3">
-        <Link
-          href={`/tarefas/${task.id}`}
-          className={`flex min-w-0 flex-1 items-center gap-3 ${isSecond ? "pointer-events-none" : ""}`}
-          aria-disabled={isSecond}
-          tabIndex={isSecond ? -1 : undefined}
-        >
-          <div className="size-10 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
-            <BedDouble size={18} />
-          </div>
-          <div className="min-w-0">
-            <p className="font-medium">Suíte {task.rooms.number}</p>
-            <p className="text-xs text-muted-foreground">
-              {taskTypeLabel(task.task_type, task.extra_cleaning)}
-              {isPast && ` · ${formatDateShortPt(task.date)}`}
-              {isSecond && ` · você é a 2ª camareira (checklist com ${task.first?.name ?? "a 1ª"})`}
-              {waitingSecond && " · aguardando a 2ª camareira"}
-            </p>
-          </div>
-        </Link>
+        {inExecution || isSecond ? (
+          info
+        ) : (
+          <Link href={`/tarefas/${task.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+            {info}
+          </Link>
+        )}
         <div className="flex items-center gap-2 shrink-0">
           <Badge variant={task.status === "concluido" ? "default" : "secondary"}>
             {TASK_STATUS_LABELS[task.status]}
           </Badge>
-          {canCancel && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-auto flex-col gap-0.5 rounded-xl px-2 py-1 text-[10px] leading-tight [&_svg:not([class*='size-'])]:size-3.5"
-              disabled={isPending}
-              onClick={() =>
-                startTransition(async () => {
-                  const result = await unclaimTask(task.id);
-                  if (result?.error) toast.error(result.error);
-                  else {
-                    toast.success("Escolha cancelada.");
-                    router.refresh();
-                  }
-                })
-              }
-            >
-              <Undo2 size={14} />
-              <span>Cancelar</span>
-            </Button>
-          )}
-          {!isSecond && (
+          {!inExecution && !isSecond && (
             <Link href={`/tarefas/${task.id}`}>
               <ChevronRight size={16} className="text-muted-foreground" />
             </Link>
           )}
         </div>
       </CardContent>
-      {canDecline && (
-        <CardContent>
+      {inExecution && !isSecond && (
+        <CardContent className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            className="gap-1.5"
+            disabled={isPending || waitingSecond}
+            onClick={() =>
+              startTransition(async () => {
+                const result = await startTask(task.id);
+                if (result?.error) toast.error(result.error);
+                else router.push(`/tarefas/${task.id}`);
+              })
+            }
+          >
+            <Play size={14} />
+            <span>{started ? "Continuar" : "Começar"}</span>
+          </Button>
           <Button
             variant="outline"
             size="sm"
-            className="w-full gap-1.5"
+            className="gap-1.5"
             disabled={isPending}
-            onClick={() => {
-              if (!confirm(`Confirmar que o hóspede da Suíte ${task.rooms.number} não quis o serviço de ${taskTypeLabel(task.task_type, false).toLowerCase()}? O serviço será cancelado.`)) return;
+            onClick={() =>
               startTransition(async () => {
-                const result = await declineServiceByGuest(task.id);
+                const result = await unclaimTask(task.id);
                 if (result?.error) toast.error(result.error);
                 else {
-                  toast.success("Serviço cancelado: o hóspede não quis.");
+                  toast.success("Escolha cancelada: a suíte voltou para a lista de disponíveis.");
                   router.refresh();
                 }
-              });
-            }}
+              })
+            }
           >
-            <UserX size={14} />
-            <span>Hóspede não quis o serviço</span>
+            <Undo2 size={14} />
+            <span>Cancelar escolha</span>
           </Button>
+          {canDecline && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={isPending}
+              onClick={() => {
+                if (!confirm(`Confirmar que o hóspede da Suíte ${task.rooms.number} não quis o serviço de ${taskTypeLabel(task.task_type, false).toLowerCase()}? O serviço será cancelado.`)) return;
+                startTransition(async () => {
+                  const result = await declineServiceByGuest(task.id);
+                  if (result?.error) toast.error(result.error);
+                  else {
+                    toast.success("Registrado: o hóspede não quis o serviço.");
+                    router.refresh();
+                  }
+                });
+              }}
+            >
+              <UserX size={14} />
+              <span>Hóspede não quis o serviço</span>
+            </Button>
+          )}
         </CardContent>
       )}
     </Card>

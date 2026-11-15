@@ -21,7 +21,6 @@ function ComandaRow({ comanda, onClick }: { comanda: ComandaListItem; onClick: (
           Comanda #{comanda.monthly_number ?? comanda.sequence_number} ·{" "}
           {roomSlotLabel({
             room_number: comanda.room_number,
-            guestSlot: comanda.guestSlot,
             guestNameHint: comanda.guestNameHint,
           })}
           <Badge variant={comanda.status === "cancelada" ? "secondary" : "outline"}>

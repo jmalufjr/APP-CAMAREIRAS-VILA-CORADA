@@ -2,9 +2,9 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { ComandaStatus, RoomBillGuestSlot } from "@/lib/types";
+import type { ComandaStatus } from "@/lib/types";
 import { SERVICE_CHARGE_RATE } from "@/lib/room-bills";
-import { nowInBrazil, toDateKey, dateKeyInBrazil, startOfDayBrasiliaUtc, nextDayBrasiliaUtcBoundary } from "@/lib/date";
+import { todayKey, nowInBrazil, toDateKey, dateKeyInBrazil, startOfDayBrasiliaUtc, nextDayBrasiliaUtcBoundary } from "@/lib/date";
 import { EXCLUDED_CAMAREIRA_NAME, closedPeriodRange } from "@/lib/commission-math";
 
 export interface ComandaItemInput {
@@ -21,9 +21,9 @@ function revalidateComandaPaths() {
 export async function submitComanda(
   roomId: string,
   items: ComandaItemInput[],
-  guestSlot: RoomBillGuestSlot = "unica"
+  billId: string
 ) {
-  if (!roomId) return { error: "Selecione a suíte." };
+  if (!roomId || !billId) return { error: "Selecione a suíte." };
   const validItems = items.filter((i) => i.quantity > 0);
   if (validItems.length === 0) return { error: "Selecione ao menos um item com quantidade." };
 
@@ -31,7 +31,7 @@ export async function submitComanda(
   const { data, error } = await supabase.rpc("submit_comanda", {
     p_room_id: roomId,
     p_items: validItems,
-    p_guest_slot: guestSlot,
+    p_bill_id: billId,
   });
   if (error) return { error: error.message };
 
@@ -44,10 +44,10 @@ export async function submitComanda(
 export async function submitComandaSigned(
   roomId: string,
   items: ComandaItemInput[],
-  guestSlot: RoomBillGuestSlot,
+  billId: string,
   signaturePng: string
 ) {
-  if (!roomId) return { error: "Selecione a suíte." };
+  if (!roomId || !billId) return { error: "Selecione a suíte." };
   const validItems = items.filter((i) => i.quantity > 0);
   if (validItems.length === 0) return { error: "Selecione ao menos um item com quantidade." };
   if (!signaturePng.startsWith("data:image/png;base64,")) return { error: "Assinatura inválida." };
@@ -56,7 +56,8 @@ export async function submitComandaSigned(
   const { data, error } = await supabase.rpc("submit_comanda_signed", {
     p_room_id: roomId,
     p_items: validItems,
-    p_guest_slot: guestSlot,
+    p_guest_slot: "unica",
+    p_bill_id: billId,
     p_signature: signaturePng,
   });
   if (error) return { error: error.message };
@@ -69,9 +70,9 @@ export async function editComanda(
   comandaId: string,
   roomId: string,
   items: ComandaItemInput[],
-  guestSlot: RoomBillGuestSlot = "unica"
+  billId: string
 ) {
-  if (!roomId) return { error: "Selecione a suíte." };
+  if (!roomId || !billId) return { error: "Selecione a suíte." };
   const validItems = items.filter((i) => i.quantity > 0);
   if (validItems.length === 0) return { error: "Selecione ao menos um item com quantidade." };
 
@@ -80,7 +81,7 @@ export async function editComanda(
     p_comanda_id: comandaId,
     p_room_id: roomId,
     p_items: validItems,
-    p_guest_slot: guestSlot,
+    p_bill_id: billId,
   });
   if (error) return { error: error.message };
 
@@ -132,7 +133,6 @@ export interface ComandaListItem {
   // Da conta a que esta comanda pertence — usados pra identificar a
   // comanda por suíte/hóspede (ver src/lib/room-bill-label.ts), no lugar
   // de mostrar só o número da suíte.
-  guestSlot: RoomBillGuestSlot;
   guestNameHint: string | null;
   // Assinatura do hóspede (imagem PNG em data URL) e quando foi assinada; nulos em comandas antigas.
   signaturePng: string | null;
@@ -161,7 +161,7 @@ type ComandaRow = {
   rooms: { number: string } | null;
   created_by_profile: { name: string } | null;
   last_action_by_profile: { name: string } | null;
-  room_bills: { paid_at: string | null; guest_slot: RoomBillGuestSlot; guest_name_hint: string | null } | null;
+  room_bills: { paid_at: string | null; guest_name_hint: string | null } | null;
 };
 
 type ComandaItemRow = {
@@ -173,7 +173,7 @@ type ComandaItemRow = {
 };
 
 const COMANDA_ROW_SELECT =
-  "id, room_id, sequence_number, monthly_number, status, created_at, last_action_at, signature_png, signed_at, rooms(number), created_by_profile:profiles!bar_comandas_created_by_fkey(name), last_action_by_profile:profiles!bar_comandas_last_action_by_fkey(name), room_bills!inner(status, paid_at, guest_slot, guest_name_hint)";
+  "id, room_id, sequence_number, monthly_number, status, created_at, last_action_at, signature_png, signed_at, rooms(number), created_by_profile:profiles!bar_comandas_created_by_fkey(name), last_action_by_profile:profiles!bar_comandas_last_action_by_fkey(name), room_bills!inner(status, paid_at, guest_name_hint)";
 
 // Busca os itens de um conjunto de comandas já embutidos no resultado da
 // lista (em vez de buscar item a item quando o usuário abre o modal de
@@ -221,7 +221,6 @@ async function attachItemsAndMap(
       items,
       total: items.reduce((sum, i) => sum + i.subtotal, 0),
       bill_paid_at: r.room_bills?.paid_at ?? null,
-      guestSlot: r.room_bills?.guest_slot ?? "unica",
       guestNameHint: r.room_bills?.guest_name_hint ?? null,
       signaturePng: r.signature_png,
       signedAt: r.signed_at,
@@ -303,24 +302,22 @@ export interface ComandaFormData {
   // própria comanda) que decide se o formulário pode ficar editável.
   comanda_status: ComandaStatus;
   bill_status: "aberta" | "fechada" | "reaberta" | "paga";
-  // Qual conta da suíte esta comanda pertence hoje — quase sempre 'unica';
-  // só é 'saida_hoje'/'chegada_hoje' se a suíte estiver com a conta
-  // dividida (Saída com Chegada).
-  guest_slot: RoomBillGuestSlot;
+  // Conta (suíte + hóspede + reserva) a que esta comanda pertence hoje.
+  bill_id: string;
 }
 
 export async function getComandaForEdit(comandaId: string): Promise<ComandaFormData | null> {
   const supabase = await createClient();
   const { data: comanda } = await supabase
     .from("bar_comandas")
-    .select("room_id, status, room_bills(status, guest_slot)")
+    .select("room_id, bill_id, status, room_bills(status)")
     .eq("id", comandaId)
     .single();
   if (!comanda) return null;
 
   const billInfo = (
     comanda as unknown as {
-      room_bills: { status: ComandaFormData["bill_status"]; guest_slot: RoomBillGuestSlot } | null;
+      room_bills: { status: ComandaFormData["bill_status"] } | null;
     }
   ).room_bills;
   const billStatus = billInfo?.status;
@@ -340,7 +337,7 @@ export async function getComandaForEdit(comandaId: string): Promise<ComandaFormD
     quantities,
     comanda_status: comanda.status,
     bill_status: billStatus ?? "aberta",
-    guest_slot: billInfo?.guest_slot ?? "unica",
+    bill_id: (comanda as unknown as { bill_id: string }).bill_id,
   };
 }
 
@@ -349,72 +346,39 @@ export interface RoomOption {
   bill_id: string;
   room_number: string;
   billStatus: "aberta" | "fechada" | "reaberta" | "paga";
-  guestSlot: RoomBillGuestSlot;
   guestNameHint: string | null;
 }
 
-// Numa suíte com Saída com Chegada em andamento (conta do hóspede que sai
-// ainda não paga quando o novo chega), aparece 2 vezes aqui — uma opção
-// por conta. Em qualquer outro dia, aparece só 1 vez, igual a sempre.
-// Uma conta cujo hóspede já trocou de suíte (`available_for_new_orders =
-// false`, ver stays-sync.ts) nunca aparece aqui — continua existindo e
-// visível em "Consumo por quartos" pra fechar/pagar, só não é mais opção
-// de destino pra uma comanda nova (essa passa a ser lançada na suíte
-// nova, que o hóspede já ocupa).
+// Só aparecem as contas de hóspedes que AINDA estão na pousada (check-out hoje ou depois — inclui
+// quem chega e quem sai hoje), identificadas por suíte + hóspede (a referência da reserva fica
+// escondida). Conta de quem já saiu nunca é opção de novo pedido; ela continua em "Consumo por
+// suítes" para fechar/pagar. Uma conta cujo hóspede já trocou de suíte (available_for_new_orders =
+// false) também não aparece — o pedido passa a ser lançado na suíte nova.
 export async function getRoomsForComandaSelector(): Promise<RoomOption[]> {
   const supabase = await createClient();
+  const today = todayKey();
   const [{ data: rooms }, { data: bills }] = await Promise.all([
     supabase.from("rooms").select("id, number").eq("active", true).order("position"),
     supabase
       .from("room_bills")
-      .select("id, room_id, status, guest_slot, guest_name_hint, available_for_new_orders")
-      .neq("status", "paga"),
+      .select("id, room_id, status, guest_name_hint, stay_check_in, available_for_new_orders, stay_check_out")
+      .neq("status", "paga")
+      .eq("available_for_new_orders", true)
+      .gte("stay_check_out", today),
   ]);
 
-  const billsByRoom = new Map<
-    string,
-    {
-      id: string;
-      status: "aberta" | "fechada" | "reaberta" | "paga";
-      guest_slot: RoomBillGuestSlot;
-      guest_name_hint: string | null;
-      available_for_new_orders: boolean;
-    }[]
-  >();
-  (bills ?? []).forEach((b) => {
-    const list = billsByRoom.get(b.room_id) ?? [];
-    list.push(b);
-    billsByRoom.set(b.room_id, list);
-  });
-
-  return (rooms ?? []).flatMap((room) => {
-    const allBills = billsByRoom.get(room.id) ?? [];
-    const selectableBills = allBills.filter((b) => b.available_for_new_orders);
-
-    if (selectableBills.length === 0) {
-      if (allBills.length > 0) return []; // só sobrou conta de hóspede que já trocou de suíte — nada disponível aqui
-      // Suíte sem conta ainda (nunca teve consumo lançado) — a comanda
-      // cria a conta 'unica' na hora, via a mesma RPC de sempre.
-      return [
-        {
-          room_id: room.id,
-          bill_id: "",
-          room_number: room.number,
-          billStatus: "aberta" as const,
-          guestSlot: "unica" as const,
-          guestNameHint: null,
-        },
-      ];
-    }
-    return selectableBills.map((b) => ({
-      room_id: room.id,
-      bill_id: b.id,
-      room_number: room.number,
-      billStatus: b.status,
-      guestSlot: b.guest_slot,
-      guestNameHint: b.guest_name_hint,
-    }));
-  });
+  return (rooms ?? []).flatMap((room) =>
+    (bills ?? [])
+      .filter((b) => b.room_id === room.id)
+      .sort((x, y) => String(x.stay_check_in ?? "").localeCompare(String(y.stay_check_in ?? "")))
+      .map((b) => ({
+        room_id: room.id as string,
+        bill_id: b.id as string,
+        room_number: room.number as string,
+        billStatus: b.status as RoomOption["billStatus"],
+        guestNameHint: (b.guest_name_hint as string | null) ?? null,
+      }))
+  );
 }
 
 // ---------- Leitura: comissão de 10% do bar por camareira (Resumo Executivo) ----------

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { submitComandaSigned, editComanda, cancelComanda } from "@/lib/actions/comandas";
 import type { RoomOption } from "@/lib/actions/comandas";
-import type { PoolbarItem, RoomBillGuestSlot } from "@/lib/types";
+import type { PoolbarItem } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { QuantityStepper } from "@/components/shared/quantity-stepper";
 import { SignaturePad, type SignaturePadHandle } from "@/components/shared/signature-pad";
@@ -18,18 +18,8 @@ import {
 } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
-// Chave só do lado do cliente, combinando suíte + qual conta — necessária
-// porque uma suíte com Saída com Chegada em andamento aparece 2 vezes na
-// lista (uma opção por conta), então room_id sozinho deixa de ser único.
-function optionKey(roomId: string, guestSlot: RoomBillGuestSlot): string {
-  return `${roomId}::${guestSlot}`;
-}
-
-function roomOptionLabel(room: RoomOption, isSplit: boolean): string {
-  if (room.guestNameHint) return `Suíte ${room.room_number} — ${room.guestNameHint}`;
-  if (!isSplit || room.guestSlot === "unica") return `Suíte ${room.room_number}`;
-  const situacao = room.guestSlot === "saida_hoje" ? "saída de hoje" : "chegada de hoje";
-  return `Suíte ${room.room_number} (${situacao})`;
+function roomOptionLabel(room: RoomOption): string {
+  return room.guestNameHint ? `Suíte ${room.room_number} — ${room.guestNameHint}` : `Suíte ${room.room_number}`;
 }
 
 export function ComandaForm({
@@ -37,8 +27,7 @@ export function ComandaForm({
   comandaId,
   poolbarItems,
   rooms,
-  initialRoomId,
-  initialGuestSlot,
+  initialBillId,
   initialQuantities,
   initialComandaStatus,
   initialBillStatus,
@@ -47,8 +36,7 @@ export function ComandaForm({
   comandaId?: string;
   poolbarItems: PoolbarItem[];
   rooms: RoomOption[];
-  initialRoomId?: string;
-  initialGuestSlot?: RoomBillGuestSlot;
+  initialBillId?: string;
   initialQuantities?: Record<string, number>;
   initialComandaStatus?: "original" | "cancelada" | "editada";
   initialBillStatus?: "aberta" | "fechada" | "reaberta" | "paga";
@@ -59,7 +47,7 @@ export function ComandaForm({
   // desde o primeiro render — alternar undefined/string faz o Base UI
   // acusar o componente de trocar de não controlado para controlado.
   const [selectedKey, setSelectedKey] = useState<string>(
-    initialRoomId ? optionKey(initialRoomId, initialGuestSlot ?? "unica") : ""
+    initialBillId ?? ""
   );
   const [quantities, setQuantities] = useState<Record<string, number>>(initialQuantities ?? {});
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -69,9 +57,7 @@ export function ComandaForm({
   const [signEmpty, setSignEmpty] = useState(true);
   const padRef = useRef<SignaturePadHandle>(null);
 
-  const selectedRoom = rooms.find((r) => optionKey(r.room_id, r.guestSlot) === selectedKey);
-  const roomIdCounts = new Map<string, number>();
-  rooms.forEach((r) => roomIdCounts.set(r.room_id, (roomIdCounts.get(r.room_id) ?? 0) + 1));
+  const selectedRoom = rooms.find((r) => r.bill_id === selectedKey);
 
   // Uma vez cancelada a própria comanda, ou fechada/paga a conta A QUE ELA
   // PERTENCE (não a conta corrente do quarto — uma comanda antiga pode
@@ -143,7 +129,7 @@ export function ComandaForm({
     }
     const signature = padRef.current.toPngDataUrl();
     startTransition(async () => {
-      const result = await submitComandaSigned(selectedRoom.room_id, orderItems, selectedRoom.guestSlot, signature);
+      const result = await submitComandaSigned(selectedRoom.room_id, orderItems, selectedRoom.bill_id, signature);
       if (result?.error) {
         toast.error(result.error);
         return;
@@ -158,7 +144,7 @@ export function ComandaForm({
   function handleEditSubmit() {
     if (!validateOrder() || !selectedRoom) return;
     startTransition(async () => {
-      const result = await editComanda(comandaId!, selectedRoom.room_id, orderItems, selectedRoom.guestSlot);
+      const result = await editComanda(comandaId!, selectedRoom.room_id, orderItems, selectedRoom.bill_id);
       if (result?.error) {
         toast.error(result.error);
         return;
@@ -234,18 +220,16 @@ export function ComandaForm({
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Selecione a suíte">
                 {(v: string) => {
-                  const room = rooms.find((r) => optionKey(r.room_id, r.guestSlot) === v);
-                  return room ? roomOptionLabel(room, (roomIdCounts.get(room.room_id) ?? 1) > 1) : v;
+                  const room = rooms.find((r) => r.bill_id === v);
+                  return room ? roomOptionLabel(room) : v;
                 }}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {rooms.map((room) => {
-                const key = optionKey(room.room_id, room.guestSlot);
-                const isSplit = (roomIdCounts.get(room.room_id) ?? 1) > 1;
                 return (
-                  <SelectItem key={key} value={key} disabled={room.billStatus === "fechada"}>
-                    {roomOptionLabel(room, isSplit)}
+                  <SelectItem key={room.bill_id} value={room.bill_id} disabled={room.billStatus === "fechada"}>
+                    {roomOptionLabel(room)}
                     {room.billStatus === "fechada" ? " (conta fechada)" : ""}
                   </SelectItem>
                 );
@@ -273,7 +257,7 @@ export function ComandaForm({
           </DialogHeader>
           {selectedRoom && (
             <p className="rounded-lg bg-muted px-3 py-2 text-base font-semibold">
-              {roomOptionLabel(selectedRoom, (roomIdCounts.get(selectedRoom.room_id) ?? 1) > 1)}
+              {roomOptionLabel(selectedRoom)}
             </p>
           )}
           <div className="space-y-1.5">
@@ -306,7 +290,7 @@ export function ComandaForm({
           </DialogHeader>
           {selectedRoom && (
             <p className="rounded-lg bg-muted px-3 py-2 text-base font-semibold">
-              {roomOptionLabel(selectedRoom, (roomIdCounts.get(selectedRoom.room_id) ?? 1) > 1)}
+              {roomOptionLabel(selectedRoom)}
             </p>
           )}
           <p className="text-sm text-muted-foreground">

@@ -8,14 +8,13 @@ import type { ChecklistType, DailyRoomTaskOccurrence } from "@/lib/types";
 import { ChecklistDetail } from "@/components/shared/checklist-detail";
 import { Card, CardContent } from "@/components/ui/card";
 import { TASK_STATUS_LABELS } from "@/lib/types";
-import { getRoomBillSnapshotForDate } from "@/lib/actions/room-bills";
 import { signOccurrencePhotoUrls } from "@/lib/occurrence-photos";
 
 // Visão somente-leitura do admin de um serviço já concluído (ou cancelado)
-// pela camareira — mesmo componente ChecklistDetail da tela dela, que já
-// trava tudo (checkboxes, formulários) quando o status é "concluido". Não
-// recebe `minibar` (edição): em vez disso recebe `minibarSnapshot`, um
-// retrato somente-leitura da conta vigente na data da tarefa.
+// pela camareira — mesmo componente ChecklistDetail da tela dela, em modo
+// somente leitura. Mostra exatamente o que a camareira registrou naquele
+// serviço: checklist, consumo de frigobar DO DIA, ocorrências e observações
+// (o bar da piscina não tem relação com o serviço e não aparece aqui).
 // Itens da Limpeza adicional vêm depois dos do serviço base (cada grupo na própria ordem).
 function sortChecksExtrasLast<T extends { checklist_items?: { type?: string; position?: number } | null }>(rows: T[]): T[] {
   const extra = (r: T) => (r.checklist_items?.type === "limpeza_adicional" ? 1 : 0);
@@ -38,7 +37,7 @@ export default async function AdminTaskDetailPage({
 
   if (!task) notFound();
 
-  const [{ data: checks }, { data: occurrencesRaw }, { data: categories }, minibarSnapshot] = await Promise.all([
+  const [{ data: checks }, { data: occurrencesRaw }, { data: categories }, { data: minibarRaw }] = await Promise.all([
     supabase
       .from("daily_room_task_checks")
       .select("*, checklist_items(label, description, position, type)")
@@ -49,8 +48,14 @@ export default async function AdminTaskDetailPage({
       .select("*, occurrence_categories(name), daily_room_task_occurrence_photos(id, storage_path)")
       .eq("daily_room_task_id", taskId),
     supabase.from("occurrence_categories").select("*").eq("active", true).order("position"),
-    getRoomBillSnapshotForDate(task.room_id, task.date),
+    supabase
+      .from("daily_room_task_minibar_items")
+      .select("id, quantity, minibar_item_id, minibar_items(name)")
+      .eq("task_id", taskId),
   ]);
+  const taskMinibar = ((minibarRaw ?? []) as unknown as { id: string; quantity: number; minibar_item_id: string; minibar_items: { name: string } | null }[])
+    .map((r) => ({ id: r.id, itemId: r.minibar_item_id, name: r.minibar_items?.name ?? "—", quantity: r.quantity }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   type OccurrenceRawRow = DailyRoomTaskOccurrence & {
     occurrence_categories: { name: string };
@@ -130,7 +135,8 @@ export default async function AdminTaskDetailPage({
         checks={sortChecksExtrasLast(checks ?? [])}
         occurrences={occurrences}
         categories={categories ?? []}
-        minibarSnapshot={minibarSnapshot}
+        taskMinibar={taskMinibar}
+        readOnly
       />
     </div>
   );

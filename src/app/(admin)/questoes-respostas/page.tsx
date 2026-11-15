@@ -183,9 +183,15 @@ export default function QuestoesRespostasPage() {
                 Você pode mudar o tipo de trabalho de qualquer suíte a qualquer momento, num seletor na
                 própria tela — inclusive escolher “Sem trabalho” se não houver nada a fazer ali. A
                 camareira, pelo próprio celular, escolhe uma das suítes disponíveis pra trabalhar (você
-                não precisa atribuir manualmente quem faz o quê), preenche um checklist de itens,
-                registra qualquer problema encontrado (ver pergunta 6) e, ao final, libera a suíte. Ao
-                liberar, o serviço é concluído direto — a revisão é dispensada por padrão. Se você (ou o gerente
+                não precisa atribuir manualmente quem faz o quê). Ao escolher, a suíte vai para “Minhas suítes”, onde
+                ela decide: <strong>Começar</strong> (abre o checklist; o horário de início é o do primeiro clique),{" "}
+                <strong>Cancelar escolha</strong> (a suíte volta para a caixa de escolha de todas e o horário de início é
+                apagado) ou <strong>Hóspede não quis o serviço</strong> (só arrumação e troca: no Planejamento diário a
+                suíte passa a “Sem trabalho” e no Resumo executivo aparece como “Hóspede não quis o serviço”). Dentro do
+                checklist ela marca os itens, registra o consumo de frigobar do dia, anota problemas encontrados (ver
+                pergunta 6) e observações. <strong>Nada disso é gravado até ela tocar em “Serviço na suíte finalizado”</strong>
+                (voltar de tela não grava nada); se faltar algum item do checklist, o sistema avisa e não deixa finalizar. Ao
+                finalizar, o serviço é concluído direto — a revisão é dispensada por padrão. Se você (ou o gerente
                 operacional) habilitou a revisão daquela suíte no Planejamento diário, ele NÃO fica concluído: fica
                 “pendente de revisão”. Você acompanha
                 tudo isso em tempo real na tela de Planejamento.
@@ -197,10 +203,7 @@ export default function QuestoesRespostasPage() {
                 e observações, e encerra a revisão. Se tudo estiver completo, o serviço é concluído. Se
                 algum item estiver incompleto, ele volta para a camareira que executou como “serviço de
                 correção”: ela aperta “Iniciar correção”, vê só os itens incompletos, marca cada um como
-                corrigido e finaliza — aí sim o serviço é concluído. No frigobar, ela vê os valores que já
-                tinha lançado e pode editá-los; o novo consumo só é gravado ao finalizar a correção (se a
-                conta da suíte já estiver fechada ou paga, o consumo não é alterado e aparece um aviso —
-                o ajuste fica com você). Os horários de início, término e duração da revisão e da
+                corrigido e finaliza — aí sim o serviço é concluído. A revisora e a executora veem a mesma tela do serviço (checklist, observações, ocorrências e o consumo de frigobar DO DIA que a executora lançou — nunca o total da conta). Na correção, a executora troca o número do dia pelo valor certo; a conta do hóspede é ajustada pela diferença só ao finalizar a correção (se a conta já estiver fechada ou paga, o consumo não é alterado e aparece um aviso — o ajuste fica com você). Os horários de início, término e duração da revisão e da
                 correção aparecem na tabela “Serviços dos últimos 7 dias” e no Histórico.
               </P>
               <P>
@@ -323,13 +326,23 @@ export default function QuestoesRespostasPage() {
               <P>
                 Cada suíte tem uma “conta corrente” única, somando frigobar e bar da piscina juntos,
                 que passa por quatro fases: aberta → fechada → reaberta (se precisar corrigir algo) →
-                paga. Assim que uma conta é marcada como paga, uma conta nova e zerada já nasce
-                sozinha pra aquela suíte, pronta pro próximo hóspede.
+                paga. <strong>Cada hóspede tem a sua própria conta</strong>, identificada por suíte + hóspede
+                + reserva na Stays (a referência da reserva não aparece nas telas; só o nome e as datas da
+                estadia). Uma conta nunca passa de um hóspede para outro e não há limite de contas por suíte: a conta de quem já saiu
+                e ainda não pagou continua existindo até ser fechada e paga. Em “Consumo por suítes” aparecem três cards:
+                hóspedes que ainda estão na pousada (inclusive quem sai e quem chega hoje), hóspedes que já saíram e ainda não
+                pagaram, e contas pagas nos últimos 7 dias. Só as contas do primeiro card aparecem como opção ao fazer um pedido
+                de comanda.
               </P>
               <P>
                 O frigobar é lançado item a item, direto pela camareira, com botões de mais/menos (sem
-                precisar digitar números) — cada lançamento feito durante o atendimento soma ao total
-                da conta, nunca sobrescreve. Com a conta ainda aberta, a camareira pode ligar “Lançar
+                precisar digitar números). No serviço da suíte, a camareira registra só o
+                <strong>consumo diferencial</strong>: o que foi consumido desde o último serviço. Os contadores começam
+                sempre em zero (ela não vê o total acumulado da conta) e, quando ela finaliza o serviço, esse consumo é somado à
+                conta de quem dormiu na suíte na noite anterior (nunca à de quem está chegando). Sem consumo, ela deixa
+                “Houve consumo de frigobar?” desligado. Em “Somente Chegada” não há frigobar. Conta fechada não aceita frigobar
+                pelo serviço (use “Lançar consumo adicional”, reabrindo a conta). Ao abrir um serviço concluído no Resumo
+                executivo você vê exatamente o consumo de frigobar daquele dia. Com a conta ainda aberta, a camareira pode ligar “Lançar
                 consumo adicional” se precisar somar mais alguma coisa antes de fechar (por exemplo, o
                 consumo do último dia do hóspede); com a conta reaberta pra corrigir algo, a edição já
                 fica sempre disponível e continua somando por padrão — só se ela escolher

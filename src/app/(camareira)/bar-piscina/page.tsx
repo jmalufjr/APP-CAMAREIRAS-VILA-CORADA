@@ -1,13 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import type { MinibarItem } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
-import { getRoomBillsOverview } from "@/lib/actions/room-bills";
+import { getRoomBillsOverview, getRecentlyPaidRoomBills } from "@/lib/actions/room-bills";
 import { ConsumoQuartosPanel } from "./consumo-quartos-panel";
 
 export default async function ConsumoQuartosPage() {
   const supabase = await createClient();
-  const [overview, { data: minibarItems }] = await Promise.all([
+  const [overview, recentlyPaid, { data: minibarItems }] = await Promise.all([
     getRoomBillsOverview(),
+    getRecentlyPaidRoomBills(),
     supabase.from("minibar_items").select("*").eq("active", true).order("position"),
   ]);
 
@@ -17,7 +18,7 @@ export default async function ConsumoQuartosPage() {
         title="Consumo total por suíte"
         subtitle="Consumo de frigobar e do bar da piscina por suíte, com taxa de serviço de 10% sobre o bar."
       />
-      <ConsumoQuartosPanel overview={overview} minibarItems={(minibarItems ?? []) as MinibarItem[]} />
+      <ConsumoQuartosPanel overview={overview} minibarItems={(minibarItems ?? []) as MinibarItem[]} recentlyPaid={recentlyPaid} />
     </div>
   );
 }

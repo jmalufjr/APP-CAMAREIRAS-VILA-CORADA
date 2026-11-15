@@ -3,8 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { toDateKey, nowInBrazil, dateKeyInBrazil } from "@/lib/date";
-import { getOrCreateCurrentBill } from "@/lib/room-bills";
-import type { RoomBillGuestSlot } from "@/lib/types";
+import { findLastNightOccupant, findBillForOccupant, ensureBillForOccupant } from "@/lib/room-occupancy";
 
 // ---------- Admin: CRUD do catálogo de itens de frigobar ----------
 
@@ -58,65 +57,72 @@ export async function deleteMinibarItem(id: string) {
   return { success: true };
 }
 
-// ---------- Camareira/admin: registrar consumo de frigobar na conta corrente do quarto ----------
+// ---------- Camareira/admin: ajustar o consumo ACUMULADO de uma conta de frigobar ----------
 
-// Desde o Módulo Contábil Leva 4, o estoque desce (ou volta, se a
-// quantidade for reduzida) no momento em que esta quantidade é
-// registrada — não mais só quando a conta é paga. A resolução do delta
-// (nova quantidade − antiga) e a baixa/estorno de estoque acontecem
-// atomicamente dentro de `set_minibar_consumption` (security definer),
-// nunca aqui no cliente — evita condição de corrida entre ler a
-// quantidade antiga e gravar a nova.
-export async function setMinibarConsumption(
-  roomId: string,
-  itemId: string,
-  quantity: number,
-  guestSlot: RoomBillGuestSlot = "unica"
-) {
+// Grava a quantidade total (absoluta) de um item na conta. Usado só nas telas de conta
+// (reabrir pra corrigir) e na correção de serviço — o checklist do serviço NÃO usa isto:
+// ele só soma o consumo do dia, ao finalizar (ver finalizeService em tasks.ts).
+// A conta fechada não aceita lançamento (regra dentro da função do banco).
+export async function setMinibarConsumption(billId: string, itemId: string, quantity: number) {
   const supabase = await createClient();
-
-  const bill = await getOrCreateCurrentBill(supabase, roomId, guestSlot);
-
   const { error } = await supabase.rpc("set_minibar_consumption", {
-    p_bill_id: bill.id,
+    p_bill_id: billId,
     p_minibar_item_id: itemId,
     p_quantity: Math.max(0, Math.floor(quantity)),
   });
-
   if (error) return { error: error.message };
   revalidatePath("/tarefas");
   revalidatePath("/frigobar");
+  revalidatePath("/bar-piscina");
   return { success: true };
 }
 
-// ---------- Camareira: consumo de frigobar do quarto (tela de checklist) ----------
+// ---------- Camareira: contexto do frigobar de um serviço (tela de checklist) ----------
 
-export interface MinibarRoomConsumption {
-  billStatus: "aberta" | "fechada" | "reaberta" | "paga";
+export interface MinibarTaskContext {
+  // Conta de quem dormiu na suíte na noite anterior (null = ainda não existe ou não foi possível identificar).
+  billId: string | null;
+  billStatus: "aberta" | "fechada" | "reaberta" | "paga" | null;
+  guestName: string | null;
+  // true se foi possível descobrir quem dormiu na suíte na noite anterior.
+  resolved: boolean;
+  // Quantidade só vem preenchida (acumulado da conta) quando `withAccumulated` é pedido.
   items: { id: string; name: string; price: number; quantity: number }[];
 }
 
-export async function getMinibarConsumptionForRoom(
+export async function getMinibarContextForTask(
   roomId: string,
-  guestSlot: RoomBillGuestSlot = "unica"
-): Promise<MinibarRoomConsumption> {
+  date: string,
+  options: { withAccumulated?: boolean; ensureBill?: boolean } = {}
+): Promise<MinibarTaskContext> {
   const supabase = await createClient();
-  const bill = await getOrCreateCurrentBill(supabase, roomId, guestSlot);
+  const occupant = await findLastNightOccupant(supabase, roomId, date);
 
-  const [{ data: items }, { data: lines }] = await Promise.all([
-    supabase.from("minibar_items").select("*").eq("active", true).order("position"),
-    supabase.from("room_bill_minibar_items").select("minibar_item_id, quantity").eq("bill_id", bill.id),
-  ]);
+  let bill = occupant ? await findBillForOccupant(supabase, roomId, occupant) : null;
+  if (!bill && occupant && options.ensureBill) {
+    bill = await ensureBillForOccupant(supabase, roomId, occupant);
+  }
 
-  const quantityByItem = new Map((lines ?? []).map((l) => [l.minibar_item_id, l.quantity]));
+  const { data: items } = await supabase.from("minibar_items").select("*").eq("active", true).order("position");
+  let quantityByItem = new Map<string, number>();
+  if (options.withAccumulated && bill) {
+    const { data: lines } = await supabase
+      .from("room_bill_minibar_items")
+      .select("minibar_item_id, quantity")
+      .eq("bill_id", bill.id);
+    quantityByItem = new Map((lines ?? []).map((l) => [l.minibar_item_id as string, l.quantity as number]));
+  }
 
   return {
-    billStatus: bill.status,
+    billId: bill?.id ?? null,
+    billStatus: (bill?.status as MinibarTaskContext["billStatus"]) ?? null,
+    guestName: bill?.guest_name_hint ?? occupant?.guestName ?? null,
+    resolved: occupant !== null,
     items: (items ?? []).map((item) => ({
-      id: item.id,
-      name: item.name,
-      price: item.price,
-      quantity: quantityByItem.get(item.id) ?? 0,
+      id: item.id as string,
+      name: item.name as string,
+      price: Number(item.price),
+      quantity: quantityByItem.get(item.id as string) ?? 0,
     })),
   };
 }

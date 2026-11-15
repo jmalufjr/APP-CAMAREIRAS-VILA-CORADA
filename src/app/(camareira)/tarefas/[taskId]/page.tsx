@@ -1,11 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { BackLink } from "@/components/shared/back-link";
 import { taskTypeLabel } from "@/lib/task-type";
 import type { ChecklistType, DailyRoomTaskOccurrence } from "@/lib/types";
-import { getMinibarConsumptionForRoom } from "@/lib/actions/minibar";
-import { resolveAutoMinibarGuestSlot } from "@/lib/room-bills";
+import { getMinibarContextForTask } from "@/lib/actions/minibar";
 import { signOccurrencePhotoUrls } from "@/lib/occurrence-photos";
 import { ChecklistDetail } from "@/components/shared/checklist-detail";
 import { ReviewPanel } from "@/components/shared/review-panel";
@@ -35,11 +34,15 @@ export default async function TaskDetailPage({
 
   if (!task) notFound();
 
-  // Resolvido a partir das contas que já existem pra suíte, não do tipo
-  // de checklist (ver resolveAutoMinibarGuestSlot).
-  const minibarGuestSlot = await resolveAutoMinibarGuestSlot(supabase, task.room_id);
+  // Serviço escolhido mas ainda não começado: o checklist só abre depois de "Começar" (tela Minhas suítes).
+  const inExecution = task.status === "pendente" || task.status === "em_andamento";
+  if (inExecution && task.assigned_to === profile.id && !task.started_at) redirect("/tarefas");
 
-  const [{ data: checks }, { data: occurrencesRaw }, { data: categories }, minibar] = await Promise.all([
+  // Frigobar: a conta é a de quem dormiu na suíte na noite anterior ao dia do serviço (trinômio
+  // suíte + hóspede + reserva). Correção (revisão) edita o acumulado; a execução só soma o consumo do dia.
+  const isCorrectorView =
+    (task.status === "aguardando_correcao" || task.status === "em_correcao") && task.assigned_to === profile.id;
+  const [{ data: checks }, { data: occurrencesRaw }, { data: categories }, minibar, { data: minibarRaw }] = await Promise.all([
     supabase
       .from("daily_room_task_checks")
       .select("*, checklist_items(label, description, position, type)")
@@ -50,8 +53,14 @@ export default async function TaskDetailPage({
       .select("*, occurrence_categories(name), daily_room_task_occurrence_photos(id, storage_path)")
       .eq("daily_room_task_id", taskId),
     supabase.from("occurrence_categories").select("*").eq("active", true).order("position"),
-    getMinibarConsumptionForRoom(task.room_id, minibarGuestSlot),
+    inExecution || isCorrectorView
+      ? getMinibarContextForTask(task.room_id, task.date, { ensureBill: isCorrectorView })
+      : Promise.resolve(undefined),
+    supabase.from("daily_room_task_minibar_items").select("id, quantity, minibar_item_id, minibar_items(name)").eq("task_id", taskId),
   ]);
+  const taskMinibar = ((minibarRaw ?? []) as unknown as { id: string; quantity: number; minibar_item_id: string; minibar_items: { name: string } | null }[])
+    .map((r) => ({ id: r.id, itemId: r.minibar_item_id, name: r.minibar_items?.name ?? "—", quantity: r.quantity }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   type OccurrenceRawRow = DailyRoomTaskOccurrence & {
     occurrence_categories: { name: string };
@@ -101,13 +110,16 @@ export default async function TaskDetailPage({
           occurrences={occurrences}
           categories={categories ?? []}
           executorName={nameOf(task.assigned_to)}
+          taskMinibar={taskMinibar}
         />
       ) : isCorrector ? (
         <CorrectionPanel
           task={task}
           checks={sortChecksExtrasLast(checks ?? [])}
           minibar={minibar}
-          minibarGuestSlot={minibarGuestSlot}
+          taskMinibar={taskMinibar}
+          occurrences={occurrences}
+          categories={categories ?? []}
           reviewerName={nameOf(task.reviewed_by)}
         />
       ) : (
@@ -116,8 +128,8 @@ export default async function TaskDetailPage({
           checks={sortChecksExtrasLast(checks ?? [])}
           occurrences={occurrences}
           categories={categories ?? []}
-          minibar={minibar}
-          minibarGuestSlot={minibarGuestSlot}
+          minibar={inExecution ? minibar : undefined}
+          taskMinibar={taskMinibar}
         />
       )}
     </div>

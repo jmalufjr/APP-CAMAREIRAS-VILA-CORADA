@@ -6,8 +6,7 @@ import { OCCURRENCE_PHOTOS_BUCKET } from "@/lib/occurrence-photos";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { syncStaysPlanning } from "@/lib/actions/stays-sync";
-import { setMinibarConsumption } from "@/lib/actions/minibar";
-import type { RoomBillGuestSlot } from "@/lib/types";
+import { findLastNightOccupant, ensureBillForOccupant } from "@/lib/room-occupancy";
 
 export async function claimTask(taskId: string) {
   const supabase = await createClient();
@@ -105,17 +104,73 @@ export async function claimExtraCleaningSecond(taskId: string) {
   return { success: true };
 }
 
-export async function toggleCheck(checkId: string, checked: boolean) {
+// "Começar": abre o checklist e grava o horário de início (só na primeira vez — cliques
+// seguintes não mudam o horário). É a única coisa gravada antes de finalizar o serviço.
+export async function startTask(taskId: string) {
   const supabase = await createClient();
-  const { error } = await supabase.rpc("toggle_daily_room_task_check", {
-    p_check_id: checkId,
-    p_checked: checked,
-  });
-
+  const { error } = await supabase.rpc("start_daily_room_task", { p_task_id: taskId });
   if (error) return { error: error.message };
-
   revalidatePath("/tarefas", "layout");
   return { success: true };
+}
+
+export interface FinalizeServiceInput {
+  taskId: string;
+  checkedIds: string[];
+  notes: string;
+  bedlinenChanged: boolean;
+  occurrences: { categoryId: string; description: string }[];
+  // Consumo de frigobar DO DIA (diferencial): só itens com quantidade > 0.
+  minibar: { itemId: string; quantity: number }[];
+}
+
+// "Serviço na suíte finalizado": grava de uma vez só tudo o que a camareira preencheu (itens do
+// checklist, troca de roupa a pedido, ocorrências, consumo diferencial de frigobar, observações) e
+// libera a suíte. Se qualquer parte falhar, nada fica gravado. O consumo de frigobar é SOMADO à conta
+// de quem dormiu na suíte na noite anterior (nunca à de quem chega depois).
+export async function finalizeService(input: FinalizeServiceInput) {
+  const supabase = await createClient();
+  const minibar = input.minibar.filter((m) => m.quantity > 0);
+
+  let billId: string | null = null;
+  if (minibar.length > 0) {
+    const { data: task } = await supabase
+      .from("daily_room_tasks")
+      .select("room_id, date")
+      .eq("id", input.taskId)
+      .single();
+    if (!task) return { error: "Serviço não encontrado." };
+    const occupant = await findLastNightOccupant(supabase, task.room_id as string, task.date as string);
+    if (!occupant) {
+      return {
+        error:
+          "Não foi possível identificar o hóspede que dormiu nesta suíte na noite anterior para lançar o frigobar. Tente novamente em instantes ou avise o administrador.",
+      };
+    }
+    try {
+      billId = (await ensureBillForOccupant(supabase, task.room_id as string, occupant)).id;
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "Erro ao obter a conta do hóspede." };
+    }
+  }
+
+  const { data, error } = await supabase.rpc("finalize_daily_room_task", {
+    p_task_id: input.taskId,
+    p_checked_ids: input.checkedIds,
+    p_notes: input.notes,
+    p_bedlinen: input.bedlinenChanged,
+    p_occurrences: input.occurrences.map((o) => ({ category_id: o.categoryId, description: o.description })),
+    p_minibar: minibar.map((m) => ({ item_id: m.itemId, quantity: Math.floor(m.quantity) })),
+    p_bill_id: billId,
+  });
+  if (error) return { error: error.message };
+
+  if (input.bedlinenChanged) recalculatePlanningAfterResponse();
+  revalidateTaskPages();
+  revalidatePath("/frigobar");
+  revalidatePath("/bar-piscina");
+  const occurrenceIds = ((data as { occurrence_ids?: string[] } | null)?.occurrence_ids ?? []) as string[];
+  return { success: true, occurrenceIds };
 }
 
 export async function addOccurrence(taskId: string, categoryId: string, description: string) {
@@ -149,16 +204,6 @@ export async function removeOccurrence(id: string) {
   }
 
   revalidatePath("/tarefas", "layout");
-  return { success: true };
-}
-
-// A executora libera a suíte: o serviço NÃO fica concluído, vai pra revisão
-// (ver release_daily_room_task / PRD_camareira_revisora.md).
-export async function releaseTask(taskId: string, notes: string) {
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("release_daily_room_task", { p_task_id: taskId, p_notes: notes });
-  if (error) return { error: error.message };
-  revalidateTaskPages();
   return { success: true };
 }
 
@@ -235,23 +280,25 @@ export async function setCorrectionMinibarDone(taskId: string, done: boolean) {
   return { success: true };
 }
 
-// Finaliza a correção. Se o frigobar estava incompleto, os valores
-// conferidos/editados pela executora (minibarChanges) só são gravados AGORA —
-// e só se a conta da suíte ainda aceitar lançamento; com a conta fechada/paga
-// o consumo não é alterado e o aviso volta pra tela (o admin ajusta depois).
+// Finaliza a correção. Se o frigobar estava incompleto, os valores do DIA (consumo diferencial que a
+// executora lançou) que ela corrigiu só são gravados AGORA: a conta do hóspede é ajustada pela diferença
+// (novo valor do dia − valor antigo do dia). Com a conta fechada/paga nada é alterado e o aviso volta pra
+// tela (o admin ajusta depois).
 export async function finishCorrection(
   taskId: string,
-  roomId: string,
-  guestSlot: RoomBillGuestSlot,
+  billId: string | null,
   minibarChanges: { itemId: string; quantity: number }[]
 ) {
   const supabase = await createClient();
   let warning: string | null = null;
-  for (const change of minibarChanges) {
-    const result = await setMinibarConsumption(roomId, change.itemId, change.quantity, guestSlot);
-    if (result?.error) {
+  if (minibarChanges.length > 0) {
+    const { error: mbError } = await supabase.rpc("apply_correction_minibar", {
+      p_task_id: taskId,
+      p_bill_id: billId,
+      p_changes: minibarChanges.map((c) => ({ item_id: c.itemId, quantity: Math.max(0, Math.floor(c.quantity)) })),
+    });
+    if (mbError) {
       warning = "A conta de frigobar desta suíte já está fechada ou paga — o consumo não foi alterado. Avise o administrador para ajustar.";
-      break;
     }
   }
   const { error } = await supabase.rpc("finish_correction", { p_task_id: taskId });

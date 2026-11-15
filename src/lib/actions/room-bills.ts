@@ -3,15 +3,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import {
-  getOrCreateCurrentBill,
-  SERVICE_CHARGE_RATE,
   computeBillTotals,
   type RoomBillLineItem,
   type MinibarRow,
   type PoolbarRow,
 } from "@/lib/room-bills";
 import { renderReceiptPdf, type ReceiptData } from "@/lib/receipt-pdf";
-import type { RoomBillStatus, ReceiptSettings, PaymentMethod, RoomBillGuestSlot } from "@/lib/types";
+import type { RoomBillStatus, ReceiptSettings, PaymentMethod } from "@/lib/types";
 import { startOfDayBrasiliaUtc, nextDayBrasiliaUtcBoundary, todayKey } from "@/lib/date";
 import { Resend } from "resend";
 
@@ -20,9 +18,9 @@ import { Resend } from "resend";
 // SQL security definer (close_room_bill/reopen_room_bill/pay_room_bill)
 // checam is_camareira() e fazem toda a transição em 1 round trip.
 
-export async function closeRoomBill(roomId: string, guestSlot: RoomBillGuestSlot = "unica") {
+export async function closeRoomBill(roomId: string, billId: string) {
   const supabase = await createClient();
-  const { error } = await supabase.rpc("close_room_bill", { p_room_id: roomId, p_guest_slot: guestSlot });
+  const { error } = await supabase.rpc("close_room_bill", { p_room_id: roomId, p_bill_id: billId });
   if (error) return { error: error.message };
   revalidatePath("/frigobar");
   revalidatePath("/bar-piscina");
@@ -31,9 +29,9 @@ export async function closeRoomBill(roomId: string, guestSlot: RoomBillGuestSlot
   return { success: true };
 }
 
-export async function reopenRoomBill(roomId: string, guestSlot: RoomBillGuestSlot = "unica") {
+export async function reopenRoomBill(roomId: string, billId: string) {
   const supabase = await createClient();
-  const { error } = await supabase.rpc("reopen_room_bill", { p_room_id: roomId, p_guest_slot: guestSlot });
+  const { error } = await supabase.rpc("reopen_room_bill", { p_room_id: roomId, p_bill_id: billId });
   if (error) return { error: error.message };
   revalidatePath("/frigobar");
   revalidatePath("/bar-piscina");
@@ -42,16 +40,12 @@ export async function reopenRoomBill(roomId: string, guestSlot: RoomBillGuestSlo
   return { success: true };
 }
 
-export async function markRoomBillPaid(
-  roomId: string,
-  paymentMethod: PaymentMethod,
-  guestSlot: RoomBillGuestSlot = "unica"
-) {
+export async function markRoomBillPaid(roomId: string, paymentMethod: PaymentMethod, billIdToPay: string) {
   const supabase = await createClient();
   const { data: billId, error } = await supabase.rpc("pay_room_bill", {
     p_room_id: roomId,
     p_payment_method: paymentMethod,
-    p_guest_slot: guestSlot,
+    p_bill_id: billIdToPay,
   });
   if (error) return { error: error.message };
 
@@ -88,16 +82,12 @@ export async function resendRoomBillReceipt(billId: string) {
 // conta específica o valor dos 10%, e nenhuma comanda que a compõe conta
 // mais na comissão de quem a lançou (ver getBarCommissionByCamareira* em
 // comandas.ts) — nenhuma outra conta ou comanda é afetada.
-export async function setServiceChargeWaived(
-  roomId: string,
-  waived: boolean,
-  guestSlot: RoomBillGuestSlot = "unica"
-) {
+export async function setServiceChargeWaived(roomId: string, waived: boolean, billId: string) {
   const supabase = await createClient();
   const { error } = await supabase.rpc("set_room_bill_service_charge_waived", {
     p_room_id: roomId,
     p_waived: waived,
-    p_guest_slot: guestSlot,
+    p_bill_id: billId,
   });
   if (error) return { error: error.message };
   revalidatePath("/frigobar");
@@ -114,21 +104,14 @@ export interface RoomBillOverview {
   room_number: string;
   bill_id: string;
   status: RoomBillStatus;
-  // 'unica' quase sempre (1 conta por suíte, como sempre foi); só vira
-  // 'saida_hoje'/'chegada_hoje' num dia de Saída com Chegada em que a
-  // conta do hóspede que sai ainda não tinha sido paga quando o hóspede
-  // novo chegou — nesse caso a suíte aparece 2 vezes nesta lista, uma
-  // entrada por conta.
-  guestSlot: RoomBillGuestSlot;
-  // Nome do hóspede vindo da Stays, só pra exibição — melhor esforço,
-  // pode ser null mesmo numa conta dividida.
+  // Nome do hóspede da reserva (Stays) e datas da estadia — a conta é sempre
+  // identificada por (suíte, hóspede, reserva); a reserva em si fica escondida.
   guestNameHint: string | null;
-  // Sinaliza se o frigobar do hóspede que está saindo hoje (guestSlot
-  // 'saida_hoje', ou 'unica' num dia de Somente Saída) já foi conferido
-  // pela camareira no checklist, ou se a conta fechou antes disso
-  // acontecer e ainda precisa ser lançado em "Lançar consumo adicional".
-  // null quando não há nenhuma tarefa de saída relevante hoje.
-  departureFrigobarStatus: "confirmed_via_checklist" | "pending_needs_manual_entry" | null;
+  stayCheckIn: string | null;
+  stayCheckOut: string | null;
+  // "in_house" = hóspede ainda na pousada (check-out hoje ou depois, inclui quem
+  // chega e quem sai hoje); "former" = já saiu e ainda não pagou (ou sem datas).
+  group: "in_house" | "former";
   minibarItems: RoomBillLineItem[];
   minibarTotal: number;
   poolbarItems: RoomBillLineItem[];
@@ -144,117 +127,51 @@ export interface RoomBillOverview {
   // Nome da camareira que fechou a conta corrente (null se ela nunca foi
   // fechada ainda — só existe uma vez que closed_by é gravado).
   closedByName: string | null;
-  lastPaidBill: { total: number; paid_at: string; payment_method: PaymentMethod | null } | null;
 }
 
+// Contas não pagas (abertas, fechadas ou reabertas), uma por hóspede/reserva, já separadas em
+// "hóspedes que ainda estão na pousada" e "hóspedes que já saíram e ainda não pagaram".
 export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
   const supabase = await createClient();
   const today = todayKey();
-  const [{ data: rooms }, { data: bills }, { data: departureTasks }] = await Promise.all([
-    supabase.from("rooms").select("id, number").eq("active", true).order("position"),
-    supabase.from("room_bills").select("*, closed_by_profile:profiles!room_bills_closed_by_fkey(name)"),
-    // Serve pra calcular departureFrigobarStatus: se o frigobar do hóspede
-    // que sai hoje (Saída com Chegada ou Somente Saída) já foi conferido
-    // pela camareira no checklist (tarefa concluída) ou ainda está
-    // pendente com a conta já fechada.
+  const [{ data: rooms }, { data: bills }] = await Promise.all([
+    supabase.from("rooms").select("id, number, position").eq("active", true).order("position"),
     supabase
-      .from("daily_room_tasks")
-      .select("room_id, task_type, status")
-      .eq("date", today)
-      .in("task_type", ["preparacao", "somente_saida"]),
+      .from("room_bills")
+      .select("*, closed_by_profile:profiles!room_bills_closed_by_fkey(name)")
+      .neq("status", "paga"),
   ]);
 
   type BillRow = {
     room_id: string;
     id: string;
     status: RoomBillStatus;
-    guest_slot: RoomBillGuestSlot;
     guest_name_hint: string | null;
-    paid_at: string | null;
-    payment_method: PaymentMethod | null;
+    stay_check_in: string | null;
+    stay_check_out: string | null;
     service_charge_waived: boolean;
     closed_by_profile: { name: string } | null;
   };
 
   const roomList = rooms ?? [];
-  const allBills = (bills ?? []) as unknown as BillRow[];
-
-  // Saída com Chegada só pode envolver o frigobar do hóspede que sai
-  // (guest_slot 'saida_hoje'); Somente Saída nunca coexiste com uma
-  // divisão de conta (nunca há chegada no mesmo dia), então usa 'unica'.
-  const departureSlotByRoom = new Map<string, { slot: RoomBillGuestSlot; taskStatus: string }>();
-  (departureTasks ?? []).forEach((t) => {
-    departureSlotByRoom.set(t.room_id, {
-      slot: t.task_type === "preparacao" ? "saida_hoje" : "unica",
-      taskStatus: t.status,
-    });
-  });
-
-  const currentBillsByRoom = new Map<string, BillRow[]>();
-  for (const room of roomList) {
-    const current = allBills.filter((b) => b.room_id === room.id && b.status !== "paga");
-    if (current.length > 0) {
-      currentBillsByRoom.set(room.id, current);
-    } else {
-      const created = await getOrCreateCurrentBill(supabase, room.id);
-      currentBillsByRoom.set(room.id, [
-        {
-          room_id: room.id,
-          id: created.id,
-          status: created.status,
-          guest_slot: created.guest_slot,
-          guest_name_hint: created.guest_name_hint,
-          paid_at: created.paid_at,
-          payment_method: null,
-          service_charge_waived: created.service_charge_waived,
-          closed_by_profile: null,
-        },
-      ]);
-    }
-  }
-
-  const currentBillIds = Array.from(currentBillsByRoom.values())
-    .flat()
-    .map((b) => b.id);
-
-  const lastPaidByRoom = new Map<
-    string,
-    { id: string; paid_at: string; serviceChargeWaived: boolean; paymentMethod: PaymentMethod | null }
-  >();
-  allBills
-    .filter((b) => b.status === "paga" && b.paid_at)
-    .forEach((b) => {
-      const existing = lastPaidByRoom.get(b.room_id);
-      if (!existing || (b.paid_at as string) > existing.paid_at) {
-        lastPaidByRoom.set(b.room_id, {
-          id: b.id,
-          paid_at: b.paid_at as string,
-          serviceChargeWaived: b.service_charge_waived,
-          paymentMethod: b.payment_method,
-        });
-      }
-    });
-  const lastPaidBillIds = Array.from(lastPaidByRoom.values()).map((b) => b.id);
-
-  const allRelevantBillIds = [...currentBillIds, ...lastPaidBillIds];
+  const roomOrder = new Map(roomList.map((r, i) => [r.id as string, i]));
+  const allBills = ((bills ?? []) as unknown as BillRow[]).filter((b) => roomOrder.has(b.room_id));
+  const billIds = allBills.map((b) => b.id);
 
   const [{ data: minibarRows }, { data: poolbarRows }] = await Promise.all([
-    allRelevantBillIds.length
+    billIds.length
       ? supabase
           .from("room_bill_minibar_items")
           .select("bill_id, minibar_item_id, quantity, price_snapshot, minibar_items(name)")
-          .in("bill_id", allRelevantBillIds)
+          .in("bill_id", billIds)
           .gt("quantity", 0)
       : Promise.resolve({ data: [] as unknown[] }),
-    // Bar da piscina agora vem das comandas ativas (não canceladas) daquele
-    // bill_id, em vez de um valor editado diretamente por item.
-    allRelevantBillIds.length
+    // Bar da piscina vem das comandas ativas (não canceladas) daquele bill_id.
+    billIds.length
       ? supabase
           .from("bar_comanda_items")
-          .select(
-            "quantity, price_snapshot, poolbar_item_id, poolbar_items(name), bar_comandas!inner(bill_id, status)"
-          )
-          .in("bar_comandas.bill_id", allRelevantBillIds)
+          .select("quantity, price_snapshot, poolbar_item_id, poolbar_items(name), bar_comandas!inner(bill_id, status)")
+          .in("bar_comandas.bill_id", billIds)
           .neq("bar_comandas.status", "cancelada")
           .gt("quantity", 0)
       : Promise.resolve({ data: [] as unknown[] }),
@@ -262,52 +179,30 @@ export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
 
   const mbRows = (minibarRows ?? []) as unknown as MinibarRow[];
   const pbRows = (poolbarRows ?? []) as unknown as PoolbarRow[];
+  const roomNumber = new Map(roomList.map((r) => [r.id as string, r.number as string]));
 
-  return roomList.flatMap((room) => {
-    const roomBills = currentBillsByRoom.get(room.id)!;
-
-    const lastPaid = lastPaidByRoom.get(room.id);
-    let lastPaidBill: RoomBillOverview["lastPaidBill"] = null;
-    if (lastPaid) {
-      const paidMinibarTotal = mbRows
-        .filter((r) => r.bill_id === lastPaid.id)
-        .reduce((sum, r) => sum + r.quantity * Number(r.price_snapshot), 0);
-      const paidPoolbarSubtotal = pbRows
-        .filter((r) => r.bar_comandas.bill_id === lastPaid.id)
-        .reduce((sum, r) => sum + r.quantity * Number(r.price_snapshot), 0);
-      const paidTotal =
-        paidMinibarTotal + paidPoolbarSubtotal * (lastPaid.serviceChargeWaived ? 1 : 1 + SERVICE_CHARGE_RATE);
-      lastPaidBill = { total: paidTotal, paid_at: lastPaid.paid_at, payment_method: lastPaid.paymentMethod };
-    }
-
-    const departure = departureSlotByRoom.get(room.id);
-
-    return roomBills.map((currentBill) => {
-      const totals = computeBillTotals(currentBill.id, mbRows, pbRows, currentBill.service_charge_waived);
-
-      let departureFrigobarStatus: RoomBillOverview["departureFrigobarStatus"] = null;
-      if (departure && departure.slot === currentBill.guest_slot) {
-        if (departure.taskStatus === "concluido") {
-          departureFrigobarStatus = "confirmed_via_checklist";
-        } else if (currentBill.status === "fechada") {
-          departureFrigobarStatus = "pending_needs_manual_entry";
-        }
-      }
-
+  return allBills
+    .map((bill) => {
+      const totals = computeBillTotals(bill.id, mbRows, pbRows, bill.service_charge_waived);
+      const inHouse = !!bill.stay_check_out && bill.stay_check_out >= today;
       return {
-        room_id: room.id,
-        room_number: room.number,
-        bill_id: currentBill.id,
-        status: currentBill.status,
-        guestSlot: currentBill.guest_slot,
-        guestNameHint: currentBill.guest_name_hint,
-        departureFrigobarStatus,
+        room_id: bill.room_id,
+        room_number: roomNumber.get(bill.room_id) ?? "—",
+        bill_id: bill.id,
+        status: bill.status,
+        guestNameHint: bill.guest_name_hint,
+        stayCheckIn: bill.stay_check_in,
+        stayCheckOut: bill.stay_check_out,
+        group: inHouse ? ("in_house" as const) : ("former" as const),
         ...totals,
-        closedByName: currentBill.closed_by_profile?.name ?? null,
-        lastPaidBill,
+        closedByName: bill.closed_by_profile?.name ?? null,
       };
-    });
-  });
+    })
+    .sort(
+      (x, y) =>
+        (roomOrder.get(x.room_id) ?? 0) - (roomOrder.get(y.room_id) ?? 0) ||
+        (x.stayCheckIn ?? "").localeCompare(y.stayCheckIn ?? "")
+    );
 }
 
 // ---------- Recibo em PDF de uma conta paga (visualização e e-mail) ----------
@@ -589,6 +484,9 @@ export interface RecentlyPaidBill {
   bill_id: string;
   room_id: string;
   room_number: string;
+  guestNameHint: string | null;
+  stayCheckIn: string | null;
+  stayCheckOut: string | null;
   paid_at: string;
   paidByName: string | null;
   paymentMethod: PaymentMethod | null;
@@ -613,7 +511,7 @@ export async function getRecentlyPaidRoomBills(days = 7): Promise<RecentlyPaidBi
   const { data: bills } = await supabase
     .from("room_bills")
     .select(
-      "id, room_id, paid_at, payment_method, receipt_email_sent, service_charge_waived, rooms(number), paid_by_profile:profiles!room_bills_paid_by_fkey(name)"
+      "id, room_id, paid_at, payment_method, receipt_email_sent, service_charge_waived, guest_name_hint, stay_check_in, stay_check_out, rooms(number), paid_by_profile:profiles!room_bills_paid_by_fkey(name)"
     )
     .eq("status", "paga")
     .gte("paid_at", cutoff)
@@ -626,6 +524,9 @@ export async function getRecentlyPaidRoomBills(days = 7): Promise<RecentlyPaidBi
     payment_method: PaymentMethod | null;
     receipt_email_sent: boolean;
     service_charge_waived: boolean;
+    guest_name_hint: string | null;
+    stay_check_in: string | null;
+    stay_check_out: string | null;
     rooms: { number: string } | null;
     paid_by_profile: { name: string } | null;
   };
@@ -655,6 +556,9 @@ export async function getRecentlyPaidRoomBills(days = 7): Promise<RecentlyPaidBi
     bill_id: bill.id,
     room_id: bill.room_id,
     room_number: bill.rooms?.number ?? "—",
+    guestNameHint: bill.guest_name_hint,
+    stayCheckIn: bill.stay_check_in,
+    stayCheckOut: bill.stay_check_out,
     paid_at: bill.paid_at,
     paidByName: bill.paid_by_profile?.name ?? null,
     paymentMethod: bill.payment_method,

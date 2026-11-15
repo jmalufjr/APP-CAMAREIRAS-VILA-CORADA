@@ -1,18 +1,21 @@
-import type { RoomBillGuestSlot } from "@/lib/types";
+import { formatDateShortPt } from "@/lib/date";
 
-// Rótulo compartilhado por "Consumo por quartos" (camareira e admin):
-// toda conta é identificada pela dupla suíte/hóspede — mostra o nome
-// assim que a sincronização com a Stays já souber quem é (a maioria dos
-// casos, mesmo numa estadia contínua sem nenhuma divisão de conta). Só
-// cai de volta pra "saída de hoje"/"chegada de hoje" (sem nome) quando o
-// hóspede daquela conta específica ainda não foi identificado.
-export function roomSlotLabel(room: {
-  room_number: string;
-  guestSlot: RoomBillGuestSlot;
-  guestNameHint: string | null;
-}): string {
-  if (room.guestNameHint) return `Suíte ${room.room_number} — ${room.guestNameHint}`;
-  if (room.guestSlot === "unica") return `Suíte ${room.room_number}`;
-  const situacao = room.guestSlot === "saida_hoje" ? "saída de hoje" : "chegada de hoje";
-  return `Suíte ${room.room_number} (${situacao})`;
+// Rótulo compartilhado das contas: toda conta é identificada pela dupla
+// suíte + hóspede (a referência da reserva na Stays fica escondida). Em
+// "Consumo por suítes" também mostra as datas da estadia (withDates) para
+// diferenciar duas contas com o mesmo nome (ex.: hóspede que voltou depois).
+export function roomSlotLabel(
+  room: {
+    room_number: string;
+    guestNameHint: string | null;
+    stayCheckIn?: string | null;
+    stayCheckOut?: string | null;
+  },
+  options: { withDates?: boolean } = {}
+): string {
+  const base = room.guestNameHint ? `Suíte ${room.room_number} — ${room.guestNameHint}` : `Suíte ${room.room_number}`;
+  if (options.withDates && room.stayCheckIn && room.stayCheckOut) {
+    return `${base} (${formatDateShortPt(room.stayCheckIn)} a ${formatDateShortPt(room.stayCheckOut)})`;
+  }
+  return base;
 }
