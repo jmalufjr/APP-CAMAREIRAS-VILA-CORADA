@@ -10,16 +10,16 @@ import { getPaidBillRoomNumber } from "@/lib/actions/room-bills";
 // (/receipt) também confere isso, em defesa dupla.
 export default async function ContaPagaPage({ params }: { params: Promise<{ billId: string }> }) {
   const { billId } = await params;
-  const roomNumber = await getPaidBillRoomNumber(billId);
-  if (!roomNumber) notFound();
+  const names = await getPaidBillRoomNumber(billId);
+  if (!names) notFound();
 
   return (
     <PdfViewerPanel
       billId={billId}
       pdfUrl={`/api/room-bills/${billId}/receipt`}
-      downloadFilename={`conta-suite-${roomNumber}.pdf`}
+      downloadFilename={names.fileName}
       backHref="/frigobar"
-      title={`Conta paga — Suíte ${roomNumber}`}
+      title={`Conta paga — ${names.label}`}
       subtitle="Use os botões abaixo para baixar, imprimir ou enviar por e-mail."
     />
   );

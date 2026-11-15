@@ -332,7 +332,7 @@ export default function QuestoesRespostasPage() {
                 e ainda não pagou continua existindo até ser fechada e paga. Em “Consumo por suítes” aparecem três cards:
                 hóspedes que ainda estão na pousada (inclusive quem sai e quem chega hoje), hóspedes que já saíram e ainda não
                 pagaram, e contas pagas nos últimos 7 dias. Só as contas do primeiro card aparecem como opção ao fazer um pedido
-                de comanda.
+                de comanda. <strong>Conta paga nunca é reaberta nem recriada pelo sistema</strong>: se o hóspede pagou antes de a camareira conferir o frigobar, o consumo achado depois não pode ser lançado (o checklist avisa) e é perda. Por isso, quando o hóspede fecha a conta antes do serviço, pergunte a ele se houve consumo e adote a resposta dele. Quem faz check-out não ganha mais conta nova no dia da saída: se o ex-hóspede quiser consumir no bar depois do check-out (no mesmo dia ou em outro), a camareira cria uma <strong>conta avulsa</strong> (botão “Adicionar conta avulsa”, com nome completo, telefone e data). Ela aparece como “Avulsa — Nome” no seletor de comanda, não tem frigobar, e segue o mesmo caminho das outras (fechar, ver PDF, QR code - PIX, reabrir conta e “A conta foi paga”); se continuar sem pagamento passa no dia seguinte para o segundo card. O bar dela entra normalmente no resultado, nos custos e na rentabilidade.
               </P>
               <P>
                 O frigobar é lançado item a item, direto pela camareira, com botões de mais/menos (sem

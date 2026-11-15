@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { RoomBillOverview, RecentlyPaidBill } from "@/lib/actions/room-bills";
-import { closeRoomBill, reopenRoomBill, markRoomBillPaid, setServiceChargeWaived } from "@/lib/actions/room-bills";
+import { closeRoomBill, reopenRoomBill, markRoomBillPaid, setServiceChargeWaived, createWalkinBill } from "@/lib/actions/room-bills";
 import { setMinibarConsumption } from "@/lib/actions/minibar";
 import type { MinibarItem } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
-import { formatDateTimePt } from "@/lib/date";
+import { formatDateTimePt, todayKey } from "@/lib/date";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -42,6 +43,9 @@ export function ConsumoQuartosPanel({
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <WalkinDialogButton />
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>Hóspedes na pousada</CardTitle>
@@ -96,7 +100,7 @@ export function ConsumoQuartosPanel({
                   <div className="min-w-0">
                     <p className="font-medium">
                       {roomSlotLabel(
-                        { room_number: bill.room_number, guestNameHint: bill.guestNameHint, stayCheckIn: bill.stayCheckIn, stayCheckOut: bill.stayCheckOut },
+                        { room_number: bill.room_number, guestNameHint: bill.guestNameHint, stayCheckIn: bill.stayCheckIn, stayCheckOut: bill.stayCheckOut, isWalkin: bill.isWalkin },
                         { withDates: true }
                       )}
                     </p>
@@ -113,6 +117,69 @@ export function ConsumoQuartosPanel({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// Conta avulsa: de ex-hóspede (já fez check-out) que quer consumir no bar — sem suíte, sem reserva, sem frigobar.
+function WalkinDialogButton() {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [date, setDate] = useState(todayKey());
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+
+  function handleCreate() {
+    startTransition(async () => {
+      const result = await createWalkinBill(name, phone, date);
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Conta avulsa criada. Ela já aparece ao fazer um pedido de comanda.");
+      setOpen(false);
+      setName("");
+      setPhone("");
+      setDate(todayKey());
+      router.refresh();
+    });
+  }
+
+  return (
+    <>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+        Adicionar conta avulsa
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nova conta avulsa</DialogTitle>
+            <DialogDescription>
+              Para quem já fez check-out e quer consumir no bar. A conta é identificada pelo nome completo, telefone e data.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="walkin-name">Nome completo</Label>
+              <Input id="walkin-name" value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="walkin-phone">Telefone</Label>
+              <Input id="walkin-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="walkin-date">Data</Label>
+              <Input id="walkin-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button disabled={isPending || name.trim().length < 3 || phone.trim().length < 8} onClick={handleCreate}>
+              Criar conta
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -267,7 +334,11 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
       </AccordionTrigger>
       <AccordionPanel>
         <div className="space-y-3 pt-3">
-          <div className="grid sm:grid-cols-2 gap-x-8 gap-y-4">
+          {room.isWalkin && room.walkinPhone && (
+            <p className="text-xs text-muted-foreground">Telefone: {room.walkinPhone}</p>
+          )}
+          <div className={room.isWalkin ? "grid gap-4" : "grid sm:grid-cols-2 gap-x-8 gap-y-4"}>
+            {!room.isWalkin && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-medium text-muted-foreground">Frigobar</p>
@@ -337,6 +408,7 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
                 </div>
               )}
             </div>
+            )}
             <div className="space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground">
                 Bar da piscina <span className="font-normal">(via comandas)</span>
@@ -358,10 +430,12 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
           </div>
 
           <div className="border-t border-border pt-2 space-y-1 text-sm max-w-md">
-            <div className="flex items-center justify-between">
-              <span>Total frigobar</span>
-              <span>R$ {room.minibarTotal.toFixed(2)}</span>
-            </div>
+            {!room.isWalkin && (
+              <div className="flex items-center justify-between">
+                <span>Total frigobar</span>
+                <span>R$ {room.minibarTotal.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span>Total bar da piscina</span>
               <span>R$ {room.poolbarSubtotal.toFixed(2)}</span>
@@ -386,12 +460,12 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
               <span>R$ {room.poolbarTotalWithCharge.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between font-medium pt-1">
-              <span>Total bar e frigobar</span>
+              <span>{room.isWalkin ? "Total da conta" : "Total bar e frigobar"}</span>
               <span>R$ {room.grandTotal.toFixed(2)}</span>
             </div>
           </div>
 
-          <div className="max-w-md space-y-2">
+          <div className="space-y-2">
             <Button
               size="sm"
               variant="outline"
@@ -403,16 +477,13 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
 
             {room.status === "fechada" && (
               <div className="flex flex-col sm:flex-row gap-2">
-                <Button size="sm" disabled={isPending} onClick={() => setPaymentDialogOpen(true)}>
-                  Pagamento efetuado
-                </Button>
                 <Button
                   size="sm"
                   variant="outline"
                   disabled={isPending}
                   onClick={() => router.push(`/bar-piscina/pix/${room.bill_id}`)}
                 >
-                  Pagar com PIX
+                  QR code - PIX
                 </Button>
                 <Button
                   size="sm"
@@ -420,7 +491,7 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
                   disabled={isPending}
                   onClick={() => runAction(() => reopenRoomBill(room.room_id, room.bill_id), "Conta reaberta.")}
                 >
-                  Editar/reabrir conta
+                  Reabrir conta
                 </Button>
               </div>
             )}
@@ -436,6 +507,14 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
               </Button>
             )}
 
+            {room.status === "fechada" && (
+              <div className="flex justify-end pt-2">
+                <Button size="sm" disabled={isPending} onClick={() => setPaymentDialogOpen(true)}>
+                  A conta foi paga
+                </Button>
+              </div>
+            )}
+
           </div>
         </div>
       </AccordionPanel>
@@ -443,7 +522,7 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
       <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirmar pagamento — Suíte {room.room_number}</DialogTitle>
+            <DialogTitle>Confirmar pagamento — {room.isWalkin ? `Avulsa — ${room.guestNameHint ?? ""}` : `Suíte ${room.room_number}`}</DialogTitle>
             <DialogDescription>
               Valor total: R$ {room.grandTotal.toFixed(2)}. Selecione a forma de pagamento usada pelo hóspede.
             </DialogDescription>

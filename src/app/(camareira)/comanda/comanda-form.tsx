@@ -19,6 +19,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 function roomOptionLabel(room: RoomOption): string {
+  if (room.isWalkin) return room.guestNameHint ? `Avulsa — ${room.guestNameHint}` : "Avulsa";
   return room.guestNameHint ? `Suíte ${room.room_number} — ${room.guestNameHint}` : `Suíte ${room.room_number}`;
 }
 

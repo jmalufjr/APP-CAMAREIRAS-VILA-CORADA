@@ -110,7 +110,7 @@ function PaidBillAccordionItem({ bill }: { bill: RecentlyPaidBill }) {
         <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           <span className="font-heading text-base">
             {roomSlotLabel(
-              { room_number: bill.room_number, guestNameHint: bill.guestNameHint, stayCheckIn: bill.stayCheckIn, stayCheckOut: bill.stayCheckOut },
+              { room_number: bill.room_number, guestNameHint: bill.guestNameHint, stayCheckIn: bill.stayCheckIn, stayCheckOut: bill.stayCheckOut, isWalkin: bill.isWalkin },
               { withDates: true }
             )}
           </span>
@@ -121,7 +121,8 @@ function PaidBillAccordionItem({ bill }: { bill: RecentlyPaidBill }) {
       </AccordionTrigger>
       <AccordionPanel>
         <div className="space-y-3 pt-3">
-          <div className="grid sm:grid-cols-2 gap-x-8 gap-y-4">
+          <div className={bill.isWalkin ? "grid gap-4" : "grid sm:grid-cols-2 gap-x-8 gap-y-4"}>
+            {!bill.isWalkin && (
             <div className="space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground">Frigobar</p>
               <div className="space-y-1.5">
@@ -138,6 +139,7 @@ function PaidBillAccordionItem({ bill }: { bill: RecentlyPaidBill }) {
                 )}
               </div>
             </div>
+            )}
             <div className="space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground">Bar da piscina</p>
               <div className="space-y-1.5">
@@ -157,10 +159,12 @@ function PaidBillAccordionItem({ bill }: { bill: RecentlyPaidBill }) {
           </div>
 
           <div className="border-t border-border pt-2 space-y-1 text-sm max-w-md">
-            <div className="flex items-center justify-between">
-              <span>Total frigobar</span>
-              <span>R$ {bill.minibarTotal.toFixed(2)}</span>
-            </div>
+            {!bill.isWalkin && (
+              <div className="flex items-center justify-between">
+                <span>Total frigobar</span>
+                <span>R$ {bill.minibarTotal.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span>Total bar da piscina</span>
               <span>R$ {bill.poolbarSubtotal.toFixed(2)}</span>
@@ -223,7 +227,11 @@ function RoomAccordionItem({ room }: { room: RoomBillOverview }) {
       </AccordionTrigger>
       <AccordionPanel>
         <div className="space-y-3 pt-3">
-          <div className="grid sm:grid-cols-2 gap-x-8 gap-y-4">
+          {room.isWalkin && room.walkinPhone && (
+            <p className="text-xs text-muted-foreground">Telefone: {room.walkinPhone}</p>
+          )}
+          <div className={room.isWalkin ? "grid gap-4" : "grid sm:grid-cols-2 gap-x-8 gap-y-4"}>
+            {!room.isWalkin && (
             <div className="space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground">Frigobar</p>
               <div className="space-y-1.5">
@@ -240,6 +248,7 @@ function RoomAccordionItem({ room }: { room: RoomBillOverview }) {
                 )}
               </div>
             </div>
+            )}
             <div className="space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground">Bar da piscina</p>
               <div className="space-y-1.5">
@@ -259,10 +268,12 @@ function RoomAccordionItem({ room }: { room: RoomBillOverview }) {
           </div>
 
           <div className="border-t border-border pt-2 space-y-1 text-sm max-w-md">
-            <div className="flex items-center justify-between">
-              <span>Total frigobar</span>
-              <span>R$ {room.minibarTotal.toFixed(2)}</span>
-            </div>
+            {!room.isWalkin && (
+              <div className="flex items-center justify-between">
+                <span>Total frigobar</span>
+                <span>R$ {room.minibarTotal.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span>Total bar da piscina</span>
               <span>R$ {room.poolbarSubtotal.toFixed(2)}</span>

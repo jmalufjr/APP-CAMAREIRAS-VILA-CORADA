@@ -22,6 +22,7 @@ function ComandaRow({ comanda, onClick }: { comanda: ComandaListItem; onClick: (
           {roomSlotLabel({
             room_number: comanda.room_number,
             guestNameHint: comanda.guestNameHint,
+            isWalkin: comanda.isWalkin,
           })}
           <Badge variant={comanda.status === "cancelada" ? "secondary" : "outline"}>
             {comandaDisplayStatus(comanda)}

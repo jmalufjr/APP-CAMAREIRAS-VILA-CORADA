@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { toDateKey, nowInBrazil, dateKeyInBrazil } from "@/lib/date";
-import { findLastNightOccupant, findBillForOccupant, ensureBillForOccupant } from "@/lib/room-occupancy";
+import { findLastNightOccupant, findBillForOccupant, ensureBillForOccupant, hasPaidBillOnly } from "@/lib/room-occupancy";
 
 // ---------- Admin: CRUD do catálogo de itens de frigobar ----------
 
@@ -99,7 +99,9 @@ export async function getMinibarContextForTask(
   const occupant = await findLastNightOccupant(supabase, roomId, date);
 
   let bill = occupant ? await findBillForOccupant(supabase, roomId, occupant) : null;
-  if (!bill && occupant && options.ensureBill) {
+  // Conta já paga: não aceita mais nada (nem é recriada).
+  const paidOnly = !bill && occupant ? await hasPaidBillOnly(supabase, roomId, occupant) : false;
+  if (!bill && occupant && options.ensureBill && !paidOnly) {
     bill = await ensureBillForOccupant(supabase, roomId, occupant);
   }
 
@@ -115,7 +117,7 @@ export async function getMinibarContextForTask(
 
   return {
     billId: bill?.id ?? null,
-    billStatus: (bill?.status as MinibarTaskContext["billStatus"]) ?? null,
+    billStatus: paidOnly ? "paga" : ((bill?.status as MinibarTaskContext["billStatus"]) ?? null),
     guestName: bill?.guest_name_hint ?? occupant?.guestName ?? null,
     resolved: occupant !== null,
     items: (items ?? []).map((item) => ({

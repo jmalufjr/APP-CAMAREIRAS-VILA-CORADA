@@ -9,16 +9,16 @@ import { getClosedBillRoomNumber } from "@/lib/actions/room-bills";
 // visualizador nativo do navegador dentro do iframe.
 export default async function ContaFechadaPage({ params }: { params: Promise<{ billId: string }> }) {
   const { billId } = await params;
-  const roomNumber = await getClosedBillRoomNumber(billId);
-  if (!roomNumber) notFound();
+  const names = await getClosedBillRoomNumber(billId);
+  if (!names) notFound();
 
   return (
     <PdfViewerPanel
       billId={billId}
       pdfUrl={`/api/room-bills/${billId}/conta`}
-      downloadFilename={`conta-suite-${roomNumber}.pdf`}
+      downloadFilename={names.fileName}
       backHref="/bar-piscina"
-      title={`Conta fechada — Suíte ${roomNumber}`}
+      title={`Conta fechada — ${names.label}`}
       subtitle="Use os botões abaixo para baixar, imprimir ou enviar por e-mail."
     />
   );

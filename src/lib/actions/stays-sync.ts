@@ -106,9 +106,21 @@ async function syncRoomBillsForSuite(
     .neq("status", "paga");
   if (billsError) return 1;
 
-  // 1) Cada hóspede na pousada tem a sua conta, com nome e datas preenchidos.
+  // Reservas que já têm conta PAGA: a conta paga nunca é recriada pelo sistema.
+  const { data: paidRows } = await supabase
+    .from("room_bills")
+    .select("stays_reservation_id")
+    .eq("room_id", roomId)
+    .eq("status", "paga")
+    .not("stays_reservation_id", "is", null);
+  const paidReservationIds = new Set((paidRows ?? []).map((r) => r.stays_reservation_id as string));
+
+  // 1) Cada hóspede que ainda vai dormir aqui tem a sua conta, com nome e datas preenchidos. Quem faz
+  // check-out HOJE não ganha conta nova (a estadia acabou; consumo depois do check-out vai em conta avulsa);
+  // a conta que já existia continua até ser paga.
   for (const r of inHouse) {
     const existing = (bills ?? []).find((b) => b.stays_reservation_id === r._id);
+    if (!existing && (r.checkOutDate <= today || paidReservationIds.has(r._id))) continue;
     if (!existing) {
       const name = await resolveName(r._idclient);
       const { error } = await supabase.from("room_bills").insert({

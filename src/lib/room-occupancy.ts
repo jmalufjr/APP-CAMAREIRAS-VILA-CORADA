@@ -69,6 +69,18 @@ export async function findBillForOccupant(
   return (data as RoomBill | null) ?? null;
 }
 
+// A reserva já tem conta PAGA e nenhuma aberta? Conta paga nunca é reaberta nem recriada: consumo
+// identificado depois disso é perda e não pode ser lançado.
+export async function hasPaidBillOnly(supabase: Supabase, roomId: string, occupant: RoomOccupant): Promise<boolean> {
+  const { data } = await supabase
+    .from("room_bills")
+    .select("status")
+    .eq("room_id", roomId)
+    .eq("stays_reservation_id", occupant.reservationId);
+  const rows = data ?? [];
+  return rows.length > 0 && rows.every((r) => r.status === "paga");
+}
+
 // Acha ou cria (sem duplicar) a conta da reserva — via função do banco, porque a camareira
 // não pode inserir direto em room_bills.
 export async function ensureBillForOccupant(

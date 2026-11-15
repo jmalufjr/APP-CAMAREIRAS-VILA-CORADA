@@ -30,7 +30,7 @@ export function ComandasList({ comandas }: { comandas: ComandaListItem[] }) {
             <div className="min-w-0">
               <p className="text-sm font-medium">
                 Comanda #{c.monthly_number ?? c.sequence_number} ·{" "}
-                {roomSlotLabel({ room_number: c.room_number, guestNameHint: c.guestNameHint })}
+                {roomSlotLabel({ room_number: c.room_number, guestNameHint: c.guestNameHint, isWalkin: c.isWalkin })}
               </p>
               <p className="text-xs text-muted-foreground truncate">Responsável: {c.created_by_name}</p>
             </div>

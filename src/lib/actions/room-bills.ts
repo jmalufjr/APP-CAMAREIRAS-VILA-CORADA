@@ -18,7 +18,7 @@ import { Resend } from "resend";
 // SQL security definer (close_room_bill/reopen_room_bill/pay_room_bill)
 // checam is_camareira() e fazem toda a transição em 1 round trip.
 
-export async function closeRoomBill(roomId: string, billId: string) {
+export async function closeRoomBill(roomId: string | null, billId: string) {
   const supabase = await createClient();
   const { error } = await supabase.rpc("close_room_bill", { p_room_id: roomId, p_bill_id: billId });
   if (error) return { error: error.message };
@@ -29,7 +29,7 @@ export async function closeRoomBill(roomId: string, billId: string) {
   return { success: true };
 }
 
-export async function reopenRoomBill(roomId: string, billId: string) {
+export async function reopenRoomBill(roomId: string | null, billId: string) {
   const supabase = await createClient();
   const { error } = await supabase.rpc("reopen_room_bill", { p_room_id: roomId, p_bill_id: billId });
   if (error) return { error: error.message };
@@ -40,7 +40,7 @@ export async function reopenRoomBill(roomId: string, billId: string) {
   return { success: true };
 }
 
-export async function markRoomBillPaid(roomId: string, paymentMethod: PaymentMethod, billIdToPay: string) {
+export async function markRoomBillPaid(roomId: string | null, paymentMethod: PaymentMethod, billIdToPay: string) {
   const supabase = await createClient();
   const { data: billId, error } = await supabase.rpc("pay_room_bill", {
     p_room_id: roomId,
@@ -64,6 +64,22 @@ export async function markRoomBillPaid(roomId: string, paymentMethod: PaymentMet
   return { success: true };
 }
 
+// Conta AVULSA: de ex-hóspede (já fez check-out) que quer consumir no bar. Sem suíte, sem reserva e
+// sem frigobar — identificada pelo nome completo, telefone e data. Segue o mesmo ciclo das demais.
+export async function createWalkinBill(name: string, phone: string, date: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("create_walkin_bill", {
+    p_name: name,
+    p_phone: phone,
+    p_date: date || todayKey(),
+  });
+  if (error) return { error: error.message };
+  revalidatePath("/bar-piscina");
+  revalidatePath("/comanda");
+  revalidatePath("/frigobar");
+  return { success: true, billId: data as string };
+}
+
 // Reenvio manual pelo admin (aba "Consumo por quartos", contas pagas dos
 // últimos 7 dias) quando o envio automático falhou.
 export async function resendRoomBillReceipt(billId: string) {
@@ -82,7 +98,7 @@ export async function resendRoomBillReceipt(billId: string) {
 // conta específica o valor dos 10%, e nenhuma comanda que a compõe conta
 // mais na comissão de quem a lançou (ver getBarCommissionByCamareira* em
 // comandas.ts) — nenhuma outra conta ou comanda é afetada.
-export async function setServiceChargeWaived(roomId: string, waived: boolean, billId: string) {
+export async function setServiceChargeWaived(roomId: string | null, waived: boolean, billId: string) {
   const supabase = await createClient();
   const { error } = await supabase.rpc("set_room_bill_service_charge_waived", {
     p_room_id: roomId,
@@ -100,7 +116,10 @@ export async function setServiceChargeWaived(roomId: string, waived: boolean, bi
 // ---------- Leitura combinada para a tela do admin "Consumo de Bar e Frigobar" ----------
 
 export interface RoomBillOverview {
-  room_id: string;
+  // null = conta avulsa (sem suíte).
+  room_id: string | null;
+  isWalkin: boolean;
+  walkinPhone: string | null;
   room_number: string;
   bill_id: string;
   status: RoomBillStatus;
@@ -143,7 +162,9 @@ export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
   ]);
 
   type BillRow = {
-    room_id: string;
+    room_id: string | null;
+    is_walkin: boolean;
+    walkin_phone: string | null;
     id: string;
     status: RoomBillStatus;
     guest_name_hint: string | null;
@@ -155,7 +176,7 @@ export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
 
   const roomList = rooms ?? [];
   const roomOrder = new Map(roomList.map((r, i) => [r.id as string, i]));
-  const allBills = ((bills ?? []) as unknown as BillRow[]).filter((b) => roomOrder.has(b.room_id));
+  const allBills = ((bills ?? []) as unknown as BillRow[]).filter((b) => b.is_walkin || (b.room_id !== null && roomOrder.has(b.room_id)));
   const billIds = allBills.map((b) => b.id);
 
   const [{ data: minibarRows }, { data: poolbarRows }] = await Promise.all([
@@ -187,7 +208,9 @@ export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
       const inHouse = !!bill.stay_check_out && bill.stay_check_out >= today;
       return {
         room_id: bill.room_id,
-        room_number: roomNumber.get(bill.room_id) ?? "—",
+        isWalkin: bill.is_walkin,
+        walkinPhone: bill.walkin_phone,
+        room_number: bill.room_id ? (roomNumber.get(bill.room_id) ?? "—") : "—",
         bill_id: bill.id,
         status: bill.status,
         guestNameHint: bill.guest_name_hint,
@@ -200,7 +223,7 @@ export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
     })
     .sort(
       (x, y) =>
-        (roomOrder.get(x.room_id) ?? 0) - (roomOrder.get(y.room_id) ?? 0) ||
+        (x.room_id ? (roomOrder.get(x.room_id) ?? 0) : 9999) - (y.room_id ? (roomOrder.get(y.room_id) ?? 0) : 9999) ||
         (x.stayCheckIn ?? "").localeCompare(y.stayCheckIn ?? "")
     );
 }
@@ -217,7 +240,7 @@ export async function getRoomBillReceiptData(billId: string): Promise<ReceiptDat
   const supabase = await createClient();
   const { data: bill } = await supabase
     .from("room_bills")
-    .select("status, paid_at, closed_at, service_charge_waived, rooms(number)")
+    .select("status, paid_at, closed_at, service_charge_waived, is_walkin, guest_name_hint, rooms(number)")
     .eq("id", billId)
     .single();
   if (!bill) return null;
@@ -252,8 +275,10 @@ export async function getRoomBillReceiptData(billId: string): Promise<ReceiptDat
   const pbRows = (poolbarRows ?? []) as unknown as PoolbarRow[];
   const room = bill as unknown as { rooms: { number: string } | null };
 
+  const walkin = (bill as unknown as { is_walkin: boolean }).is_walkin;
   return {
-    room_number: room.rooms?.number ?? "—",
+    room_number: walkin ? ((bill as unknown as { guest_name_hint: string | null }).guest_name_hint ?? "—") : (room.rooms?.number ?? "—"),
+    isWalkin: walkin,
     statusLabel,
     statusDate,
     ...computeBillTotals(billId, mbRows, pbRows, bill.service_charge_waived),
@@ -264,33 +289,43 @@ export async function getRoomBillReceiptData(billId: string): Promise<ReceiptDat
 // da suíte — usado pela tela da camareira que mostra o PDF da conta fechada
 // antes do pagamento (guarda a página contra abrir para uma conta que já
 // foi paga/reaberta desde então, não só desabilitar o botão na UI).
-export async function getClosedBillRoomNumber(billId: string): Promise<string | null> {
+export interface BillPdfNames {
+  label: string; // "Suíte 3" ou "Conta avulsa — Fulano"
+  fileName: string;
+}
+
+export async function getClosedBillRoomNumber(billId: string): Promise<BillPdfNames | null> {
   const supabase = await createClient();
   const { data: bill } = await supabase
     .from("room_bills")
-    .select("status, rooms(number)")
+    .select("status, is_walkin, guest_name_hint, rooms(number)")
     .eq("id", billId)
     .eq("status", "fechada")
     .single();
   if (!bill) return null;
-  const room = bill as unknown as { rooms: { number: string } | null };
-  return room.rooms?.number ?? "—";
+  return billPdfNames(bill as unknown as BillNameRow);
+}
+
+type BillNameRow = { is_walkin: boolean; guest_name_hint: string | null; rooms: { number: string } | null };
+function billPdfNames(bill: BillNameRow): BillPdfNames {
+  if (bill.is_walkin) return { label: `Conta avulsa — ${bill.guest_name_hint ?? "—"}`, fileName: "conta-avulsa.pdf" };
+  const n = bill.rooms?.number ?? "—";
+  return { label: `Suíte ${n}`, fileName: `conta-suite-${n}.pdf` };
 }
 
 // Mesma ideia de getClosedBillRoomNumber, mas para o PDF do recibo de uma
 // conta já paga (tela do admin) — guarda a página contra abrir para uma
 // conta que não está (ou não está mais) paga.
-export async function getPaidBillRoomNumber(billId: string): Promise<string | null> {
+export async function getPaidBillRoomNumber(billId: string): Promise<BillPdfNames | null> {
   const supabase = await createClient();
   const { data: bill } = await supabase
     .from("room_bills")
-    .select("status, rooms(number)")
+    .select("status, is_walkin, guest_name_hint, rooms(number)")
     .eq("id", billId)
     .eq("status", "paga")
     .single();
   if (!bill) return null;
-  const room = bill as unknown as { rooms: { number: string } | null };
-  return room.rooms?.number ?? "—";
+  return billPdfNames(bill as unknown as BillNameRow);
 }
 
 // ---------- Retrato do consumo de uma suíte numa data específica ----------
@@ -417,17 +452,18 @@ async function buildAndSendReceiptPdf(billId: string): Promise<{ ok: true } | { 
   }
 
   try {
+    const accountLabel = data.isWalkin ? `Conta avulsa — ${data.room_number}` : `Suíte ${data.room_number}`;
     const pdfBuffer = await renderReceiptPdf(data);
     const resend = new Resend(process.env.RESEND_API_KEY);
     const subject = data.statusLabel.startsWith("Pagamento")
-      ? `Conta paga — Suíte ${data.room_number}`
-      : `Conta fechada, aguardando pagamento — Suíte ${data.room_number}`;
+      ? `Conta paga — ${accountLabel}`
+      : `Conta fechada, aguardando pagamento — ${accountLabel}`;
     const { error } = await resend.emails.send({
       from: process.env.RECEIPT_FROM_EMAIL ?? "Vila Corada <recibos@consumos.vilacorada.com.br>",
       to: accountingEmail,
       subject,
-      text: `Segue em anexo o PDF da conta da suíte ${data.room_number}.`,
-      attachments: [{ filename: `conta-suite-${data.room_number}.pdf`, content: pdfBuffer }],
+      text: `Segue em anexo o PDF da conta: ${accountLabel}.`,
+      attachments: [{ filename: data.isWalkin ? `conta-avulsa.pdf` : `conta-suite-${data.room_number}.pdf`, content: pdfBuffer }],
     });
     if (error) return { ok: false, reason: "Falha ao enviar o e-mail. Tente novamente." };
     return { ok: true };
@@ -482,7 +518,8 @@ export async function sendRoomBillPdfEmail(billId: string) {
 
 export interface RecentlyPaidBill {
   bill_id: string;
-  room_id: string;
+  room_id: string | null;
+  isWalkin: boolean;
   room_number: string;
   guestNameHint: string | null;
   stayCheckIn: string | null;
@@ -511,7 +548,7 @@ export async function getRecentlyPaidRoomBills(days = 7): Promise<RecentlyPaidBi
   const { data: bills } = await supabase
     .from("room_bills")
     .select(
-      "id, room_id, paid_at, payment_method, receipt_email_sent, service_charge_waived, guest_name_hint, stay_check_in, stay_check_out, rooms(number), paid_by_profile:profiles!room_bills_paid_by_fkey(name)"
+      "id, room_id, paid_at, payment_method, receipt_email_sent, service_charge_waived, guest_name_hint, is_walkin, stay_check_in, stay_check_out, rooms(number), paid_by_profile:profiles!room_bills_paid_by_fkey(name)"
     )
     .eq("status", "paga")
     .gte("paid_at", cutoff)
@@ -519,7 +556,8 @@ export async function getRecentlyPaidRoomBills(days = 7): Promise<RecentlyPaidBi
 
   type PaidBillRow = {
     id: string;
-    room_id: string;
+    room_id: string | null;
+    is_walkin: boolean;
     paid_at: string;
     payment_method: PaymentMethod | null;
     receipt_email_sent: boolean;
@@ -555,6 +593,7 @@ export async function getRecentlyPaidRoomBills(days = 7): Promise<RecentlyPaidBi
   return billList.map((bill) => ({
     bill_id: bill.id,
     room_id: bill.room_id,
+    isWalkin: bill.is_walkin,
     room_number: bill.rooms?.number ?? "—",
     guestNameHint: bill.guest_name_hint,
     stayCheckIn: bill.stay_check_in,

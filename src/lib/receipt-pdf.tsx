@@ -10,6 +10,8 @@ export interface ReceiptLineItem {
 
 export interface ReceiptData {
   room_number: string;
+  // Conta avulsa (ex-hóspede): room_number guarda o nome do hóspede; sem frigobar.
+  isWalkin?: boolean;
   // Texto e data mostrados no subtítulo — variam conforme o motivo do PDF:
   // recibo de pagamento ("Pagamento registrado em", paid_at) ou conta
   // fechada aguardando pagamento ("Conta fechada em", closed_at).
@@ -67,22 +69,28 @@ function ReceiptDocument({ data }: { data: ReceiptData }) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <Text style={styles.title}>Vila Corada — Conta da Suíte {data.room_number}</Text>
+        <Text style={styles.title}>Vila Corada — {data.isWalkin ? `Conta avulsa — ${data.room_number}` : `Conta da Suíte ${data.room_number}`}</Text>
         <Text style={styles.subtitle}>
           {data.statusLabel} {formatDateTimePt(data.statusDate)}
         </Text>
 
-        <Text style={styles.sectionTitle}>Frigobar</Text>
-        <LineItemRows items={data.minibarItems} />
+        {!data.isWalkin && (
+          <>
+            <Text style={styles.sectionTitle}>Frigobar</Text>
+            <LineItemRows items={data.minibarItems} />
+          </>
+        )}
 
         <Text style={styles.sectionTitle}>Bar da piscina</Text>
         <LineItemRows items={data.poolbarItems} />
 
         <View style={{ marginTop: 20 }}>
-          <View style={styles.row}>
-            <Text>Total frigobar</Text>
-            <Text>R$ {data.minibarTotal.toFixed(2)}</Text>
-          </View>
+          {!data.isWalkin && (
+            <View style={styles.row}>
+              <Text>Total frigobar</Text>
+              <Text>R$ {data.minibarTotal.toFixed(2)}</Text>
+            </View>
+          )}
           <View style={styles.row}>
             <Text>Total bar da piscina</Text>
             <Text>R$ {data.poolbarSubtotal.toFixed(2)}</Text>

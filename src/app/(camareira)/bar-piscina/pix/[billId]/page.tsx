@@ -16,7 +16,7 @@ export default async function PixPaymentPage({ params }: { params: Promise<{ bil
     <div className="space-y-6">
       <BackLink href="/bar-piscina" />
       <PageHeader
-        title={`Pagamento por PIX — Suíte ${room.room_number}`}
+        title={`QR code - PIX — ${room.isWalkin ? `Conta avulsa — ${room.guestNameHint ?? ""}` : `Suíte ${room.room_number}`}`}
         subtitle="Peça para o hóspede escanear o QR code abaixo no aplicativo do banco."
       />
       <div className="flex flex-col items-center gap-4 py-4">

@@ -70,7 +70,8 @@ export function ChecklistDetail({
   // Somente Chegada não tem frigobar: a suíte estava vazia na noite anterior.
   const showMinibarEntry = !!minibar && !isReleased && task.task_type !== "somente_chegada";
   const minibarItems = minibar?.items ?? [];
-  const isMinibarClosed = minibar?.billStatus === "fechada";
+  const isMinibarPaid = minibar?.billStatus === "paga";
+  const isMinibarClosed = minibar?.billStatus === "fechada" || isMinibarPaid;
   const [dayQuantities, setDayQuantities] = useState<Record<string, number>>({});
   const [hasMinibarConsumption, setHasMinibarConsumption] = useState(false);
 
@@ -167,7 +168,7 @@ export function ChecklistDetail({
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-heading text-lg">Consumo de frigobar</h3>
               <div className="flex items-center gap-2">
-                {isMinibarClosed && <Badge variant="secondary">Conta fechada</Badge>}
+                {isMinibarClosed && <Badge variant="secondary">{isMinibarPaid ? "Conta paga" : "Conta fechada"}</Badge>}
                 <Label htmlFor="minibar-consumption" className="text-sm font-normal">
                   Houve consumo de frigobar?
                 </Label>
@@ -185,7 +186,9 @@ export function ChecklistDetail({
             </div>
             {isMinibarClosed ? (
               <p className="text-xs text-muted-foreground">
-                A conta do hóspede está fechada: lance esse consumo em Consumo por suítes &gt; Lançar consumo adicional.
+                {isMinibarPaid
+                  ? "A conta do hóspede já foi paga: não é possível lançar consumo de frigobar. Se quiser, registre nas observações."
+                  : "A conta do hóspede está fechada: lance esse consumo em Consumo por suítes > Lançar consumo adicional."}
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">

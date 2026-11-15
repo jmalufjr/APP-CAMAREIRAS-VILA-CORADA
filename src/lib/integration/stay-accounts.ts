@@ -222,7 +222,7 @@ export async function buildIntegrationAccount(supabase: SupabaseClient, bill: Bi
 }
 
 export async function getStayAccount(supabase: SupabaseClient, accountId: string): Promise<IntegrationAccount | null> {
-  const { data: bill } = await supabase.from("room_bills").select(BILL_SELECT).eq("id", accountId).maybeSingle();
+  const { data: bill } = await supabase.from("room_bills").select(BILL_SELECT).eq("id", accountId).not("room_id", "is", null).maybeSingle();
   if (!bill) return null;
   return buildIntegrationAccount(supabase, bill as unknown as BillRow);
 }
@@ -242,7 +242,7 @@ export async function listStayAccounts(
   supabase: SupabaseClient,
   { cursor, limit }: { cursor: string | null; limit: number }
 ): Promise<StayAccountsPage> {
-  let query = supabase.from("room_bills").select(BILL_SELECT).order("id", { ascending: true }).limit(limit + 1);
+  let query = supabase.from("room_bills").select(BILL_SELECT).not("room_id", "is", null).order("id", { ascending: true }).limit(limit + 1);
   if (cursor) query = query.gt("id", cursor);
   const { data: bills } = await query;
 

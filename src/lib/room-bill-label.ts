@@ -10,9 +10,12 @@ export function roomSlotLabel(
     guestNameHint: string | null;
     stayCheckIn?: string | null;
     stayCheckOut?: string | null;
+    isWalkin?: boolean;
   },
   options: { withDates?: boolean } = {}
 ): string {
+  // Conta avulsa: sem suíte e sem datas de estadia — só "Avulsa — Nome".
+  if (room.isWalkin) return room.guestNameHint ? `Avulsa — ${room.guestNameHint}` : "Avulsa";
   const base = room.guestNameHint ? `Suíte ${room.room_number} — ${room.guestNameHint}` : `Suíte ${room.room_number}`;
   if (options.withDates && room.stayCheckIn && room.stayCheckOut) {
     return `${base} (${formatDateShortPt(room.stayCheckIn)} a ${formatDateShortPt(room.stayCheckOut)})`;

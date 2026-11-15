@@ -334,7 +334,9 @@ export interface PoolbarItem {
 
 export interface RoomBill {
   id: string;
-  room_id: string;
+  // null = conta avulsa (ex-hóspede, sem suíte).
+  room_id: string | null;
+  is_walkin: boolean;
   status: RoomBillStatus;
   guest_slot: RoomBillGuestSlot;
   guest_name_hint: string | null;

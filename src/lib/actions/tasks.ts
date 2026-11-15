@@ -6,7 +6,7 @@ import { OCCURRENCE_PHOTOS_BUCKET } from "@/lib/occurrence-photos";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { syncStaysPlanning } from "@/lib/actions/stays-sync";
-import { findLastNightOccupant, ensureBillForOccupant } from "@/lib/room-occupancy";
+import { findLastNightOccupant, ensureBillForOccupant, hasPaidBillOnly } from "@/lib/room-occupancy";
 
 export async function claimTask(taskId: string) {
   const supabase = await createClient();
@@ -145,6 +145,12 @@ export async function finalizeService(input: FinalizeServiceInput) {
       return {
         error:
           "Não foi possível identificar o hóspede que dormiu nesta suíte na noite anterior para lançar o frigobar. Tente novamente em instantes ou avise o administrador.",
+      };
+    }
+    if (await hasPaidBillOnly(supabase, task.room_id as string, occupant)) {
+      return {
+        error:
+          "A conta deste hóspede já foi paga: o consumo de frigobar não pode mais ser lançado. Desligue “Houve consumo de frigobar?” e, se quiser, registre nas observações.",
       };
     }
     try {

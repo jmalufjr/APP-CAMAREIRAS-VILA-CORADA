@@ -19,11 +19,11 @@ function revalidateComandaPaths() {
 }
 
 export async function submitComanda(
-  roomId: string,
+  roomId: string | null,
   items: ComandaItemInput[],
   billId: string
 ) {
-  if (!roomId || !billId) return { error: "Selecione a suíte." };
+  if (!billId) return { error: "Selecione a suíte." };
   const validItems = items.filter((i) => i.quantity > 0);
   if (validItems.length === 0) return { error: "Selecione ao menos um item com quantidade." };
 
@@ -42,12 +42,12 @@ export async function submitComanda(
 // Pedido novo com a assinatura do hóspede (imagem PNG em data URL). O pedido e a assinatura são
 // gravados juntos, na mesma transação; a hora da assinatura é a do servidor.
 export async function submitComandaSigned(
-  roomId: string,
+  roomId: string | null,
   items: ComandaItemInput[],
   billId: string,
   signaturePng: string
 ) {
-  if (!roomId || !billId) return { error: "Selecione a suíte." };
+  if (!billId) return { error: "Selecione a suíte." };
   const validItems = items.filter((i) => i.quantity > 0);
   if (validItems.length === 0) return { error: "Selecione ao menos um item com quantidade." };
   if (!signaturePng.startsWith("data:image/png;base64,")) return { error: "Assinatura inválida." };
@@ -68,11 +68,11 @@ export async function submitComandaSigned(
 
 export async function editComanda(
   comandaId: string,
-  roomId: string,
+  roomId: string | null,
   items: ComandaItemInput[],
   billId: string
 ) {
-  if (!roomId || !billId) return { error: "Selecione a suíte." };
+  if (!billId) return { error: "Selecione a suíte." };
   const validItems = items.filter((i) => i.quantity > 0);
   if (validItems.length === 0) return { error: "Selecione ao menos um item com quantidade." };
 
@@ -110,7 +110,7 @@ export async function cancelComanda(comandaId: string, ingredientsRecovered: boo
 
 export interface ComandaListItem {
   id: string;
-  room_id: string;
+  room_id: string | null;
   room_number: string;
   sequence_number: number;
   // Número exibido nas telas ("Comanda #N") — sequencial por mês, pela
@@ -134,6 +134,7 @@ export interface ComandaListItem {
   // comanda por suíte/hóspede (ver src/lib/room-bill-label.ts), no lugar
   // de mostrar só o número da suíte.
   guestNameHint: string | null;
+  isWalkin: boolean;
   // Assinatura do hóspede (imagem PNG em data URL) e quando foi assinada; nulos em comandas antigas.
   signaturePng: string | null;
   signedAt: string | null;
@@ -150,7 +151,7 @@ export interface ComandaListItemLine {
 
 type ComandaRow = {
   id: string;
-  room_id: string;
+  room_id: string | null;
   sequence_number: number;
   monthly_number: number | null;
   status: ComandaStatus;
@@ -161,7 +162,7 @@ type ComandaRow = {
   rooms: { number: string } | null;
   created_by_profile: { name: string } | null;
   last_action_by_profile: { name: string } | null;
-  room_bills: { paid_at: string | null; guest_name_hint: string | null } | null;
+  room_bills: { paid_at: string | null; guest_name_hint: string | null; is_walkin: boolean } | null;
 };
 
 type ComandaItemRow = {
@@ -173,7 +174,7 @@ type ComandaItemRow = {
 };
 
 const COMANDA_ROW_SELECT =
-  "id, room_id, sequence_number, monthly_number, status, created_at, last_action_at, signature_png, signed_at, rooms(number), created_by_profile:profiles!bar_comandas_created_by_fkey(name), last_action_by_profile:profiles!bar_comandas_last_action_by_fkey(name), room_bills!inner(status, paid_at, guest_name_hint)";
+  "id, room_id, sequence_number, monthly_number, status, created_at, last_action_at, signature_png, signed_at, rooms(number), created_by_profile:profiles!bar_comandas_created_by_fkey(name), last_action_by_profile:profiles!bar_comandas_last_action_by_fkey(name), room_bills!inner(status, paid_at, guest_name_hint, is_walkin)";
 
 // Busca os itens de um conjunto de comandas já embutidos no resultado da
 // lista (em vez de buscar item a item quando o usuário abre o modal de
@@ -222,6 +223,7 @@ async function attachItemsAndMap(
       total: items.reduce((sum, i) => sum + i.subtotal, 0),
       bill_paid_at: r.room_bills?.paid_at ?? null,
       guestNameHint: r.room_bills?.guest_name_hint ?? null,
+      isWalkin: r.room_bills?.is_walkin ?? false,
       signaturePng: r.signature_png,
       signedAt: r.signed_at,
     };
@@ -293,7 +295,7 @@ export async function getInactiveComandas(days = 7): Promise<ComandaListItem[]> 
 // ---------- Leitura: dados para o formulário "Novo pedido" / edição ----------
 
 export interface ComandaFormData {
-  room_id: string;
+  room_id: string | null;
   quantities: Record<string, number>;
   // Status da comanda em si e da conta a que ela pertence NESTE MOMENTO —
   // não confundir com o status da conta CORRENTE do quarto: uma comanda
@@ -342,11 +344,12 @@ export async function getComandaForEdit(comandaId: string): Promise<ComandaFormD
 }
 
 export interface RoomOption {
-  room_id: string;
+  room_id: string | null;
   bill_id: string;
   room_number: string;
   billStatus: "aberta" | "fechada" | "reaberta" | "paga";
   guestNameHint: string | null;
+  isWalkin: boolean;
 }
 
 // Só aparecem as contas de hóspedes que AINDA estão na pousada (check-out hoje ou depois — inclui
@@ -361,24 +364,37 @@ export async function getRoomsForComandaSelector(): Promise<RoomOption[]> {
     supabase.from("rooms").select("id, number").eq("active", true).order("position"),
     supabase
       .from("room_bills")
-      .select("id, room_id, status, guest_name_hint, stay_check_in, available_for_new_orders, stay_check_out")
+      .select("id, room_id, status, guest_name_hint, stay_check_in, available_for_new_orders, stay_check_out, is_walkin")
       .neq("status", "paga")
       .eq("available_for_new_orders", true)
       .gte("stay_check_out", today),
   ]);
 
-  return (rooms ?? []).flatMap((room) =>
+  const suiteOptions = (rooms ?? []).flatMap((room) =>
     (bills ?? [])
       .filter((b) => b.room_id === room.id)
       .sort((x, y) => String(x.stay_check_in ?? "").localeCompare(String(y.stay_check_in ?? "")))
       .map((b) => ({
-        room_id: room.id as string,
+        room_id: room.id as string | null,
         bill_id: b.id as string,
         room_number: room.number as string,
         billStatus: b.status as RoomOption["billStatus"],
         guestNameHint: (b.guest_name_hint as string | null) ?? null,
+        isWalkin: false,
       }))
   );
+  // Contas avulsas do dia (aparecem como "Avulsa — Nome") depois das suítes.
+  const walkinOptions = (bills ?? [])
+    .filter((b) => b.is_walkin)
+    .map((b) => ({
+      room_id: null as string | null,
+      bill_id: b.id as string,
+      room_number: "",
+      billStatus: b.status as RoomOption["billStatus"],
+      guestNameHint: (b.guest_name_hint as string | null) ?? null,
+      isWalkin: true,
+    }));
+  return [...suiteOptions, ...walkinOptions];
 }
 
 // ---------- Leitura: comissão de 10% do bar por camareira (Resumo Executivo) ----------
