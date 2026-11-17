@@ -206,12 +206,6 @@ function RoomAccordionItem({ room, minibarItems, isAdmin }: { room: RoomBillOver
   // escolhe fazer, não uma pergunta sobre o que já existe na conta.
   const [isLaunchingAdditional, setIsLaunchingAdditional] = useState(false);
 
-  // "reaberta": edição sempre disponível; por padrão soma ao que já existe
-  // (aditivo). A camareira pode optar por zerar e relançar tudo do zero
-  // ("integral") — essa escolha nunca é persistida: volta a ser aditiva
-  // sempre que a conta passa por um novo ciclo fechar -> reabrir.
-  const [isIntegralMode, setIsIntegralMode] = useState(false);
-
   // Base sobre a qual os steppers somam (modo aditivo): o total que já
   // existia no momento em que a edição começou. O que o stepper mostra é
   // só a quantidade sendo adicionada agora (autônomo, sempre começa em
@@ -232,11 +226,10 @@ function RoomAccordionItem({ room, minibarItems, isAdmin }: { room: RoomBillOver
   const [trackedStatus, setTrackedStatus] = useState(room.status);
   if (room.status !== trackedStatus) {
     setTrackedStatus(room.status);
-    if (room.status === "reaberta") {
-      setIsIntegralMode(false);
-      setBaseQty(initialMinibarQty);
-      setAdditionalQty(zeroQty);
-    }
+    // Aberta ou reaberta: a conta sempre volta ao mesmo aspecto, com o lançamento adicional fechado.
+    setIsLaunchingAdditional(false);
+    setBaseQty(initialMinibarQty);
+    setAdditionalQty(zeroQty);
   }
 
   function runAction(action: () => Promise<{ error?: string } | undefined>, successMessage?: string) {
@@ -286,38 +279,6 @@ function RoomAccordionItem({ room, minibarItems, isAdmin }: { room: RoomBillOver
     }
   }
 
-  function handleToggleIntegralMode(checked: boolean) {
-    if (checked) {
-      if (
-        !confirm(
-          "Isso vai zerar todo o consumo de frigobar já lançado nessa conta, para lançar tudo novamente do zero. Confirma?"
-        )
-      ) {
-        return;
-      }
-      startTransition(async () => {
-        const results = await Promise.all(
-          minibarItems.map((item) => setMinibarConsumption(room.bill_id, item.id, 0))
-        );
-        const failed = results.find((r) => r?.error);
-        if (failed?.error) {
-          toast.error(failed.error);
-          return;
-        }
-        setIsIntegralMode(true);
-        setBaseQty(zeroQty);
-        setAdditionalQty(zeroQty);
-        router.refresh();
-      });
-    } else {
-      // Volta a ser aditivo, preservando o que já está lançado agora (não
-      // volta pro valor de antes de entrar no modo integral).
-      setIsIntegralMode(false);
-      setBaseQty(initialMinibarQty);
-      setAdditionalQty(zeroQty);
-    }
-  }
-
   function handleConfirmPayment() {
     if (!paymentMethod) {
       toast.error("Selecione a forma de pagamento.");
@@ -328,8 +289,7 @@ function RoomAccordionItem({ room, minibarItems, isAdmin }: { room: RoomBillOver
     setPaymentMethod("");
   }
 
-  const showEditableMinibar =
-    room.status === "reaberta" || (room.status === "aberta" && isLaunchingAdditional);
+  const showEditableMinibar = (room.status === "aberta" || room.status === "reaberta") && isLaunchingAdditional;
 
   return (
     <AccordionItem value={room.bill_id}>
@@ -337,7 +297,6 @@ function RoomAccordionItem({ room, minibarItems, isAdmin }: { room: RoomBillOver
         <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           <span className="font-heading text-base">{roomSlotLabel(room, { withDates: true })}</span>
           {room.status === "fechada" && <Badge variant="secondary">Conta fechada</Badge>}
-          {room.status === "reaberta" && <Badge variant="outline">Conta reaberta</Badge>}
         </span>
         <span className="text-xs text-muted-foreground mr-2">R$ {room.grandTotal.toFixed(2)}</span>
       </AccordionTrigger>
@@ -351,7 +310,7 @@ function RoomAccordionItem({ room, minibarItems, isAdmin }: { room: RoomBillOver
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-medium text-muted-foreground">Frigobar</p>
-                {room.status === "aberta" && (
+                {(room.status === "aberta" || room.status === "reaberta") && (
                   <div className="flex items-center gap-2">
                     <Label
                       htmlFor={`launch-additional-${room.bill_id}`}
@@ -368,28 +327,13 @@ function RoomAccordionItem({ room, minibarItems, isAdmin }: { room: RoomBillOver
                   </div>
                 )}
               </div>
-              {room.status === "reaberta" && (
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Lançamento adicional de consumo</p>
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      id={`zero-relaunch-${room.bill_id}`}
-                      checked={isIntegralMode}
-                      disabled={isPending}
-                      onCheckedChange={(checked) => handleToggleIntegralMode(!!checked)}
-                    />
-                    <Label
-                      htmlFor={`zero-relaunch-${room.bill_id}`}
-                      className="text-xs font-normal text-muted-foreground"
-                    >
-                      Selecione aqui apenas se quiser zerar o consumo de frigobar e lançar todo o consumo
-                      novamente
-                    </Label>
-                  </div>
-                </div>
-              )}
-              {showEditableMinibar ? (
-                <div className="space-y-1.5">
+              <ConsumptionMatrixTable
+                matrix={room.minibarMatrix}
+                emptyText="Sem consumo de frigobar."
+                serviceHref={isAdmin ? (taskId) => `/dashboard/tarefas/${taskId}` : undefined}
+              />
+              {showEditableMinibar && (
+                <div className="space-y-1.5 pt-2">
                   {minibarItems.map((item) => (
                     <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-sm">
                       <span className="min-w-0">{item.name}</span>
@@ -401,12 +345,6 @@ function RoomAccordionItem({ room, minibarItems, isAdmin }: { room: RoomBillOver
                     </div>
                   ))}
                 </div>
-              ) : (
-                <ConsumptionMatrixTable
-                  matrix={room.minibarMatrix}
-                  emptyText="Sem consumo de frigobar."
-                  serviceHref={isAdmin ? (taskId) => `/dashboard/tarefas/${taskId}` : undefined}
-                />
               )}
             </div>
             )}

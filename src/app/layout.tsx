@@ -1,3 +1,4 @@
+import { NavTracker } from "@/components/shared/nav-tracker";
 import type { Metadata } from "next";
 import { Montserrat, Playfair_Display, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
@@ -44,6 +45,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           disableTransitionOnChange
         >
           {children}
+          <NavTracker />
           <Toaster richColors position="top-center" />
         </ThemeProvider>
       </body>
