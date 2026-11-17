@@ -25,8 +25,15 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
 };
 
 // Rótulo do status de um serviço, com o motivo quando o hóspede não quis o serviço.
-export function taskStatusLabel(task: { status: TaskStatus; guest_declined?: boolean | null }): string {
-  if (task.status === "cancelado" && task.guest_declined) return "Hóspede não quis o serviço";
+export function taskStatusLabel(task: {
+  status: TaskStatus;
+  guest_declined?: boolean | null;
+  declined_restock?: boolean | null;
+}): string {
+  if (task.status === "cancelado" && task.guest_declined) return "Hóspede não quis o serviço e não houve reposição de frigobar";
+  if (task.guest_declined && task.declined_restock) {
+    return task.status === "concluido" ? "Não realizado a pedido, com reposição de frigobar" : "Hóspede não quis o serviço — reposição de frigobar em andamento";
+  }
   return TASK_STATUS_LABELS[task.status];
 }
 
@@ -177,6 +184,7 @@ export interface DailyRoomTask {
   stays_locked: boolean;
   // Hóspede não quis o serviço (arrumação/troca): o serviço fica cancelado com este motivo.
   guest_declined: boolean;
+  declined_restock: boolean;
   // Arrumação em que houve troca de roupa de cama e banho a pedido do hóspede.
   bedlinen_changed: boolean;
   // Revisão habilitada pelo admin/gerente no Planejamento diário (padrão: dispensada).

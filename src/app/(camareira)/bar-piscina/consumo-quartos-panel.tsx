@@ -16,6 +16,7 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionPanel } from "@/co
 import { formatDateTimePt, todayKey } from "@/lib/date";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConsumptionMatrixTable } from "@/components/shared/consumption-matrix-table";
 import {
   Dialog,
   DialogContent,
@@ -34,12 +35,15 @@ export function ConsumoQuartosPanel({
   minibarItems,
   recentlyPaid,
   paidCard,
+  isAdmin = false,
 }: {
   overview: RoomBillOverview[];
   minibarItems: MinibarItem[];
   recentlyPaid: RecentlyPaidBill[];
   // Admin: no lugar do card simples de contas pagas, passa o card com PDF e reenvio de e-mail.
   paidCard?: React.ReactNode;
+  // Admin: as colunas de serviço do frigobar abrem a tela do serviço.
+  isAdmin?: boolean;
 }) {
   const inHouse = overview.filter((r) => r.group === "in_house");
   const former = overview.filter((r) => r.group === "former");
@@ -62,7 +66,7 @@ export function ConsumoQuartosPanel({
           ) : (
             <Accordion className="space-y-2">
               {inHouse.map((room) => (
-                <RoomAccordionItem key={room.bill_id} room={room} minibarItems={minibarItems} />
+                <RoomAccordionItem key={room.bill_id} room={room} minibarItems={minibarItems} isAdmin={isAdmin} />
               ))}
             </Accordion>
           )}
@@ -82,7 +86,7 @@ export function ConsumoQuartosPanel({
           ) : (
             <Accordion className="space-y-2">
               {former.map((room) => (
-                <RoomAccordionItem key={room.bill_id} room={room} minibarItems={minibarItems} />
+                <RoomAccordionItem key={room.bill_id} room={room} minibarItems={minibarItems} isAdmin={isAdmin} />
               ))}
             </Accordion>
           )}
@@ -188,7 +192,7 @@ function WalkinDialogButton() {
   );
 }
 
-function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; minibarItems: MinibarItem[] }) {
+function RoomAccordionItem({ room, minibarItems, isAdmin }: { room: RoomBillOverview; minibarItems: MinibarItem[]; isAdmin: boolean }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -342,7 +346,7 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
           {room.isWalkin && room.walkinPhone && (
             <p className="text-xs text-muted-foreground">Telefone: {room.walkinPhone}</p>
           )}
-          <div className={room.isWalkin ? "grid gap-4" : "grid sm:grid-cols-2 gap-x-8 gap-y-4"}>
+          <div className="grid gap-4">
             {!room.isWalkin && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">
@@ -398,19 +402,11 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
                   ))}
                 </div>
               ) : (
-                <div className="space-y-1.5">
-                  {room.minibarItems.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between text-sm">
-                      <span>
-                        {item.name} <span className="text-muted-foreground">× {item.quantity}</span>
-                      </span>
-                      <span>R$ {item.subtotal.toFixed(2)}</span>
-                    </div>
-                  ))}
-                  {room.minibarItems.length === 0 && (
-                    <p className="text-sm text-muted-foreground py-2">Sem consumo em aberto.</p>
-                  )}
-                </div>
+                <ConsumptionMatrixTable
+                  matrix={room.minibarMatrix}
+                  emptyText="Sem consumo de frigobar."
+                  serviceHref={isAdmin ? (taskId) => `/dashboard/tarefas/${taskId}` : undefined}
+                />
               )}
             </div>
             )}
@@ -418,19 +414,7 @@ function RoomAccordionItem({ room, minibarItems }: { room: RoomBillOverview; min
               <p className="text-xs font-medium text-muted-foreground">
                 Bar da piscina <span className="font-normal">(via comandas)</span>
               </p>
-              <div className="space-y-1.5">
-                {room.poolbarItems.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between text-sm">
-                    <span>
-                      {item.name} <span className="text-muted-foreground">× {item.quantity}</span>
-                    </span>
-                    <span>R$ {item.subtotal.toFixed(2)}</span>
-                  </div>
-                ))}
-                {room.poolbarItems.length === 0 && (
-                  <p className="text-sm text-muted-foreground py-2">Nenhuma comanda ativa para esta suíte.</p>
-                )}
-              </div>
+              <ConsumptionMatrixTable matrix={room.barMatrix} emptyText="Nenhuma comanda ativa para esta suíte." />
             </div>
           </div>
 

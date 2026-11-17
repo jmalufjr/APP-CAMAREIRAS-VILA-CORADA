@@ -421,12 +421,13 @@ export async function syncStaysPlanning(options?: SyncOptions) {
     const earliest = stayStarts.reduce((a, b) => (a < b ? a : b));
     const { data: pastTasks } = await supabase
       .from("daily_room_tasks")
-      .select("room_id, date, task_type, status, bedlinen_changed")
+      .select("room_id, date, task_type, status, bedlinen_changed, guest_declined")
       .gte("date", earliest)
       .lte("date", today);
     (pastTasks ?? []).forEach((t) => {
       const executed = t.date < today ? doneStatuses.has(t.status as string) : t.status !== "cancelado";
-      const isTroca = t.task_type === "troca" || (t.task_type === "arrumacao" && t.bedlinen_changed === true);
+      // Serviço recusado pelo hóspede (mesmo com reposição de frigobar) nunca conta como troca feita.
+      const isTroca = !t.guest_declined && (t.task_type === "troca" || (t.task_type === "arrumacao" && t.bedlinen_changed === true));
       const list = historyByRoom.get(t.room_id as string) ?? [];
       list.push({ date: t.date as string, trocaDone: executed && isTroca });
       historyByRoom.set(t.room_id as string, list);

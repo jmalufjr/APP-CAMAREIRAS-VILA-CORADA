@@ -69,6 +69,18 @@ export async function declineServiceByGuest(taskId: string) {
   return { success: true };
 }
 
+// O hóspede não quis o serviço, mas HAVERÁ reposição de frigobar: o serviço segue para uma tela sem
+// checklist (só frigobar, ocorrências e observações) e termina como "não realizado a pedido, com reposição".
+export async function declineServiceWithRestock(taskId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("decline_service_with_restock", { p_task_id: taskId });
+  if (error) return { error: error.message };
+  recalculatePlanningAfterResponse();
+  revalidatePath("/tarefas", "layout");
+  revalidatePath("/planejamento");
+  return { success: true };
+}
+
 // Arrumação: marca que houve troca de roupa de cama e banho a pedido do hóspede (antecipa a troca).
 export async function setBedlinenChanged(taskId: string, value: boolean) {
   const supabase = await createClient();

@@ -88,7 +88,7 @@ export function PlanningBoard({
                 <TableCell className="font-medium">{room.number}</TableCell>
                 <TableCell>
                   <Select
-                    value={task && !(task.status === "cancelado" && task.guest_declined) ? task.task_type : "none"}
+                    value={task && !task.guest_declined ? task.task_type : "none"}
                     onValueChange={(v) => handleTaskTypeChange(room.id, v)}
                     disabled={isPending}
                   >

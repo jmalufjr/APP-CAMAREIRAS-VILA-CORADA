@@ -79,8 +79,11 @@ export function ChecklistDetail({
     setLocalChecks((prev) => prev.map((c) => (c.id === checkId ? { ...c, checked: next } : c)));
   }
 
+  // Recusa com reposição de frigobar: sem checklist (só frigobar, ocorrências e observações).
+  const restockMode = task.declined_restock;
+
   async function handleFinalize() {
-    if (!localChecks.every((c) => c.checked)) {
+    if (!restockMode && !localChecks.every((c) => c.checked)) {
       toast.error("Marque todos os itens do checklist antes de finalizar o serviço.");
       return;
     }
@@ -93,7 +96,7 @@ export function ChecklistDetail({
         : [];
       const result = await finalizeService({
         taskId: task.id,
-        checkedIds: localChecks.filter((c) => c.checked).map((c) => c.id),
+        checkedIds: restockMode ? [] : localChecks.filter((c) => c.checked).map((c) => c.id),
         notes,
         bedlinenChanged,
         occurrences: drafts.map((d) => ({ categoryId: d.categoryId, description: d.description })),
@@ -130,8 +133,14 @@ export function ChecklistDetail({
         </div>
       )}
 
+      {restockMode && (
+        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
+          O hóspede não quis o serviço. Registre apenas o consumo de frigobar, ocorrências de manutenção e observações.
+        </div>
+      )}
+
       <div className="space-y-2">
-        {localChecks.map((check) => (
+        {(restockMode ? [] : localChecks).map((check) => (
           <div
             key={check.id}
             className="flex items-center gap-2 rounded-lg border border-border bg-card p-3"

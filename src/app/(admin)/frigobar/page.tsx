@@ -39,6 +39,7 @@ export default async function FrigobarPage() {
             overview={overview}
             minibarItems={(minibarItems ?? []) as MinibarItem[]}
             recentlyPaid={recentlyPaid}
+            isAdmin
             paidCard={<PaidBillsCard bills={recentlyPaid} title="Contas pagas nos últimos 30 dias" emptyText="Nenhuma conta paga nos últimos 30 dias." />}
           />
         </TabsContent>

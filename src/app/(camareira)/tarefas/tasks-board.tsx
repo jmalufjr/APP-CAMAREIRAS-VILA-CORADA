@@ -1,17 +1,18 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import Link from "next/link";
 import type { DailyRoomTask, Profile } from "@/lib/types";
 import { TASK_STATUS_LABELS } from "@/lib/types";
-import { claimTask, unclaimTask, startTask, claimReview, claimExtraCleaningSecond, declineServiceByGuest } from "@/lib/actions/tasks";
+import { claimTask, unclaimTask, startTask, claimReview, claimExtraCleaningSecond, declineServiceByGuest, declineServiceWithRestock } from "@/lib/actions/tasks";
 import { taskTypeLabel } from "@/lib/task-type";
 import { formatDateShortPt } from "@/lib/date";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { BedDouble, ChevronRight, ClipboardCheck, Hand, Play, Undo2, UserX } from "lucide-react";
 
 export type TaskWithRoom = DailyRoomTask & {
@@ -262,6 +263,7 @@ function AvailableTaskCard({ task, isPast }: { task: TaskWithRoom; isPast?: bool
 function MyTaskCard({ task, today, meId }: { task: TaskWithRoom; today: string; meId: string }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+  const [declineOpen, setDeclineOpen] = useState(false);
   const isPast = task.date !== today;
   const inExecution = task.status === "pendente" || task.status === "em_andamento";
   // Sou a 2ª camareira da limpeza adicional: não tenho o checklist, só acompanho.
@@ -351,17 +353,7 @@ function MyTaskCard({ task, today, meId }: { task: TaskWithRoom; today: string; 
               size="sm"
               className="gap-1.5"
               disabled={isPending}
-              onClick={() => {
-                if (!confirm(`Confirmar que o hóspede da Suíte ${task.rooms.number} não quis o serviço de ${taskTypeLabel(task.task_type, false).toLowerCase()}? O serviço será cancelado.`)) return;
-                startTransition(async () => {
-                  const result = await declineServiceByGuest(task.id);
-                  if (result?.error) toast.error(result.error);
-                  else {
-                    toast.success("Registrado: o hóspede não quis o serviço.");
-                    router.refresh();
-                  }
-                });
-              }}
+              onClick={() => setDeclineOpen(true)}
             >
               <UserX size={14} />
               <span>Hóspede não quis o serviço</span>
@@ -369,6 +361,45 @@ function MyTaskCard({ task, today, meId }: { task: TaskWithRoom; today: string; 
           )}
         </CardContent>
       )}
+      <Dialog open={declineOpen} onOpenChange={setDeclineOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Suíte {task.rooms.number} — o hóspede não quis o serviço</DialogTitle>
+            <DialogDescription>Haverá reposição de frigobar?</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:flex-col sm:items-stretch">
+            <Button
+              disabled={isPending}
+              onClick={() =>
+                startTransition(async () => {
+                  const result = await declineServiceWithRestock(task.id);
+                  if (result?.error) toast.error(result.error);
+                  else router.push(`/tarefas/${task.id}`);
+                })
+              }
+            >
+              Sim, haverá reposição de frigobar
+            </Button>
+            <Button
+              variant="outline"
+              disabled={isPending}
+              onClick={() =>
+                startTransition(async () => {
+                  const result = await declineServiceByGuest(task.id);
+                  if (result?.error) toast.error(result.error);
+                  else {
+                    setDeclineOpen(false);
+                    toast.success("Registrado: o hóspede não quis o serviço e não houve reposição de frigobar.");
+                    router.refresh();
+                  }
+                })
+              }
+            >
+              Não, não haverá reposição
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

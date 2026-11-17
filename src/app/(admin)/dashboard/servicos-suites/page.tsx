@@ -15,7 +15,7 @@ export default async function ServicosSuitesPage() {
   const supabase = await createClient();
   const today = todayKey();
   const tomorrow = tomorrowKey();
-  const sevenDaysAgo = daysAgoKey(6);
+  const thirtyDaysAgo = daysAgoKey(29);
 
   const [{ data: todayTasks }, { data: tomorrowTasks }, serviceLogRows, { data: pendingReview }] = await Promise.all([
     supabase
@@ -23,9 +23,9 @@ export default async function ServicosSuitesPage() {
       .select("*, rooms(number), chooser:profiles!daily_room_tasks_assigned_to_fkey(name)")
       .eq("date", today),
     supabase.from("daily_room_tasks").select("*, rooms(number)").eq("date", tomorrow),
-    // Serviço concluído pelas camareiras nos últimos 7 dias, para a tabela
-    // "Serviços dos últimos 7 dias" abaixo dos cards de hoje/amanhã.
-    getServiceLogRows(supabase, sevenDaysAgo, today),
+    // Serviço concluído pelas camareiras nos últimos 30 dias, para a tabela
+    // "Serviços dos últimos 30 dias" abaixo dos cards de hoje/amanhã.
+    getServiceLogRows(supabase, thirtyDaysAgo, today),
     // Serviços que ainda não fecharam o ciclo (revisão / correção), de qualquer dia.
     supabase
       .from("daily_room_tasks")
@@ -50,7 +50,7 @@ export default async function ServicosSuitesPage() {
   return (
     <div className="space-y-6">
       <BackLink href="/dashboard" />
-      <PageHeader title="Serviços nas suítes" subtitle="Suítes de hoje e amanhã, e os serviços dos últimos 7 dias." />
+      <PageHeader title="Serviços nas suítes" subtitle="Suítes de hoje e amanhã, e os serviços dos últimos 30 dias." />
 
       <div className="grid lg:grid-cols-2 gap-6">
         <Card>
@@ -122,7 +122,7 @@ export default async function ServicosSuitesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-heading text-lg">Serviços dos últimos 7 dias</CardTitle>
+          <CardTitle className="font-heading text-lg">Serviços dos últimos 30 dias</CardTitle>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <ServiceLogTable rows={serviceLogRows} />

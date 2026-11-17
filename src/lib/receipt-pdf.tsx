@@ -1,5 +1,5 @@
 import { Document, Page, Text, View, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
-import { formatDateTimePt } from "@/lib/date";
+import { formatDateTimePt, formatDatePt } from "@/lib/date";
 
 export interface ReceiptLineItem {
   id: string;
@@ -8,8 +8,16 @@ export interface ReceiptLineItem {
   subtotal: number;
 }
 
+import type { ConsumptionMatrix } from "@/lib/bill-consumption";
+
 export interface ReceiptData {
   room_number: string;
+  // Hóspede e período da estadia, e as tabelas de consumo (frigobar por dia, bar por comanda).
+  guestName?: string | null;
+  stayCheckIn?: string | null;
+  stayCheckOut?: string | null;
+  minibarMatrix?: ConsumptionMatrix;
+  barMatrix?: ConsumptionMatrix;
   // Conta avulsa (ex-hóspede): room_number guarda o nome do hóspede; sem frigobar.
   isWalkin?: boolean;
   // Texto e data mostrados no subtítulo — variam conforme o motivo do PDF:
@@ -45,7 +53,41 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   empty: { color: "#888888", fontStyle: "italic" },
+  info: { fontSize: 11, marginBottom: 2 },
+  mHead: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#999999", paddingBottom: 3 },
+  mRow: { flexDirection: "row", paddingVertical: 2, borderBottomWidth: 0.5, borderBottomColor: "#dddddd" },
+  mName: { flexGrow: 1, flexBasis: 140 },
+  mCell: { width: 72, textAlign: "center" },
+  mSub: { fontSize: 8, color: "#666666" },
 });
+
+// Tabela de consumo: linhas = itens, colunas = dia/serviço (frigobar) ou comanda (bar), última coluna = total.
+function MatrixPdfTable({ matrix }: { matrix: ConsumptionMatrix }) {
+  if (matrix.rows.length === 0) return <Text style={styles.empty}>Sem consumo.</Text>;
+  return (
+    <View>
+      <View style={styles.mHead}>
+        <Text style={styles.mName}>Item</Text>
+        {matrix.columns.map((c) => (
+          <View key={c.key} style={styles.mCell}>
+            <Text>{c.title}</Text>
+            {c.subtitle ? <Text style={styles.mSub}>{c.subtitle}</Text> : null}
+          </View>
+        ))}
+        <Text style={styles.mCell}>Total</Text>
+      </View>
+      {matrix.rows.map((r) => (
+        <View key={r.name} style={styles.mRow}>
+          <Text style={styles.mName}>{r.name}</Text>
+          {r.cells.map((v, i) => (
+            <Text key={i} style={styles.mCell}>{v === 0 ? "-" : String(v)}</Text>
+          ))}
+          <Text style={styles.mCell}>{String(r.total)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 function LineItemRows({ items }: { items: ReceiptLineItem[] }) {
   if (items.length === 0) {
@@ -68,8 +110,13 @@ function LineItemRows({ items }: { items: ReceiptLineItem[] }) {
 function ReceiptDocument({ data }: { data: ReceiptData }) {
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
+      <Page size="A4" orientation={Math.max(data.minibarMatrix?.columns.length ?? 0, data.barMatrix?.columns.length ?? 0) > 5 ? "landscape" : "portrait"} style={styles.page}>
         <Text style={styles.title}>Vila Corada — {data.isWalkin ? `Conta avulsa — ${data.room_number}` : `Conta da Suíte ${data.room_number}`}</Text>
+        {data.guestName ? <Text style={styles.info}>Hóspede: {data.guestName}</Text> : null}
+        {!data.isWalkin ? <Text style={styles.info}>Suíte: {data.room_number}</Text> : null}
+        {data.stayCheckIn && data.stayCheckOut ? (
+          <Text style={styles.info}>Período da hospedagem: {formatDatePt(data.stayCheckIn)} a {formatDatePt(data.stayCheckOut)}</Text>
+        ) : null}
         <Text style={styles.subtitle}>
           {data.statusLabel} {formatDateTimePt(data.statusDate)}
         </Text>
@@ -77,12 +124,12 @@ function ReceiptDocument({ data }: { data: ReceiptData }) {
         {!data.isWalkin && (
           <>
             <Text style={styles.sectionTitle}>Frigobar</Text>
-            <LineItemRows items={data.minibarItems} />
+            {data.minibarMatrix ? <MatrixPdfTable matrix={data.minibarMatrix} /> : <LineItemRows items={data.minibarItems} />}
           </>
         )}
 
         <Text style={styles.sectionTitle}>Bar da piscina</Text>
-        <LineItemRows items={data.poolbarItems} />
+        {data.barMatrix ? <MatrixPdfTable matrix={data.barMatrix} /> : <LineItemRows items={data.poolbarItems} />}
 
         <View style={{ marginTop: 20 }}>
           {!data.isWalkin && (

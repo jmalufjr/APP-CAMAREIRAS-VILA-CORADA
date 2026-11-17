@@ -11,7 +11,7 @@ export async function getServiceLogRows(supabase: Supabase, from: string, to: st
   const { data } = await supabase
     .from("daily_room_tasks")
     .select(
-      "id, date, task_type, extra_cleaning, claimed_at, started_at, finished_at, review_claimed_at, review_finished_at, review_waived_by, correction_started_at, correction_finished_at, rooms(number), profiles!daily_room_tasks_assigned_to_fkey(name), second:profiles!daily_room_tasks_second_assigned_to_fkey(name), reviewer:profiles!daily_room_tasks_reviewed_by_fkey(name)"
+      "id, date, task_type, extra_cleaning, claimed_at, started_at, finished_at, review_claimed_at, review_finished_at, review_waived_by, declined_restock, correction_started_at, correction_finished_at, rooms(number), profiles!daily_room_tasks_assigned_to_fkey(name), second:profiles!daily_room_tasks_second_assigned_to_fkey(name), reviewer:profiles!daily_room_tasks_reviewed_by_fkey(name)"
     )
     .gte("date", from)
     .lte("date", to)
@@ -31,6 +31,7 @@ export async function getServiceLogRows(supabase: Supabase, from: string, to: st
       review_waived_by: string | null;
       correction_started_at: string | null;
       correction_finished_at: string | null;
+      declined_restock: boolean;
       rooms: { number: string };
       profiles: { name: string } | null;
       second: { name: string } | null;
@@ -54,6 +55,7 @@ export async function getServiceLogRows(supabase: Supabase, from: string, to: st
       review_finished_at: r.review_finished_at,
       correction_started_at: r.correction_started_at,
       correction_finished_at: r.correction_finished_at,
+      declined_restock: r.declined_restock,
     }))
     .sort((a, b) => (a.date !== b.date ? b.date.localeCompare(a.date) : Number(a.room_number) - Number(b.room_number)));
 }

@@ -23,6 +23,8 @@ export interface ServiceLogRow {
   review_finished_at: string | null;
   correction_started_at: string | null;
   correction_finished_at: string | null;
+  // Hóspede não quis o serviço, com reposição de frigobar (conta como serviço feito).
+  declined_restock?: boolean;
 }
 
 export function ServiceLogTable({ rows, emptyText }: { rows: ServiceLogRow[]; emptyText?: string }) {
@@ -60,7 +62,10 @@ export function ServiceLogTable({ rows, emptyText }: { rows: ServiceLogRow[]; em
             >
               <TableCell>{formatDateShortPt(r.date)}</TableCell>
               <TableCell>{r.room_number}</TableCell>
-              <TableCell>{taskTypeLabel(r.task_type, r.extra_cleaning)}</TableCell>
+              <TableCell>
+                {taskTypeLabel(r.task_type, r.extra_cleaning)}
+                {r.declined_restock && <span className="block text-xs text-muted-foreground">não realizado a pedido, com reposição de frigobar</span>}
+              </TableCell>
               <TableCell>{r.camareira_name ?? "—"}</TableCell>
               <TableCell>{time(inicio)}</TableCell>
               <TableCell>{time(r.finished_at)}</TableCell>

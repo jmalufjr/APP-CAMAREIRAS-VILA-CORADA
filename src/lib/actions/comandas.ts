@@ -336,6 +336,20 @@ export async function getInactiveComandasForPeriod(from: string, to: string): Pr
 
 // ---------- Leitura: dados para o formulário "Novo pedido" / edição ----------
 
+// Uma comanda só (página da comanda), com histórico e assinatura; `canModify` = quem lançou ou admin.
+export async function getComandaDetail(comandaId: string): Promise<{ comanda: ComandaListItem; canModify: boolean } | null> {
+  const supabase = await createClient();
+  const { data: row } = await supabase.from("bar_comandas").select(COMANDA_ROW_SELECT).eq("id", comandaId).maybeSingle();
+  if (!row) return null;
+  const [comanda] = await attachItemsAndMap(supabase, [row as unknown as ComandaRow]);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: me } = user ? await supabase.from("profiles").select("role").eq("id", user.id).single() : { data: null };
+  const canModify = me?.role === "admin" || (!!user && comanda.created_by_id === user.id);
+  return { comanda, canModify };
+}
+
 export interface ComandaFormData {
   room_id: string | null;
   quantities: Record<string, number>;

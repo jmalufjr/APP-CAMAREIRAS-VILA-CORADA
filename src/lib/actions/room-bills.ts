@@ -9,6 +9,7 @@ import {
   type PoolbarRow,
 } from "@/lib/room-bills";
 import { renderReceiptPdf, type ReceiptData } from "@/lib/receipt-pdf";
+import { buildMinibarMatrices, buildBarMatrices, emptyMatrix, type ConsumptionMatrix } from "@/lib/bill-consumption";
 import type { RoomBillStatus, ReceiptSettings, PaymentMethod } from "@/lib/types";
 import { startOfDayBrasiliaUtc, nextDayBrasiliaUtcBoundary, todayKey } from "@/lib/date";
 import { Resend } from "resend";
@@ -146,6 +147,9 @@ export interface RoomBillOverview {
   // Nome da camareira que fechou a conta corrente (null se ela nunca foi
   // fechada ainda — só existe uma vez que closed_by é gravado).
   closedByName: string | null;
+  // Tabelas de consumo por dia (frigobar) e por comanda (bar).
+  minibarMatrix: ConsumptionMatrix;
+  barMatrix: ConsumptionMatrix;
 }
 
 // Contas não pagas (abertas, fechadas ou reabertas), uma por hóspede/reserva, já separadas em
@@ -201,6 +205,7 @@ export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
   const mbRows = (minibarRows ?? []) as unknown as MinibarRow[];
   const pbRows = (poolbarRows ?? []) as unknown as PoolbarRow[];
   const roomNumber = new Map(roomList.map((r) => [r.id as string, r.number as string]));
+  const [minibarMatrices, barMatrices] = await Promise.all([buildMinibarMatrices(billIds), buildBarMatrices(billIds)]);
 
   return allBills
     .map((bill) => {
@@ -219,6 +224,8 @@ export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
         group: inHouse ? ("in_house" as const) : ("former" as const),
         ...totals,
         closedByName: bill.closed_by_profile?.name ?? null,
+        minibarMatrix: bill.is_walkin ? emptyMatrix() : (minibarMatrices.get(bill.id) ?? emptyMatrix()),
+        barMatrix: barMatrices.get(bill.id) ?? emptyMatrix(),
       };
     })
     .sort(
@@ -240,7 +247,7 @@ export async function getRoomBillReceiptData(billId: string): Promise<ReceiptDat
   const supabase = await createClient();
   const { data: bill } = await supabase
     .from("room_bills")
-    .select("status, paid_at, closed_at, service_charge_waived, is_walkin, guest_name_hint, rooms(number)")
+    .select("status, paid_at, closed_at, service_charge_waived, is_walkin, guest_name_hint, stay_check_in, stay_check_out, rooms(number)")
     .eq("id", billId)
     .single();
   if (!bill) return null;
@@ -276,7 +283,14 @@ export async function getRoomBillReceiptData(billId: string): Promise<ReceiptDat
   const room = bill as unknown as { rooms: { number: string } | null };
 
   const walkin = (bill as unknown as { is_walkin: boolean }).is_walkin;
+  const stay = bill as unknown as { guest_name_hint: string | null; stay_check_in: string | null; stay_check_out: string | null };
+  const [minibarMatrices, barMatrices] = await Promise.all([buildMinibarMatrices([billId]), buildBarMatrices([billId])]);
   return {
+    guestName: stay.guest_name_hint,
+    stayCheckIn: stay.stay_check_in,
+    stayCheckOut: stay.stay_check_out,
+    minibarMatrix: walkin ? emptyMatrix() : (minibarMatrices.get(billId) ?? emptyMatrix()),
+    barMatrix: barMatrices.get(billId) ?? emptyMatrix(),
     room_number: walkin ? ((bill as unknown as { guest_name_hint: string | null }).guest_name_hint ?? "—") : (room.rooms?.number ?? "—"),
     isWalkin: walkin,
     statusLabel,

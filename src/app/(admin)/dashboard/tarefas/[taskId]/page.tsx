@@ -1,9 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
-import { PageHeader } from "@/components/shared/page-header";
 import { BackLink } from "@/components/shared/back-link";
 import { taskTypeLabel } from "@/lib/task-type";
-import { formatDatePt, formatTimePt, formatDurationPt } from "@/lib/date";
+import { formatDatePt, formatTimePt, formatDurationPt, effectiveServiceStart } from "@/lib/date";
 import type { ChecklistType, DailyRoomTaskOccurrence } from "@/lib/types";
 import { ChecklistDetail } from "@/components/shared/checklist-detail";
 import { Card, CardContent } from "@/components/ui/card";
@@ -80,10 +79,17 @@ export default async function AdminTaskDetailPage({
   return (
     <div className="space-y-6">
       <BackLink href="/dashboard" />
-      <PageHeader
-        title={`Suíte ${room.number} — ${formatDatePt(task.date)}`}
-        subtitle={`Checklist de ${taskTypeLabel(task.task_type as ChecklistType, task.extra_cleaning).toLowerCase()} · ${camareiraName}`}
-      />
+      <div>
+        <h1 className="font-heading text-2xl sm:text-3xl text-primary">{`Suíte ${room.number} — ${formatDatePt(task.date)}`}</h1>
+        {/* Um ponto (≈1,3 px) menor que o título. */}
+        <p className="font-heading text-[22.7px] sm:text-[28.7px] leading-tight mt-1">
+          {`Checklist de ${taskTypeLabel(task.task_type as ChecklistType, task.extra_cleaning).toLowerCase()} · ${camareiraName}`}
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Início {time(effectiveServiceStart(task.claimed_at, task.started_at))} · Fim {time(task.finished_at)} · Duração{" "}
+          {formatDurationPt(effectiveServiceStart(task.claimed_at, task.started_at), task.finished_at)}
+        </p>
+      </div>
       {hasReview && (
         <Card>
           <CardContent className="space-y-3 text-sm">
