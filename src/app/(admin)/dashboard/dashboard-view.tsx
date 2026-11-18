@@ -42,14 +42,14 @@ type Accent = "amber" | "blue" | "emerald" | "rose" | "violet" | "teal" | "orang
 
 // Cada cartão tem uma cor de destaque (faixa no topo, fundo levemente tingido e marcador).
 const ACCENTS: Record<Accent, { card: string; chip: string; dot: string }> = {
-  amber: { card: "border-t-4 border-t-amber-500 bg-linear-to-br from-amber-500/20 via-card to-card", chip: "bg-amber-500/25 text-amber-700 dark:text-amber-300", dot: "bg-amber-500" },
-  blue: { card: "border-t-4 border-t-blue-500 bg-linear-to-br from-blue-500/20 via-card to-card", chip: "bg-blue-500/25 text-blue-700 dark:text-blue-300", dot: "bg-blue-500" },
-  emerald: { card: "border-t-4 border-t-emerald-500 bg-linear-to-br from-emerald-500/20 via-card to-card", chip: "bg-emerald-500/25 text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-500" },
-  rose: { card: "border-t-4 border-t-rose-500 bg-linear-to-br from-rose-500/20 via-card to-card", chip: "bg-rose-500/25 text-rose-700 dark:text-rose-300", dot: "bg-rose-500" },
-  violet: { card: "border-t-4 border-t-violet-500 bg-linear-to-br from-violet-500/20 via-card to-card", chip: "bg-violet-500/25 text-violet-700 dark:text-violet-300", dot: "bg-violet-500" },
-  teal: { card: "border-t-4 border-t-teal-500 bg-linear-to-br from-teal-500/20 via-card to-card", chip: "bg-teal-500/25 text-teal-700 dark:text-teal-300", dot: "bg-teal-500" },
-  orange: { card: "border-t-4 border-t-orange-500 bg-linear-to-br from-orange-500/20 via-card to-card", chip: "bg-orange-500/25 text-orange-700 dark:text-orange-300", dot: "bg-orange-500" },
-  sky: { card: "border-t-4 border-t-sky-500 bg-linear-to-br from-sky-500/20 via-card to-card", chip: "bg-sky-500/25 text-sky-700 dark:text-sky-300", dot: "bg-sky-500" },
+  amber: { card: "bg-linear-to-br from-amber-500/20 via-card to-card", chip: "bg-amber-500/25 text-amber-700 dark:text-amber-300", dot: "bg-amber-500" },
+  blue: { card: "bg-linear-to-br from-blue-500/20 via-card to-card", chip: "bg-blue-500/25 text-blue-700 dark:text-blue-300", dot: "bg-blue-500" },
+  emerald: { card: "bg-linear-to-br from-emerald-500/20 via-card to-card", chip: "bg-emerald-500/25 text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-500" },
+  rose: { card: "bg-linear-to-br from-rose-500/20 via-card to-card", chip: "bg-rose-500/25 text-rose-700 dark:text-rose-300", dot: "bg-rose-500" },
+  violet: { card: "bg-linear-to-br from-violet-500/20 via-card to-card", chip: "bg-violet-500/25 text-violet-700 dark:text-violet-300", dot: "bg-violet-500" },
+  teal: { card: "bg-linear-to-br from-teal-500/20 via-card to-card", chip: "bg-teal-500/25 text-teal-700 dark:text-teal-300", dot: "bg-teal-500" },
+  orange: { card: "bg-linear-to-br from-orange-500/20 via-card to-card", chip: "bg-orange-500/25 text-orange-700 dark:text-orange-300", dot: "bg-orange-500" },
+  sky: { card: "bg-linear-to-br from-sky-500/20 via-card to-card", chip: "bg-sky-500/25 text-sky-700 dark:text-sky-300", dot: "bg-sky-500" },
 };
 
 // Efeito de botão em relevo: sombra com "degrau" embaixo; ao passar o mouse sobe, ao clicar afunda.
@@ -126,7 +126,7 @@ function Panel({
   return (
     <Shell href={href} accent={accent} className={className}>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 font-heading text-lg">
+        <CardTitle className="flex items-center gap-2 font-heading text-[17px] group-data-[size=sm]/card:text-[17px]">
           <span className={`size-2.5 shrink-0 rounded-full ${a.dot}`} />
           {title}
         </CardTitle>
