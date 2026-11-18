@@ -53,21 +53,20 @@ const ACCENTS: Record<Accent, { card: string; chip: string; dot: string }> = {
 };
 
 // Efeito de botão em relevo: sombra com "degrau" embaixo; ao passar o mouse sobe, ao clicar afunda.
-const RAISED =
-  "h-full shadow-[0_4px_0_0_rgb(0_0_0/0.22),0_10px_18px_-6px_rgb(0_0_0/0.35)] transition-all duration-150";
+const RAISED = "shadow-[0_4px_0_0_#B08944,0_10px_18px_-6px_rgb(0_0_0/0.35)] transition-all duration-150";
 const RAISED_LINK =
-  "group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_0_0_rgb(0_0_0/0.22),0_14px_22px_-6px_rgb(0_0_0/0.4)] group-active:translate-y-[3px] group-active:shadow-[0_1px_0_0_rgb(0_0_0/0.22),0_2px_6px_-2px_rgb(0_0_0/0.3)]";
+  "group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_0_0_#B08944,0_14px_22px_-6px_rgb(0_0_0/0.4)] group-active:translate-y-[3px] group-active:shadow-[0_1px_0_0_#B08944,0_2px_6px_-2px_rgb(0_0_0/0.3)]";
 
 // Cartão inteiro clicável (quando tem href): leva à tela que amplia a informação do cartão.
-function Shell({ href, accent = "blue", className, children }: { href?: string; accent?: Accent; className?: string; children: React.ReactNode }) {
+function Shell({ href, accent = "blue", className, fill, children }: { href?: string; accent?: Accent; className?: string; fill?: boolean; children: React.ReactNode }) {
   const a = ACCENTS[accent];
   const card = (
-    <Card size="sm" className={`${RAISED} ${a.card} ${href ? RAISED_LINK : ""} ${href ? "" : (className ?? "")}`}>
+    <Card size="sm" className={`${RAISED} ${a.card} ${fill ? "h-full" : ""} ${href ? RAISED_LINK : ""} ${href ? "" : (className ?? "")}`}>
       {children}
     </Card>
   );
   return href ? (
-    <Link href={href} className={`group block h-full rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring ${className ?? ""}`}>
+    <Link href={href} className={`group block ${fill ? "h-full" : ""} rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring ${className ?? ""}`}>
       {card}
     </Link>
   ) : (
@@ -94,16 +93,16 @@ function Kpi({
 }) {
   const a = ACCENTS[accent ?? "blue"];
   return (
-    <Shell href={href} accent={accent}>
-      <CardContent className="flex h-full flex-col justify-center space-y-1">
-        <div className="flex items-start gap-2 text-xs font-medium text-foreground/80">
-          <span className={`flex size-6 shrink-0 items-center justify-center rounded-full ${a.chip}`}>
-            <Icon size={14} strokeWidth={2} />
+    <Shell href={href} accent={accent} fill>
+      <CardContent className="space-y-1.5">
+        <div className="flex items-start gap-2 text-base font-medium text-foreground/80">
+          <span className={`flex size-7 shrink-0 items-center justify-center rounded-full ${a.chip}`}>
+            <Icon size={16} strokeWidth={2} />
           </span>
           <span className="min-w-0 pt-0.5 leading-tight">{label}</span>
         </div>
-        <p className={`text-center text-2xl font-bold leading-none ${tone === "alert" ? "text-red-600 dark:text-red-400" : VALUE_COLOR}`}>{value}</p>
-        {sub && <p className="text-center text-[11px] leading-tight text-muted-foreground">{sub}</p>}
+        <p className={`text-3xl font-bold leading-none ${tone === "alert" ? "text-red-600 dark:text-red-400" : VALUE_COLOR}`}>{value}</p>
+        {sub && <p className="text-sm leading-tight text-muted-foreground">{sub}</p>}
       </CardContent>
     </Shell>
   );
@@ -113,7 +112,6 @@ function Panel({
   title,
   children,
   className,
-  large,
   href,
   accent,
 }: {
@@ -128,12 +126,12 @@ function Panel({
   return (
     <Shell href={href} accent={accent} className={className}>
       <CardHeader>
-        <CardTitle className={`flex items-center gap-2 font-heading ${large ? "text-base" : "text-sm"}`}>
+        <CardTitle className="flex items-center gap-2 font-heading text-lg">
           <span className={`size-2.5 shrink-0 rounded-full ${a.dot}`} />
           {title}
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex-1">{children}</CardContent>
+      <CardContent>{children}</CardContent>
     </Shell>
   );
 }
@@ -152,12 +150,12 @@ function MonthlyRankList({ title, items, current, previous, accent }: { title: s
   return (
     <Panel title={title} href="/frigobar" accent={accent}>
       {items.length === 0 ? (
-        <p className="text-xs text-muted-foreground">Sem consumo registrado em {monthName(current)}.</p>
+        <p className="text-base text-muted-foreground">Sem consumo registrado em {monthName(current)}.</p>
       ) : (
         <div className="space-y-2.5">
           {items.map((i, idx) => (
             <div key={i.name} className="space-y-0.5">
-              <div className="flex items-baseline justify-between gap-2 text-xs">
+              <div className="flex items-baseline justify-between gap-2 text-base">
                 <span className="min-w-0 truncate">
                   <span className="text-muted-foreground">{idx + 1}.</span> {i.name}
                 </span>
@@ -173,7 +171,7 @@ function MonthlyRankList({ title, items, current, previous, accent }: { title: s
               </div>
             </div>
           ))}
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Barra de cima: {monthName(current)} · barra de baixo: {monthName(previous)}.
           </p>
         </div>
@@ -189,7 +187,7 @@ function TopPie({ title, items, accent }: { title: string; items: RankedItem[]; 
   return (
     <Panel title={title} href="/frigobar" accent={accent}>
       {total === 0 ? (
-        <p className="text-xs text-muted-foreground">Sem consumo registrado.</p>
+        <p className="text-base text-muted-foreground">Sem consumo registrado.</p>
       ) : (
         <div className="space-y-2">
           <div className="h-36 w-full">
@@ -201,13 +199,13 @@ function TopPie({ title, items, accent }: { title: string; items: RankedItem[]; 
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                  contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 14 }}
                   formatter={(value, name) => [`${value} un.`, name]}
                 />
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <ul className="space-y-0.5 text-xs">
+          <ul className="space-y-0.5 text-base">
             {data.map((d, i) => (
               <li key={d.name} className="flex items-center gap-1.5">
                 <span className="size-2 shrink-0 rounded-full" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
@@ -224,7 +222,7 @@ function TopPie({ title, items, accent }: { title: string; items: RankedItem[]; 
 
 function ConsumptionColumn({ title, block, labels, accent }: { title: string; block: ConsumptionBlock; labels: { current: string; previous: string }; accent: Accent }) {
   return (
-    <div className="flex h-full flex-col gap-3 [&>*]:flex-1">
+    <div className="space-y-3">
       <MonthlyRankList title={title} items={block.monthly} current={labels.current} previous={labels.previous} accent={accent} />
       <TopPie title={`${title} · desde o início`} items={block.pie} accent={accent} />
     </div>
@@ -232,11 +230,11 @@ function ConsumptionColumn({ title, block, labels, accent }: { title: string; bl
 }
 
 function SuiteChips({ rooms, empty }: { rooms: string[]; empty: string }) {
-  if (rooms.length === 0) return <p className="text-xs text-muted-foreground">{empty}</p>;
+  if (rooms.length === 0) return <p className="text-base text-muted-foreground">{empty}</p>;
   return (
     <div className="flex flex-wrap gap-1">
       {rooms.map((n) => (
-        <span key={n} className="rounded-md border border-border px-1.5 py-0.5 text-xs font-medium">
+        <span key={n} className="rounded-md border border-border px-1.5 py-0.5 text-base font-medium">
           {n}
         </span>
       ))}
@@ -248,19 +246,20 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
   const bk = d.breakfast;
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="grid items-start gap-3 lg:grid-cols-3">
+        <div className="space-y-3">
         <Panel title="Suítes de hoje" href="/dashboard/servicos-suites" accent="amber">
           {d.todaySuites.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Nenhuma suíte planejada para hoje.</p>
+            <p className="text-base text-muted-foreground">Nenhuma suíte planejada para hoje.</p>
           ) : (
-            <ul className="max-h-72 space-y-1 overflow-y-auto">
+            <ul className="max-h-[28rem] space-y-1 overflow-y-auto">
               {d.todaySuites.map((t) => (
-                <li key={t.id} className="flex items-center justify-between gap-2 border-b border-border py-1 text-xs last:border-0">
-                  <span className="min-w-0 truncate">
+                <li key={t.id} className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 border-b border-border py-1 text-base last:border-0">
+                  <span className="min-w-0">
                     Suíte {t.room} · {t.label}
                   </span>
                   <span
-                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
+                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-sm font-medium ${
                       t.done ? "bg-emerald-600/15 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground"
                     }`}
                   >
@@ -270,13 +269,36 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
               ))}
             </ul>
           )}
-          <span className="mt-2 inline-block text-xs text-primary hover:underline">
+          <span className="mt-2 inline-block text-base text-primary hover:underline">
             Ver todos os serviços
           </span>
         </Panel>
 
+        <Panel title="Manutenção" href="/ocorrencias" accent="rose">
+          <div className="space-y-2 text-base">
+            <div className="flex items-baseline justify-between">
+              <span className="text-muted-foreground">Ocorrências hoje</span>
+              <span className="text-xl font-bold tabular-nums">{d.occurrences.today}</span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-muted-foreground">Em aberto (pendentes ou selecionadas)</span>
+              <span className="text-xl font-bold tabular-nums">{d.occurrences.open}</span>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <span className="text-primary hover:underline">
+                Ver ocorrências
+              </span>
+              <span className="text-primary hover:underline">
+                Manutenção preventiva
+              </span>
+            </div>
+          </div>
+        </Panel>
+
+        </div>
+        <div className="space-y-3">
         <Panel title="Chegadas e saídas de hoje" href="/chegadas-saidas/gerenciar" accent="blue">
-          <div className="space-y-3 text-xs">
+          <div className="space-y-3 text-base">
             <div>
               <p className="mb-1 flex items-center gap-1.5 font-medium">
                 <CalendarClock size={13} /> Chegadas ({d.arrivals.length})
@@ -316,8 +338,28 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
           </div>
         </Panel>
 
+        <Panel title="Suítes vagas, disponíveis para alugar" href="/dashboard/suites-disponiveis" accent="emerald">
+          <div className="space-y-3">
+            <div>
+              <p className="mb-1 flex items-center gap-1.5 text-base font-medium">
+                <Key size={13} /> Limpas ({d.suites.clean.length})
+              </p>
+              <SuiteChips rooms={d.suites.clean} empty="Nenhuma suíte limpa e vaga." />
+            </div>
+            <div>
+              <p className="mb-1 text-base font-medium text-muted-foreground">Sujas ({d.suites.dirty.length})</p>
+              <SuiteChips rooms={d.suites.dirty} empty="Nenhuma suíte suja e vaga." />
+            </div>
+            <span className="text-base text-primary hover:underline">
+              Ver detalhes
+            </span>
+          </div>
+        </Panel>
+
+        </div>
+        <div className="space-y-3">
         <Panel title="Mesas do café da manhã" href="/mesas/gerenciar" accent="orange">
-          <div className="space-y-3 text-xs">
+          <div className="space-y-3 text-base">
             {(
               [
                 ["Hoje", bk.today],
@@ -329,7 +371,7 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
                   <Coffee size={13} /> {label}
                 </span>
                 <span className="text-right tabular-nums">
-                  <span className="text-base font-bold">{v.tables}</span> mesas · <span className="text-base font-bold">{v.guests}</span> hóspedes
+                  <span className="text-xl font-bold">{v.tables}</span> mesas · <span className="text-xl font-bold">{v.guests}</span> hóspedes
                 </span>
               </div>
             ))}
@@ -338,49 +380,7 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
             </span>
           </div>
         </Panel>
-      </div>
-
-      <div className="grid gap-3 lg:grid-cols-3">
-        <Panel title="Suítes vagas, disponíveis para alugar" href="/dashboard/suites-disponiveis" accent="emerald">
-          <div className="space-y-3">
-            <div>
-              <p className="mb-1 flex items-center gap-1.5 text-xs font-medium">
-                <Key size={13} /> Limpas ({d.suites.clean.length})
-              </p>
-              <SuiteChips rooms={d.suites.clean} empty="Nenhuma suíte limpa e vaga." />
-            </div>
-            <div>
-              <p className="mb-1 text-xs font-medium text-muted-foreground">Sujas ({d.suites.dirty.length})</p>
-              <SuiteChips rooms={d.suites.dirty} empty="Nenhuma suíte suja e vaga." />
-            </div>
-            <span className="text-xs text-primary hover:underline">
-              Ver detalhes
-            </span>
-          </div>
-        </Panel>
-
-        <Panel title="Manutenção" href="/ocorrencias" accent="rose">
-          <div className="space-y-2 text-xs">
-            <div className="flex items-baseline justify-between">
-              <span className="text-muted-foreground">Ocorrências hoje</span>
-              <span className="text-base font-bold tabular-nums">{d.occurrences.today}</span>
-            </div>
-            <div className="flex items-baseline justify-between">
-              <span className="text-muted-foreground">Em aberto (pendentes ou selecionadas)</span>
-              <span className="text-base font-bold tabular-nums">{d.occurrences.open}</span>
-            </div>
-            <div className="flex gap-3 pt-1">
-              <span className="text-primary hover:underline">
-                Ver ocorrências
-              </span>
-              <span className="text-primary hover:underline">
-                Manutenção preventiva
-              </span>
-            </div>
-          </div>
-        </Panel>
-
-        <div className="grid gap-3">
+        <div className="space-y-3">
           <Kpi icon={CreditCard} accent="violet" label="Contas em aberto" value={String(d.accounts.open)} sub={brl(d.accounts.total)} href="/frigobar" />
           <Kpi
             icon={AlertTriangle}
@@ -398,13 +398,14 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
             href="/frigobar"
           />
         </div>
+        </div>
       </div>
 
       <div>
-        <p className="mb-2 text-xs font-medium text-muted-foreground">
+        <p className="mb-2 text-base font-medium text-muted-foreground">
           Mais consumidos no mês corrente ({monthName(d.monthLabels.current)}), com o mês anterior ao lado
         </p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <ConsumptionColumn title="Frigobar" block={d.top.frigobar} labels={d.monthLabels} accent="sky" />
           <ConsumptionColumn title="Bar · Petiscos" block={d.top.petiscos} labels={d.monthLabels} accent="orange" />
           <ConsumptionColumn title="Bar · Drinks" block={d.top.drinks} labels={d.monthLabels} accent="violet" />
@@ -438,12 +439,12 @@ function CentersPanel({ title, rows, note, accent }: { title: string; rows: Gere
   return (
     <Panel title={title} href="/contabil/resultado-mensal" accent={accent}>
       {rows.length === 0 ? (
-        <p className="text-xs text-muted-foreground">Sem dados.</p>
+        <p className="text-base text-muted-foreground">Sem dados.</p>
       ) : (
         <div className="space-y-2.5">
           {rows.map((c) => (
             <div key={c.center} className="space-y-1">
-              <div className="flex items-baseline justify-between gap-2 text-xs">
+              <div className="flex items-baseline justify-between gap-2 text-base">
                 <span className="min-w-0 truncate font-medium">{CENTER_LABELS[c.center] ?? c.center}</span>
                 <span className="shrink-0 tabular-nums text-muted-foreground">
                   {brl0(c.revenue)} − {brl0(c.expenses)}
@@ -457,7 +458,7 @@ function CentersPanel({ title, rows, note, accent }: { title: string; rows: Gere
               </div>
             </div>
           ))}
-          <p className="text-[11px] text-muted-foreground">Barra de cima: receita · barra de baixo: despesa.{note ? ` ${note}` : ""}</p>
+          <p className="text-sm text-muted-foreground">Barra de cima: receita · barra de baixo: despesa.{note ? ` ${note}` : ""}</p>
         </div>
       )}
     </Panel>
@@ -516,16 +517,16 @@ function GerencialView({ d, isGerente }: { d: GerencialDashboard; isGerente: boo
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartData} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis xAxisId="a" dataKey="label" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                  <XAxis xAxisId="a" dataKey="label" tick={{ fontSize: 14, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
                   <XAxis xAxisId="b" dataKey="label" hide />
-                  <YAxis yAxisId="rev" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
-                  <YAxis yAxisId="price" orientation="right" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={58} tickFormatter={(v) => `R$${Math.round(v)}`} />
-                  <YAxis yAxisId="occ" orientation="right" domain={[0, 100]} tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => `${v}%`} />
+                  <YAxis yAxisId="rev" tick={{ fontSize: 14, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
+                  <YAxis yAxisId="price" orientation="right" tick={{ fontSize: 14, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={58} tickFormatter={(v) => `R$${Math.round(v)}`} />
+                  <YAxis yAxisId="occ" orientation="right" domain={[0, 100]} tick={{ fontSize: 14, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => `${v}%`} />
                   <Tooltip
-                    contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                    contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 14 }}
                     formatter={(value, name) => (name === "Ocupação" ? [`${value}%`, name] : [brl(Number(value)), name])}
                   />
-                  <Legend wrapperStyle={{ fontSize: 13 }} />
+                  <Legend wrapperStyle={{ fontSize: 15 }} />
                   <Bar xAxisId="a" yAxisId="rev" dataKey="revenue" name="Receita de hospedagem" fill={C_REVENUE} barSize={30} radius={[4, 4, 0, 0]}>
                     {chartData.map((p) => (
                       <Cell key={p.month} fill={p.isCurrent ? C_CURRENT : C_REVENUE} />
@@ -539,38 +540,38 @@ function GerencialView({ d, isGerente }: { d: GerencialDashboard; isGerente: boo
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground">Sem dados de indicadores ainda.</p>
+            <p className="text-base text-muted-foreground">Sem dados de indicadores ainda.</p>
           )}
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="mt-2 text-base text-muted-foreground">
             Barra mais larga: receita de hospedagem (o mês corrente em dourado). Barra estreita por cima: lucro gerencial (disponível desde nov/2026).
           </p>
         </Panel>
 
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid items-start gap-3 lg:grid-cols-2">
         <Panel title="Avaliações dos hóspedes (notas de 0 a 10)" href="/dashboard/avaliacoes-hospedes" accent="amber">
           {d.reviews ? (
-            <div className="space-y-2 text-xs">
+            <div className="space-y-2 text-base">
               <div className="flex items-baseline justify-between">
                 <span className="text-muted-foreground">Média geral</span>
-                <span className="text-base font-bold tabular-nums">{score(d.reviews.average)} / 10</span>
+                <span className="text-xl font-bold tabular-nums">{score(d.reviews.average)} / 10</span>
               </div>
               <div className="flex items-baseline justify-between">
                 <span className="text-muted-foreground">Média dos últimos 90 dias</span>
-                <span className="text-base font-bold tabular-nums">{score(d.reviews.last90)} / 10</span>
+                <span className="text-xl font-bold tabular-nums">{score(d.reviews.last90)} / 10</span>
               </div>
               <div className="flex items-baseline justify-between">
                 <span className="text-muted-foreground">Novas na última semana</span>
-                <span className="text-base font-bold tabular-nums">{d.reviews.news}</span>
+                <span className="text-xl font-bold tabular-nums">{d.reviews.news}</span>
               </div>
               {d.reviews.booking && (
                 <div className="space-y-1.5 border-t border-border pt-2">
                   <div className="flex items-baseline justify-between">
                     <span className="font-medium">Booking · média geral</span>
-                    <span className="text-base font-bold tabular-nums">{score(d.reviews.booking.average)} / 10</span>
+                    <span className="text-xl font-bold tabular-nums">{score(d.reviews.booking.average)} / 10</span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground">{d.reviews.booking.count} avaliações</p>
+                  <p className="text-sm text-muted-foreground">{d.reviews.booking.count} avaliações</p>
                   <ul className="space-y-1">
                     {d.reviews.booking.items.map((i) => (
                       <li key={i.label} className="flex items-baseline justify-between gap-2">
@@ -584,7 +585,7 @@ function GerencialView({ d, isGerente }: { d: GerencialDashboard; isGerente: boo
                     {d.reviews.booking.bySuite.map((b) => (
                       <li key={b.suite} className="flex items-baseline justify-between gap-2">
                         <span className="text-muted-foreground">
-                          Suíte {b.suite} <span className="text-[10px]">({b.count})</span>
+                          Suíte {b.suite} <span className="text-sm">({b.count})</span>
                         </span>
                         <span className="shrink-0 font-semibold tabular-nums">{score(b.average)}</span>
                       </li>
@@ -602,17 +603,17 @@ function GerencialView({ d, isGerente }: { d: GerencialDashboard; isGerente: boo
               </div>
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground">Avaliações indisponíveis no momento.</p>
+            <p className="text-base text-muted-foreground">Avaliações indisponíveis no momento.</p>
           )}
         </Panel>
         <Panel title="Maiores despesas · mês corrente e média" large href="/contabil/compras/relatorio" accent="rose">
           {d.expenseRanking.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma despesa lançada.</p>
+            <p className="text-base text-muted-foreground">Nenhuma despesa lançada.</p>
           ) : (
             <div className="space-y-2.5">
               {d.expenseRanking.map((e, i) => (
                 <div key={e.name} className="space-y-1">
-                  <div className="flex items-baseline justify-between gap-2 text-sm">
+                  <div className="flex items-baseline justify-between gap-2 text-base">
                     <span className="min-w-0 truncate">
                       <span className="text-muted-foreground">{i + 1}.</span> {e.name}
                     </span>
@@ -628,7 +629,7 @@ function GerencialView({ d, isGerente }: { d: GerencialDashboard; isGerente: boo
                   </div>
                 </div>
               ))}
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Barra de cima: {monthLabel} · barra de baixo: média mensal dos {d.windowMonths} mês(es) desde {sinceLabel} (inclui o mês corrente). Ordem pelo maior dos dois valores.
               </p>
             </div>
@@ -636,7 +637,7 @@ function GerencialView({ d, isGerente }: { d: GerencialDashboard; isGerente: boo
         </Panel>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid items-start gap-3 lg:grid-cols-2">
         <CentersPanel title={`Receita e despesa por centro · ${monthLabel}`} rows={d.centersCurrent} accent="emerald" />
         <CentersPanel
           title={`Receita e despesa por centro · acumulado de ${sinceLabel} a ${monthLabel}`}
