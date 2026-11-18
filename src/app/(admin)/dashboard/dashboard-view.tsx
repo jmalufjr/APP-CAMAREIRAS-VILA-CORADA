@@ -16,7 +16,6 @@ import {
   YAxis,
 } from "recharts";
 import {
-  AlertTriangle,
   BedDouble,
   CalendarClock,
   Coffee,
@@ -66,7 +65,7 @@ function Shell({ href, accent = "blue", className, fill, children }: { href?: st
     </Card>
   );
   return href ? (
-    <Link href={href} className={`group block ${fill ? "h-full" : ""} rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring ${className ?? ""}`}>
+    <Link href={href} className={`group block ${fill ? "h-full flex-1" : ""} rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring ${className ?? ""}`}>
       {card}
     </Link>
   ) : (
@@ -114,6 +113,7 @@ function Panel({
   className,
   href,
   accent,
+  fill,
 }: {
   title: string;
   children: React.ReactNode;
@@ -121,10 +121,11 @@ function Panel({
   large?: boolean;
   href?: string;
   accent?: Accent;
+  fill?: boolean;
 }) {
   const a = ACCENTS[accent ?? "blue"];
   return (
-    <Shell href={href} accent={accent} className={className}>
+    <Shell href={href} accent={accent} className={className} fill={fill}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 font-heading text-[17px] group-data-[size=sm]/card:text-[17px]">
           <span className={`size-2.5 shrink-0 rounded-full ${a.dot}`} />
@@ -246,9 +247,9 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
   const bk = d.breakfast;
   return (
     <div className="space-y-4">
-      <div className="grid items-start gap-3 lg:grid-cols-3">
-        <div className="space-y-3">
-        <Panel title="Suítes de hoje" href="/dashboard/servicos-suites" accent="amber">
+      <div className="grid items-stretch gap-3 lg:grid-cols-3">
+        <div className="flex flex-col gap-3">
+        <Panel fill title="Suítes de hoje" href="/dashboard/servicos-suites" accent="amber">
           {d.todaySuites.length === 0 ? (
             <p className="text-base text-muted-foreground">Nenhuma suíte planejada para hoje.</p>
           ) : (
@@ -273,30 +274,8 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
             Ver todos os serviços
           </span>
         </Panel>
-
-        <Panel title="Manutenção" href="/ocorrencias" accent="rose">
-          <div className="space-y-2 text-base">
-            <div className="flex items-baseline justify-between">
-              <span className="text-muted-foreground">Ocorrências hoje</span>
-              <span className="text-xl font-bold tabular-nums">{d.occurrences.today}</span>
-            </div>
-            <div className="flex items-baseline justify-between">
-              <span className="text-muted-foreground">Em aberto (pendentes ou selecionadas)</span>
-              <span className="text-xl font-bold tabular-nums">{d.occurrences.open}</span>
-            </div>
-            <div className="flex gap-3 pt-1">
-              <span className="text-primary hover:underline">
-                Ver ocorrências
-              </span>
-              <span className="text-primary hover:underline">
-                Manutenção preventiva
-              </span>
-            </div>
-          </div>
-        </Panel>
-
         </div>
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
         <Panel title="Chegadas e saídas de hoje" href="/chegadas-saidas/gerenciar" accent="blue">
           <div className="space-y-3 text-base">
             <div>
@@ -337,27 +316,27 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
             </span>
           </div>
         </Panel>
-
-        <Panel title="Suítes vagas, disponíveis para alugar" href="/dashboard/suites-disponiveis" accent="emerald">
-          <div className="space-y-3">
-            <div>
-              <p className="mb-1 flex items-center gap-1.5 text-base font-medium">
-                <Key size={13} /> Limpas ({d.suites.clean.length})
-              </p>
-              <SuiteChips rooms={d.suites.clean} empty="Nenhuma suíte limpa e vaga." />
-            </div>
-            <div>
-              <p className="mb-1 text-base font-medium text-muted-foreground">Sujas ({d.suites.dirty.length})</p>
-              <SuiteChips rooms={d.suites.dirty} empty="Nenhuma suíte suja e vaga." />
-            </div>
-            <span className="text-base text-primary hover:underline">
-              Ver detalhes
-            </span>
-          </div>
+        <Panel fill title="Contas de consumo" href="/frigobar" accent="violet">
+          <ul className="divide-y divide-border">
+            {(
+              [
+                ["Contas em aberto", d.accounts.open, brl(d.accounts.total), false],
+                ["Contas com checkout em aberto", d.accounts.checkoutOpen.count, `${brl(d.accounts.checkoutOpen.total)} · hóspede já saiu`, d.accounts.checkoutOpen.count > 0],
+                ["Contas com checkout fechadas, não pagas", d.accounts.checkoutClosed.count, `${brl(d.accounts.checkoutClosed.total)} · aguardando pagamento`, false],
+              ] as const
+            ).map(([label, count, sub, alert]) => (
+              <li key={label} className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+                <span className="min-w-0">
+                  <span className="block text-base">{label}</span>
+                  <span className="block text-sm text-muted-foreground">{sub}</span>
+                </span>
+                <span className={`shrink-0 text-right text-xl font-bold ${alert ? "text-red-600 dark:text-red-400" : VALUE_COLOR}`}>{count}</span>
+              </li>
+            ))}
+          </ul>
         </Panel>
-
         </div>
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
         <Panel title="Mesas do café da manhã" href="/mesas/gerenciar" accent="orange">
           <div className="space-y-3 text-base">
             {(
@@ -380,24 +359,43 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
             </span>
           </div>
         </Panel>
-        <div className="space-y-3">
-          <Kpi icon={CreditCard} accent="violet" label="Contas em aberto" value={String(d.accounts.open)} sub={brl(d.accounts.total)} href="/frigobar" />
-          <Kpi
-            icon={AlertTriangle}
-            accent="rose" label="Contas com checkout em aberto"
-            value={String(d.accounts.checkoutOpen.count)}
-            sub={`${brl(d.accounts.checkoutOpen.total)} · hóspede já saiu`}
-            href="/frigobar"
-            tone={d.accounts.checkoutOpen.count > 0 ? "alert" : undefined}
-          />
-          <Kpi
-            icon={CreditCard}
-            accent="teal" label="Contas com checkout fechadas, não pagas"
-            value={String(d.accounts.checkoutClosed.count)}
-            sub={`${brl(d.accounts.checkoutClosed.total)} · aguardando pagamento`}
-            href="/frigobar"
-          />
-        </div>
+        <Panel title="Suítes vagas, disponíveis para alugar" href="/dashboard/suites-disponiveis" accent="emerald">
+          <div className="space-y-3">
+            <div>
+              <p className="mb-1 flex items-center gap-1.5 text-base font-medium">
+                <Key size={13} /> Limpas ({d.suites.clean.length})
+              </p>
+              <SuiteChips rooms={d.suites.clean} empty="Nenhuma suíte limpa e vaga." />
+            </div>
+            <div>
+              <p className="mb-1 text-base font-medium text-muted-foreground">Sujas ({d.suites.dirty.length})</p>
+              <SuiteChips rooms={d.suites.dirty} empty="Nenhuma suíte suja e vaga." />
+            </div>
+            <span className="text-base text-primary hover:underline">
+              Ver detalhes
+            </span>
+          </div>
+        </Panel>
+        <Panel fill title="Manutenção" href="/ocorrencias" accent="rose">
+          <div className="space-y-2 text-base">
+            <div className="flex items-baseline justify-between">
+              <span className="text-muted-foreground">Ocorrências hoje</span>
+              <span className="text-xl font-bold tabular-nums">{d.occurrences.today}</span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-muted-foreground">Em aberto (pendentes ou selecionadas)</span>
+              <span className="text-xl font-bold tabular-nums">{d.occurrences.open}</span>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <span className="text-primary hover:underline">
+                Ver ocorrências
+              </span>
+              <span className="text-primary hover:underline">
+                Manutenção preventiva
+              </span>
+            </div>
+          </div>
+        </Panel>
         </div>
       </div>
 
