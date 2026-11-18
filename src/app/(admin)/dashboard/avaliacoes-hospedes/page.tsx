@@ -12,7 +12,7 @@ const menuItems = [
 export default function AvaliacoesHospedesMenuPage() {
   return (
     <div className="space-y-6">
-      <BackLink href="/dashboard" />
+      <BackLink href="/contabil" />
       <PageHeader title="Avaliações dos hóspedes" subtitle="Escolha o que deseja ver." />
       <nav className="max-w-md space-y-1.5">
         {menuItems.map((item) => (

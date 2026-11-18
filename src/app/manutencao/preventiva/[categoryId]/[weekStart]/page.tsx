@@ -22,9 +22,9 @@ export default async function ManutencaoPreventivaCategoryPage({
         action={
           <Link
             href="/manutencao/preventiva"
-            className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3.5 py-2 text-sm font-semibold text-primary shadow-sm transition-colors hover:bg-primary/20 dark:border-[#E8B85C]/50 dark:bg-[#E8B85C]/10 dark:text-[#E8B85C] dark:hover:bg-[#E8B85C]/20"
           >
-            <ArrowLeft size={15} /> Voltar
+            <ArrowLeft size={16} strokeWidth={2.25} /> Voltar
           </Link>
         }
       />

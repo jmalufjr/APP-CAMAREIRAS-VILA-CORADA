@@ -57,7 +57,7 @@ export default async function TicketMedioCanaisPage() {
 
   return (
     <div className="space-y-6">
-      <BackLink href="/dashboard" />
+      <BackLink href="/contabil" />
       <PageHeader
         title="Ticket médio de canais de venda"
         subtitle="Preço cadastrado e preço efetivamente cobrado, por suíte e canal de venda, nos próximos 6 meses."

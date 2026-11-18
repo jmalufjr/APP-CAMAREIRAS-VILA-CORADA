@@ -11,6 +11,9 @@ import {
   FileBarChart,
   ListChecks,
   FileSpreadsheet,
+  TrendingUp,
+  CircleDollarSign,
+  Star,
 } from "lucide-react";
 
 // Módulo gerencial (ex-Módulo Contábil). No topo, só o administrador vê o "Lucro gerencial do mês"
@@ -21,6 +24,9 @@ const menuItems = [
   { href: "/contabil/custo-produtos", label: "Rentabilidade de Petiscos e Drinks", icon: FileBarChart },
   { href: "/contabil/compras/nova", label: "Lançar compra ou despesa", icon: Plus },
   { href: "/contabil/compras/relatorio", label: "Relatório de despesas (regime caixa)", icon: FileSpreadsheet },
+  { href: "/dashboard/indicadores", label: "Indicadores", icon: TrendingUp },
+  { href: "/dashboard/ticket-medio-canais", label: "Ticket médio de canais de venda", icon: CircleDollarSign },
+  { href: "/dashboard/avaliacoes-hospedes", label: "Avaliações dos hóspedes", icon: Star },
   { href: "/ativo-permanente", label: "Inventário de ativo permanente", icon: Archive },
   { href: "/contabil/listas", label: "Listas gerenciais", icon: ListChecks },
 ];
@@ -28,7 +34,12 @@ const menuItems = [
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 // O gerente operacional só consulta: Resultado mensal, Rentabilidade de Petiscos e Drinks e Relatório de despesas.
-const GERENTE_HREFS = new Set(["/contabil/resultado-mensal", "/contabil/custo-produtos", "/contabil/compras/relatorio"]);
+const GERENTE_HREFS = new Set([
+  "/contabil/resultado-mensal",
+  "/contabil/custo-produtos",
+  "/contabil/compras/relatorio",
+  "/dashboard/avaliacoes-hospedes",
+]);
 
 export default async function ModuloContabilPage() {
   const profile = await getCurrentProfile();

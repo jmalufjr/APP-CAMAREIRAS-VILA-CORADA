@@ -74,7 +74,7 @@ export default async function IndicadoresPage() {
   if ("error" in result) {
     return (
       <div className="space-y-6">
-        <BackLink href="/dashboard" />
+        <BackLink href="/contabil" />
         <PageHeader title="Indicadores" subtitle="ADR, RevPAR, NetRevPAR e ocupação por mês." />
         <p className="text-sm text-destructive">{result.error}</p>
       </div>
@@ -83,7 +83,7 @@ export default async function IndicadoresPage() {
 
   return (
     <div className="space-y-6">
-      <BackLink href="/dashboard" />
+      <BackLink href="/contabil" />
       <PageHeader
         title="Indicadores"
         subtitle="ADR, RevPAR, NetRevPAR e taxas de ocupação por mês, calculados por diária (check-in inclusivo, check-out exclusivo) com os dados da Stays."

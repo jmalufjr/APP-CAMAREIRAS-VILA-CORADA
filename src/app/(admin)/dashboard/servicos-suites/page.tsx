@@ -49,7 +49,7 @@ export default async function ServicosSuitesPage() {
 
   return (
     <div className="space-y-6">
-      <BackLink href="/dashboard" />
+      <BackLink href="/operacional" />
       <PageHeader title="Serviços nas suítes" subtitle="Suítes de hoje e amanhã, e os serviços dos últimos 30 dias." />
 
       <div className="grid lg:grid-cols-2 gap-6">

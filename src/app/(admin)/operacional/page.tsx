@@ -3,6 +3,9 @@ import { getCurrentProfile } from "@/lib/actions/session";
 import { PageHeader } from "@/components/shared/page-header";
 import {
   ClipboardCheck,
+  CalendarRange,
+  BedDouble,
+  Key,
   CalendarClock,
   Coffee,
   Wine,
@@ -14,7 +17,10 @@ import {
 } from "lucide-react";
 
 const menuItems = [
+  { href: "/dashboard/calendario-stays", label: "Calendário de reservas - Stays", icon: CalendarRange },
   { href: "/planejamento", label: "Planejamento diário", icon: ClipboardCheck },
+  { href: "/dashboard/servicos-suites", label: "Serviços nas suítes", icon: BedDouble },
+  { href: "/dashboard/suites-disponiveis", label: "Suítes vagas e limpas, disponíveis para alugar", icon: Key },
   { href: "/chegadas-saidas/gerenciar", label: "Chegadas & saídas", icon: CalendarClock },
   { href: "/mesas/gerenciar", label: "Mesas do café", icon: Coffee },
   { href: "/frigobar", label: "Consumo de Bar e Frigobar", icon: Wine },
@@ -26,7 +32,10 @@ const menuItems = [
 
 // Itens que o gerente operacional enxerga (o resto é do admin).
 const GERENTE_HREFS = new Set([
+  "/dashboard/calendario-stays",
   "/planejamento",
+  "/dashboard/servicos-suites",
+  "/dashboard/suites-disponiveis",
   "/chegadas-saidas/gerenciar",
   "/mesas/gerenciar",
   "/frigobar",

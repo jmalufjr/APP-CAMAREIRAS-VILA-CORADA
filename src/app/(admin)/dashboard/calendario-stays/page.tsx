@@ -27,7 +27,7 @@ export default async function CalendarioStaysPage({
 
   return (
     <div className="space-y-6">
-      <BackLink href="/dashboard" />
+      <BackLink href="/operacional" />
       <PageHeader
         title="Calendário de reservas - Stays"
         subtitle="Reservas, pré-reservas, contratos e bloqueios de cada suíte, dia a dia, direto da Stays."

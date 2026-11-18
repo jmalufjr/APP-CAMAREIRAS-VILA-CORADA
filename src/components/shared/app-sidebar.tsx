@@ -37,10 +37,12 @@ interface NavItem {
   // Rotas que também marcam este item como ativo (o item é um módulo que
   // agrupa várias telas, cada uma com seu próprio caminho).
   matchPrefixes?: string[];
+  // Só fica ativo na própria página (não nas telas que moram sob o mesmo prefixo).
+  exact?: boolean;
 }
 
 const adminNav: NavItem[] = [
-  { href: "/dashboard", label: "Resumo executivo", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Resumo executivo", icon: LayoutDashboard, exact: true },
   {
     href: "/operacional",
     label: "Módulo operacional",
@@ -55,16 +57,28 @@ const adminNav: NavItem[] = [
       "/manutencao-preventiva",
       "/historico",
       "/ocorrencias",
+      "/dashboard/calendario-stays",
+      "/dashboard/servicos-suites",
+      "/dashboard/suites-disponiveis",
+      "/dashboard/tarefas",
     ],
   },
   {
     href: "/contabil",
     label: "Módulo gerencial",
     icon: BookOpen,
-    matchPrefixes: ["/contabil", "/compras", "/despesas", "/ativo-permanente"],
+    matchPrefixes: [
+      "/contabil",
+      "/compras",
+      "/despesas",
+      "/ativo-permanente",
+      "/dashboard/indicadores",
+      "/dashboard/ticket-medio-canais",
+      "/dashboard/avaliacoes",
+    ],
   },
   { href: "/sincronizacao", label: "Sincronização", icon: RefreshCw },
-  { href: "/integracao", label: "Integração", icon: Plug },
+  { href: "/integracao", label: "Integração", icon: Plug, matchPrefixes: ["/integracao", "/dashboard/api-tokens", "/dashboard/email-envio"] },
   { href: "/usuarios", label: "Usuários", icon: Users },
   { href: "/questoes-respostas", label: "Questões e Respostas", icon: HelpCircle },
 ];
@@ -124,7 +138,9 @@ function SidebarContent({
           const moreSpecificItemMatches = items.some(
             (other) => other.href !== item.href && other.href.startsWith(item.href + "/") && matches(other.href)
           );
-          const active = item.matchPrefixes
+          const active = item.exact
+            ? pathname === item.href
+            : item.matchPrefixes
             ? item.matchPrefixes.some(matches)
             : matches(item.href) && !moreSpecificItemMatches;
           return (

@@ -448,7 +448,7 @@ export default function QuestoesRespostasPage() {
               </P>
               <P>
                 Existe também o papel <strong>“Gerente operacional”</strong>. Ele enxerga o Resumo executivo
-                (menos “Ticket médio de canais de venda” e “Indicadores”, que são só do administrador), o Módulo operacional
+                (só a aba Operacional), o Módulo operacional
                 (inclusive as Comissões das camareiras e as Listas operacionais, mas, dentro das Listas operacionais, sem
                 “Ocorrências Manutenção” e “Manutenção Preventiva”), a Sincronização e, no Módulo gerencial, apenas três
                 itens, <strong>só para consulta</strong>: o <strong>Resultado mensal</strong>, a{" "}
@@ -475,14 +475,36 @@ export default function QuestoesRespostasPage() {
           <AccordionPanel>
             <div className="space-y-3">
               <P>
-                É a primeira tela que você vê ao entrar. No topo ficam 2 cards de “Consulta rápida”:
-                suítes concluídas hoje e ocorrências de manutenção hoje. (As comissões ficam na tela
-                “Comissões das camareiras”, no Módulo operacional, explicadas na pergunta 11; os botões de sincronização com a Stays
-                ficam no menu “Sincronização”, pergunta 1.)
+                É a primeira tela que você vê ao entrar. Ela tem duas abas, como as abas de uma planilha:{" "}
+                <strong>Operacional</strong> e <strong>Gerencial</strong>. Cada aba é um painel de uma tela só, pensado para o
+                computador e também para o celular (no celular, é só rolar). Os números são clicáveis e levam à tela
+                com mais detalhes.
               </P>
+              <List
+                items={[
+                  <>
+                    <strong>Aba Operacional</strong> (o gerente operacional vê só esta): serviços concluídos hoje, serviços
+                    pendentes de revisão, ocorrências de manutenção, chegadas e saídas de hoje, mesas e hóspedes do café
+                    e contas de consumo em aberto; o andamento dos serviços de hoje; as suítes vagas, limpas e sujas; e,
+                    por quantidade desde o início, os 5 itens mais consumidos do frigobar, dos petiscos, dos drinks e das
+                    outras bebidas do bar.
+                  </>,
+                  <>
+                    <strong>Aba Gerencial</strong> (só o administrador): lucro gerencial, receita e despesas do mês,
+                    diária média, ocupação e avaliação dos hóspedes; um gráfico da receita de hospedagem e da ocupação dos
+                    últimos meses; as avaliações; a receita e a despesa de cada centro; e as maiores despesas do mês.
+                  </>,
+                ]}
+              />
               <P>
-                Mais abaixo tem um menu levando a 8 telas com mais detalhes, cada uma com um botão pra
-                voltar:
+                As telas que ficavam em um menu aqui mudaram de lugar. No <strong>Módulo operacional</strong>:
+                Calendário de reservas - Stays (primeiro item), Serviços nas suítes e Suítes vagas e limpas (logo depois
+                do Planejamento diário). No <strong>Módulo gerencial</strong>, depois do Relatório de despesas:
+                Indicadores, Ticket médio de canais de venda e Avaliações dos hóspedes. As telas “Consumo de frigobar” e
+                “Consumo de bar” deixaram de existir: o consumo por item agora aparece no painel operacional. (As comissões
+                ficam em “Comissões das camareiras”, no Módulo operacional, explicadas na pergunta 11; os botões de sincronização
+                com a Stays ficam no menu “Sincronização”, pergunta 1.) As explicações abaixo de cada uma dessas telas continuam
+                valendo:
               </P>
               <List
                 items={[
@@ -531,14 +553,6 @@ export default function QuestoesRespostasPage() {
                     essa tela.
                   </>,
                   <>
-                    <strong>Consumo de frigobar</strong>: os totais do mês atual e do mês anterior, item
-                    por item, com gráficos de participação de cada um.
-                  </>,
-                  <>
-                    <strong>Consumo de bar</strong>: o mesmo, mas com petiscos e bebidas contabilizados
-                    separadamente, tanto nas tabelas quanto nos gráficos.
-                  </>,
-                  <>
                     <strong>Avaliações dos hóspedes</strong>: três telas com as avaliações que os hóspedes deixam nos
                     canais (Booking, Airbnb, Expedia e o formulário da própria Stays). Em “Avaliações: conteúdo e
                     resposta” você vê cada avaliação, com as notas por item e os comentários, e pode escrever uma resposta
@@ -568,7 +582,7 @@ export default function QuestoesRespostasPage() {
           <AccordionPanel>
             <div className="space-y-3">
               <P>
-                Essa tela (menu do Resumo executivo, “Suítes vagas e limpas, disponíveis para alugar”)
+                Essa tela (Módulo operacional, “Suítes vagas e limpas, disponíveis para alugar”)
                 mostra duas listas — <strong>suítes limpas</strong> e <strong>suítes sujas</strong> —
                 com todas as suítes que não têm hóspede previsto pra ficar hospedado hoje à noite. É
                 sempre calculada na hora, sem nenhum horário de corte: se uma suíte “disponível” receber
@@ -1550,7 +1564,7 @@ export default function QuestoesRespostasPage() {
           <AccordionPanel>
             <div className="space-y-3">
               <P>
-                A tela <strong>Indicadores</strong> (Resumo executivo, só para o administrador) mostra, mês a
+                A tela <strong>Indicadores</strong> (Módulo gerencial, só para o administrador) mostra, mês a
                 mês, o desempenho da pousada com os dados da Stays. Tudo é contado por <strong>diária</strong>:
                 cada diária pertence ao dia em que começa (o check-in conta, o check-out não). Uma reserva
                 que atravessa a virada do mês dá a cada mês a sua parte das diárias e da receita — um check-out
