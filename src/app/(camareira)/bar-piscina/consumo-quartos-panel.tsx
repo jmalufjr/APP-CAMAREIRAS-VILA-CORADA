@@ -18,6 +18,7 @@ import { formatDateTimePt, todayKey } from "@/lib/date";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConsumptionMatrixTable } from "@/components/shared/consumption-matrix-table";
+import { ReactivationNotes } from "@/components/shared/reactivation-notes";
 import {
   Dialog,
   DialogContent,
@@ -448,6 +449,8 @@ function RoomAccordionItem({ room, minibarItems, isAdmin }: { room: RoomBillOver
             )}
 
           </div>
+
+          <ReactivationNotes log={room.reactivationLog} />
         </div>
       </AccordionPanel>
 

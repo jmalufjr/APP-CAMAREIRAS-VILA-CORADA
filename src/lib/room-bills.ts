@@ -69,3 +69,17 @@ export function computeBillTotals(billId: string, mbRows: MinibarRow[], pbRows: 
     serviceChargeWaived: waived,
   };
 }
+
+// Contas pagas a partir desta data foram fechadas/pagas já com o consumo por dia (frigobar) e por comanda (bar):
+// no card de contas pagas elas mostram as tabelas completas e podem ser reabertas pelo administrador. As anteriores
+// ficam exatamente como estavam.
+export const NEW_BILLING_PAID_FROM = "2026-11-18";
+
+// Uma reabertura de conta paga (guardada em room_bills.reactivation_log).
+export interface ReactivationEntry {
+  paid_at: string | null;
+  paid_by_name: string | null;
+  payment_method: string | null;
+  reopened_at: string;
+  reopened_by_name: string | null;
+}

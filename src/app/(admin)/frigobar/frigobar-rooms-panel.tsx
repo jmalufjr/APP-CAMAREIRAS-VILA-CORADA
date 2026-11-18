@@ -4,7 +4,9 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { RecentlyPaidBill } from "@/lib/actions/room-bills";
-import { resendRoomBillReceipt } from "@/lib/actions/room-bills";
+import { resendRoomBillReceipt, resurrectRoomBill } from "@/lib/actions/room-bills";
+import { ConsumptionMatrixTable } from "@/components/shared/consumption-matrix-table";
+import { ReactivationNotes } from "@/components/shared/reactivation-notes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
@@ -18,7 +20,7 @@ import { roomSlotLabel } from "@/lib/room-bill-label";
 // O card de e-mail (antes "E-mail da contabilidade") saiu daqui e virou a
 // tela "Cadastrar e-mail de envio" no menu do Resumo Executivo (Parte 34).
 // Card de contas pagas (com PDF e reenvio do e-mail) — usado em Consumo por suítes e no Histórico.
-export function PaidBillsCard({ bills, title, emptyText }: { bills: RecentlyPaidBill[]; title: string; emptyText: string }) {
+export function PaidBillsCard({ bills, title, emptyText, isAdmin = false }: { bills: RecentlyPaidBill[]; title: string; emptyText: string; isAdmin?: boolean }) {
   return (
     <Card>
       <CardHeader>
@@ -30,7 +32,7 @@ export function PaidBillsCard({ bills, title, emptyText }: { bills: RecentlyPaid
         ) : (
           <Accordion className="space-y-2">
             {bills.map((bill) => (
-              <PaidBillAccordionItem key={bill.bill_id} bill={bill} />
+              <PaidBillAccordionItem key={bill.bill_id} bill={bill} isAdmin={isAdmin} />
             ))}
           </Accordion>
         )}
@@ -39,7 +41,7 @@ export function PaidBillsCard({ bills, title, emptyText }: { bills: RecentlyPaid
   );
 }
 
-function PaidBillAccordionItem({ bill }: { bill: RecentlyPaidBill }) {
+function PaidBillAccordionItem({ bill, isAdmin }: { bill: RecentlyPaidBill; isAdmin: boolean }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -49,6 +51,23 @@ function PaidBillAccordionItem({ bill }: { bill: RecentlyPaidBill }) {
       if (result?.error) toast.error(result.error);
       else {
         toast.success("E-mail reenviado.");
+        router.refresh();
+      }
+    });
+  }
+
+  function handleResurrect() {
+    if (
+      !confirm(
+        "Reabrir esta conta? Ela volta para as contas abertas com todo o consumo lançado, e o registro de que foi fechada e paga é apagado (fica só uma observação no rodapé)."
+      )
+    )
+      return;
+    startTransition(async () => {
+      const result = await resurrectRoomBill(bill.bill_id);
+      if (result?.error) toast.error(result.error);
+      else {
+        toast.success("Conta reaberta: ela voltou para as contas abertas.");
         router.refresh();
       }
     });
@@ -71,6 +90,22 @@ function PaidBillAccordionItem({ bill }: { bill: RecentlyPaidBill }) {
       </AccordionTrigger>
       <AccordionPanel>
         <div className="space-y-3 pt-3">
+          {bill.barMatrix ? (
+            <div className="grid gap-4">
+              {!bill.isWalkin && bill.minibarMatrix && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">Frigobar</p>
+                  <ConsumptionMatrixTable matrix={bill.minibarMatrix} emptyText="Sem consumo de frigobar." serviceHref={(taskId) => `/dashboard/tarefas/${taskId}`} />
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Bar da piscina <span className="font-normal">(via comandas)</span>
+                </p>
+                <ConsumptionMatrixTable matrix={bill.barMatrix} emptyText="Nenhuma comanda nesta conta." />
+              </div>
+            </div>
+          ) : (
           <div className={bill.isWalkin ? "grid gap-4" : "grid sm:grid-cols-2 gap-x-8 gap-y-4"}>
             {!bill.isWalkin && (
             <div className="space-y-1.5">
@@ -107,6 +142,7 @@ function PaidBillAccordionItem({ bill }: { bill: RecentlyPaidBill }) {
               </div>
             </div>
           </div>
+          )}
 
           <div className="border-t border-border pt-2 space-y-1 text-sm max-w-md">
             {!bill.isWalkin && (
@@ -157,7 +193,14 @@ function PaidBillAccordionItem({ bill }: { bill: RecentlyPaidBill }) {
                 Reenviar e-mail
               </Button>
             )}
+            {isAdmin && bill.canResurrect && (
+              <Button size="sm" variant="outline" disabled={isPending} onClick={handleResurrect}>
+                Reabrir conta (paga por engano)
+              </Button>
+            )}
           </div>
+
+          <ReactivationNotes log={bill.reactivationLog} />
         </div>
       </AccordionPanel>
     </AccordionItem>

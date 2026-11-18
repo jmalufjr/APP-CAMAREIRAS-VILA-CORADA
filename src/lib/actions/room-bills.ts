@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import {
   computeBillTotals,
+  NEW_BILLING_PAID_FROM,
+  type ReactivationEntry,
   type RoomBillLineItem,
   type MinibarRow,
   type PoolbarRow,
@@ -38,6 +40,19 @@ export async function reopenRoomBill(roomId: string | null, billId: string) {
   revalidatePath("/bar-piscina");
   revalidatePath("/comanda");
   revalidatePath("/tarefas");
+  return { success: true };
+}
+
+// Só o administrador: reabre uma conta paga por engano (volta como aberta, com o consumo; o histórico fica no rodapé).
+export async function resurrectRoomBill(billId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("resurrect_room_bill", { p_bill_id: billId });
+  if (error) return { error: error.message };
+  revalidatePath("/frigobar");
+  revalidatePath("/bar-piscina");
+  revalidatePath("/comanda");
+  revalidatePath("/historico");
+  revalidatePath("/dashboard");
   return { success: true };
 }
 
@@ -150,6 +165,8 @@ export interface RoomBillOverview {
   // Tabelas de consumo por dia (frigobar) e por comanda (bar).
   minibarMatrix: ConsumptionMatrix;
   barMatrix: ConsumptionMatrix;
+  // Histórico de reaberturas de uma conta paga por engano (rodapé do card).
+  reactivationLog: ReactivationEntry[];
 }
 
 // Contas não pagas (abertas, fechadas ou reabertas), uma por hóspede/reserva, já separadas em
@@ -176,6 +193,7 @@ export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
     stay_check_out: string | null;
     service_charge_waived: boolean;
     closed_by_profile: { name: string } | null;
+    reactivation_log: ReactivationEntry[] | null;
   };
 
   const roomList = rooms ?? [];
@@ -226,6 +244,7 @@ export async function getRoomBillsOverview(): Promise<RoomBillOverview[]> {
         closedByName: bill.closed_by_profile?.name ?? null,
         minibarMatrix: bill.is_walkin ? emptyMatrix() : (minibarMatrices.get(bill.id) ?? emptyMatrix()),
         barMatrix: barMatrices.get(bill.id) ?? emptyMatrix(),
+        reactivationLog: bill.reactivation_log ?? [],
       };
     })
     .sort(
@@ -550,6 +569,11 @@ export interface RecentlyPaidBill {
   poolbarTotalWithCharge: number;
   grandTotal: number;
   serviceChargeWaived: boolean;
+  // Contas pagas a partir de 18/11/2026: tabelas completas de consumo (como na conta fechada) e reabertura pelo admin.
+  minibarMatrix: ConsumptionMatrix | null;
+  barMatrix: ConsumptionMatrix | null;
+  canResurrect: boolean;
+  reactivationLog: ReactivationEntry[];
 }
 
 // Contas pagas nos últimos `days` dias (uma linha por conta paga, não só a
@@ -570,7 +594,7 @@ async function fetchPaidRoomBills(cutoff: string, until: string | null): Promise
   let billsQuery = supabase
     .from("room_bills")
     .select(
-      "id, room_id, paid_at, payment_method, receipt_email_sent, service_charge_waived, guest_name_hint, is_walkin, stay_check_in, stay_check_out, rooms(number), paid_by_profile:profiles!room_bills_paid_by_fkey(name)"
+      "id, room_id, paid_at, payment_method, receipt_email_sent, service_charge_waived, guest_name_hint, is_walkin, stay_check_in, stay_check_out, reactivation_log, rooms(number), paid_by_profile:profiles!room_bills_paid_by_fkey(name)"
     )
     .eq("status", "paga")
     .gte("paid_at", cutoff)
@@ -591,11 +615,20 @@ async function fetchPaidRoomBills(cutoff: string, until: string | null): Promise
     stay_check_out: string | null;
     rooms: { number: string } | null;
     paid_by_profile: { name: string } | null;
+    reactivation_log: ReactivationEntry[] | null;
   };
   const billList = (bills ?? []) as unknown as PaidBillRow[];
   if (billList.length === 0) return [];
 
   const billIds = billList.map((b) => b.id);
+  const cutover = startOfDayBrasiliaUtc(NEW_BILLING_PAID_FROM);
+  const newIds = billList.filter((b) => b.paid_at >= cutover && !b.is_walkin).map((b) => b.id);
+  const walkinNewIds = billList.filter((b) => b.paid_at >= cutover && b.is_walkin).map((b) => b.id);
+
+  const [minibarMatrices, barMatrices] = await Promise.all([
+    newIds.length ? buildMinibarMatrices(newIds) : Promise.resolve(new Map<string, ConsumptionMatrix>()),
+    newIds.length + walkinNewIds.length ? buildBarMatrices([...newIds, ...walkinNewIds]) : Promise.resolve(new Map<string, ConsumptionMatrix>()),
+  ]);
 
   const [{ data: minibarRows }, { data: poolbarRows }] = await Promise.all([
     supabase
@@ -627,6 +660,10 @@ async function fetchPaidRoomBills(cutoff: string, until: string | null): Promise
     paymentMethod: bill.payment_method,
     receiptEmailSent: bill.receipt_email_sent,
     ...computeBillTotals(bill.id, mbRows, pbRows, bill.service_charge_waived),
+    minibarMatrix: bill.paid_at >= cutover && !bill.is_walkin ? (minibarMatrices.get(bill.id) ?? emptyMatrix()) : null,
+    barMatrix: bill.paid_at >= cutover ? (barMatrices.get(bill.id) ?? emptyMatrix()) : null,
+    canResurrect: bill.paid_at >= cutover,
+    reactivationLog: bill.reactivation_log ?? [],
   }));
 }
 

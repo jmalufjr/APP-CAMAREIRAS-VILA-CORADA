@@ -6,11 +6,13 @@ import { getActiveComandas, getInactiveComandas } from "@/lib/actions/comandas";
 import { PaidBillsCard } from "./frigobar-rooms-panel";
 import { ConsumoQuartosPanel } from "@/app/(camareira)/bar-piscina/consumo-quartos-panel";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/actions/session";
 import type { MinibarItem } from "@/lib/types";
 import { ComandasListPanel } from "./comandas-list-panel";
 
 export default async function FrigobarPage() {
   const supabase = await createClient();
+  const profile = await getCurrentProfile();
   const [overview, recentlyPaid, activeComandas, inactiveComandas, { data: minibarItems }] = await Promise.all([
     getRoomBillsOverview(),
     getRecentlyPaidRoomBills(),
@@ -40,7 +42,7 @@ export default async function FrigobarPage() {
             minibarItems={(minibarItems ?? []) as MinibarItem[]}
             recentlyPaid={recentlyPaid}
             isAdmin
-            paidCard={<PaidBillsCard bills={recentlyPaid} title="Contas pagas nos últimos 30 dias" emptyText="Nenhuma conta paga nos últimos 30 dias." />}
+            paidCard={<PaidBillsCard bills={recentlyPaid} title="Contas pagas nos últimos 30 dias" emptyText="Nenhuma conta paga nos últimos 30 dias." isAdmin={profile.role === "admin"} />}
           />
         </TabsContent>
       </Tabs>
