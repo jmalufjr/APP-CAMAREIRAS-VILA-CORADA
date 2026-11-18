@@ -40,16 +40,16 @@ const VALUE_COLOR = "text-primary dark:text-[#E8B85C]";
 
 type Accent = "amber" | "blue" | "emerald" | "rose" | "violet" | "teal" | "orange" | "sky";
 
-// Cada cartão tem uma cor de destaque (faixa no topo, fundo levemente tingido e marcador).
+// Cartões com fundo sólido e só as cores da identidade visual da pousada (bordô no tema claro, dourado nos escuros).
 const ACCENTS: Record<Accent, { card: string; chip: string; dot: string }> = {
-  amber: { card: "bg-linear-to-br from-amber-500/20 via-card to-card", chip: "bg-amber-500/25 text-amber-700 dark:text-amber-300", dot: "bg-amber-500" },
-  blue: { card: "bg-linear-to-br from-blue-500/20 via-card to-card", chip: "bg-blue-500/25 text-blue-700 dark:text-blue-300", dot: "bg-blue-500" },
-  emerald: { card: "bg-linear-to-br from-emerald-500/20 via-card to-card", chip: "bg-emerald-500/25 text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-500" },
-  rose: { card: "bg-linear-to-br from-rose-500/20 via-card to-card", chip: "bg-rose-500/25 text-rose-700 dark:text-rose-300", dot: "bg-rose-500" },
-  violet: { card: "bg-linear-to-br from-violet-500/20 via-card to-card", chip: "bg-violet-500/25 text-violet-700 dark:text-violet-300", dot: "bg-violet-500" },
-  teal: { card: "bg-linear-to-br from-teal-500/20 via-card to-card", chip: "bg-teal-500/25 text-teal-700 dark:text-teal-300", dot: "bg-teal-500" },
-  orange: { card: "bg-linear-to-br from-orange-500/20 via-card to-card", chip: "bg-orange-500/25 text-orange-700 dark:text-orange-300", dot: "bg-orange-500" },
-  sky: { card: "bg-linear-to-br from-sky-500/20 via-card to-card", chip: "bg-sky-500/25 text-sky-700 dark:text-sky-300", dot: "bg-sky-500" },
+  amber: { card: "bg-card", chip: "bg-primary/15 text-primary dark:bg-[#E8B85C]/20 dark:text-[#E8B85C]", dot: "bg-primary dark:bg-[#E8B85C]" },
+  blue: { card: "bg-card", chip: "bg-primary/15 text-primary dark:bg-[#E8B85C]/20 dark:text-[#E8B85C]", dot: "bg-primary dark:bg-[#E8B85C]" },
+  emerald: { card: "bg-card", chip: "bg-primary/15 text-primary dark:bg-[#E8B85C]/20 dark:text-[#E8B85C]", dot: "bg-primary dark:bg-[#E8B85C]" },
+  rose: { card: "bg-card", chip: "bg-primary/15 text-primary dark:bg-[#E8B85C]/20 dark:text-[#E8B85C]", dot: "bg-primary dark:bg-[#E8B85C]" },
+  violet: { card: "bg-card", chip: "bg-primary/15 text-primary dark:bg-[#E8B85C]/20 dark:text-[#E8B85C]", dot: "bg-primary dark:bg-[#E8B85C]" },
+  teal: { card: "bg-card", chip: "bg-primary/15 text-primary dark:bg-[#E8B85C]/20 dark:text-[#E8B85C]", dot: "bg-primary dark:bg-[#E8B85C]" },
+  orange: { card: "bg-card", chip: "bg-primary/15 text-primary dark:bg-[#E8B85C]/20 dark:text-[#E8B85C]", dot: "bg-primary dark:bg-[#E8B85C]" },
+  sky: { card: "bg-card", chip: "bg-primary/15 text-primary dark:bg-[#E8B85C]/20 dark:text-[#E8B85C]", dot: "bg-primary dark:bg-[#E8B85C]" },
 };
 
 // Efeito de botão em relevo: sombra com "degrau" embaixo; ao passar o mouse sobe, ao clicar afunda.
