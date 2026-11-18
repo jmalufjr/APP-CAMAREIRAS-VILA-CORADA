@@ -8,6 +8,8 @@ import {
   ComposedChart,
   Legend,
   Line,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -27,8 +29,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { GerencialDashboard, OperationalDashboard, RankedItem } from "@/lib/dashboard-data";
-import { TASK_STATUS_LABELS } from "@/lib/types";
+import type { ConsumptionBlock, GerencialDashboard, MonthlyRankedItem, OperationalDashboard, RankedItem } from "@/lib/dashboard-data";
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const brl0 = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -78,31 +79,96 @@ function Panel({ title, children, className, large }: { title: string; children:
   );
 }
 
-// Ranking horizontal simples (barras proporcionais ao maior valor, só por quantidade).
-function RankList({ title, items }: { title: string; items: RankedItem[] }) {
-  const max = Math.max(1, ...items.map((i) => i.quantity));
+const PIE_COLORS = ["#E8B85C", "#2563EB", "#059669", "#DB2777", "#7C3AED"];
+
+function monthName(ym: string) {
+  const [y, m] = ym.split("-");
+  const names = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  return `${names[Number(m) - 1]}/${y.slice(2)}`;
+}
+
+// Cinco mais consumidos do mês corrente: uma barra para o mês corrente e outra (mais clara) para o anterior.
+function MonthlyRankList({ title, items, current, previous }: { title: string; items: MonthlyRankedItem[]; current: string; previous: string }) {
+  const max = Math.max(1, ...items.flatMap((i) => [i.current, i.previous]));
   return (
     <Panel title={title}>
       {items.length === 0 ? (
-        <p className="text-xs text-muted-foreground">Sem consumo registrado.</p>
+        <p className="text-xs text-muted-foreground">Sem consumo registrado em {monthName(current)}.</p>
       ) : (
-        <ol className="space-y-2">
+        <div className="space-y-2.5">
           {items.map((i, idx) => (
-            <li key={i.name} className="space-y-0.5">
+            <div key={i.name} className="space-y-0.5">
               <div className="flex items-baseline justify-between gap-2 text-xs">
                 <span className="min-w-0 truncate">
                   <span className="text-muted-foreground">{idx + 1}.</span> {i.name}
                 </span>
-                <span className="shrink-0 font-semibold tabular-nums">{i.quantity}</span>
+                <span className="shrink-0 tabular-nums text-muted-foreground">
+                  <span className="font-semibold text-foreground">{i.current}</span> · ant. {i.previous}
+                </span>
               </div>
               <div className="h-1.5 rounded-full bg-muted">
-                <div className="h-1.5 rounded-full bg-[var(--chart-1)] dark:bg-[#E8B85C]" style={{ width: `${(i.quantity / max) * 100}%` }} />
+                <div className="h-1.5 rounded-full bg-[var(--chart-1)] dark:bg-[#E8B85C]" style={{ width: `${(i.current / max) * 100}%` }} />
               </div>
-            </li>
+              <div className="h-1.5 rounded-full bg-muted">
+                <div className="h-1.5 rounded-full bg-muted-foreground/50" style={{ width: `${(i.previous / max) * 100}%` }} />
+              </div>
+            </div>
           ))}
-        </ol>
+          <p className="text-[11px] text-muted-foreground">
+            Barra de cima: {monthName(current)} · barra de baixo: {monthName(previous)}.
+          </p>
+        </div>
       )}
     </Panel>
+  );
+}
+
+// Pizza dos cinco itens mais consumidos desde o início; as fatias somam 100% entre os cinco.
+function TopPie({ title, items }: { title: string; items: RankedItem[] }) {
+  const total = items.reduce((s, i) => s + i.quantity, 0);
+  const data = items.map((i) => ({ ...i, pct: total > 0 ? (i.quantity / total) * 100 : 0 }));
+  return (
+    <Panel title={title}>
+      {total === 0 ? (
+        <p className="text-xs text-muted-foreground">Sem consumo registrado.</p>
+      ) : (
+        <div className="space-y-2">
+          <div className="h-36 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={data} dataKey="quantity" nameKey="name" innerRadius={28} outerRadius={60} paddingAngle={1} stroke="var(--card)">
+                  {data.map((d, i) => (
+                    <Cell key={d.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                  formatter={(value, name) => [`${value} un.`, name]}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <ul className="space-y-0.5 text-xs">
+            {data.map((d, i) => (
+              <li key={d.name} className="flex items-center gap-1.5">
+                <span className="size-2 shrink-0 rounded-full" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                <span className="min-w-0 flex-1 truncate text-muted-foreground">{d.name}</span>
+                <span className="shrink-0 font-semibold tabular-nums">{d.pct.toFixed(0)}%</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function ConsumptionColumn({ title, block, labels }: { title: string; block: ConsumptionBlock; labels: { current: string; previous: string } }) {
+  return (
+    <div className="space-y-3">
+      <MonthlyRankList title={title} items={block.monthly} current={labels.current} previous={labels.previous} />
+      <TopPie title={`${title} · desde o início`} items={block.pie} />
+    </div>
   );
 }
 
@@ -119,59 +185,103 @@ function SuiteChips({ rooms, empty }: { rooms: string[]; empty: string }) {
   );
 }
 
-const STATUS_SEGMENTS = [
-  { key: "done", label: TASK_STATUS_LABELS.concluido, color: "bg-emerald-600" },
-  { key: "review", label: "Em revisão/correção", color: "bg-[var(--chart-4)]" },
-  { key: "inProgress", label: TASK_STATUS_LABELS.em_andamento, color: "bg-[var(--chart-2)]" },
-  { key: "pending", label: TASK_STATUS_LABELS.pendente, color: "bg-muted-foreground/40" },
-] as const;
-
 function OperationalView({ d }: { d: OperationalDashboard }) {
-  const s = d.services;
+  const bk = d.breakfast;
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <Kpi icon={BedDouble} label="Serviços concluídos hoje" value={`${s.done} / ${s.total}`} href="/dashboard/servicos-suites" />
-        <Kpi
-          icon={Percent}
-          label="Pendentes de revisão"
-          value={String(d.pendingReview)}
-          sub="em qualquer dia"
-          href="/planejamento"
-          tone={d.pendingReview > 0 ? "alert" : undefined}
-        />
-        <Kpi icon={AlertTriangle} label="Ocorrências hoje" value={String(d.occurrences.today)} sub={`${d.occurrences.open} em aberto no total`} href="/ocorrencias" />
-        <Kpi icon={CalendarClock} label="Chegadas / saídas hoje" value={`${d.arrivals} / ${d.departures}`} href="/chegadas-saidas/gerenciar" />
-        <Kpi icon={Coffee} label="Café hoje" value={`${d.breakfast.tables} mesas`} sub={`${d.breakfast.guests} hóspedes`} href="/mesas/gerenciar" />
-        <Kpi icon={CreditCard} label="Contas em aberto" value={String(d.accounts.open)} sub={brl(d.accounts.total)} href="/frigobar" />
+      <div className="grid gap-3 lg:grid-cols-3">
+        <Panel title="Suítes de hoje">
+          {d.todaySuites.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhuma suíte planejada para hoje.</p>
+          ) : (
+            <ul className="max-h-72 space-y-1 overflow-y-auto">
+              {d.todaySuites.map((t) => (
+                <li key={t.id} className="flex items-center justify-between gap-2 border-b border-border py-1 text-xs last:border-0">
+                  <span className="min-w-0 truncate">
+                    Suíte {t.room} · {t.label}
+                  </span>
+                  <span
+                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
+                      t.done ? "bg-emerald-600/15 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {t.status}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Link href="/dashboard/servicos-suites" className="mt-2 inline-block text-xs text-primary hover:underline">
+            Ver todos os serviços
+          </Link>
+        </Panel>
+
+        <Panel title="Chegadas e saídas de hoje">
+          <div className="space-y-3 text-xs">
+            <div>
+              <p className="mb-1 flex items-center gap-1.5 font-medium">
+                <CalendarClock size={13} /> Chegadas ({d.arrivals.length})
+              </p>
+              {d.arrivals.length === 0 ? (
+                <p className="text-muted-foreground">Nenhuma chegada prevista.</p>
+              ) : (
+                <ul className="space-y-0.5">
+                  {d.arrivals.map((a) => (
+                    <li key={a.id} className="flex items-baseline justify-between gap-2">
+                      <span className="min-w-0 truncate">
+                        Suíte {a.room} · {a.firstName}
+                      </span>
+                      <span className="shrink-0 tabular-nums text-muted-foreground">{a.time ?? "sem horário"}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div>
+              <p className="mb-1 font-medium text-muted-foreground">Saídas ({d.departures.length})</p>
+              {d.departures.length === 0 ? (
+                <p className="text-muted-foreground">Nenhuma saída prevista.</p>
+              ) : (
+                <ul className="space-y-0.5">
+                  {d.departures.map((x) => (
+                    <li key={x.id} className="truncate">
+                      Suíte {x.room} · {x.firstName}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <Link href="/chegadas-saidas/gerenciar" className="inline-block text-primary hover:underline">
+              Abrir Chegadas &amp; saídas
+            </Link>
+          </div>
+        </Panel>
+
+        <Panel title="Mesas do café da manhã">
+          <div className="space-y-3 text-xs">
+            {(
+              [
+                ["Hoje", bk.today],
+                ["Amanhã", bk.tomorrow],
+              ] as const
+            ).map(([label, v]) => (
+              <div key={label} className="flex items-center justify-between gap-2 border-b border-border pb-2 last:border-0 last:pb-0">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <Coffee size={13} /> {label}
+                </span>
+                <span className="text-right tabular-nums">
+                  <span className="text-base font-bold">{v.tables}</span> mesas · <span className="text-base font-bold">{v.guests}</span> hóspedes
+                </span>
+              </div>
+            ))}
+            <Link href="/mesas/gerenciar" className="inline-block text-primary hover:underline">
+              Abrir Mesas do café
+            </Link>
+          </div>
+        </Panel>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-3">
-        <Panel title="Serviços de hoje">
-          {s.total === 0 ? (
-            <p className="text-xs text-muted-foreground">Nenhum serviço planejado para hoje.</p>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex h-3 overflow-hidden rounded-full bg-muted">
-                {STATUS_SEGMENTS.map((seg) => {
-                  const n = s[seg.key];
-                  return n > 0 ? <div key={seg.key} className={seg.color} style={{ width: `${(n / s.total) * 100}%` }} title={`${seg.label}: ${n}`} /> : null;
-                })}
-              </div>
-              <ul className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                {STATUS_SEGMENTS.map((seg) => (
-                  <li key={seg.key} className="flex items-center gap-1.5">
-                    <span className={`size-2 rounded-full ${seg.color}`} />
-                    <span className="min-w-0 flex-1 truncate text-muted-foreground">{seg.label}</span>
-                    <span className="font-semibold tabular-nums">{s[seg.key]}</span>
-                  </li>
-                ))}
-              </ul>
-              {s.cancelled > 0 && <p className="text-[11px] text-muted-foreground">{s.cancelled} cancelado(s) não entram na conta.</p>}
-            </div>
-          )}
-        </Panel>
-
         <Panel title="Suítes vagas, disponíveis para alugar">
           <div className="space-y-3">
             <div>
@@ -210,15 +320,36 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
             </div>
           </div>
         </Panel>
+
+        <div className="grid gap-3">
+          <Kpi icon={CreditCard} label="Contas em aberto" value={String(d.accounts.open)} sub={brl(d.accounts.total)} href="/frigobar" />
+          <Kpi
+            icon={AlertTriangle}
+            label="Contas com checkout em aberto"
+            value={String(d.accounts.checkoutOpen.count)}
+            sub={`${brl(d.accounts.checkoutOpen.total)} · hóspede já saiu`}
+            href="/frigobar"
+            tone={d.accounts.checkoutOpen.count > 0 ? "alert" : undefined}
+          />
+          <Kpi
+            icon={CreditCard}
+            label="Contas com checkout fechadas, não pagas"
+            value={String(d.accounts.checkoutClosed.count)}
+            sub={`${brl(d.accounts.checkoutClosed.total)} · aguardando pagamento`}
+            href="/frigobar"
+          />
+        </div>
       </div>
 
       <div>
-        <p className="mb-2 text-xs font-medium text-muted-foreground">Mais consumidos desde o início (por quantidade)</p>
+        <p className="mb-2 text-xs font-medium text-muted-foreground">
+          Mais consumidos no mês corrente ({monthName(d.monthLabels.current)}), com o mês anterior ao lado
+        </p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <RankList title="Frigobar" items={d.top.frigobar} />
-          <RankList title="Bar · Petiscos" items={d.top.petiscos} />
-          <RankList title="Bar · Drinks" items={d.top.drinks} />
-          <RankList title="Bar · Outras bebidas" items={d.top.bebidas} />
+          <ConsumptionColumn title="Frigobar" block={d.top.frigobar} labels={d.monthLabels} />
+          <ConsumptionColumn title="Bar · Petiscos" block={d.top.petiscos} labels={d.monthLabels} />
+          <ConsumptionColumn title="Bar · Drinks" block={d.top.drinks} labels={d.monthLabels} />
+          <ConsumptionColumn title="Bar · Outras bebidas" block={d.top.bebidas} labels={d.monthLabels} />
         </div>
       </div>
     </div>

@@ -483,11 +483,14 @@ export default function QuestoesRespostasPage() {
               <List
                 items={[
                   <>
-                    <strong>Aba Operacional</strong>: serviços concluídos hoje, serviços
-                    pendentes de revisão, ocorrências de manutenção, chegadas e saídas de hoje, mesas e hóspedes do café
-                    e contas de consumo em aberto; o andamento dos serviços de hoje; as suítes vagas, limpas e sujas; e,
-                    por quantidade desde o início, os 5 itens mais consumidos do frigobar, dos petiscos, dos drinks e das
-                    outras bebidas do bar.
+                    <strong>Aba Operacional</strong>: as suítes de hoje (serviço e situação de cada uma);
+                    as chegadas (suíte, primeiro nome do hóspede e horário previsto) e as saídas (suíte e primeiro nome) de
+                    hoje; as mesas e os hóspedes do café de hoje e de amanhã; as suítes vagas, limpas e sujas; a
+                    manutenção; as contas em aberto, as contas de quem já saiu e ainda está em aberto e as contas de quem
+                    já saiu e está fechada, aguardando pagamento. Por fim, os 5 itens mais consumidos no mês corrente em
+                    cada grupo (frigobar, petiscos, drinks e outras bebidas), com uma barra do mês corrente e outra do
+                    mês anterior, e abaixo uma pizza com a participação dos 5 mais consumidos desde o início (somando
+                    100% entre eles). O consumo de frigobar por mês vem do registro de lançamentos, que só existe desde nov/2026.
                   </>,
                   <>
                     <strong>Aba Gerencial</strong> (administrador e gerente operacional): lucro gerencial, receita e despesas do
