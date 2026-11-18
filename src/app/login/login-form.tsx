@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { signInAction, type LoginOption } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/shared/password-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -57,7 +57,7 @@ export function LoginForm({ options }: { options: LoginOption[] }) {
 
           <div className="space-y-2">
             <Label htmlFor="password">Senha</Label>
-            <Input id="password" name="password" type="password" required autoComplete="current-password" />
+            <PasswordInput id="password" name="password" required autoComplete="current-password" />
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
