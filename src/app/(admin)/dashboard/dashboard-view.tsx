@@ -4,7 +4,9 @@ import Link from "next/link";
 import {
   Bar,
   CartesianGrid,
+  Cell,
   ComposedChart,
+  Legend,
   Line,
   ResponsiveContainer,
   Tooltip,
@@ -223,7 +225,7 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
   );
 }
 
-const CENTER_LABELS: Record<string, string> = { hospedagem: "Hospedagem", cafe: "Café da manhã", bar: "Bar", frigobar: "Frigobar" };
+const CENTER_LABELS: Record<string, string> = { hospedagem: "Hospedagem e café da manhã", bar: "Bar", frigobar: "Frigobar" };
 
 function monthShort(ym: string) {
   const [y, m] = ym.split("-");
@@ -231,12 +233,55 @@ function monthShort(ym: string) {
   return `${names[Number(m) - 1]}/${y.slice(2)}`;
 }
 
-function GerencialView({ d }: { d: GerencialDashboard }) {
+const score = (v: number | null) => (v === null ? "—" : v.toFixed(2).replace(".", ","));
+
+// Cores do gráfico (legíveis nos três temas).
+const C_REVENUE = "#94A3B8";
+const C_CURRENT = "#E8B85C";
+const C_PROFIT = "#059669";
+const C_OCC = "#2563EB";
+const C_ADR = "#7C3AED";
+const C_REVPAR = "#DB2777";
+
+function CentersPanel({ title, rows, note }: { title: string; rows: GerencialDashboard["centersCurrent"]; note?: string }) {
+  const max = Math.max(1, ...rows.flatMap((c) => [c.revenue, c.expenses]));
+  return (
+    <Panel title={title}>
+      {rows.length === 0 ? (
+        <p className="text-xs text-muted-foreground">Sem dados.</p>
+      ) : (
+        <div className="space-y-2.5">
+          {rows.map((c) => (
+            <div key={c.center} className="space-y-1">
+              <div className="flex items-baseline justify-between gap-2 text-xs">
+                <span className="min-w-0 truncate font-medium">{CENTER_LABELS[c.center] ?? c.center}</span>
+                <span className="shrink-0 tabular-nums text-muted-foreground">
+                  {brl0(c.revenue)} − {brl0(c.expenses)}
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-muted">
+                <div className="h-1.5 rounded-full bg-[var(--chart-2)] dark:bg-[#E8B85C]" style={{ width: `${(Math.max(c.revenue, 0) / max) * 100}%` }} />
+              </div>
+              <div className="h-1.5 rounded-full bg-muted">
+                <div className="h-1.5 rounded-full bg-[var(--chart-1)] dark:bg-[#B08968]" style={{ width: `${(Math.max(c.expenses, 0) / max) * 100}%` }} />
+              </div>
+            </div>
+          ))}
+          <p className="text-[11px] text-muted-foreground">Barra de cima: receita · barra de baixo: despesa.{note ? ` ${note}` : ""}</p>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function GerencialView({ d, isGerente }: { d: GerencialDashboard; isGerente: boolean }) {
   const r = d.result;
   const ind = d.indicators;
-  const maxCenter = Math.max(1, ...d.centers.flatMap((c) => [c.revenue, c.expenses]));
-  const maxExpense = Math.max(1, ...d.topExpenses.map((e) => e.amount));
   const monthLabel = monthShort(d.month);
+  const sinceLabel = monthShort(d.windowStart);
+  const maxExpense = Math.max(1, ...d.expenseRanking.flatMap((e) => [e.current, e.average]));
+  const chartData = d.series.map((p) => ({ ...p, label: monthShort(p.month), occPct: p.occ === null ? null : Math.round(p.occ * 100) }));
+  const hasChart = d.series.some((p) => p.revenue !== null);
 
   return (
     <div className="space-y-4">
@@ -251,56 +296,98 @@ function GerencialView({ d }: { d: GerencialDashboard }) {
         />
         <Kpi icon={TrendingUp} label="Receita do mês" value={r ? brl0(r.revenue) : "—"} sub="hospedagem líquida + bar + frigobar" href="/contabil/resultado-mensal" />
         <Kpi icon={CreditCard} label="Despesas do mês" value={r ? brl0(r.expenses) : "—"} sub="regime caixa, rateadas" href="/contabil/compras/relatorio" />
-        <Kpi icon={BedDouble} label="Diária média (ADR)" value={ind?.current?.adr != null ? brl0(ind.current.adr) : "—"} sub={`${ind?.current?.paid ?? 0} diárias vendidas`} href="/dashboard/indicadores" />
-        <Kpi icon={Percent} label="Ocupação comercial" value={pct(ind?.current?.occ ?? null)} sub={ind?.current?.revpar != null ? `RevPAR ${brl0(ind.current.revpar)}` : undefined} href="/dashboard/indicadores" />
+        <Kpi
+          icon={BedDouble}
+          label="Diária média (ADR)"
+          value={ind?.current?.adr != null ? brl0(ind.current.adr) : "—"}
+          sub={`${ind?.current?.paid ?? 0} diárias vendidas`}
+          href={isGerente ? undefined : "/dashboard/indicadores"}
+        />
+        <Kpi
+          icon={Percent}
+          label="Ocupação comercial"
+          value={pct(ind?.current?.occ ?? null)}
+          sub={ind?.current?.revpar != null ? `RevPAR ${brl0(ind.current.revpar)}` : undefined}
+          href={isGerente ? undefined : "/dashboard/indicadores"}
+        />
         <Kpi
           icon={Star}
           label="Avaliação dos hóspedes"
-          value={d.reviews?.average != null ? d.reviews.average.toFixed(2).replace(".", ",") : "—"}
+          value={d.reviews?.average != null ? `${score(d.reviews.average)} / 10` : "—"}
           sub={d.reviews ? `${d.reviews.total} avaliações · ${d.reviews.news} nova(s) na semana` : undefined}
           href="/dashboard/avaliacoes-hospedes"
         />
       </div>
 
       <div className="grid gap-3 lg:grid-cols-3">
-        <Panel title="Receita de hospedagem e ocupação (últimos meses)" className="lg:col-span-2">
-          {ind && ind.series.length > 0 ? (
-            <div className="h-56 w-full">
+        <Panel title="Receita de hospedagem e taxa de ocupação (12 meses atrás e 5 à frente)" className="lg:col-span-2">
+          {hasChart ? (
+            <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={ind.series.map((p) => ({ ...p, label: monthShort(p.month), occPct: p.occ === null ? null : Math.round(p.occ * 100) }))} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <ComposedChart data={chartData} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
-                  <YAxis yAxisId="rev" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
-                  <YAxis yAxisId="occ" orientation="right" domain={[0, 100]} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={36} tickFormatter={(v) => `${v}%`} />
+                  <XAxis xAxisId="a" dataKey="label" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                  <XAxis xAxisId="b" dataKey="label" hide />
+                  <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={40} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
+                  <YAxis yAxisId="price" orientation="right" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => `R$${Math.round(v)}`} />
+                  <YAxis yAxisId="occ" orientation="right" domain={[0, 100]} tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={34} tickFormatter={(v) => `${v}%`} />
                   <Tooltip
                     contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
-                    formatter={(value, name) => (name === "Receita" ? [brl(Number(value)), name] : [`${value}%`, name])}
+                    formatter={(value, name) => (name === "Ocupação" ? [`${value}%`, name] : [brl(Number(value)), name])}
                   />
-                  <Bar yAxisId="rev" dataKey="revenue" name="Receita" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
-                  <Line yAxisId="occ" dataKey="occPct" name="Ocupação" stroke="#E8B85C" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar xAxisId="a" yAxisId="rev" dataKey="revenue" name="Receita de hospedagem" fill={C_REVENUE} barSize={24} radius={[4, 4, 0, 0]}>
+                    {chartData.map((p) => (
+                      <Cell key={p.month} fill={p.isCurrent ? C_CURRENT : C_REVENUE} />
+                    ))}
+                  </Bar>
+                  <Bar xAxisId="b" yAxisId="rev" dataKey="profit" name="Lucro gerencial" fill={C_PROFIT} barSize={10} radius={[2, 2, 0, 0]} />
+                  <Line yAxisId="occ" dataKey="occPct" name="Ocupação" stroke={C_OCC} strokeWidth={2} dot={{ r: 2.5 }} connectNulls />
+                  <Line yAxisId="price" dataKey="adr" name="ADR (STR)" stroke={C_ADR} strokeWidth={2} dot={{ r: 2.5 }} connectNulls />
+                  <Line yAxisId="price" dataKey="revpar" name="RevPAR (STR)" stroke={C_REVPAR} strokeWidth={2} dot={{ r: 2.5 }} connectNulls />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">Sem dados de indicadores ainda.</p>
           )}
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Barra mais larga: receita de hospedagem (o mês corrente em dourado). Barra estreita por cima: lucro gerencial (disponível desde nov/2026).
+          </p>
         </Panel>
 
-        <Panel title="Avaliações dos hóspedes">
+        <Panel title="Avaliações dos hóspedes (notas de 0 a 10)">
           {d.reviews ? (
             <div className="space-y-2 text-xs">
               <div className="flex items-baseline justify-between">
                 <span className="text-muted-foreground">Média geral</span>
-                <span className="text-base font-bold tabular-nums">{d.reviews.average != null ? d.reviews.average.toFixed(2).replace(".", ",") : "—"} / 5</span>
+                <span className="text-base font-bold tabular-nums">{score(d.reviews.average)} / 10</span>
               </div>
               <div className="flex items-baseline justify-between">
                 <span className="text-muted-foreground">Média dos últimos 90 dias</span>
-                <span className="text-base font-bold tabular-nums">{d.reviews.last90 != null ? d.reviews.last90.toFixed(2).replace(".", ",") : "—"} / 5</span>
+                <span className="text-base font-bold tabular-nums">{score(d.reviews.last90)} / 10</span>
               </div>
               <div className="flex items-baseline justify-between">
                 <span className="text-muted-foreground">Novas na última semana</span>
                 <span className="text-base font-bold tabular-nums">{d.reviews.news}</span>
               </div>
+              {d.reviews.booking && (
+                <div className="space-y-1.5 border-t border-border pt-2">
+                  <div className="flex items-baseline justify-between">
+                    <span className="font-medium">Booking · média geral</span>
+                    <span className="text-base font-bold tabular-nums">{score(d.reviews.booking.average)} / 10</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">{d.reviews.booking.count} avaliações</p>
+                  <ul className="space-y-1">
+                    {d.reviews.booking.items.map((i) => (
+                      <li key={i.label} className="flex items-baseline justify-between gap-2">
+                        <span className="min-w-0 truncate text-muted-foreground">{i.label}</span>
+                        <span className="shrink-0 font-semibold tabular-nums">{score(i.average)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="flex gap-3 pt-1">
                 <Link href="/dashboard/avaliacoes" className="text-primary hover:underline">
                   Ler e responder
@@ -316,52 +403,41 @@ function GerencialView({ d }: { d: GerencialDashboard }) {
         </Panel>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <Panel title={`Receita e despesa por centro · ${monthLabel}`}>
-          {d.centers.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Sem dados do mês.</p>
+      <div className="grid gap-3 lg:grid-cols-3">
+        <CentersPanel title={`Receita e despesa por centro · ${monthLabel}`} rows={d.centersCurrent} />
+        <CentersPanel
+          title={`Receita e despesa por centro · acumulado de ${sinceLabel} a ${monthLabel}`}
+          rows={d.centersAccum}
+          note={`Soma dos últimos ${d.windowMonths} mês(es), a partir de ${sinceLabel} (máximo de 12).`}
+        />
+
+        <Panel title="Maiores despesas · mês corrente e média">
+          {d.expenseRanking.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhuma despesa lançada.</p>
           ) : (
             <div className="space-y-2.5">
-              {d.centers.map((c) => (
-                <div key={c.center} className="space-y-1">
-                  <div className="flex items-baseline justify-between text-xs">
-                    <span className="font-medium">{CENTER_LABELS[c.center] ?? c.center}</span>
-                    <span className="tabular-nums text-muted-foreground">
-                      {brl0(c.revenue)} − {brl0(c.expenses)}
-                    </span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-muted">
-                    <div className="h-1.5 rounded-full bg-[var(--chart-2)] dark:bg-[#E8B85C]" style={{ width: `${(c.revenue / maxCenter) * 100}%` }} />
-                  </div>
-                  <div className="h-1.5 rounded-full bg-muted">
-                    <div className="h-1.5 rounded-full bg-[var(--chart-1)] dark:bg-[#B08968]" style={{ width: `${(c.expenses / maxCenter) * 100}%` }} />
-                  </div>
-                </div>
-              ))}
-              <p className="text-[11px] text-muted-foreground">Barra de cima: receita · barra de baixo: despesa.</p>
-            </div>
-          )}
-        </Panel>
-
-        <Panel title={`Maiores despesas do mês · ${monthLabel}`}>
-          {d.topExpenses.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Nenhuma despesa lançada no mês.</p>
-          ) : (
-            <ol className="space-y-2">
-              {d.topExpenses.map((e, i) => (
-                <li key={e.name} className="space-y-0.5">
+              {d.expenseRanking.map((e, i) => (
+                <div key={e.name} className="space-y-1">
                   <div className="flex items-baseline justify-between gap-2 text-xs">
                     <span className="min-w-0 truncate">
                       <span className="text-muted-foreground">{i + 1}.</span> {e.name}
                     </span>
-                    <span className="shrink-0 font-semibold tabular-nums">{brl0(e.amount)}</span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">
+                      <span className="font-semibold text-foreground">{brl0(e.current)}</span> · média {brl0(e.average)}
+                    </span>
                   </div>
                   <div className="h-1.5 rounded-full bg-muted">
-                    <div className="h-1.5 rounded-full bg-[var(--chart-1)] dark:bg-[#B08968]" style={{ width: `${(e.amount / maxExpense) * 100}%` }} />
+                    <div className="h-1.5 rounded-full bg-[var(--chart-1)] dark:bg-[#B08968]" style={{ width: `${(e.current / maxExpense) * 100}%` }} />
                   </div>
-                </li>
+                  <div className="h-1.5 rounded-full bg-muted">
+                    <div className="h-1.5 rounded-full bg-muted-foreground/50" style={{ width: `${(e.average / maxExpense) * 100}%` }} />
+                  </div>
+                </div>
               ))}
-            </ol>
+              <p className="text-[11px] text-muted-foreground">
+                Barra de cima: {monthLabel} · barra de baixo: média mensal dos {d.windowMonths} mês(es) desde {sinceLabel} (inclui o mês corrente). Ordem pelo maior dos dois valores.
+              </p>
+            </div>
           )}
         </Panel>
       </div>
@@ -372,12 +448,12 @@ function GerencialView({ d }: { d: GerencialDashboard }) {
 export function DashboardView({
   operational,
   gerencial,
+  isGerente,
 }: {
   operational: OperationalDashboard;
-  gerencial: GerencialDashboard | null;
+  gerencial: GerencialDashboard;
+  isGerente: boolean;
 }) {
-  // Gerente operacional vê só o painel operacional (o financeiro é do administrador).
-  if (!gerencial) return <OperationalView d={operational} />;
   return (
     <Tabs defaultValue="operacional">
       <TabsList>
@@ -388,7 +464,7 @@ export function DashboardView({
         <OperationalView d={operational} />
       </TabsContent>
       <TabsContent value="gerencial" className="pt-3">
-        <GerencialView d={gerencial} />
+        <GerencialView d={gerencial} isGerente={isGerente} />
       </TabsContent>
     </Tabs>
   );

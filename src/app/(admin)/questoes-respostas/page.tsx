@@ -448,7 +448,7 @@ export default function QuestoesRespostasPage() {
               </P>
               <P>
                 Existe também o papel <strong>“Gerente operacional”</strong>. Ele enxerga o Resumo executivo
-                (só a aba Operacional), o Módulo operacional
+                (as duas abas, Operacional e Gerencial), o Módulo operacional
                 (inclusive as Comissões das camareiras e as Listas operacionais, mas, dentro das Listas operacionais, sem
                 “Ocorrências Manutenção” e “Manutenção Preventiva”), a Sincronização e, no Módulo gerencial, apenas três
                 itens, <strong>só para consulta</strong>: o <strong>Resultado mensal</strong>, a{" "}
@@ -483,16 +483,21 @@ export default function QuestoesRespostasPage() {
               <List
                 items={[
                   <>
-                    <strong>Aba Operacional</strong> (o gerente operacional vê só esta): serviços concluídos hoje, serviços
+                    <strong>Aba Operacional</strong>: serviços concluídos hoje, serviços
                     pendentes de revisão, ocorrências de manutenção, chegadas e saídas de hoje, mesas e hóspedes do café
                     e contas de consumo em aberto; o andamento dos serviços de hoje; as suítes vagas, limpas e sujas; e,
                     por quantidade desde o início, os 5 itens mais consumidos do frigobar, dos petiscos, dos drinks e das
                     outras bebidas do bar.
                   </>,
                   <>
-                    <strong>Aba Gerencial</strong> (só o administrador): lucro gerencial, receita e despesas do mês,
-                    diária média, ocupação e avaliação dos hóspedes; um gráfico da receita de hospedagem e da ocupação dos
-                    últimos meses; as avaliações; a receita e a despesa de cada centro; e as maiores despesas do mês.
+                    <strong>Aba Gerencial</strong> (administrador e gerente operacional): lucro gerencial, receita e despesas do
+                    mês, diária média, ocupação e avaliação dos hóspedes (notas de 0 a 10, com a média geral do Booking e a
+                    média de cada item que o Booking avalia). Um gráfico com 12 meses para trás, o mês corrente (barra em
+                    dourado) e 5 meses à frente: a barra larga é a receita de hospedagem, a barra estreita por cima é o
+                    lucro gerencial (disponível desde nov/2026) e as linhas são a ocupação, o ADR e o RevPAR (padrão STR).
+                    Depois, a receita e a despesa por centro (hospedagem e café da manhã juntos), uma vez para o mês
+                    corrente e outra somando os últimos 12 meses (contando só a partir de nov/2026), e as maiores despesas
+                    com o valor do mês corrente e a média mensal desde nov/2026.
                   </>,
                 ]}
               />

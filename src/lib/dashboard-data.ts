@@ -3,7 +3,9 @@ import { todayKey } from "@/lib/date";
 import { getAvailableSuites } from "@/lib/available-suites";
 import { getRoomBillsOverview } from "@/lib/actions/room-bills";
 import { getMonthlyResult } from "@/lib/actions/monthly-result";
-import { getIndicators } from "@/lib/actions/indicators";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { loadIndicators } from "@/lib/indicators-load";
+import { channelAverage, type ItemAverage } from "@/lib/stays/reviews";
 import { getGuestReviews } from "@/lib/actions/stays-reviews";
 
 export interface RankedItem {
@@ -137,53 +139,146 @@ export async function getOperationalDashboard(): Promise<OperationalDashboard> {
   };
 }
 
-export interface GerencialDashboard {
-  month: string;
-  result: { revenue: number; expenses: number; operating: number; lodgingNet: number; bar: number; frigobar: number } | null;
-  centers: { center: string; revenue: number; expenses: number }[];
-  topExpenses: { name: string; amount: number }[];
-  indicators: {
-    current: { adr: number | null; revpar: number | null; occ: number | null; paid: number; revenue: number } | null;
-    series: { month: string; revenue: number; occ: number | null }[];
-  } | null;
-  reviews: { average: number | null; total: number; last90: number | null; news: number } | null;
+export interface CenterRow {
+  center: string;
+  revenue: number;
+  expenses: number;
 }
 
+export interface ChartPoint {
+  month: string; // AAAA-MM
+  revenue: number | null;
+  profit: number | null;
+  adr: number | null;
+  revpar: number | null;
+  occ: number | null;
+  isCurrent: boolean;
+}
+
+export interface GerencialDashboard {
+  month: string;
+  // Primeiro mês do acumulado/média (nunca antes de nov/2026) e quantos meses entram na conta.
+  windowStart: string;
+  windowMonths: number;
+  result: { revenue: number; expenses: number; operating: number; lodgingNet: number; bar: number; frigobar: number } | null;
+  centersCurrent: CenterRow[];
+  centersAccum: CenterRow[];
+  expenseRanking: { name: string; current: number; average: number }[];
+  series: ChartPoint[];
+  indicators: { current: { adr: number | null; revpar: number | null; occ: number | null; paid: number; revenue: number } | null } | null;
+  reviews: {
+    average: number | null;
+    total: number;
+    last90: number | null;
+    news: number;
+    booking: { average: number | null; count: number; items: ItemAverage[] } | null;
+  } | null;
+}
+
+// Início do controle gerencial (modelo simplificado): nada antes disso entra nas somas e médias.
+const MODEL_START = "2026-11";
+
+function shiftMonth(ym: string, delta: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  const idx = y * 12 + (m - 1) + delta;
+  return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, "0")}`;
+}
+
+// Hospedagem e café da manhã aparecem juntos.
+function mergeCenters(rows: CenterRow[]): CenterRow[] {
+  const out: CenterRow[] = [];
+  rows.forEach((c) => {
+    const key = c.center === "cafe" ? "hospedagem" : c.center;
+    const found = out.find((o) => o.center === key);
+    if (found) {
+      found.revenue += c.revenue;
+      found.expenses += c.expenses;
+    } else out.push({ center: key, revenue: c.revenue, expenses: c.expenses });
+  });
+  return out;
+}
+
+// O acesso (administrador ou gerente operacional) já foi conferido pela página; as leituras usam o
+// cliente do sistema porque os indicadores da Stays só o administrador lê pelas regras do banco.
 export async function getGerencialDashboard(): Promise<GerencialDashboard> {
   const month = todayKey().slice(0, 7);
-  const [result, indicators, reviews] = await Promise.all([getMonthlyResult(month), getIndicators(), getGuestReviews()]);
+  const lastTwelve = shiftMonth(month, -11);
+  const windowStart = lastTwelve > MODEL_START ? lastTwelve : MODEL_START;
+  const windowList: string[] = [];
+  for (let m = windowStart; m <= month; m = shiftMonth(m, 1)) windowList.push(m);
 
-  let resultOut: GerencialDashboard["result"] = null;
-  let centers: GerencialDashboard["centers"] = [];
-  let topExpenses: GerencialDashboard["topExpenses"] = [];
-  if (!("error" in result)) {
-    resultOut = {
-      revenue: result.totalRevenue,
-      expenses: result.totalExpenses,
-      operating: result.operatingResult,
-      lodgingNet: result.lodging.net,
-      bar: result.bar.total,
-      frigobar: result.frigobar.total,
-    };
-    centers = result.byCenter.map((c) => ({ center: c.center, revenue: c.revenue, expenses: c.expenses }));
-    const byCategory = new Map<string, number>();
-    result.byCenter.forEach((c) => c.categories.forEach((l) => byCategory.set(l.name, (byCategory.get(l.name) ?? 0) + l.amount)));
-    topExpenses = Array.from(byCategory.entries())
-      .map(([name, amount]) => ({ name, amount }))
-      .filter((l) => l.amount > 0)
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 5);
-  }
+  const [results, indicators, reviews] = await Promise.all([
+    Promise.all(windowList.map((m) => getMonthlyResult(m))),
+    loadIndicators(createAdminClient()),
+    getGuestReviews(),
+  ]);
 
+  type Ok = Exclude<(typeof results)[number], { error: string }>;
+  const okResults = new Map<string, Ok>();
+  results.forEach((r, i) => {
+    if (!("error" in r)) okResults.set(windowList[i], r);
+  });
+
+  const cur = okResults.get(month) ?? null;
+  const resultOut: GerencialDashboard["result"] = cur
+    ? {
+        revenue: cur.totalRevenue,
+        expenses: cur.totalExpenses,
+        operating: cur.operatingResult,
+        lodgingNet: cur.lodging.net,
+        bar: cur.bar.total,
+        frigobar: cur.frigobar.total,
+      }
+    : null;
+
+  const centersCurrent = cur ? mergeCenters(cur.byCenter.map((c) => ({ center: c.center, revenue: c.revenue, expenses: c.expenses }))) : [];
+  const accum = new Map<string, CenterRow>();
+  const catCurrent = new Map<string, number>();
+  const catTotal = new Map<string, number>();
+  okResults.forEach((r, m) => {
+    r.byCenter.forEach((c) => {
+      const a = accum.get(c.center) ?? { center: c.center, revenue: 0, expenses: 0 };
+      a.revenue += c.revenue;
+      a.expenses += c.expenses;
+      accum.set(c.center, a);
+      c.categories.forEach((l) => {
+        catTotal.set(l.name, (catTotal.get(l.name) ?? 0) + l.amount);
+        if (m === month) catCurrent.set(l.name, (catCurrent.get(l.name) ?? 0) + l.amount);
+      });
+    });
+  });
+  const centersAccum = mergeCenters(Array.from(accum.values()));
+
+  const monthsCount = Math.max(1, okResults.size);
+  const expenseRanking = Array.from(new Set([...catCurrent.keys(), ...catTotal.keys()]))
+    .map((name) => ({ name, current: catCurrent.get(name) ?? 0, average: (catTotal.get(name) ?? 0) / monthsCount }))
+    .filter((e) => e.current > 0 || e.average > 0)
+    .sort((a, b) => Math.max(b.current, b.average) - Math.max(a.current, a.average))
+    .slice(0, 6);
+
+  // Gráfico: 12 meses para trás, o mês corrente e 5 para frente.
+  const byMonth = new Map<string, { adr: number | null; revpar: number | null; occ: number | null; revenue: number }>();
   let indOut: GerencialDashboard["indicators"] = null;
   if (!("error" in indicators)) {
-    const cur = indicators.open[0] ?? null;
-    const lastClosed = indicators.closed.slice(0, 5).reverse();
-    const series = [...lastClosed, ...(cur ? [cur] : [])].map((m) => ({ month: m.month.slice(0, 7), revenue: m.revenue, occ: m.occCommercial }));
-    indOut = {
-      current: cur ? { adr: cur.adr, revpar: cur.revpar, occ: cur.occCommercial, paid: cur.paid, revenue: cur.revenue } : null,
-      series,
-    };
+    [...indicators.closed, ...indicators.open].forEach((m) =>
+      byMonth.set(m.month.slice(0, 7), { adr: m.adr, revpar: m.revpar, occ: m.occCommercial, revenue: m.revenue })
+    );
+    const c = indicators.open[0] ?? null;
+    indOut = { current: c ? { adr: c.adr, revpar: c.revpar, occ: c.occCommercial, paid: c.paid, revenue: c.revenue } : null };
+  }
+  const series: ChartPoint[] = [];
+  for (let i = -12; i <= 5; i++) {
+    const m = shiftMonth(month, i);
+    const ind = byMonth.get(m);
+    series.push({
+      month: m,
+      revenue: ind ? ind.revenue : null,
+      profit: okResults.get(m)?.operatingResult ?? null,
+      adr: ind?.adr ?? null,
+      revpar: ind?.revpar ?? null,
+      occ: ind?.occ ?? null,
+      isCurrent: m === month,
+    });
   }
 
   let revOut: GerencialDashboard["reviews"] = null;
@@ -191,13 +286,28 @@ export async function getGerencialDashboard(): Promise<GerencialDashboard> {
     const rated = reviews.reviews.filter((r) => r.rating !== null && r.rating > 0);
     const avg = (list: typeof rated) => (list.length ? list.reduce((s, r) => s + (r.rating as number), 0) / list.length : null);
     const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+    const b = channelAverage(reviews.reviews, "bookingcom");
+    // Notas em escala de 0 a 10 (as da Stays vêm de 0 a 5).
+    const x2 = (v: number | null) => (v === null ? null : v * 2);
     revOut = {
-      average: avg(rated),
+      average: x2(avg(rated)),
       total: rated.length,
-      last90: avg(rated.filter((r) => r.day >= cutoff)),
+      last90: x2(avg(rated.filter((r) => r.day >= cutoff))),
       news: reviews.reviews.filter((r) => r.isNew).length,
+      booking: b.count > 0 ? { average: x2(b.average), count: b.count, items: b.items.map((i) => ({ ...i, average: i.average * 2 })) } : null,
     };
   }
 
-  return { month, result: resultOut, centers, topExpenses, indicators: indOut, reviews: revOut };
+  return {
+    month,
+    windowStart,
+    windowMonths: monthsCount,
+    result: resultOut,
+    centersCurrent,
+    centersAccum,
+    expenseRanking,
+    series,
+    indicators: indOut,
+    reviews: revOut,
+  };
 }

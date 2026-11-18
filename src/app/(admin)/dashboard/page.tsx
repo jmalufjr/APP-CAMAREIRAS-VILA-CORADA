@@ -5,16 +5,15 @@ import { todayKey, formatDatePt } from "@/lib/date";
 import { getGerencialDashboard, getOperationalDashboard, type GerencialDashboard } from "@/lib/dashboard-data";
 import { DashboardView } from "./dashboard-view";
 
-// Resumo executivo: dois painéis (abas Operacional e Gerencial). O gerente operacional vê só o operacional.
+// Resumo executivo: dois painéis (abas Operacional e Gerencial), para o administrador e para o gerente
+// operacional.
 export default async function DashboardPage() {
   const profile = await getCurrentProfile();
   const isGerente = profile.role === "gerente_operacional";
 
   const [operational, gerencial] = await Promise.all([
     getOperationalDashboard(),
-    isGerente
-      ? Promise.resolve<GerencialDashboard | null>(null)
-      : getGerencialDashboard().catch((): GerencialDashboard | null => null),
+    getGerencialDashboard().catch((): GerencialDashboard => EMPTY_GERENCIAL),
   ]);
 
   return (
@@ -24,16 +23,20 @@ export default async function DashboardPage() {
         subtitle={`Resumo de hoje, ${formatDatePt(todayKey())}`}
         action={isGerente ? undefined : <ThemeToggle />}
       />
-      <DashboardView operational={operational} gerencial={isGerente ? null : (gerencial ?? EMPTY_GERENCIAL)} />
+      <DashboardView operational={operational} gerencial={gerencial} isGerente={isGerente} />
     </div>
   );
 }
 
 const EMPTY_GERENCIAL: GerencialDashboard = {
   month: todayKey().slice(0, 7),
+  windowStart: "2026-11",
+  windowMonths: 1,
   result: null,
-  centers: [],
-  topExpenses: [],
+  centersCurrent: [],
+  centersAccum: [],
+  expenseRanking: [],
+  series: [],
   indicators: null,
   reviews: null,
 };
