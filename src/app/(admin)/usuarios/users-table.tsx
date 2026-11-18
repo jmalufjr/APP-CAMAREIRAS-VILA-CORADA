@@ -7,7 +7,7 @@ import type { Profile } from "@/lib/types";
 import { deleteUser, resetUserPassword } from "@/lib/actions/users";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/shared/password-input";
 import {
   Table,
   TableBody,
@@ -106,8 +106,7 @@ export function UsersTable({ users }: { users: Profile[] }) {
           <DialogHeader>
             <DialogTitle>Redefinir senha de {resetTarget?.name}</DialogTitle>
           </DialogHeader>
-          <Input
-            type="password"
+          <PasswordInput
             placeholder="Nova senha"
             minLength={6}
             value={newPassword}

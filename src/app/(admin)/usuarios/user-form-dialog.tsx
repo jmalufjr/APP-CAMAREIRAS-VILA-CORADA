@@ -7,6 +7,7 @@ import { createUser, updateUser } from "@/lib/actions/users";
 import type { Profile, UserRole } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/shared/password-input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -105,7 +106,7 @@ export function UserFormDialog({ user }: { user?: Profile }) {
           {!isEdit && (
             <div className="space-y-2">
               <Label htmlFor="password">Senha inicial</Label>
-              <Input id="password" name="password" type="password" required minLength={6} />
+              <PasswordInput id="password" name="password" required minLength={6} />
             </div>
           )}
           {isEdit && (
