@@ -38,6 +38,43 @@ const pct = (v: number | null) => (v === null ? "—" : `${(v * 100).toFixed(0)}
 // Valor em destaque: bordô no tema claro, dourado nos escuros (mesma regra dos cards do app).
 const VALUE_COLOR = "text-primary dark:text-[#E8B85C]";
 
+type Accent = "amber" | "blue" | "emerald" | "rose" | "violet" | "teal" | "orange" | "sky";
+
+// Cada cartão tem uma cor de destaque (faixa no topo, fundo levemente tingido e marcador).
+const ACCENTS: Record<Accent, { card: string; chip: string; dot: string }> = {
+  amber: { card: "border-t-4 border-t-amber-500 bg-linear-to-br from-amber-500/20 via-card to-card", chip: "bg-amber-500/25 text-amber-700 dark:text-amber-300", dot: "bg-amber-500" },
+  blue: { card: "border-t-4 border-t-blue-500 bg-linear-to-br from-blue-500/20 via-card to-card", chip: "bg-blue-500/25 text-blue-700 dark:text-blue-300", dot: "bg-blue-500" },
+  emerald: { card: "border-t-4 border-t-emerald-500 bg-linear-to-br from-emerald-500/20 via-card to-card", chip: "bg-emerald-500/25 text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-500" },
+  rose: { card: "border-t-4 border-t-rose-500 bg-linear-to-br from-rose-500/20 via-card to-card", chip: "bg-rose-500/25 text-rose-700 dark:text-rose-300", dot: "bg-rose-500" },
+  violet: { card: "border-t-4 border-t-violet-500 bg-linear-to-br from-violet-500/20 via-card to-card", chip: "bg-violet-500/25 text-violet-700 dark:text-violet-300", dot: "bg-violet-500" },
+  teal: { card: "border-t-4 border-t-teal-500 bg-linear-to-br from-teal-500/20 via-card to-card", chip: "bg-teal-500/25 text-teal-700 dark:text-teal-300", dot: "bg-teal-500" },
+  orange: { card: "border-t-4 border-t-orange-500 bg-linear-to-br from-orange-500/20 via-card to-card", chip: "bg-orange-500/25 text-orange-700 dark:text-orange-300", dot: "bg-orange-500" },
+  sky: { card: "border-t-4 border-t-sky-500 bg-linear-to-br from-sky-500/20 via-card to-card", chip: "bg-sky-500/25 text-sky-700 dark:text-sky-300", dot: "bg-sky-500" },
+};
+
+// Efeito de botão em relevo: sombra com "degrau" embaixo; ao passar o mouse sobe, ao clicar afunda.
+const RAISED =
+  "h-full shadow-[0_4px_0_0_rgb(0_0_0/0.22),0_10px_18px_-6px_rgb(0_0_0/0.35)] transition-all duration-150";
+const RAISED_LINK =
+  "group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_0_0_rgb(0_0_0/0.22),0_14px_22px_-6px_rgb(0_0_0/0.4)] group-active:translate-y-[3px] group-active:shadow-[0_1px_0_0_rgb(0_0_0/0.22),0_2px_6px_-2px_rgb(0_0_0/0.3)]";
+
+// Cartão inteiro clicável (quando tem href): leva à tela que amplia a informação do cartão.
+function Shell({ href, accent = "blue", className, children }: { href?: string; accent?: Accent; className?: string; children: React.ReactNode }) {
+  const a = ACCENTS[accent];
+  const card = (
+    <Card size="sm" className={`${RAISED} ${a.card} ${href ? RAISED_LINK : ""} ${href ? "" : (className ?? "")}`}>
+      {children}
+    </Card>
+  );
+  return href ? (
+    <Link href={href} className={`group block h-full rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring ${className ?? ""}`}>
+      {card}
+    </Link>
+  ) : (
+    card
+  );
+}
+
 function Kpi({
   icon: Icon,
   label,
@@ -45,6 +82,7 @@ function Kpi({
   sub,
   href,
   tone,
+  accent,
 }: {
   icon: React.ElementType;
   label: string;
@@ -52,30 +90,51 @@ function Kpi({
   sub?: string;
   href?: string;
   tone?: "alert";
+  accent?: Accent;
 }) {
-  const body = (
-    <Card size="sm" className={href ? "transition-colors hover:bg-accent/40" : undefined}>
-      <CardContent className="space-y-1">
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Icon size={14} strokeWidth={1.75} className="shrink-0" />
-          <span className="min-w-0 truncate">{label}</span>
+  const a = ACCENTS[accent ?? "blue"];
+  return (
+    <Shell href={href} accent={accent}>
+      <CardContent className="flex h-full flex-col justify-center space-y-1">
+        <div className="flex items-start gap-2 text-xs font-medium text-foreground/80">
+          <span className={`flex size-6 shrink-0 items-center justify-center rounded-full ${a.chip}`}>
+            <Icon size={14} strokeWidth={2} />
+          </span>
+          <span className="min-w-0 pt-0.5 leading-tight">{label}</span>
         </div>
-        <p className={`text-xl font-bold leading-none ${tone === "alert" ? "text-red-600 dark:text-red-400" : VALUE_COLOR}`}>{value}</p>
-        {sub && <p className="text-[11px] leading-tight text-muted-foreground">{sub}</p>}
+        <p className={`text-center text-2xl font-bold leading-none ${tone === "alert" ? "text-red-600 dark:text-red-400" : VALUE_COLOR}`}>{value}</p>
+        {sub && <p className="text-center text-[11px] leading-tight text-muted-foreground">{sub}</p>}
       </CardContent>
-    </Card>
+    </Shell>
   );
-  return href ? <Link href={href}>{body}</Link> : body;
 }
 
-function Panel({ title, children, className, large }: { title: string; children: React.ReactNode; className?: string; large?: boolean }) {
+function Panel({
+  title,
+  children,
+  className,
+  large,
+  href,
+  accent,
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+  large?: boolean;
+  href?: string;
+  accent?: Accent;
+}) {
+  const a = ACCENTS[accent ?? "blue"];
   return (
-    <Card size="sm" className={className}>
+    <Shell href={href} accent={accent} className={className}>
       <CardHeader>
-        <CardTitle className={`font-heading ${large ? "text-base" : "text-sm"}`}>{title}</CardTitle>
+        <CardTitle className={`flex items-center gap-2 font-heading ${large ? "text-base" : "text-sm"}`}>
+          <span className={`size-2.5 shrink-0 rounded-full ${a.dot}`} />
+          {title}
+        </CardTitle>
       </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
+      <CardContent className="flex-1">{children}</CardContent>
+    </Shell>
   );
 }
 
@@ -88,10 +147,10 @@ function monthName(ym: string) {
 }
 
 // Cinco mais consumidos do mês corrente: uma barra para o mês corrente e outra (mais clara) para o anterior.
-function MonthlyRankList({ title, items, current, previous }: { title: string; items: MonthlyRankedItem[]; current: string; previous: string }) {
+function MonthlyRankList({ title, items, current, previous, accent }: { title: string; items: MonthlyRankedItem[]; current: string; previous: string; accent: Accent }) {
   const max = Math.max(1, ...items.flatMap((i) => [i.current, i.previous]));
   return (
-    <Panel title={title}>
+    <Panel title={title} href="/frigobar" accent={accent}>
       {items.length === 0 ? (
         <p className="text-xs text-muted-foreground">Sem consumo registrado em {monthName(current)}.</p>
       ) : (
@@ -124,11 +183,11 @@ function MonthlyRankList({ title, items, current, previous }: { title: string; i
 }
 
 // Pizza dos cinco itens mais consumidos desde o início; as fatias somam 100% entre os cinco.
-function TopPie({ title, items }: { title: string; items: RankedItem[] }) {
+function TopPie({ title, items, accent }: { title: string; items: RankedItem[]; accent: Accent }) {
   const total = items.reduce((s, i) => s + i.quantity, 0);
   const data = items.map((i) => ({ ...i, pct: total > 0 ? (i.quantity / total) * 100 : 0 }));
   return (
-    <Panel title={title}>
+    <Panel title={title} href="/frigobar" accent={accent}>
       {total === 0 ? (
         <p className="text-xs text-muted-foreground">Sem consumo registrado.</p>
       ) : (
@@ -163,11 +222,11 @@ function TopPie({ title, items }: { title: string; items: RankedItem[] }) {
   );
 }
 
-function ConsumptionColumn({ title, block, labels }: { title: string; block: ConsumptionBlock; labels: { current: string; previous: string } }) {
+function ConsumptionColumn({ title, block, labels, accent }: { title: string; block: ConsumptionBlock; labels: { current: string; previous: string }; accent: Accent }) {
   return (
-    <div className="space-y-3">
-      <MonthlyRankList title={title} items={block.monthly} current={labels.current} previous={labels.previous} />
-      <TopPie title={`${title} · desde o início`} items={block.pie} />
+    <div className="flex h-full flex-col gap-3 [&>*]:flex-1">
+      <MonthlyRankList title={title} items={block.monthly} current={labels.current} previous={labels.previous} accent={accent} />
+      <TopPie title={`${title} · desde o início`} items={block.pie} accent={accent} />
     </div>
   );
 }
@@ -190,7 +249,7 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
   return (
     <div className="space-y-4">
       <div className="grid gap-3 lg:grid-cols-3">
-        <Panel title="Suítes de hoje">
+        <Panel title="Suítes de hoje" href="/dashboard/servicos-suites" accent="amber">
           {d.todaySuites.length === 0 ? (
             <p className="text-xs text-muted-foreground">Nenhuma suíte planejada para hoje.</p>
           ) : (
@@ -211,12 +270,12 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
               ))}
             </ul>
           )}
-          <Link href="/dashboard/servicos-suites" className="mt-2 inline-block text-xs text-primary hover:underline">
+          <span className="mt-2 inline-block text-xs text-primary hover:underline">
             Ver todos os serviços
-          </Link>
+          </span>
         </Panel>
 
-        <Panel title="Chegadas e saídas de hoje">
+        <Panel title="Chegadas e saídas de hoje" href="/chegadas-saidas/gerenciar" accent="blue">
           <div className="space-y-3 text-xs">
             <div>
               <p className="mb-1 flex items-center gap-1.5 font-medium">
@@ -251,13 +310,13 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
                 </ul>
               )}
             </div>
-            <Link href="/chegadas-saidas/gerenciar" className="inline-block text-primary hover:underline">
+            <span className="inline-block text-primary hover:underline">
               Abrir Chegadas &amp; saídas
-            </Link>
+            </span>
           </div>
         </Panel>
 
-        <Panel title="Mesas do café da manhã">
+        <Panel title="Mesas do café da manhã" href="/mesas/gerenciar" accent="orange">
           <div className="space-y-3 text-xs">
             {(
               [
@@ -274,15 +333,15 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
                 </span>
               </div>
             ))}
-            <Link href="/mesas/gerenciar" className="inline-block text-primary hover:underline">
+            <span className="inline-block text-primary hover:underline">
               Abrir Mesas do café
-            </Link>
+            </span>
           </div>
         </Panel>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-3">
-        <Panel title="Suítes vagas, disponíveis para alugar">
+        <Panel title="Suítes vagas, disponíveis para alugar" href="/dashboard/suites-disponiveis" accent="emerald">
           <div className="space-y-3">
             <div>
               <p className="mb-1 flex items-center gap-1.5 text-xs font-medium">
@@ -294,13 +353,13 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
               <p className="mb-1 text-xs font-medium text-muted-foreground">Sujas ({d.suites.dirty.length})</p>
               <SuiteChips rooms={d.suites.dirty} empty="Nenhuma suíte suja e vaga." />
             </div>
-            <Link href="/dashboard/suites-disponiveis" className="text-xs text-primary hover:underline">
+            <span className="text-xs text-primary hover:underline">
               Ver detalhes
-            </Link>
+            </span>
           </div>
         </Panel>
 
-        <Panel title="Manutenção">
+        <Panel title="Manutenção" href="/ocorrencias" accent="rose">
           <div className="space-y-2 text-xs">
             <div className="flex items-baseline justify-between">
               <span className="text-muted-foreground">Ocorrências hoje</span>
@@ -311,21 +370,21 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
               <span className="text-base font-bold tabular-nums">{d.occurrences.open}</span>
             </div>
             <div className="flex gap-3 pt-1">
-              <Link href="/ocorrencias" className="text-primary hover:underline">
+              <span className="text-primary hover:underline">
                 Ver ocorrências
-              </Link>
-              <Link href="/manutencao-preventiva" className="text-primary hover:underline">
+              </span>
+              <span className="text-primary hover:underline">
                 Manutenção preventiva
-              </Link>
+              </span>
             </div>
           </div>
         </Panel>
 
         <div className="grid gap-3">
-          <Kpi icon={CreditCard} label="Contas em aberto" value={String(d.accounts.open)} sub={brl(d.accounts.total)} href="/frigobar" />
+          <Kpi icon={CreditCard} accent="violet" label="Contas em aberto" value={String(d.accounts.open)} sub={brl(d.accounts.total)} href="/frigobar" />
           <Kpi
             icon={AlertTriangle}
-            label="Contas com checkout em aberto"
+            accent="rose" label="Contas com checkout em aberto"
             value={String(d.accounts.checkoutOpen.count)}
             sub={`${brl(d.accounts.checkoutOpen.total)} · hóspede já saiu`}
             href="/frigobar"
@@ -333,7 +392,7 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
           />
           <Kpi
             icon={CreditCard}
-            label="Contas com checkout fechadas, não pagas"
+            accent="teal" label="Contas com checkout fechadas, não pagas"
             value={String(d.accounts.checkoutClosed.count)}
             sub={`${brl(d.accounts.checkoutClosed.total)} · aguardando pagamento`}
             href="/frigobar"
@@ -346,10 +405,10 @@ function OperationalView({ d }: { d: OperationalDashboard }) {
           Mais consumidos no mês corrente ({monthName(d.monthLabels.current)}), com o mês anterior ao lado
         </p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <ConsumptionColumn title="Frigobar" block={d.top.frigobar} labels={d.monthLabels} />
-          <ConsumptionColumn title="Bar · Petiscos" block={d.top.petiscos} labels={d.monthLabels} />
-          <ConsumptionColumn title="Bar · Drinks" block={d.top.drinks} labels={d.monthLabels} />
-          <ConsumptionColumn title="Bar · Outras bebidas" block={d.top.bebidas} labels={d.monthLabels} />
+          <ConsumptionColumn title="Frigobar" block={d.top.frigobar} labels={d.monthLabels} accent="sky" />
+          <ConsumptionColumn title="Bar · Petiscos" block={d.top.petiscos} labels={d.monthLabels} accent="orange" />
+          <ConsumptionColumn title="Bar · Drinks" block={d.top.drinks} labels={d.monthLabels} accent="violet" />
+          <ConsumptionColumn title="Bar · Outras bebidas" block={d.top.bebidas} labels={d.monthLabels} accent="teal" />
         </div>
       </div>
     </div>
@@ -374,10 +433,10 @@ const C_OCC = "#2563EB";
 const C_ADR = "#7C3AED";
 const C_REVPAR = "#DB2777";
 
-function CentersPanel({ title, rows, note }: { title: string; rows: GerencialDashboard["centersCurrent"]; note?: string }) {
+function CentersPanel({ title, rows, note, accent }: { title: string; rows: GerencialDashboard["centersCurrent"]; note?: string; accent: Accent }) {
   const max = Math.max(1, ...rows.flatMap((c) => [c.revenue, c.expenses]));
   return (
-    <Panel title={title}>
+    <Panel title={title} href="/contabil/resultado-mensal" accent={accent}>
       {rows.length === 0 ? (
         <p className="text-xs text-muted-foreground">Sem dados.</p>
       ) : (
@@ -419,31 +478,31 @@ function GerencialView({ d, isGerente }: { d: GerencialDashboard; isGerente: boo
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Kpi
           icon={Wallet}
-          label="Lucro gerencial do mês"
+          accent="emerald" label="Lucro gerencial do mês"
           value={r ? brl0(r.operating) : "—"}
           sub={`${monthLabel} · parcial`}
           href="/contabil/resultado-mensal"
           tone={r && r.operating < 0 ? "alert" : undefined}
         />
-        <Kpi icon={TrendingUp} label="Receita do mês" value={r ? brl0(r.revenue) : "—"} sub="hospedagem líquida + bar + frigobar" href="/contabil/resultado-mensal" />
-        <Kpi icon={CreditCard} label="Despesas do mês" value={r ? brl0(r.expenses) : "—"} sub="regime caixa, rateadas" href="/contabil/compras/relatorio" />
+        <Kpi icon={TrendingUp} accent="blue" label="Receita do mês" value={r ? brl0(r.revenue) : "—"} sub="hospedagem líquida + bar + frigobar" href="/contabil/resultado-mensal" />
+        <Kpi icon={CreditCard} accent="rose" label="Despesas do mês" value={r ? brl0(r.expenses) : "—"} sub="regime caixa, rateadas" href="/contabil/compras/relatorio" />
         <Kpi
           icon={BedDouble}
-          label="Diária média (ADR)"
+          accent="violet" label="Diária média (ADR)"
           value={ind?.current?.adr != null ? brl0(ind.current.adr) : "—"}
           sub={`${ind?.current?.paid ?? 0} diárias vendidas`}
           href={isGerente ? undefined : "/dashboard/indicadores"}
         />
         <Kpi
           icon={Percent}
-          label="Ocupação comercial"
+          accent="sky" label="Ocupação comercial"
           value={pct(ind?.current?.occ ?? null)}
           sub={ind?.current?.revpar != null ? `RevPAR ${brl0(ind.current.revpar)}` : undefined}
           href={isGerente ? undefined : "/dashboard/indicadores"}
         />
         <Kpi
           icon={Star}
-          label="Avaliação dos hóspedes"
+          accent="amber" label="Avaliação dos hóspedes"
           value={d.reviews?.average != null ? `${score(d.reviews.average)} / 10` : "—"}
           sub={d.reviews ? `${d.reviews.total} avaliações · ${d.reviews.news} nova(s) na semana` : undefined}
           href="/dashboard/avaliacoes-hospedes"
@@ -451,7 +510,7 @@ function GerencialView({ d, isGerente }: { d: GerencialDashboard; isGerente: boo
       </div>
 
       <div>
-        <Panel title="Receita de hospedagem, lucro gerencial, taxa de ocupação, ADR e RevPAR (12 meses atrás e 5 à frente)" large>
+        <Panel title="Receita de hospedagem, lucro gerencial, taxa de ocupação, ADR e RevPAR (12 meses atrás e 5 à frente)" large href={isGerente ? undefined : "/dashboard/indicadores"} accent="blue">
           {hasChart ? (
             <div className="h-[26rem] w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -490,7 +549,7 @@ function GerencialView({ d, isGerente }: { d: GerencialDashboard; isGerente: boo
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <Panel title="Avaliações dos hóspedes (notas de 0 a 10)">
+        <Panel title="Avaliações dos hóspedes (notas de 0 a 10)" href="/dashboard/avaliacoes-hospedes" accent="amber">
           {d.reviews ? (
             <div className="space-y-2 text-xs">
               <div className="flex items-baseline justify-between">
@@ -534,19 +593,19 @@ function GerencialView({ d, isGerente }: { d: GerencialDashboard; isGerente: boo
                 </div>
               )}
               <div className="flex gap-3 pt-1">
-                <Link href="/dashboard/avaliacoes" className="text-primary hover:underline">
+                <span className="text-primary hover:underline">
                   Ler e responder
-                </Link>
-                <Link href="/dashboard/avaliacoes-medias" className="text-primary hover:underline">
+                </span>
+                <span className="text-primary hover:underline">
                   Médias
-                </Link>
+                </span>
               </div>
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">Avaliações indisponíveis no momento.</p>
           )}
         </Panel>
-        <Panel title="Maiores despesas · mês corrente e média" large>
+        <Panel title="Maiores despesas · mês corrente e média" large href="/contabil/compras/relatorio" accent="rose">
           {d.expenseRanking.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhuma despesa lançada.</p>
           ) : (
@@ -578,10 +637,11 @@ function GerencialView({ d, isGerente }: { d: GerencialDashboard; isGerente: boo
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <CentersPanel title={`Receita e despesa por centro · ${monthLabel}`} rows={d.centersCurrent} />
+        <CentersPanel title={`Receita e despesa por centro · ${monthLabel}`} rows={d.centersCurrent} accent="emerald" />
         <CentersPanel
           title={`Receita e despesa por centro · acumulado de ${sinceLabel} a ${monthLabel}`}
           rows={d.centersAccum}
+          accent="teal"
           note={`Soma dos últimos ${d.windowMonths} mês(es), a partir de ${sinceLabel} (máximo de 12).`}
         />
 

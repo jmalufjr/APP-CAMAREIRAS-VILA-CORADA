@@ -477,8 +477,8 @@ export default function QuestoesRespostasPage() {
               <P>
                 É a primeira tela que você vê ao entrar. Ela tem duas abas, como as abas de uma planilha:{" "}
                 <strong>Operacional</strong> e <strong>Gerencial</strong>. Cada aba é um painel de uma tela só, pensado para o
-                computador e também para o celular (no celular, é só rolar). Os números são clicáveis e levam à tela
-                com mais detalhes.
+                computador e também para o celular (no celular, é só rolar). Cada cartão é colorido e tem aparência de botão em relevo: ao clicar
+                nele você vai para a tela que mostra mais detalhes daquela informação.
               </P>
               <List
                 items={[
