@@ -77,6 +77,35 @@ export async function setMinibarConsumption(billId: string, itemId: string, quan
   return { success: true };
 }
 
+// Lançamento adicional: só com a conta FECHADA, sem reabrir (o checklist continua bloqueado em conta fechada).
+export async function addMinibarOnClosedBill(billId: string, itemId: string, quantity: number) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_minibar_consumption_closed", {
+    p_bill_id: billId,
+    p_minibar_item_id: itemId,
+    p_quantity: Math.max(0, Math.floor(quantity)),
+  });
+  if (error) return { error: error.message };
+  revalidatePath("/frigobar");
+  revalidatePath("/bar-piscina");
+  return { success: true };
+}
+
+// Edita diretamente uma coluna da tabela de consumo (aberta, reaberta ou fechada; nunca paga). Fica no
+// histórico (quem, quando, valor anterior). O lançamento original do serviço não muda.
+export async function editMinibarColumn(billId: string, columnKey: string, changes: { itemId: string; quantity: number }[]) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("edit_minibar_column", {
+    p_bill_id: billId,
+    p_column_key: columnKey,
+    p_changes: changes.map((c) => ({ item_id: c.itemId, quantity: Math.max(0, Math.floor(c.quantity)) })),
+  });
+  if (error) return { error: error.message };
+  revalidatePath("/frigobar");
+  revalidatePath("/bar-piscina");
+  return { success: true };
+}
+
 // ---------- Camareira: contexto do frigobar de um serviço (tela de checklist) ----------
 
 export interface MinibarTaskContext {

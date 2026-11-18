@@ -34,6 +34,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ bil
   return new NextResponse(new Uint8Array(pdf), {
     headers: {
       "Content-Type": "application/pdf",
+      "Cache-Control": "no-store",
       "Content-Disposition": `inline; filename="${data.isWalkin ? "conta-avulsa" : `conta-suite-${data.room_number}`}.pdf"`,
     },
   });

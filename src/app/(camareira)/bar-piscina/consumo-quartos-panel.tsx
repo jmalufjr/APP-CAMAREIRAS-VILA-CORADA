@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { RoomBillOverview, RecentlyPaidBill } from "@/lib/actions/room-bills";
 import { closeRoomBill, reopenRoomBill, markRoomBillPaid, setServiceChargeWaived, createWalkinBill } from "@/lib/actions/room-bills";
-import { setMinibarConsumption } from "@/lib/actions/minibar";
+import { addMinibarOnClosedBill, editMinibarColumn } from "@/lib/actions/minibar";
+import type { ConsumptionColumn } from "@/lib/bill-consumption";
 import type { MinibarItem } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { QuantityStepper } from "@/components/shared/quantity-stepper";
@@ -268,7 +269,7 @@ function RoomAccordionItem({ room, minibarItems, isAdmin }: { room: RoomBillOver
   // suíte, em vez de sobrescrevê-lo.
   function handleAdditionalChange(itemId: string, v: number) {
     setAdditionalQty((prev) => ({ ...prev, [itemId]: v }));
-    runAction(() => setMinibarConsumption(room.bill_id, itemId, (baseQty[itemId] ?? 0) + v));
+    runAction(() => addMinibarOnClosedBill(room.bill_id, itemId, (baseQty[itemId] ?? 0) + v));
   }
 
   function handleStartLaunchingAdditional(checked: boolean) {
@@ -289,7 +290,10 @@ function RoomAccordionItem({ room, minibarItems, isAdmin }: { room: RoomBillOver
     setPaymentMethod("");
   }
 
-  const showEditableMinibar = (room.status === "aberta" || room.status === "reaberta") && isLaunchingAdditional;
+  // O lançamento adicional só existe com a conta FECHADA (sem reabrir); com a conta aberta/reaberta, o consumo
+  // se corrige pelo lápis de cada coluna.
+  const showEditableMinibar = room.status === "fechada" && isLaunchingAdditional;
+  const [editingColumn, setEditingColumn] = useState<ConsumptionColumn | null>(null);
 
   return (
     <AccordionItem value={room.bill_id}>
@@ -310,7 +314,7 @@ function RoomAccordionItem({ room, minibarItems, isAdmin }: { room: RoomBillOver
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-medium text-muted-foreground">Frigobar</p>
-                {(room.status === "aberta" || room.status === "reaberta") && (
+                {room.status === "fechada" && (
                   <div className="flex items-center gap-2">
                     <Label
                       htmlFor={`launch-additional-${room.bill_id}`}
@@ -331,6 +335,7 @@ function RoomAccordionItem({ room, minibarItems, isAdmin }: { room: RoomBillOver
                 matrix={room.minibarMatrix}
                 emptyText="Sem consumo de frigobar."
                 serviceHref={isAdmin ? (taskId) => `/dashboard/tarefas/${taskId}` : undefined}
+                onEditColumn={(col) => setEditingColumn(col)}
               />
               {showEditableMinibar && (
                 <div className="space-y-1.5 pt-2">
@@ -446,6 +451,17 @@ function RoomAccordionItem({ room, minibarItems, isAdmin }: { room: RoomBillOver
         </div>
       </AccordionPanel>
 
+      <MinibarColumnDialog
+        column={editingColumn}
+        room={room}
+        minibarItems={minibarItems}
+        onClose={() => setEditingColumn(null)}
+        onSaved={() => {
+          setEditingColumn(null);
+          router.refresh();
+        }}
+      />
+
       <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -484,5 +500,90 @@ function RoomAccordionItem({ room, minibarItems, isAdmin }: { room: RoomBillOver
         </DialogContent>
       </Dialog>
     </AccordionItem>
+  );
+}
+
+// Edição direta de uma coluna do consumo de frigobar (lápis): troca os números daquela coluna; a conta
+// é ajustada pela diferença e a edição fica registrada (quem, quando e o valor anterior).
+function MinibarColumnDialog({
+  column,
+  room,
+  minibarItems,
+  onClose,
+  onSaved,
+}: {
+  column: ConsumptionColumn | null;
+  room: RoomBillOverview;
+  minibarItems: MinibarItem[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [values, setValues] = useState<Record<string, number>>({});
+  const [trackedKey, setTrackedKey] = useState<string | null>(null);
+
+  const colIndex = column ? room.minibarMatrix.columns.findIndex((c) => c.key === column.key) : -1;
+  const original: Record<string, number> = {};
+  if (column && colIndex >= 0) {
+    room.minibarMatrix.rows.forEach((r) => {
+      if (r.itemId) original[r.itemId] = r.cells[colIndex] ?? 0;
+    });
+  }
+  // Ao abrir outra coluna, recomeça dos valores dela (sem useEffect).
+  if ((column?.key ?? null) !== trackedKey) {
+    setTrackedKey(column?.key ?? null);
+    setValues(original);
+  }
+
+  function handleSave() {
+    if (!column) return;
+    const changes = minibarItems
+      .filter((i) => (values[i.id] ?? 0) !== (original[i.id] ?? 0))
+      .map((i) => ({ itemId: i.id, quantity: values[i.id] ?? 0 }));
+    if (changes.length === 0) {
+      onClose();
+      return;
+    }
+    const reduces = changes.some((c) => c.quantity < (original[c.itemId] ?? 0));
+    const msg = reduces
+      ? "Esta edição REDUZ o consumo de frigobar cobrado nesta conta. Ela ficará registrada (quem, quando e o valor anterior). Confirma?"
+      : "Confirma a edição desta coluna? Ela ficará registrada (quem, quando e o valor anterior).";
+    if (!confirm(msg)) return;
+    startTransition(async () => {
+      const result = await editMinibarColumn(room.bill_id, column.key, changes);
+      if (result?.error) toast.error(result.error);
+      else {
+        toast.success("Coluna editada.");
+        onSaved();
+      }
+    });
+  }
+
+  return (
+    <Dialog open={column !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Editar frigobar — {column ? `${column.title}${column.subtitle ? ` (${column.subtitle})` : ""}` : ""}</DialogTitle>
+          <DialogDescription>Ajuste as quantidades desta coluna. A conta do hóspede é atualizada pela diferença.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          {minibarItems.map((item) => (
+            <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-sm">
+              <span className="min-w-0">{item.name}</span>
+              <QuantityStepper
+                value={values[item.id] ?? 0}
+                disabled={isPending}
+                onChange={(v) => setValues((prev) => ({ ...prev, [item.id]: Math.max(0, Math.floor(v) || 0) }))}
+              />
+            </div>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button disabled={isPending} onClick={handleSave}>
+            Salvar edição
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

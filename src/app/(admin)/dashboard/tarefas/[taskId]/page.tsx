@@ -80,6 +80,7 @@ export default async function AdminTaskDetailPage({
     <div className="space-y-6">
       <BackLink href="/dashboard" />
       <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lançamento original</p>
         <h1 className="font-heading text-2xl sm:text-3xl text-primary">{`Suíte ${room.number} — ${formatDatePt(task.date)}`}</h1>
         {/* Um ponto (≈1,3 px) menor que o título. */}
         <p className="font-heading text-[22.7px] sm:text-[28.7px] leading-tight mt-1">
