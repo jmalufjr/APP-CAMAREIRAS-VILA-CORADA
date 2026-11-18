@@ -430,7 +430,7 @@ const score = (v: number | null) => (v === null ? "—" : v.toFixed(2).replace("
 const C_REVENUE = "#94A3B8";
 const C_CURRENT = "#E8B85C";
 const C_PROFIT = "#059669";
-const C_OCC = "#2563EB";
+const C_OCC = "#FDE047";
 const C_ADR = "#7C3AED";
 const C_REVPAR = "#DB2777";
 
