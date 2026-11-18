@@ -67,11 +67,11 @@ function Kpi({
   return href ? <Link href={href}>{body}</Link> : body;
 }
 
-function Panel({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
+function Panel({ title, children, className, large }: { title: string; children: React.ReactNode; className?: string; large?: boolean }) {
   return (
     <Card size="sm" className={className}>
       <CardHeader>
-        <CardTitle className="font-heading text-sm">{title}</CardTitle>
+        <CardTitle className={`font-heading ${large ? "text-base" : "text-sm"}`}>{title}</CardTitle>
       </CardHeader>
       <CardContent>{children}</CardContent>
     </Card>
@@ -319,43 +319,46 @@ function GerencialView({ d, isGerente }: { d: GerencialDashboard; isGerente: boo
         />
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-3">
-        <Panel title="Receita de hospedagem e taxa de ocupação (12 meses atrás e 5 à frente)" className="lg:col-span-2">
+      <div>
+        <Panel title="Receita de hospedagem, lucro gerencial, taxa de ocupação, ADR e RevPAR (12 meses atrás e 5 à frente)" large>
           {hasChart ? (
-            <div className="h-72 w-full">
+            <div className="h-[26rem] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartData} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis xAxisId="a" dataKey="label" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                  <XAxis xAxisId="a" dataKey="label" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
                   <XAxis xAxisId="b" dataKey="label" hide />
-                  <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={40} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
-                  <YAxis yAxisId="price" orientation="right" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => `R$${Math.round(v)}`} />
-                  <YAxis yAxisId="occ" orientation="right" domain={[0, 100]} tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={34} tickFormatter={(v) => `${v}%`} />
+                  <YAxis yAxisId="rev" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
+                  <YAxis yAxisId="price" orientation="right" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={58} tickFormatter={(v) => `R$${Math.round(v)}`} />
+                  <YAxis yAxisId="occ" orientation="right" domain={[0, 100]} tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => `${v}%`} />
                   <Tooltip
                     contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
                     formatter={(value, name) => (name === "Ocupação" ? [`${value}%`, name] : [brl(Number(value)), name])}
                   />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar xAxisId="a" yAxisId="rev" dataKey="revenue" name="Receita de hospedagem" fill={C_REVENUE} barSize={24} radius={[4, 4, 0, 0]}>
+                  <Legend wrapperStyle={{ fontSize: 13 }} />
+                  <Bar xAxisId="a" yAxisId="rev" dataKey="revenue" name="Receita de hospedagem" fill={C_REVENUE} barSize={30} radius={[4, 4, 0, 0]}>
                     {chartData.map((p) => (
                       <Cell key={p.month} fill={p.isCurrent ? C_CURRENT : C_REVENUE} />
                     ))}
                   </Bar>
-                  <Bar xAxisId="b" yAxisId="rev" dataKey="profit" name="Lucro gerencial" fill={C_PROFIT} barSize={10} radius={[2, 2, 0, 0]} />
-                  <Line yAxisId="occ" dataKey="occPct" name="Ocupação" stroke={C_OCC} strokeWidth={2} dot={{ r: 2.5 }} connectNulls />
-                  <Line yAxisId="price" dataKey="adr" name="ADR (STR)" stroke={C_ADR} strokeWidth={2} dot={{ r: 2.5 }} connectNulls />
-                  <Line yAxisId="price" dataKey="revpar" name="RevPAR (STR)" stroke={C_REVPAR} strokeWidth={2} dot={{ r: 2.5 }} connectNulls />
+                  <Bar xAxisId="b" yAxisId="rev" dataKey="profit" name="Lucro gerencial" fill={C_PROFIT} barSize={13} radius={[2, 2, 0, 0]} />
+                  <Line yAxisId="occ" dataKey="occPct" name="Ocupação" stroke={C_OCC} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                  <Line yAxisId="price" dataKey="adr" name="ADR (STR)" stroke={C_ADR} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                  <Line yAxisId="price" dataKey="revpar" name="RevPAR (STR)" stroke={C_REVPAR} strokeWidth={2} dot={{ r: 3 }} connectNulls />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">Sem dados de indicadores ainda.</p>
           )}
-          <p className="mt-1 text-[11px] text-muted-foreground">
+          <p className="mt-2 text-xs text-muted-foreground">
             Barra mais larga: receita de hospedagem (o mês corrente em dourado). Barra estreita por cima: lucro gerencial (disponível desde nov/2026).
           </p>
         </Panel>
 
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
         <Panel title="Avaliações dos hóspedes (notas de 0 a 10)">
           {d.reviews ? (
             <div className="space-y-2 text-xs">
@@ -386,6 +389,17 @@ function GerencialView({ d, isGerente }: { d: GerencialDashboard; isGerente: boo
                       </li>
                     ))}
                   </ul>
+                  <p className="pt-1 font-medium">Booking · média por suíte</p>
+                  <ul className="grid grid-cols-2 gap-x-4 gap-y-1">
+                    {d.reviews.booking.bySuite.map((b) => (
+                      <li key={b.suite} className="flex items-baseline justify-between gap-2">
+                        <span className="text-muted-foreground">
+                          Suíte {b.suite} <span className="text-[10px]">({b.count})</span>
+                        </span>
+                        <span className="shrink-0 font-semibold tabular-nums">{score(b.average)}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
               <div className="flex gap-3 pt-1">
@@ -401,24 +415,14 @@ function GerencialView({ d, isGerente }: { d: GerencialDashboard; isGerente: boo
             <p className="text-xs text-muted-foreground">Avaliações indisponíveis no momento.</p>
           )}
         </Panel>
-      </div>
-
-      <div className="grid gap-3 lg:grid-cols-3">
-        <CentersPanel title={`Receita e despesa por centro · ${monthLabel}`} rows={d.centersCurrent} />
-        <CentersPanel
-          title={`Receita e despesa por centro · acumulado de ${sinceLabel} a ${monthLabel}`}
-          rows={d.centersAccum}
-          note={`Soma dos últimos ${d.windowMonths} mês(es), a partir de ${sinceLabel} (máximo de 12).`}
-        />
-
-        <Panel title="Maiores despesas · mês corrente e média">
+        <Panel title="Maiores despesas · mês corrente e média" large>
           {d.expenseRanking.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Nenhuma despesa lançada.</p>
+            <p className="text-sm text-muted-foreground">Nenhuma despesa lançada.</p>
           ) : (
             <div className="space-y-2.5">
               {d.expenseRanking.map((e, i) => (
                 <div key={e.name} className="space-y-1">
-                  <div className="flex items-baseline justify-between gap-2 text-xs">
+                  <div className="flex items-baseline justify-between gap-2 text-sm">
                     <span className="min-w-0 truncate">
                       <span className="text-muted-foreground">{i + 1}.</span> {e.name}
                     </span>
@@ -426,20 +430,30 @@ function GerencialView({ d, isGerente }: { d: GerencialDashboard; isGerente: boo
                       <span className="font-semibold text-foreground">{brl0(e.current)}</span> · média {brl0(e.average)}
                     </span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-muted">
-                    <div className="h-1.5 rounded-full bg-[var(--chart-1)] dark:bg-[#B08968]" style={{ width: `${(e.current / maxExpense) * 100}%` }} />
+                  <div className="h-2 rounded-full bg-muted">
+                    <div className="h-2 rounded-full bg-[var(--chart-1)] dark:bg-[#B08968]" style={{ width: `${(e.current / maxExpense) * 100}%` }} />
                   </div>
-                  <div className="h-1.5 rounded-full bg-muted">
-                    <div className="h-1.5 rounded-full bg-muted-foreground/50" style={{ width: `${(e.average / maxExpense) * 100}%` }} />
+                  <div className="h-2 rounded-full bg-muted">
+                    <div className="h-2 rounded-full bg-muted-foreground/50" style={{ width: `${(e.average / maxExpense) * 100}%` }} />
                   </div>
                 </div>
               ))}
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Barra de cima: {monthLabel} · barra de baixo: média mensal dos {d.windowMonths} mês(es) desde {sinceLabel} (inclui o mês corrente). Ordem pelo maior dos dois valores.
               </p>
             </div>
           )}
         </Panel>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <CentersPanel title={`Receita e despesa por centro · ${monthLabel}`} rows={d.centersCurrent} />
+        <CentersPanel
+          title={`Receita e despesa por centro · acumulado de ${sinceLabel} a ${monthLabel}`}
+          rows={d.centersAccum}
+          note={`Soma dos últimos ${d.windowMonths} mês(es), a partir de ${sinceLabel} (máximo de 12).`}
+        />
+
       </div>
     </div>
   );

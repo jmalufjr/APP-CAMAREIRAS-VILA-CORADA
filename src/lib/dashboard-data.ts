@@ -171,7 +171,7 @@ export interface GerencialDashboard {
     total: number;
     last90: number | null;
     news: number;
-    booking: { average: number | null; count: number; items: ItemAverage[] } | null;
+    booking: { average: number | null; count: number; items: ItemAverage[]; bySuite: { suite: string; average: number; count: number }[] } | null;
   } | null;
 }
 
@@ -288,13 +288,20 @@ export async function getGerencialDashboard(): Promise<GerencialDashboard> {
     const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
     const b = channelAverage(reviews.reviews, "bookingcom");
     // Notas em escala de 0 a 10 (as da Stays vêm de 0 a 5).
+    const bySuiteMap = new Map<string, number[]>();
+    reviews.reviews
+      .filter((r) => r.channel === "bookingcom" && r.suite && r.rating !== null && r.rating > 0)
+      .forEach((r) => bySuiteMap.set(r.suite as string, [...(bySuiteMap.get(r.suite as string) ?? []), r.rating as number]));
+    const bySuite = Array.from(bySuiteMap.entries())
+      .map(([suite, v]) => ({ suite, average: (v.reduce((a, c) => a + c, 0) / v.length) * 2, count: v.length }))
+      .sort((a, c) => Number(a.suite) - Number(c.suite));
     const x2 = (v: number | null) => (v === null ? null : v * 2);
     revOut = {
       average: x2(avg(rated)),
       total: rated.length,
       last90: x2(avg(rated.filter((r) => r.day >= cutoff))),
       news: reviews.reviews.filter((r) => r.isNew).length,
-      booking: b.count > 0 ? { average: x2(b.average), count: b.count, items: b.items.map((i) => ({ ...i, average: i.average * 2 })) } : null,
+      booking: b.count > 0 ? { average: x2(b.average), count: b.count, items: b.items.map((i) => ({ ...i, average: i.average * 2 })), bySuite } : null,
     };
   }
 

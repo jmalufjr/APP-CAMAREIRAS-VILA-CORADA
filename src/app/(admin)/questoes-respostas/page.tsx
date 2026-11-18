@@ -492,7 +492,7 @@ export default function QuestoesRespostasPage() {
                   <>
                     <strong>Aba Gerencial</strong> (administrador e gerente operacional): lucro gerencial, receita e despesas do
                     mês, diária média, ocupação e avaliação dos hóspedes (notas de 0 a 10, com a média geral do Booking e a
-                    média de cada item que o Booking avalia). Um gráfico com 12 meses para trás, o mês corrente (barra em
+                    média de cada item que o Booking avalia e a média do Booking por suíte). Um gráfico com 12 meses para trás, o mês corrente (barra em
                     dourado) e 5 meses à frente: a barra larga é a receita de hospedagem, a barra estreita por cima é o
                     lucro gerencial (disponível desde nov/2026) e as linhas são a ocupação, o ADR e o RevPAR (padrão STR).
                     Depois, a receita e a despesa por centro (hospedagem e café da manhã juntos), uma vez para o mês
