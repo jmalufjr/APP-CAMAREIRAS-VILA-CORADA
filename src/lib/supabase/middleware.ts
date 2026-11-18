@@ -104,13 +104,14 @@ export async function updateSession(request: NextRequest) {
         "/dashboard/suites-disponiveis",
         "/dashboard/calendario-stays",
         "/dashboard/tarefas",
+        "/comanda",
         "/checklists",
         "/contabil/resultado-mensal",
         "/contabil/custo-produtos",
         "/contabil/compras/relatorio",
       ];
       // Dentro das Listas operacionais, estes dois menus não são do gerente.
-      const gerenteBlocked = ["/checklists/ocorrencias", "/checklists/manutencao-preventiva"];
+      const gerenteBlocked = ["/checklists/ocorrencias", "/checklists/manutencao-preventiva", "/comanda/novo"];
       if (gerenteBlocked.some(matchesPrefix) || (!exact.includes(path) && !prefixes.some(matchesPrefix))) {
         const url = request.nextUrl.clone();
         url.pathname = "/dashboard";

@@ -14,10 +14,17 @@ export default async function ComandaPage() {
         title="Comandas de Bar da Piscina"
         subtitle="Registre e acompanhe os pedidos do bar da piscina por suíte."
       />
-      <Button render={<Link href="/comanda/novo">Novo pedido</Link>} nativeButton={false} />
+      {profile.role !== "gerente_operacional" && (
+        <Button
+          size="lg"
+          className="h-12 px-8 text-base font-semibold shadow-md"
+          render={<Link href="/comanda/novo">+ Novo pedido</Link>}
+          nativeButton={false}
+        />
+      )}
       <div className="space-y-3">
         <p className="text-sm font-medium">Lista de comandas</p>
-        <ComandasList comandas={comandas} meId={profile.id} isAdmin={profile.role === "admin"} />
+        <ComandasList comandas={comandas} meId={profile.id} canEditAll={profile.role === "admin" || profile.role === "gerente_operacional"} />
       </div>
     </div>
   );

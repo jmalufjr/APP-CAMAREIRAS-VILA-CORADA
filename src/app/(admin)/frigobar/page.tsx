@@ -24,12 +24,12 @@ export default async function FrigobarPage() {
       <BackLink href="/operacional" />
       <PageHeader
         title="Consumo de Bar e Frigobar"
-        subtitle="Consumo de frigobar e do bar da piscina por suíte. O administrador pode fechar, reabrir e registrar o pagamento de qualquer conta, além de editar e cancelar comandas."
+        subtitle="Consumo de frigobar e do bar da piscina por suíte. O administrador pode fechar, reabrir e registrar o pagamento de qualquer conta. Administrador e gerente operacional corrigem comandas e frigobar."
       />
       <Tabs defaultValue="comandas">
         <TabsList>
           <TabsTrigger value="comandas">Lista de comandas do bar</TabsTrigger>
-          <TabsTrigger value="quartos">Consumo por suítes</TabsTrigger>
+          <TabsTrigger value="quartos">Consumo total por suíte</TabsTrigger>
         </TabsList>
         <TabsContent value="comandas" className="pt-4">
           <ComandasListPanel activeComandas={activeComandas} inactiveComandas={inactiveComandas} />

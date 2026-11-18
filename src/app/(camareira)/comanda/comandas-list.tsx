@@ -1,15 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Pencil } from "lucide-react";
 import type { ComandaListItem } from "@/lib/actions/comandas";
-import { Button } from "@/components/ui/button";
 import { ComandaDetailDialog } from "@/components/shared/comanda-detail-dialog";
 import { roomSlotLabel } from "@/lib/room-bill-label";
 
-export function ComandasList({ comandas, meId, isAdmin }: { comandas: ComandaListItem[]; meId: string; isAdmin: boolean }) {
-  const router = useRouter();
+export function ComandasList({ comandas, meId, canEditAll }: { comandas: ComandaListItem[]; meId: string; canEditAll: boolean }) {
   const [detail, setDetail] = useState<ComandaListItem | null>(null);
 
   if (comandas.length === 0) {
@@ -36,23 +32,15 @@ export function ComandasList({ comandas, meId, isAdmin }: { comandas: ComandaLis
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-sm font-medium">R$ {c.total.toFixed(2)}</span>
-              {(isAdmin || c.created_by_id === meId) && (
-              <Button
-                size="icon-sm"
-                variant="outline"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  router.push(`/comanda/${c.id}/editar`);
-                }}
-              >
-                <Pencil size={14} />
-              </Button>
-              )}
             </div>
           </div>
         ))}
       </div>
-      <ComandaDetailDialog comanda={detail} onOpenChange={(open) => !open && setDetail(null)} />
+      <ComandaDetailDialog
+        comanda={detail}
+        onOpenChange={(open) => !open && setDetail(null)}
+        canEdit={(c) => canEditAll || c.created_by_id === meId}
+      />
     </>
   );
 }

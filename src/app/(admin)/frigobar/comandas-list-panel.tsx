@@ -1,9 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Pencil } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import type { ComandaListItem } from "@/lib/actions/comandas";
 import { Badge } from "@/components/ui/badge";
 import { ComandaDetailDialog } from "@/components/shared/comanda-detail-dialog";
@@ -11,8 +8,7 @@ import { comandaDisplayStatus } from "@/lib/comanda-status";
 import { formatDateTimePt } from "@/lib/date";
 import { roomSlotLabel } from "@/lib/room-bill-label";
 
-function ComandaRow({ comanda, onClick, canEdit }: { comanda: ComandaListItem; onClick: () => void; canEdit?: boolean }) {
-  const router = useRouter();
+function ComandaRow({ comanda, onClick }: { comanda: ComandaListItem; onClick: () => void }) {
   return (
     <div
       role="button"
@@ -34,18 +30,6 @@ function ComandaRow({ comanda, onClick, canEdit }: { comanda: ComandaListItem; o
         </p>
         <span className="flex items-center gap-2 text-sm font-medium">
           R$ {comanda.total.toFixed(2)}
-          {canEdit && (
-            <Button
-              size="icon-sm"
-              variant="outline"
-              onClick={(e) => {
-                e.stopPropagation();
-                router.push(`/comanda/${comanda.id}/editar`);
-              }}
-            >
-              <Pencil size={14} />
-            </Button>
-          )}
         </span>
       </div>
       <p className="text-xs text-muted-foreground mt-1">
@@ -75,7 +59,7 @@ export function ComandasListPanel({
         ) : (
           <div className="space-y-2">
             {activeComandas.map((c) => (
-              <ComandaRow key={c.id} comanda={c} onClick={() => setDetail(c)} canEdit />
+              <ComandaRow key={c.id} comanda={c} onClick={() => setDetail(c)} />
             ))}
           </div>
         )}
@@ -95,7 +79,7 @@ export function ComandasListPanel({
         )}
       </div>
 
-      <ComandaDetailDialog comanda={detail} onOpenChange={(open) => !open && setDetail(null)} />
+      <ComandaDetailDialog comanda={detail} onOpenChange={(open) => !open && setDetail(null)} canEdit={() => true} />
     </div>
   );
 }

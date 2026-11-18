@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { ComandaListItem } from "@/lib/actions/comandas";
 import { comandaDisplayStatus } from "@/lib/comanda-status";
@@ -77,12 +79,16 @@ export function ComandaDetailBody({ comanda }: { comanda: ComandaListItem }) {
   );
 }
 
+// `canEdit` mostra o botão "Editar comanda" (só para quem pode: quem lançou, admin ou gerente). A edição
+// fica de propósito dentro da janela da comanda, e não como atalho na lista, para evitar toques sem querer.
 export function ComandaDetailDialog({
   comanda,
   onOpenChange,
+  canEdit,
 }: {
   comanda: ComandaListItem | null;
   onOpenChange: (open: boolean) => void;
+  canEdit?: (comanda: ComandaListItem) => boolean;
 }) {
   return (
     <Dialog open={comanda !== null} onOpenChange={onOpenChange}>
@@ -93,6 +99,9 @@ export function ComandaDetailDialog({
           </DialogTitle>
         </DialogHeader>
         {comanda && <ComandaDetailBody comanda={comanda} />}
+        {comanda && canEdit?.(comanda) && comanda.status !== "cancelada" && !comanda.bill_paid_at && (
+          <Button render={<Link href={`/comanda/${comanda.id}/editar`}>Editar comanda</Link>} nativeButton={false} variant="outline" />
+        )}
       </DialogContent>
     </Dialog>
   );

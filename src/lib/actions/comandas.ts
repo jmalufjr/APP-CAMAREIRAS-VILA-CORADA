@@ -336,7 +336,7 @@ export async function getInactiveComandasForPeriod(from: string, to: string): Pr
 
 // ---------- Leitura: dados para o formulário "Novo pedido" / edição ----------
 
-// Uma comanda só (página da comanda), com histórico e assinatura; `canModify` = quem lançou ou admin.
+// Uma comanda só (página da comanda), com histórico e assinatura; `canModify` = quem lançou, admin ou gerente operacional.
 export async function getComandaDetail(comandaId: string): Promise<{ comanda: ComandaListItem; canModify: boolean } | null> {
   const supabase = await createClient();
   const { data: row } = await supabase.from("bar_comandas").select(COMANDA_ROW_SELECT).eq("id", comandaId).maybeSingle();
@@ -346,7 +346,7 @@ export async function getComandaDetail(comandaId: string): Promise<{ comanda: Co
     data: { user },
   } = await supabase.auth.getUser();
   const { data: me } = user ? await supabase.from("profiles").select("role").eq("id", user.id).single() : { data: null };
-  const canModify = me?.role === "admin" || (!!user && comanda.created_by_id === user.id);
+  const canModify = me?.role === "admin" || me?.role === "gerente_operacional" || (!!user && comanda.created_by_id === user.id);
   return { comanda, canModify };
 }
 
@@ -387,7 +387,9 @@ export async function getComandaForEdit(comandaId: string): Promise<ComandaFormD
   } = await supabase.auth.getUser();
   const { data: me } = user ? await supabase.from("profiles").select("role").eq("id", user.id).single() : { data: null };
   const canModify =
-    me?.role === "admin" || (!!user && (comanda as unknown as { created_by: string | null }).created_by === user.id);
+    me?.role === "admin" ||
+    me?.role === "gerente_operacional" ||
+    (!!user && (comanda as unknown as { created_by: string | null }).created_by === user.id);
 
   const { data: itemRows } = await supabase
     .from("bar_comanda_items")
