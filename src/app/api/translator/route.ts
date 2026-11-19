@@ -132,6 +132,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, lang, audio, heard: heard.text, said: translated });
   } catch (error) {
     console.error("[tradutor]", error);
-    return NextResponse.json({ ok: false, reason: "erro" satisfies Reason });
+    // Gerente e administrador veem o motivo técnico na tela, para facilitar o diagnóstico.
+    const detail = profile.role === "camareira" ? undefined : String((error as Error)?.message ?? error).slice(0, 400);
+    return NextResponse.json({ ok: false, reason: "erro" satisfies Reason, detail });
   }
 }

@@ -79,6 +79,7 @@ const adminNav: NavItem[] = [
     ],
   },
   { href: "/sincronizacao", label: "Sincronização", icon: RefreshCw },
+  { href: "/tradutor", label: "Tradutor", icon: Languages },
   { href: "/integracao", label: "Integração", icon: Plug, matchPrefixes: ["/integracao", "/dashboard/api-tokens", "/dashboard/email-envio"] },
   { href: "/usuarios", label: "Usuários", icon: Users },
   { href: "/questoes-respostas", label: "Questões e Respostas", icon: HelpCircle },

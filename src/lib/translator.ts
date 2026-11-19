@@ -40,7 +40,6 @@ export async function translateText(text: string, direction: "to_guest" | "to_ca
   const client = new Anthropic({ apiKey });
   const params = {
     max_tokens: 400,
-    temperature: 0.2,
     system: direction === "to_guest" ? systemToGuest(GUEST_LANGUAGES[guestLang] ?? guestLang) : SYSTEM_TO_CAMAREIRA,
     messages: [{ role: "user" as const, content: text }],
   };

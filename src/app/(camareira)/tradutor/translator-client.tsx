@@ -56,6 +56,7 @@ export function TranslatorClient({ canSeeText }: { canSeeText: boolean }) {
   const [message, setMessage] = useState("");
   const [level, setLevel] = useState(0);
   const [last, setLast] = useState<{ heard: string; said: string } | null>(null);
+  const [detail, setDetail] = useState("");
 
   const langRef = useRef<string | null>(null);
   const rec = useRef<Recording | null>(null);
@@ -127,6 +128,7 @@ export function TranslatorClient({ canSeeText }: { canSeeText: boolean }) {
   async function send(from: Who, blob: Blob, ms: number) {
     setPhase("processing");
     setMessage("");
+    setDetail("");
     try {
       const fd = new FormData();
       fd.append("audio", blob, "fala");
@@ -153,6 +155,7 @@ export function TranslatorClient({ canSeeText }: { canSeeText: boolean }) {
         erro: "Algo deu errado. Toque e tente de novo.",
       };
       setMessage(texts[json.reason as string] ?? texts.erro);
+      setDetail(canSeeText && json.detail ? String(json.detail) : "");
       if (json.audio) await speak(json.audio as string);
       else setPhase("idle");
     } catch {
@@ -315,6 +318,7 @@ export function TranslatorClient({ canSeeText }: { canSeeText: boolean }) {
           </div>
         )}
         {message && <p className="text-lg font-medium text-amber-700 dark:text-amber-300">{message}</p>}
+        {detail && <p className="break-words text-xs text-muted-foreground">Detalhe técnico: {detail}</p>}
       </div>
 
       <button
