@@ -13,6 +13,11 @@ const NO_SPEECH_STOP_MS = 15000; // ninguém falou nada
 const MAX_RECORD_MS = 40000; // limite de segurança por fala
 const MIN_RECORD_MS = 700;
 
+// Avisa o servidor para ficar pronto (acordar e abrir as conexões) enquanto a fala acontece.
+function warmUp() {
+  fetch("/api/translator?warm=1", { method: "POST" }).catch(() => {});
+}
+
 function pickMime(): string | undefined {
   if (typeof MediaRecorder === "undefined") return undefined;
   return ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"].find((m) => MediaRecorder.isTypeSupported(m));
@@ -43,6 +48,7 @@ interface Recording {
   stream: MediaStream;
   ctx: AudioContext;
   timer: ReturnType<typeof setInterval>;
+  warmTimer: ReturnType<typeof setInterval>;
   startedAt: number;
   hasSpoken: boolean;
   lastVoiceAt: number;
@@ -73,6 +79,7 @@ export function TranslatorClient({ canSeeText }: { canSeeText: boolean }) {
   useEffect(() => {
     const fd = new FormData();
     fd.append("mode", "convite");
+    warmUp();
     fetch("/api/translator", { method: "POST", body: fd })
       .then((r) => r.json())
       .then((j) => {
@@ -85,6 +92,7 @@ export function TranslatorClient({ canSeeText }: { canSeeText: boolean }) {
     const r = rec.current;
     if (!r) return;
     clearInterval(r.timer);
+    clearInterval(r.warmTimer);
     r.stream.getTracks().forEach((t) => t.stop());
     void r.ctx.close().catch(() => {});
     rec.current = null;
@@ -211,6 +219,7 @@ export function TranslatorClient({ canSeeText }: { canSeeText: boolean }) {
       hasSpoken: false,
       lastVoiceAt: now,
       discard: false,
+      warmTimer: setInterval(warmUp, 3000),
       timer: setInterval(() => {
         analyser.getFloatTimeDomainData(samples);
         let sum = 0;
@@ -248,6 +257,7 @@ export function TranslatorClient({ canSeeText }: { canSeeText: boolean }) {
 
     setWho(from);
     setPhase("listening");
+    warmUp();
     beep(880);
     // Pequena espera para o som de aviso não entrar na gravação.
     setTimeout(() => {

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { startOfDayBrasiliaUtc, todayKey } from "@/lib/date";
 import { synthesize, transcribe } from "@/lib/google/speech";
+import { getGoogleAccessToken } from "@/lib/google/auth";
 import { translateText, isGuestLanguage, UNDERSTOOD_NOTHING } from "@/lib/translator";
 
 export const runtime = "nodejs";
@@ -29,9 +30,25 @@ async function phraseAudio(key: keyof typeof PHRASES): Promise<string> {
   return audio;
 }
 
+// "Aquecimento": enquanto a camareira ainda fala, a tela avisa o servidor, que acorda, pega o acesso ao Google e abre
+// as conexões com os serviços (Google e Claude). Assim, quando ela terminar, nada disso precisa ser feito na hora.
+const WARM_URLS = [
+  "https://us-central1-speech.googleapis.com/",
+  "https://texttospeech.googleapis.com/",
+  `${process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com"}/`,
+];
+
 type Reason = "nao_entendi" | "idioma" | "sem_idioma" | "limite" | "erro";
 
 export async function POST(req: Request) {
+  if (new URL(req.url).searchParams.get("warm")) {
+    await Promise.allSettled([
+      getGoogleAccessToken(),
+      ...WARM_URLS.map((u) => fetch(u, { method: "HEAD", signal: AbortSignal.timeout(3000) })),
+    ]);
+    return NextResponse.json({ ok: true });
+  }
+
   const t0 = Date.now();
   const timing: Record<string, number | string> = {};
   const mark = (name: string, since: number) => {
