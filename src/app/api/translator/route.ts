@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { startOfDayBrasiliaUtc, todayKey } from "@/lib/date";
@@ -32,24 +32,63 @@ async function phraseAudio(key: keyof typeof PHRASES): Promise<string> {
 type Reason = "nao_entendi" | "idioma" | "sem_idioma" | "limite" | "erro";
 
 export async function POST(req: Request) {
+  const t0 = Date.now();
+  const timing: Record<string, number | string> = {};
+  const mark = (name: string, since: number) => {
+    timing[name] = Date.now() - since;
+  };
+
   // Só camareira, gerente operacional e administrador (rotas de API não passam pela checagem de papel do proxy).
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [{ data: userData }, formResult] = await Promise.all([
+    supabase.auth.getUser(),
+    req.formData().then(
+      (f) => f,
+      () => null
+    ),
+  ]);
+  const user = userData.user;
   if (!user) return NextResponse.json({ ok: false, reason: "erro" satisfies Reason }, { status: 401 });
-  const { data: profile } = await supabase.from("profiles").select("role, active").eq("id", user.id).single();
+  if (!formResult) return NextResponse.json({ ok: false, reason: "erro" satisfies Reason }, { status: 400 });
+  const form = formResult;
+  const mode = String(form.get("mode") ?? "");
+  const audioMs = Math.round(Number(form.get("ms") ?? 0)) || null;
+  const admin = createAdminClient();
+
+  // O papel é conferido junto com a reserva da vaga do limite diário (uma ida ao banco em paralelo).
+  const profilePromise = supabase.from("profiles").select("role, active").eq("id", user.id).single();
+  const slotPromise =
+    mode === "camareira" || mode === "hospede"
+      ? (async () => {
+          const { data: slot } = await admin
+            .from("translator_calls")
+            .insert({ user_id: user.id, direction: mode, lang: null, audio_ms: audioMs, ok: false })
+            .select("id")
+            .single();
+          if (!slot) return { slotId: null as string | null, count: 0 };
+          const { count } = await admin
+            .from("translator_calls")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", user.id)
+            .gte("created_at", startOfDayBrasiliaUtc(todayKey()));
+          return { slotId: slot.id as string, count: count ?? 0 };
+        })()
+      : Promise.resolve({ slotId: null as string | null, count: 0 });
+
+  const [{ data: profile }, slotInfo] = await Promise.all([profilePromise, slotPromise]);
+  mark("banco_ms", t0);
+  const dropSlot = async () => {
+    if (slotInfo.slotId) await admin.from("translator_calls").delete().eq("id", slotInfo.slotId);
+  };
   if (!profile?.active || !["camareira", "gerente_operacional", "admin"].includes(profile.role as string)) {
+    await dropSlot();
     return NextResponse.json({ ok: false, reason: "erro" satisfies Reason }, { status: 403 });
   }
-
-  let form: FormData;
-  try {
-    form = await req.formData();
-  } catch {
-    return NextResponse.json({ ok: false, reason: "erro" satisfies Reason }, { status: 400 });
-  }
-  const mode = String(form.get("mode") ?? "");
+  const showDetail = profile.role !== "camareira";
+  const withTiming = <T extends Record<string, unknown>>(body: T) => {
+    timing.total_ms = Date.now() - t0;
+    return showDetail ? { ...body, timing } : body;
+  };
 
   try {
     if (mode === "convite") {
@@ -61,79 +100,84 @@ export async function POST(req: Request) {
 
     const file = form.get("audio");
     if (!(file instanceof Blob) || file.size === 0 || file.size > MAX_AUDIO_BYTES) {
+      await dropSlot();
       return NextResponse.json({ ok: false, reason: "nao_entendi" satisfies Reason, audio: await phraseAudio("not_understood") });
     }
     const guestLangIn = String(form.get("lang") ?? "");
-    const audioMs = Math.round(Number(form.get("ms") ?? 0)) || null;
 
-    // Limite diário por pessoa: a vaga é reservada ANTES de chamar qualquer serviço pago (assim chamadas
-    // simultâneas e chamadas que falham também contam); o resultado é anotado no fim.
-    const admin = createAdminClient();
-    const { data: slot } = await admin
-      .from("translator_calls")
-      .insert({ user_id: user.id, direction: mode, lang: null, audio_ms: audioMs, ok: false })
-      .select("id")
-      .single();
-    if (!slot) return NextResponse.json({ ok: false, reason: "erro" satisfies Reason });
-    const { count } = await admin
-      .from("translator_calls")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .gte("created_at", startOfDayBrasiliaUtc(todayKey()));
-    if ((count ?? 0) > MAX_CALLS_PER_DAY) {
-      await admin.from("translator_calls").delete().eq("id", slot.id);
+    // Limite diário por pessoa: a vaga já foi reservada ANTES de chamar qualquer serviço pago (assim chamadas
+    // simultâneas e chamadas que falham também contam); o resultado é anotado depois de responder.
+    if (!slotInfo.slotId) return NextResponse.json({ ok: false, reason: "erro" satisfies Reason });
+    if (slotInfo.count > MAX_CALLS_PER_DAY) {
+      await dropSlot();
       return NextResponse.json({ ok: false, reason: "limite" satisfies Reason });
     }
-
-    const log = async (ok: boolean, lang: string | null) => {
-      await admin.from("translator_calls").update({ ok, lang }).eq("id", slot.id);
+    const slotId = slotInfo.slotId;
+    const log = (ok: boolean, lang: string | null) => {
+      after(async () => {
+        await admin.from("translator_calls").update({ ok, lang }).eq("id", slotId);
+      });
     };
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
     if (mode === "camareira") {
       if (!isGuestLanguage(guestLangIn)) {
-        await log(false, null);
+        log(false, null);
         return NextResponse.json({ ok: false, reason: "sem_idioma" satisfies Reason });
       }
+      let t = Date.now();
       const heard = await transcribe(buffer, ["pt-BR"], true);
+      mark("voz_para_texto_ms", t);
       if (!heard.text) {
-        await log(false, guestLangIn);
+        log(false, guestLangIn);
         return NextResponse.json({ ok: false, reason: "nao_entendi" satisfies Reason, audio: await phraseAudio("not_understood") });
       }
-      const translated = await translateText(heard.text, "to_guest", guestLangIn);
-      if (!translated || translated === UNDERSTOOD_NOTHING) {
-        await log(false, guestLangIn);
+      t = Date.now();
+      const tr = await translateText(heard.text, "to_guest", guestLangIn);
+      mark("traducao_ms", t);
+      timing.modelo = tr.model;
+      if (!tr.text || tr.text === UNDERSTOOD_NOTHING) {
+        log(false, guestLangIn);
         return NextResponse.json({ ok: false, reason: "nao_entendi" satisfies Reason, audio: await phraseAudio("not_understood") });
       }
-      const audio = await synthesize(translated, guestLangIn, 0.92);
-      await log(true, guestLangIn);
-      return NextResponse.json({ ok: true, lang: guestLangIn, audio, heard: heard.text, said: translated });
+      t = Date.now();
+      const audio = await synthesize(tr.text, guestLangIn, 0.92);
+      mark("texto_para_voz_ms", t);
+      log(true, guestLangIn);
+      return NextResponse.json(withTiming({ ok: true, lang: guestLangIn, audio, heard: heard.text, said: tr.text }));
     }
 
     // Hóspede: o Google descobre o idioma sozinho.
+    let t = Date.now();
     const heard = await transcribe(buffer, ["auto"], false);
+    mark("voz_para_texto_ms", t);
     if (!heard.text) {
-      await log(false, null);
+      log(false, null);
       return NextResponse.json({ ok: false, reason: "nao_entendi" satisfies Reason, audio: await phraseAudio("not_understood") });
     }
     const lang = heard.languageCode.split("-")[0];
     if (!isGuestLanguage(lang)) {
-      await log(false, lang || null);
+      log(false, lang || null);
       return NextResponse.json({ ok: false, reason: "idioma" satisfies Reason, audio: await phraseAudio("unsupported") });
     }
-    const translated = await translateText(heard.text, "to_camareira", lang);
-    if (!translated || translated === UNDERSTOOD_NOTHING) {
-      await log(false, lang);
+    t = Date.now();
+    const tr = await translateText(heard.text, "to_camareira", lang);
+    mark("traducao_ms", t);
+    timing.modelo = tr.model;
+    if (!tr.text || tr.text === UNDERSTOOD_NOTHING) {
+      log(false, lang);
       return NextResponse.json({ ok: false, reason: "nao_entendi" satisfies Reason, audio: await phraseAudio("not_understood") });
     }
-    const audio = await synthesize(translated, "pt", 0.95);
-    await log(true, lang);
-    return NextResponse.json({ ok: true, lang, audio, heard: heard.text, said: translated });
+    t = Date.now();
+    const audio = await synthesize(tr.text, "pt", 0.95);
+    mark("texto_para_voz_ms", t);
+    log(true, lang);
+    return NextResponse.json(withTiming({ ok: true, lang, audio, heard: heard.text, said: tr.text }));
   } catch (error) {
     console.error("[tradutor]", error);
     // Gerente e administrador veem o motivo técnico na tela, para facilitar o diagnóstico.
-    const detail = profile.role === "camareira" ? undefined : String((error as Error)?.message ?? error).slice(0, 400);
+    const detail = showDetail ? String((error as Error)?.message ?? error).slice(0, 400) : undefined;
     return NextResponse.json({ ok: false, reason: "erro" satisfies Reason, detail });
   }
 }

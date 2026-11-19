@@ -57,6 +57,7 @@ export function TranslatorClient({ canSeeText }: { canSeeText: boolean }) {
   const [level, setLevel] = useState(0);
   const [last, setLast] = useState<{ heard: string; said: string } | null>(null);
   const [detail, setDetail] = useState("");
+  const [timing, setTiming] = useState("");
 
   const langRef = useRef<string | null>(null);
   const rec = useRef<Recording | null>(null);
@@ -129,18 +130,27 @@ export function TranslatorClient({ canSeeText }: { canSeeText: boolean }) {
     setPhase("processing");
     setMessage("");
     setDetail("");
+    setTiming("");
     try {
       const fd = new FormData();
       fd.append("audio", blob, "fala");
       fd.append("mode", from);
       fd.append("lang", langRef.current ?? "");
       fd.append("ms", String(ms));
+      const sentAt = Date.now();
       const res = await fetch("/api/translator", { method: "POST", body: fd });
       const json = await res.json();
 
       if (json.ok) {
         if (from === "hospede" && json.lang) setLang(json.lang as string);
         lastAudio.current = json.audio as string;
+        if (canSeeText && json.timing) {
+          setTiming(
+            Object.entries(json.timing as Record<string, string | number>)
+              .map(([k, v]) => `${k.replace(/_ms$/, "")}: ${v}${typeof v === "number" ? " ms" : ""}`)
+              .join(" · ") + ` · total no aparelho: ${Date.now() - sentAt} ms`
+          );
+        }
         setLast({ heard: json.heard as string, said: json.said as string });
         await speak(json.audio as string);
         return;
@@ -376,6 +386,11 @@ export function TranslatorClient({ canSeeText }: { canSeeText: boolean }) {
           {lang && (
             <p>
               <strong>Idioma do hóspede:</strong> {lang}
+            </p>
+          )}
+          {timing && (
+            <p className="break-words">
+              <strong>Tempos:</strong> {timing}
             </p>
           )}
         </details>
