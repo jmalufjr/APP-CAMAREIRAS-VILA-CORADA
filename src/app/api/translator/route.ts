@@ -40,15 +40,24 @@ export async function POST(req: Request) {
 
   // Só camareira, gerente operacional e administrador (rotas de API não passam pela checagem de papel do proxy).
   const supabase = await createClient();
-  const [{ data: userData }, formResult] = await Promise.all([
-    supabase.auth.getUser(),
+  const tA = Date.now();
+  // getClaims confere o login sem ir à rede quando possível; o áudio é recebido ao mesmo tempo.
+  const [claimsResult, formResult] = await Promise.all([
+    supabase.auth.getClaims().then((r) => {
+      mark("autenticacao_ms", tA);
+      return r;
+    }),
     req.formData().then(
-      (f) => f,
+      (f) => {
+        mark("recebendo_audio_ms", tA);
+        return f;
+      },
       () => null
     ),
   ]);
-  const user = userData.user;
-  if (!user) return NextResponse.json({ ok: false, reason: "erro" satisfies Reason }, { status: 401 });
+  const userId = claimsResult.data?.claims?.sub;
+  if (!userId) return NextResponse.json({ ok: false, reason: "erro" satisfies Reason }, { status: 401 });
+  const user = { id: userId };
   if (!formResult) return NextResponse.json({ ok: false, reason: "erro" satisfies Reason }, { status: 400 });
   const form = formResult;
   const mode = String(form.get("mode") ?? "");
@@ -56,6 +65,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient();
 
   // O papel é conferido junto com a reserva da vaga do limite diário (uma ida ao banco em paralelo).
+  const tDb = Date.now();
   const profilePromise = supabase.from("profiles").select("role, active").eq("id", user.id).single();
   const slotPromise =
     mode === "camareira" || mode === "hospede"
@@ -76,7 +86,7 @@ export async function POST(req: Request) {
       : Promise.resolve({ slotId: null as string | null, count: 0 });
 
   const [{ data: profile }, slotInfo] = await Promise.all([profilePromise, slotPromise]);
-  mark("banco_ms", t0);
+  mark("banco_ms", tDb);
   const dropSlot = async () => {
     if (slotInfo.slotId) await admin.from("translator_calls").delete().eq("id", slotInfo.slotId);
   };

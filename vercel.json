@@ -5,5 +5,8 @@
       "path": "/api/cron/stays-sync",
       "schedule": "0 9 * * *"
     }
+  ],
+  "regions": [
+    "gru1"
   ]
 }
