@@ -46,3 +46,7 @@ next-env.d.ts
 
 # Estado local de ferramenta de analise (semgrep)
 .semgrep/
+
+# chave do Google Cloud (tradutor) - nunca versionar
+google-service-account.json
+*service-account*.json

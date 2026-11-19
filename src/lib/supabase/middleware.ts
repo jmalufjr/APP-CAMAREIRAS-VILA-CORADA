@@ -105,6 +105,7 @@ export async function updateSession(request: NextRequest) {
         "/dashboard/calendario-stays",
         "/dashboard/tarefas",
         "/comanda",
+        "/tradutor",
         "/checklists",
         "/contabil/resultado-mensal",
         "/contabil/custo-produtos",

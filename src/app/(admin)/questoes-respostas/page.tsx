@@ -1650,6 +1650,50 @@ export default function QuestoesRespostasPage() {
             </div>
           </AccordionPanel>
         </AccordionItem>
+
+        <AccordionItem value="tradutor">
+          <AccordionTrigger>
+            <span className="text-left">17. Como funciona o tradutor de voz para hóspedes estrangeiros?</span>
+          </AccordionTrigger>
+          <AccordionPanel>
+            <div className="space-y-3">
+              <P>
+                O item <strong>Tradutor</strong> do menu da camareira e do gerente ajuda a atender hóspedes que falam
+                inglês, espanhol, francês, italiano ou alemão. A tela é de propósito muito simples, com dois botões grandes:
+                <strong> EU FALO</strong> (verde) e <strong>HÓSPEDE FALA</strong> (azul).
+              </P>
+              <List
+                items={[
+                  <>
+                    <strong>Começar:</strong> toque em HÓSPEDE FALA. O aparelho diz, em inglês, “Please speak in English or in
+                    your own language” e já fica ouvindo. O sistema descobre sozinho o idioma do hóspede; ninguém precisa
+                    escolher idioma nem bandeira.
+                  </>,
+                  <>
+                    <strong>Falar:</strong> toque no botão, fale com calma e, quando terminar, toque no botão vermelho
+                    (TERMINAR). Pausas no meio da fala não cortam nada; se esquecer de terminar, o sistema encerra depois de uns
+                    8 segundos de silêncio.
+                  </>,
+                  <>
+                    <strong>Ouvir:</strong> a tradução é falada em voz alta; nada aparece escrito na tela. O botão REPETIR
+                    toca de novo a última tradução e NOVA CONVERSA zera o idioma para atender outro hóspede.
+                  </>,
+                  <>
+                    <strong>Se não entender:</strong> o aparelho avisa por voz (“Não entendi. Pode repetir, por favor?”). Isso
+                    acontece com barulho forte ou com um idioma fora dos cinco.
+                  </>,
+                ]}
+              />
+              <P>
+                O português da camareira pode ser regional, com erros de concordância e gírias: uma IA interpreta a intenção e
+                traduz de forma educada e simples. A voz é reconhecida pelo Google e a tradução é feita pelo Claude. O áudio
+                não é guardado no sistema; só fica o registro de uso (quem usou e quando), para limitar a 150 falas por pessoa
+                por dia e acompanhar o custo, que é de poucos centavos por fala. O gerente e o administrador têm um aviso
+                discreto “Ver o que foi entendido” para conferir a qualidade.
+              </P>
+            </div>
+          </AccordionPanel>
+        </AccordionItem>
       </Accordion>
     </div>
   );

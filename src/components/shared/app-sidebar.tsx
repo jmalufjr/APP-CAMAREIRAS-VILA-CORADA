@@ -25,6 +25,7 @@ import {
   BookOpen,
   RefreshCw,
   Plug,
+  Languages,
 } from "lucide-react";
 
 interface NavItem {
@@ -88,6 +89,7 @@ const gerenteNav: NavItem[] = [
   adminNav[1], // Módulo operacional
   adminNav[2], // Módulo gerencial
   { href: "/sincronizacao", label: "Sincronização", icon: RefreshCw },
+  { href: "/tradutor", label: "Tradutor", icon: Languages },
 ];
 
 const camareiraNav: NavItem[] = [
@@ -96,6 +98,7 @@ const camareiraNav: NavItem[] = [
   { href: "/chegadas-saidas", label: "Chegadas & saídas", icon: CalendarClock },
   { href: "/comanda", label: "Comandas de Bar da Piscina", icon: Martini },
   { href: "/bar-piscina", label: "Consumo total por suíte", icon: Wine },
+  { href: "/tradutor", label: "Tradutor", icon: Languages },
 ];
 
 const manutencaoNav: NavItem[] = [
