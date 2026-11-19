@@ -81,7 +81,7 @@ const VOICES: Record<string, { languageCode: string; name: string }> = {
 
 // Devolve o áudio (MP3) em base64.
 export async function synthesize(text: string, lang: string, speakingRate = 1): Promise<string> {
-  const voice = VOICES[lang];
+  const voice = Object.hasOwn(VOICES, lang) ? VOICES[lang] : undefined;
   if (!voice) throw new Error(`Idioma sem voz: ${lang}`);
   const token = await getGoogleAccessToken();
 

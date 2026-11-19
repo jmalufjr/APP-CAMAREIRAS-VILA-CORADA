@@ -9,6 +9,10 @@ export const GUEST_LANGUAGES: Record<string, string> = {
   de: "alemão",
 };
 
+export function isGuestLanguage(code: string): boolean {
+  return Object.hasOwn(GUEST_LANGUAGES, code);
+}
+
 export const UNDERSTOOD_NOTHING = "NAO_ENTENDI";
 
 const BASE_RULES = `Você é o intérprete de uma pousada brasileira (Pousada Vila Corada), traduzindo a conversa entre uma camareira e um hóspede estrangeiro.

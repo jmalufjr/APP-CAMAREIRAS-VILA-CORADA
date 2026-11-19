@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { startOfDayBrasiliaUtc, todayKey } from "@/lib/date";
 import { synthesize, transcribe } from "@/lib/google/speech";
-import { translateText, GUEST_LANGUAGES, UNDERSTOOD_NOTHING } from "@/lib/translator";
+import { translateText, isGuestLanguage, UNDERSTOOD_NOTHING } from "@/lib/translator";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -66,25 +66,34 @@ export async function POST(req: Request) {
     const guestLangIn = String(form.get("lang") ?? "");
     const audioMs = Math.round(Number(form.get("ms") ?? 0)) || null;
 
-    // Limite diário por pessoa.
+    // Limite diário por pessoa: a vaga é reservada ANTES de chamar qualquer serviço pago (assim chamadas
+    // simultâneas e chamadas que falham também contam); o resultado é anotado no fim.
     const admin = createAdminClient();
+    const { data: slot } = await admin
+      .from("translator_calls")
+      .insert({ user_id: user.id, direction: mode, lang: null, audio_ms: audioMs, ok: false })
+      .select("id")
+      .single();
+    if (!slot) return NextResponse.json({ ok: false, reason: "erro" satisfies Reason });
     const { count } = await admin
       .from("translator_calls")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
       .gte("created_at", startOfDayBrasiliaUtc(todayKey()));
-    if ((count ?? 0) >= MAX_CALLS_PER_DAY) {
+    if ((count ?? 0) > MAX_CALLS_PER_DAY) {
+      await admin.from("translator_calls").delete().eq("id", slot.id);
       return NextResponse.json({ ok: false, reason: "limite" satisfies Reason });
     }
 
     const log = async (ok: boolean, lang: string | null) => {
-      await admin.from("translator_calls").insert({ user_id: user.id, direction: mode, lang, audio_ms: audioMs, ok });
+      await admin.from("translator_calls").update({ ok, lang }).eq("id", slot.id);
     };
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
     if (mode === "camareira") {
-      if (!GUEST_LANGUAGES[guestLangIn]) {
+      if (!isGuestLanguage(guestLangIn)) {
+        await log(false, null);
         return NextResponse.json({ ok: false, reason: "sem_idioma" satisfies Reason });
       }
       const heard = await transcribe(buffer, ["pt-BR"], true);
@@ -109,7 +118,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, reason: "nao_entendi" satisfies Reason, audio: await phraseAudio("not_understood") });
     }
     const lang = heard.languageCode.split("-")[0];
-    if (!GUEST_LANGUAGES[lang]) {
+    if (!isGuestLanguage(lang)) {
       await log(false, lang || null);
       return NextResponse.json({ ok: false, reason: "idioma" satisfies Reason, audio: await phraseAudio("unsupported") });
     }
