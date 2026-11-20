@@ -115,8 +115,7 @@ export async function getOccurrenceAssessment(occurrenceId: string, force = fals
   };
 
   const inputHash = createHash("sha256").update(JSON.stringify([category, row.description ?? "", photoPaths])).digest("hex").slice(0, 16);
-  const recent = row.ai_assessed_at ? Date.now() - new Date(row.ai_assessed_at).getTime() < REGENERATE_COOLDOWN_MS : false;
-  if (row.ai_assessment && row.ai_assessment.inputHash === inputHash && (!force || recent)) {
+  if (!force && row.ai_assessment && row.ai_assessment.inputHash === inputHash) {
     view.assessment = row.ai_assessment;
     view.assessedAt = row.ai_assessed_at;
     return view;
@@ -124,6 +123,22 @@ export async function getOccurrenceAssessment(occurrenceId: string, force = fals
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { ...view, error: "A avaliação pela IA não está configurada no servidor." };
+
+  // Reserva a vaga ANTES de chamar a IA, de forma atômica no banco: só uma chamada por ocorrência a cada intervalo, valendo
+  // para primeira geração, regeração e tentativas que falham (o horário é gravado mesmo se a IA errar) e para pedidos simultâneos.
+  const claimAdmin = createAdminClient();
+  const cutoff = new Date(Date.now() - REGENERATE_COOLDOWN_MS).toISOString();
+  const { data: claimed } = await claimAdmin
+    .from("daily_room_task_occurrences")
+    .update({ ai_requested_at: new Date().toISOString() })
+    .eq("id", occurrenceId)
+    .or(`ai_requested_at.is.null,ai_requested_at.lt.${cutoff}`)
+    .select("id");
+  if (!claimed || claimed.length === 0) {
+    // Já há uma análise em andamento ou feita há pouco: mostra a que existir.
+    if (row.ai_assessment) return { ...view, assessment: row.ai_assessment, assessedAt: row.ai_assessed_at };
+    return { ...view, error: "A análise está em andamento ou foi tentada há pouco. Aguarde um instante e atualize a página." };
+  }
 
   // Baixa até 4 fotos (já vêm reduzidas do celular) para a IA ver.
   const admin = createAdminClient();
