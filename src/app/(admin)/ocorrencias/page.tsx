@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { todayKey, yesterdayKey, formatDatePt } from "@/lib/date";
 import { getOccurrencesForDates } from "@/lib/actions/occurrences";
 import { OccurrenceList } from "./occurrence-list";
-import { PushSettings } from "@/components/shared/push-settings";
+import { TelegramSettings } from "@/components/shared/telegram-settings";
 import Link from "next/link";
 import { History } from "lucide-react";
 
@@ -33,7 +33,7 @@ export default async function OcorrenciasPage() {
         }
       />
 
-      <PushSettings />
+      <TelegramSettings />
 
       {[today, yesterday].map((date) => (
         <div key={date} className="space-y-3">

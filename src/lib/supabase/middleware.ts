@@ -42,7 +42,9 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/api/integration") ||
     // Avisos push: o service worker e a confirmação de leitura são chamados pelo próprio aparelho, sem sessão.
     path === "/sw.js" ||
-    path === "/api/push/ack";
+    path === "/api/push/ack" ||
+    // Telegram chama esta rota (autenticada por segredo no cabeçalho), sem sessão.
+    path === "/api/telegram/webhook";
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

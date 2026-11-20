@@ -408,12 +408,11 @@ export default function QuestoesRespostasPage() {
                 com o mesmo item.
               </P>
               <P>
-                <strong>Aviso no celular:</strong> quem trabalha na manutenção e o administrador podem receber uma notificação
-                no celular (ou no computador) sempre que uma ocorrência nova é registrada. Para ligar, abra a tela de
-                ocorrências, toque em “Ativar avisos” e depois em “Permitir”; é preciso fazer isso uma vez em cada aparelho
-                (há também um botão de aviso de teste). A notificação toca o som normal do celular, fica na tela e se repete a
-                cada 5 minutos, sem vibração, até você dispensá-la ou tocar nela, ou até a ocorrência ser selecionada. O som
-                segue o modo do celular: no silencioso, ela não toca.
+                <strong>Aviso no celular (Telegram):</strong> quem trabalha na manutenção e o administrador recebem uma
+                mensagem no Telegram sempre que uma ocorrência nova é registrada. Para ligar, instale o app Telegram, abra a
+                tela de ocorrências, toque em “Ativar no Telegram” e, no Telegram, em “Iniciar” (há também um botão de aviso de
+                teste). A mensagem repete a cada 5 minutos, com o som do Telegram, até você tocar em “Estou ciente” ou até a
+                ocorrência ser selecionada. O som segue o modo do celular: no silencioso, ela não toca.
               </P>
             </div>
           </AccordionPanel>
