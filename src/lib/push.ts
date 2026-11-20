@@ -234,9 +234,10 @@ export async function sendReminders(): Promise<{ reminded: number }> {
 
 type LinkWithRole = { id: string; chat_id: number; profiles: { role: string; active: boolean } | null };
 
-function telegramAlertFor(o: OccurrenceInfo, role: string, reminder: boolean) {
+function telegramAlertFor(o: OccurrenceInfo, linkId: string, role: string, reminder: boolean) {
   return {
     occurrenceId: o.id,
+    linkId,
     suite: o.daily_room_tasks?.rooms?.number,
     category: o.occurrence_categories?.name ?? "Ocorrência",
     description: o.description,
@@ -256,7 +257,7 @@ async function telegramFirstAlert(occ: OccurrenceInfo): Promise<number> {
     .eq("profiles.active", true);
   let sent = 0;
   for (const link of (data ?? []) as unknown as LinkWithRole[]) {
-    const res = await sendOccurrenceAlert(Number(link.chat_id), telegramAlertFor(occ, link.profiles?.role ?? "manutencao", false));
+    const res = await sendOccurrenceAlert(Number(link.chat_id), telegramAlertFor(occ, link.id, link.profiles?.role ?? "manutencao", false));
     if (res === "blocked") {
       await admin.from("telegram_links").delete().eq("id", link.id);
       continue;
@@ -277,7 +278,7 @@ async function telegramFirstAlert(occ: OccurrenceInfo): Promise<number> {
   return sent;
 }
 
-// Lembretes pelo Telegram: repete o aviso (nova mensagem, com som) até a pessoa tocar em "Estou ciente".
+// Lembretes pelo Telegram: repete o aviso (nova mensagem, com som) até a pessoa tocar em "Abrir no app".
 async function telegramReminders(before: string): Promise<number> {
   if (!telegramConfigured()) return 0;
   const admin = createAdminClient();
@@ -306,7 +307,7 @@ async function telegramReminders(before: string): Promise<number> {
     const link = row.telegram_links;
     const occ = row.daily_room_task_occurrences;
     if (!link || !occ) continue;
-    const res = await sendOccurrenceAlert(Number(link.chat_id), telegramAlertFor(occ, link.profiles?.role ?? "manutencao", true));
+    const res = await sendOccurrenceAlert(Number(link.chat_id), telegramAlertFor(occ, link.id, link.profiles?.role ?? "manutencao", true));
     if (res === "blocked") {
       await admin.from("telegram_links").delete().eq("id", link.id);
       continue;

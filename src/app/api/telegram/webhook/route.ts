@@ -61,13 +61,13 @@ export async function POST(request: NextRequest) {
       const { data: profile } = await admin.from("profiles").select("name").eq("id", row.user_id).maybeSingle();
       await sendTelegramText(
         chatId,
-        `✅ Pronto${profile?.name ? `, <b>${escapeHtml(String(profile.name))}</b>` : ""}! Você vai receber aqui um aviso a cada nova ocorrência de manutenção, com lembretes até tocar em <b>Estou ciente</b>.`
+        `✅ Pronto${profile?.name ? `, <b>${escapeHtml(String(profile.name))}</b>` : ""}! Você vai receber aqui um aviso a cada nova ocorrência de manutenção, com lembretes até tocar em <b>Abrir no app</b>.`
       );
     }
     return NextResponse.json({ ok: true });
   }
 
-  // 2) Botão "Estou ciente": encerra os lembretes daquela ocorrência para esta conversa.
+  // 2) Botão "Estou ciente" (mensagens antigas; o botão atual é um link, ver /api/telegram/open): encerra os lembretes daquela ocorrência para esta conversa.
   const cb = update.callback_query;
   if (cb?.data?.startsWith("ack:") && cb.message) {
     const occurrenceId = cb.data.slice(4);

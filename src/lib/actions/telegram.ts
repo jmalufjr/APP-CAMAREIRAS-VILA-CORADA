@@ -3,7 +3,7 @@
 import { randomBytes } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { telegramConfigured, botUsername, sendTelegramText } from "@/lib/telegram";
+import { telegramConfigured, botUsername, tgCall, appBaseUrl } from "@/lib/telegram";
 
 const ALLOWED_ROLES = ["manutencao", "admin"];
 
@@ -57,10 +57,17 @@ export async function sendTelegramTest() {
   if (!telegramConfigured()) return { error: "Avisos pelo Telegram ainda não configurados no servidor." };
   const admin = createAdminClient();
   const { data: links } = await admin.from("telegram_links").select("chat_id").eq("user_id", user.id);
+  const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
+  const path = profile?.role === "admin" ? "/ocorrencias" : "/manutencao/ocorrencias";
   if (!links || links.length === 0) return { error: "Nenhuma conversa ligada." };
   let sent = 0;
   for (const l of links) {
-    const res = await sendTelegramText(Number(l.chat_id), "🔔 <b>Teste de aviso</b>\nSe você está vendo isto, os avisos de ocorrência estão funcionando.");
+    const res = await tgCall("sendMessage", {
+      chat_id: Number(l.chat_id),
+      text: "🔔 <b>Teste de aviso</b>\nSe você está vendo isto, os avisos de ocorrência estão funcionando.",
+      parse_mode: "HTML",
+      reply_markup: { inline_keyboard: [[{ text: "Abrir no app (ciente)", url: `${appBaseUrl()}${path}` }]] },
+    });
     if (res.ok) sent++;
   }
   return sent > 0 ? { success: true } : { error: "Não foi possível enviar o teste." };

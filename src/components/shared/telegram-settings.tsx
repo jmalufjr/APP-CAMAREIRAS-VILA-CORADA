@@ -66,7 +66,7 @@ export function TelegramSettings() {
             {on ? (
               <>
                 <p className="font-medium">Avisos pelo Telegram ativados.</p>
-                <p className="text-muted-foreground">Você recebe uma mensagem a cada nova ocorrência, com lembretes até tocar em “Estou ciente”.</p>
+                <p className="text-muted-foreground">Você recebe uma mensagem a cada nova ocorrência, com lembretes até tocar em “Abrir no app”.</p>
               </>
             ) : (
               <>

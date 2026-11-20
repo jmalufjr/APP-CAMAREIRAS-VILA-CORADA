@@ -40,6 +40,8 @@ export function escapeHtml(text: string): string {
 
 export interface TelegramAlert {
   occurrenceId: string;
+  // Conversa (telegram_links.id) que recebe o aviso: vai no link do botão para registrar o "ciente".
+  linkId: string;
   suite?: string;
   category: string;
   description?: string | null;
@@ -48,7 +50,7 @@ export interface TelegramAlert {
   path: string;
 }
 
-// Envia o aviso com o botão "Estou ciente". Devolve o id da mensagem, ou "blocked" se a pessoa
+// Envia o aviso com o botão "Abrir no app" (que também vale como ciente). Devolve o id da mensagem, ou "blocked" se a pessoa
 // bloqueou o bot / apagou a conversa (quem chama remove a ligação).
 export async function sendOccurrenceAlert(chatId: number, a: TelegramAlert): Promise<{ messageId: number } | "blocked" | "error"> {
   const head = a.reminder ? "🔔 <b>LEMBRETE — ocorrência de manutenção</b>" : "🚨 <b>Nova ocorrência de manutenção</b>";
@@ -59,10 +61,8 @@ export async function sendOccurrenceAlert(chatId: number, a: TelegramAlert): Pro
     text: lines.join("\n"),
     parse_mode: "HTML",
     reply_markup: {
-      inline_keyboard: [
-        [{ text: "✅ Estou ciente", callback_data: `ack:${a.occurrenceId}` }],
-        [{ text: "Abrir no app", url: `${appBaseUrl()}${a.path}` }],
-      ],
+      // Um botão só: abrir o app já vale como "ciente" (o link passa pelo servidor, que encerra os lembretes e redireciona).
+      inline_keyboard: [[{ text: "Abrir no app (ciente)", url: `${appBaseUrl()}/api/telegram/open?o=${a.occurrenceId}&l=${a.linkId}` }]],
     },
   });
   if (res.ok) return { messageId: res.result.message_id };

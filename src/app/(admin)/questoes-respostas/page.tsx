@@ -411,8 +411,7 @@ export default function QuestoesRespostasPage() {
                 <strong>Aviso no celular (Telegram):</strong> quem trabalha na manutenção e o administrador recebem uma
                 mensagem no Telegram sempre que uma ocorrência nova é registrada. Para ligar, instale o app Telegram, abra a
                 tela de ocorrências, toque em “Ativar no Telegram” e, no Telegram, em “Iniciar” (há também um botão de aviso de
-                teste). A mensagem repete a cada 5 minutos, com o som do Telegram, até você tocar em “Estou ciente” ou até a
-                ocorrência ser selecionada. O som segue o modo do celular: no silencioso, ela não toca.
+                teste). A mensagem repete a cada 5 minutos, com o som do Telegram, até você tocar em “Abrir no app” (que já vale como ciente) ou até a ocorrência ser selecionada. O som segue o modo do celular: no silencioso, ela não toca.
               </P>
             </div>
           </AccordionPanel>

@@ -44,7 +44,8 @@ export async function updateSession(request: NextRequest) {
     path === "/sw.js" ||
     path === "/api/push/ack" ||
     // Telegram chama esta rota (autenticada por segredo no cabeçalho), sem sessão.
-    path === "/api/telegram/webhook";
+    path === "/api/telegram/webhook" ||
+    path === "/api/telegram/open";
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

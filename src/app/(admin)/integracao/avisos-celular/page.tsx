@@ -9,7 +9,7 @@ export default function AvisosCelularPage() {
       <BackLink href="/integracao" />
       <PageHeader
         title="Avisos no celular"
-        subtitle="Receba uma mensagem no Telegram sempre que uma camareira registrar uma ocorrência de manutenção, com lembretes até você tocar em “Estou ciente”."
+        subtitle="Receba uma mensagem no Telegram sempre que uma camareira registrar uma ocorrência de manutenção, com lembretes até você tocar em “Abrir no app”."
       />
       <TelegramSettings />
     </div>
