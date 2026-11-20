@@ -18,36 +18,48 @@ function urlBase64ToUint8Array(base64: string) {
 type State = "loading" | "unsupported" | "denied" | "off" | "on";
 
 type TestDetail = { host: string; result: string; code?: number; reason?: string };
+type PushJson = { endpoint: string; keys: { p256dh: string; auth: string } };
+
+const hostOf = (endpoint: string) => {
+  try {
+    return new URL(endpoint).hostname;
+  } catch {
+    return "?";
+  }
+};
 
 // Avisos de nova ocorrência de manutenção neste aparelho (notificação push): ativar, desativar e testar.
 export function PushSettings() {
   const [state, setState] = useState<State>("loading");
   const [isPending, startTransition] = useTransition();
   const [diag, setDiag] = useState<string[]>([]);
+  const [steps, setSteps] = useState<string[]>([]);
   const [lastTest, setLastTest] = useState<TestDetail[] | null>(null);
 
-  // Informações técnicas para descobrir por que um aviso não aparece.
-  async function collectDiagnostics() {
+  const addStep = (line: string) => setSteps((prev) => [...prev.slice(-9), `${new Date().toLocaleTimeString("pt-BR")} ${line}`]);
+
+  // Lê o estado REAL do navegador (permissão e inscrição), atualiza a tela e o diagnóstico e devolve a inscrição.
+  async function refresh(): Promise<PushSubscription | null> {
     const lines: string[] = [];
     lines.push(`Endereço do site: ${location.origin}`);
     lines.push(`Aberto como: ${window.matchMedia("(display-mode: standalone)").matches ? "app instalado (tela inteira)" : "página do navegador"}`);
-    lines.push(`Permissão de notificação: ${"Notification" in window ? Notification.permission : "indisponível"}`);
+    const permission = "Notification" in window ? Notification.permission : "indisponível";
+    lines.push(`Permissão de notificação: ${permission}`);
+    let sub: PushSubscription | null = null;
     try {
       const reg = await navigator.serviceWorker.getRegistration();
       lines.push(`Service worker: ${reg ? (reg.active ? "ativo" : "registrado, ainda não ativo") : "nenhum"}`);
-      const sub = await reg?.pushManager.getSubscription();
-      let host = "";
-      try {
-        host = sub ? new URL(sub.endpoint).hostname : "";
-      } catch {
-        /* sem host */
-      }
-      lines.push(`Inscrição neste aparelho: ${sub ? `sim (${host})` : "não"}`);
+      sub = (await reg?.pushManager.getSubscription()) ?? null;
+      lines.push(`Inscrição neste aparelho: ${sub ? `sim (${hostOf(sub.endpoint)})` : "não"}`);
     } catch (e) {
       lines.push(`Erro ao ler o service worker: ${e instanceof Error ? e.message : "?"}`);
     }
     lines.push(`Navegador: ${navigator.userAgent}`);
     setDiag(lines);
+    if (permission === "denied") setState("denied");
+    else if (permission === "granted" && sub) setState("on");
+    else setState("off");
+    return sub;
   }
 
   useEffect(() => {
@@ -59,25 +71,20 @@ export function PushSettings() {
       }
       try {
         const reg = await navigator.serviceWorker.register("/sw.js");
-        let existing = await reg.pushManager.getSubscription();
+        await navigator.serviceWorker.ready;
         // Permissão já dada mas sem inscrição (o navegador a descartou): inscreve de novo sem pedir nada.
-        if (!existing && Notification.permission === "granted") {
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub && Notification.permission === "granted") {
           try {
             const key = await getVapidPublicKey();
-            await navigator.serviceWorker.ready;
-            if (key) {
-              existing = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) });
-              await savePushSubscription(existing.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } }, navigator.userAgent);
-            }
+            if (key) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) });
           } catch {
-            existing = null;
+            sub = null;
           }
         }
-        if (cancelled) return;
-        void collectDiagnostics();
-        if (existing && Notification.permission === "granted") setState("on");
-        else if (Notification.permission === "denied") setState("denied");
-        else setState("off");
+        // Mantém o servidor em dia (se o aparelho foi apagado lá, grava de novo).
+        if (sub && Notification.permission === "granted") await savePushSubscription(sub.toJSON() as PushJson, navigator.userAgent);
+        if (!cancelled) await refresh();
       } catch {
         if (!cancelled) setState("unsupported");
       }
@@ -91,13 +98,16 @@ export function PushSettings() {
   function enable() {
     startTransition(async () => {
       try {
+        addStep("pedindo permissão…");
         const permission = await Notification.requestPermission();
+        addStep(`permissão: ${permission}`);
         if (permission !== "granted") {
-          setState(permission === "denied" ? "denied" : "off");
-          toast.error("Você precisa tocar em “Permitir” para receber os avisos.");
+          await refresh();
+          toast.error(permission === "denied" ? "As notificações estão bloqueadas para este site." : "Você precisa tocar em “Permitir” para receber os avisos.");
           return;
         }
         const key = await getVapidPublicKey();
+        addStep(key ? "chave do servidor obtida" : "servidor sem chave configurada");
         if (!key) {
           toast.error("Avisos ainda não configurados no servidor.");
           return;
@@ -106,16 +116,23 @@ export function PushSettings() {
         const sub =
           (await reg.pushManager.getSubscription()) ??
           (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) }));
-        const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
-        const result = await savePushSubscription(json, navigator.userAgent);
+        addStep(`inscrição criada (${hostOf(sub.endpoint)})`);
+        const result = await savePushSubscription(sub.toJSON() as PushJson, navigator.userAgent);
+        addStep(result?.error ? `erro ao salvar no servidor: ${result.error}` : "salva no servidor");
         if (result?.error) {
           toast.error(result.error);
           return;
         }
-        setState("on");
+        const real = await refresh();
+        if (!real) {
+          toast.error("O navegador não manteve a inscrição deste aparelho. Veja o Diagnóstico.");
+          return;
+        }
         toast.success("Avisos ativados neste aparelho.");
       } catch (e) {
+        addStep(`erro: ${e instanceof Error ? e.message : "?"}`);
         toast.error(`Não foi possível ativar os avisos: ${e instanceof Error ? e.message : "erro"}`);
+        await refresh();
       }
     });
   }
@@ -129,7 +146,7 @@ export function PushSettings() {
           await removePushSubscription(sub.endpoint);
           await sub.unsubscribe();
         }
-        setState("off");
+        await refresh();
         toast.success("Avisos desativados neste aparelho.");
       } catch {
         toast.error("Não foi possível desativar.");
@@ -139,9 +156,17 @@ export function PushSettings() {
 
   function test() {
     startTransition(async () => {
+      // Antes de testar, confere o navegador e regrava o aparelho no servidor.
+      const sub = await refresh();
+      if (!sub || Notification.permission !== "granted") {
+        toast.error("Este aparelho não está inscrito. Toque em “Ativar avisos”.");
+        return;
+      }
+      const saved = await savePushSubscription(sub.toJSON() as PushJson, navigator.userAgent);
+      addStep(saved?.error ? `regravar no servidor: ${saved.error}` : "aparelho regravado no servidor");
       const result = await sendTestPush();
       setLastTest((result as { details?: TestDetail[] })?.details ?? null);
-      void collectDiagnostics();
+      await refresh();
       if (result?.error) toast.error(result.error);
       else toast.success("Aviso de teste entregue ao serviço de notificações. Ele deve aparecer em instantes.");
     });
@@ -199,13 +224,21 @@ export function PushSettings() {
           )}
         </div>
         <details className="basis-full text-xs text-muted-foreground">
-          <summary className="cursor-pointer font-medium" onClick={() => void collectDiagnostics()}>
+          <summary className="cursor-pointer font-medium" onClick={() => void refresh()}>
             Diagnóstico (para o suporte)
           </summary>
           <div className="mt-2 space-y-1 break-words">
             {diag.map((l) => (
               <p key={l}>{l}</p>
             ))}
+            {steps.length > 0 && (
+              <div>
+                <p className="font-medium">Passos desta sessão:</p>
+                {steps.map((l) => (
+                  <p key={l}>{l}</p>
+                ))}
+              </div>
+            )}
             {lastTest && (
               <p>
                 Último teste:{" "}
