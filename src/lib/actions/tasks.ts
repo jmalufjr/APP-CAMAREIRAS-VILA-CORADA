@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { OCCURRENCE_PHOTOS_BUCKET } from "@/lib/occurrence-photos";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { notifyNewOccurrences } from "@/lib/push";
+import { notifyNewOccurrences } from "@/lib/occurrence-alerts";
 import { syncStaysPlanning } from "@/lib/actions/stays-sync";
 import { findLastNightOccupant, ensureBillForOccupant, hasPaidBillOnly } from "@/lib/room-occupancy";
 

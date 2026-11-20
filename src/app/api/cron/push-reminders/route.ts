@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { notifyNewOccurrences, sendReminders } from "@/lib/push";
+import { notifyNewOccurrences, sendReminders } from "@/lib/occurrence-alerts";
 
 export const maxDuration = 30;
 

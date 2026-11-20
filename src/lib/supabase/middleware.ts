@@ -40,9 +40,8 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/_next") ||
     path.startsWith("/api/cron") ||
     path.startsWith("/api/integration") ||
-    // Avisos push: o service worker e a confirmação de leitura são chamados pelo próprio aparelho, sem sessão.
+    // /sw.js: script que desinstala o antigo aviso push dos aparelhos que o registraram (sem sessão).
     path === "/sw.js" ||
-    path === "/api/push/ack" ||
     // Telegram chama esta rota (autenticada por segredo no cabeçalho), sem sessão.
     path === "/api/telegram/webhook" ||
     path === "/api/telegram/open";
