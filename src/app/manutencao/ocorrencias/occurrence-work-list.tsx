@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -79,6 +80,9 @@ export function OccurrenceWorkList({
                   )}
                 </div>
               )}
+              <Button size="sm" variant="outline" render={<Link href={`/manutencao/ocorrencias/${o.id}/avaliacao-ia`} />}>
+                Avaliação da Inteligência Artificial
+              </Button>
               <p className="text-xs text-muted-foreground">Camareira: {o.camareira_name}</p>
               <p className="text-xs text-muted-foreground">Registrado em: {formatDateTimePt(o.created_at)}</p>
 

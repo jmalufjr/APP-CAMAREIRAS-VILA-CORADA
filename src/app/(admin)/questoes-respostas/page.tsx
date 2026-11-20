@@ -413,6 +413,9 @@ export default function QuestoesRespostasPage() {
                 tela de ocorrências, toque em “Ativar no Telegram” e, no Telegram, em “Iniciar” (há também um botão de aviso de
                 teste). A mensagem repete a cada 5 minutos, com o som do Telegram, até você tocar em “Abrir no app” (que já vale como ciente) ou até a ocorrência ser selecionada. O som segue o modo do celular: no silencioso, ela não toca.
               </P>
+              <P>
+                <strong>Avaliação da Inteligência Artificial:</strong> no card de cada ocorrência, o funcionário de manutenção toca em “Avaliação da Inteligência Artificial” e vê o possível problema (em até 30 palavras), o procedimento sugerido, os materiais, as ferramentas e um link de busca de vídeos no YouTube. A IA analisa a descrição e as fotos enviadas pela camareira; é só uma sugestão, e o problema deve ser confirmado no local.
+              </P>
             </div>
           </AccordionPanel>
         </AccordionItem>
