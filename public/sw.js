@@ -3,25 +3,44 @@
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 
-self.addEventListener("push", (event) => {
-  let data = {};
+// Conta à página aberta (se houver) o que aconteceu, para aparecer no Diagnóstico.
+async function tell(message) {
   try {
-    data = event.data ? event.data.json() : {};
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    windows.forEach((w) => w.postMessage(message));
   } catch (e) {
-    data = { title: "Aviso", body: event.data ? event.data.text() : "" };
+    /* sem página aberta */
   }
+}
+
+self.addEventListener("push", (event) => {
   event.waitUntil(
-    self.registration.showNotification(data.title || "Aviso", {
-      body: data.body || "",
-      tag: data.tag || "aviso",
-      // Mesmo aviso reenviado (lembrete) toca o som de novo e a notificação fica na tela até ser dispensada.
-      renotify: true,
-      requireInteraction: true,
-      silent: false,
-      vibrate: [],
-      icon: "/vila-corada-logo.png",
-      data: { url: data.url || "/", occurrenceId: data.occurrenceId || null },
-    })
+    (async () => {
+      let data = {};
+      try {
+        data = event.data ? event.data.json() : {};
+      } catch (e) {
+        data = { title: "Aviso", body: event.data ? event.data.text() : "" };
+      }
+      const title = data.title || "Aviso";
+      const base = {
+        body: data.body || "",
+        tag: data.tag || "aviso",
+        icon: "/vila-corada-logo.png",
+        data: { url: data.url || "/", occurrenceId: data.occurrenceId || null },
+      };
+      await tell({ type: "push", step: "aviso recebido pelo aparelho" });
+      try {
+        // Mesmo aviso reenviado (lembrete) toca o som de novo e a notificação fica na tela até ser dispensada.
+        await self.registration.showNotification(title, { ...base, renotify: true, requireInteraction: true });
+        await tell({ type: "push", step: "notificação exibida" });
+      } catch (e) {
+        await tell({ type: "push", step: "erro ao exibir: " + (e && e.message ? e.message : String(e)) });
+        // Nunca deixa um aviso sem notificação (o navegador pune sites que não mostram): tenta o modo mais simples.
+        await self.registration.showNotification(title, { body: base.body, tag: base.tag, data: base.data });
+        await tell({ type: "push", step: "notificação simples exibida" });
+      }
+    })()
   );
 });
 

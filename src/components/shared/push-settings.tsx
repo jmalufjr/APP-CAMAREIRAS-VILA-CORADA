@@ -62,6 +62,16 @@ export function PushSettings() {
     return sub;
   }
 
+  // O service worker conta o que acontece quando um aviso chega ao aparelho (aparece nos passos do Diagnóstico).
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    function onMessage(event: MessageEvent) {
+      if (event.data?.type === "push" && typeof event.data.step === "string") addStep(`service worker: ${event.data.step}`);
+    }
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     async function check() {
