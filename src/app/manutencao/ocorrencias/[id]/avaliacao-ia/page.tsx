@@ -8,11 +8,10 @@ import { RegenerateButton } from "./regenerate-button";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export default async function AvaliacaoIaPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ nova?: string }> }) {
+export default async function AvaliacaoIaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { nova } = await searchParams;
   if (!UUID.test(id)) notFound();
-  const view = await getOccurrenceAssessment(id, nova === "1");
+  const view = await getOccurrenceAssessment(id);
   if (!view) notFound();
   const { occurrence, assessment } = view;
 

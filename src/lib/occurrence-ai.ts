@@ -27,6 +27,8 @@ export interface OccurrenceAssessmentView {
 }
 
 const MAX_PHOTOS = 4;
+// Quem pede "gerar de novo" só é atendido se a última avaliação tiver mais que isto (evita gasto repetido da IA).
+const REGENERATE_COOLDOWN_MS = 2 * 60 * 1000;
 const SYSTEM = `Você é um técnico experiente em manutenção predial de pousadas e hotéis no Brasil.
 Receberá a categoria, a descrição escrita pela camareira e, às vezes, fotos de um problema numa suíte.
 Responda SOMENTE com um JSON, sem texto fora dele, neste formato:
@@ -113,7 +115,8 @@ export async function getOccurrenceAssessment(occurrenceId: string, force = fals
   };
 
   const inputHash = createHash("sha256").update(JSON.stringify([category, row.description ?? "", photoPaths])).digest("hex").slice(0, 16);
-  if (!force && row.ai_assessment && row.ai_assessment.inputHash === inputHash) {
+  const recent = row.ai_assessed_at ? Date.now() - new Date(row.ai_assessed_at).getTime() < REGENERATE_COOLDOWN_MS : false;
+  if (row.ai_assessment && row.ai_assessment.inputHash === inputHash && (!force || recent)) {
     view.assessment = row.ai_assessment;
     view.assessedAt = row.ai_assessed_at;
     return view;
