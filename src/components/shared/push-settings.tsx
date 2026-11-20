@@ -164,6 +164,26 @@ export function PushSettings() {
     });
   }
 
+  // Notificação local, sem passar pela internet: mostra se o próprio aparelho/navegador consegue exibir notificações.
+  function testLocal() {
+    startTransition(async () => {
+      try {
+        if (Notification.permission !== "granted") {
+          toast.error("Primeiro toque em “Ativar avisos” e em “Permitir”.");
+          return;
+        }
+        const reg = await navigator.serviceWorker.ready;
+        await reg.showNotification("Teste local", { body: "Se você vê isto, o aparelho exibe notificações deste site.", tag: "teste-local", icon: "/vila-corada-logo.png" });
+        addStep("notificação local pedida ao navegador");
+        await refresh();
+        toast.success("Notificação local pedida. Olhe a barra de notificações do celular.");
+      } catch (e) {
+        addStep(`erro na notificação local: ${e instanceof Error ? e.message : "?"}`);
+        toast.error("Não foi possível mostrar a notificação local.");
+      }
+    });
+  }
+
   function test() {
     startTransition(async () => {
       // Antes de testar, confere o navegador e regrava o aparelho no servidor.
@@ -241,6 +261,9 @@ export function PushSettings() {
             {diag.map((l) => (
               <p key={l}>{l}</p>
             ))}
+            <Button size="sm" variant="outline" disabled={isPending} onClick={testLocal}>
+              Testar notificação local (sem internet)
+            </Button>
             {steps.length > 0 && (
               <div>
                 <p className="font-medium">Passos desta sessão:</p>
