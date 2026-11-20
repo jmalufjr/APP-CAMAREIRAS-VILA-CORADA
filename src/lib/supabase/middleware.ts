@@ -39,7 +39,10 @@ export async function updateSession(request: NextRequest) {
     path === "/login" ||
     path.startsWith("/_next") ||
     path.startsWith("/api/cron") ||
-    path.startsWith("/api/integration");
+    path.startsWith("/api/integration") ||
+    // Avisos push: o service worker e a confirmação de leitura são chamados pelo próprio aparelho, sem sessão.
+    path === "/sw.js" ||
+    path === "/api/push/ack";
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

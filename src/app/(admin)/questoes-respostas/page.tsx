@@ -407,6 +407,14 @@ export default function QuestoesRespostasPage() {
                 frequentes — útil para identificar, por exemplo, se uma mesma suíte vive dando problema
                 com o mesmo item.
               </P>
+              <P>
+                <strong>Aviso no celular:</strong> quem trabalha na manutenção e o administrador podem receber uma notificação
+                no celular (ou no computador) sempre que uma ocorrência nova é registrada. Para ligar, abra a tela de
+                ocorrências, toque em “Ativar avisos” e depois em “Permitir”; é preciso fazer isso uma vez em cada aparelho
+                (há também um botão de aviso de teste). A notificação toca o som normal do celular, fica na tela e se repete a
+                cada 5 minutos, sem vibração, até você dispensá-la ou tocar nela, ou até a ocorrência ser selecionada. O som
+                segue o modo do celular: no silencioso, ela não toca.
+              </P>
             </div>
           </AccordionPanel>
         </AccordionItem>

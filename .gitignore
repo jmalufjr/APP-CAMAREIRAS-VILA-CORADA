@@ -50,3 +50,7 @@ next-env.d.ts
 # chave do Google Cloud (tradutor) - nunca versionar
 google-service-account.json
 *service-account*.json
+
+# arquivos com segredos para copiar na Vercel / SQL Editor
+vercel-env-*.txt
+*-PRONTO.sql

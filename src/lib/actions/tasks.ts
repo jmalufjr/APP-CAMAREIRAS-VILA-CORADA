@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { OCCURRENCE_PHOTOS_BUCKET } from "@/lib/occurrence-photos";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
+import { notifyNewOccurrences } from "@/lib/push";
 import { syncStaysPlanning } from "@/lib/actions/stays-sync";
 import { findLastNightOccupant, ensureBillForOccupant, hasPaidBillOnly } from "@/lib/room-occupancy";
 
@@ -188,6 +189,8 @@ export async function finalizeService(input: FinalizeServiceInput) {
   revalidatePath("/frigobar");
   revalidatePath("/bar-piscina");
   const occurrenceIds = ((data as { occurrence_ids?: string[] } | null)?.occurrence_ids ?? []) as string[];
+  // Aviso no celular da manutenção e do administrador para cada ocorrência nova.
+  if (occurrenceIds.length > 0) after(() => void notifyNewOccurrences());
   return { success: true, occurrenceIds };
 }
 
@@ -200,6 +203,7 @@ export async function addOccurrence(taskId: string, categoryId: string, descript
     .single();
   if (error) return { error: error.message };
   revalidatePath("/tarefas", "layout");
+  after(() => void notifyNewOccurrences());
   return { success: true, occurrenceId: data.id as string };
 }
 
