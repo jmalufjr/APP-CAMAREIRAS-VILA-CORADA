@@ -53,7 +53,7 @@ export interface TelegramAlert {
 export async function sendOccurrenceAlert(chatId: number, a: TelegramAlert): Promise<{ messageId: number } | "blocked" | "error"> {
   const head = a.reminder ? "🔔 <b>LEMBRETE — ocorrência de manutenção</b>" : "🚨 <b>Nova ocorrência de manutenção</b>";
   const lines = [head, `${a.suite ? `Suíte ${escapeHtml(a.suite)} · ` : ""}${escapeHtml(a.category)}`];
-  if (a.description) lines.push(escapeHtml(a.description).slice(0, 300));
+  if (a.description) lines.push(escapeHtml(a.description.slice(0, 300)));
   const res = await tgCall<{ message_id: number }>("sendMessage", {
     chat_id: chatId,
     text: lines.join("\n"),
@@ -66,7 +66,9 @@ export async function sendOccurrenceAlert(chatId: number, a: TelegramAlert): Pro
     },
   });
   if (res.ok) return { messageId: res.result.message_id };
-  if (res.code === 403 || res.code === 400 || res.code === 404) return "blocked";
+  // Só apaga a ligação quando a conversa realmente não existe mais (bot bloqueado, usuário desativado, chat não encontrado).
+  const gone = res.code === 403 || (res.code === 400 && /chat not found|user is deactivated|bot was blocked/i.test(res.description ?? ""));
+  if (gone) return "blocked";
   console.error("[telegram]", res.code, res.description);
   return "error";
 }
