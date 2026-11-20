@@ -35,6 +35,30 @@ export interface SubscriptionRow {
   auth: string;
 }
 
+// O servidor envia o aviso para o endereço (endpoint) que o aparelho informou; por segurança, só aceita (ao salvar e
+// também antes de cada envio) endereços dos serviços de push dos navegadores.
+const PUSH_HOSTS = [
+  "fcm.googleapis.com", // Chrome, Edge e Samsung Internet no Android e no computador
+  "android.googleapis.com",
+  "updates.push.services.mozilla.com", // Firefox
+  "push.services.mozilla.com",
+  "notify.windows.com", // Edge no Windows (e subdomínios)
+  "push.apple.com", // Safari (e subdomínios, como web.push.apple.com)
+];
+
+export function validPushEndpoint(endpoint: string): boolean {
+  if (typeof endpoint !== "string" || endpoint.length > 1000) return false;
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:" || url.port || url.username || url.password) return false;
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  return PUSH_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+}
+
 export interface SendDetail {
   result: "ok" | "gone" | "error";
   // Código de resposta do serviço de push do navegador (201 = aceito) e, se falhou, um motivo curto de uma lista fixa
@@ -54,6 +78,9 @@ function reasonFor(status?: number): string {
 }
 
 export async function sendDetailed(sub: SubscriptionRow, payload: PushPayload): Promise<SendDetail> {
+  // Endereço fora dos serviços de push conhecidos (por exemplo, salvo antes desta checagem existir): nunca é chamado
+  // e o aparelho é tratado como inexistente (quem chama o apaga).
+  if (!validPushEndpoint(sub.endpoint)) return { result: "gone", reason: "endereço de aparelho inválido" };
   try {
     const res = await sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify(payload), {
       TTL: 6 * 60 * 60,
