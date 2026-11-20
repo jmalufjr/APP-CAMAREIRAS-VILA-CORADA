@@ -42,6 +42,7 @@ export function isTaskInExecution(status: TaskStatus): boolean {
   return status === "pendente" || status === "em_andamento";
 }
 export type TableShape = "round" | "rect" | "square";
+export type TableSize = "pequeno" | "medio" | "grande";
 export type OccurrenceStatus = "pendente" | "selecionada" | "resolvida";
 export type MaintenanceExecutionType = "nao_tecnico" | "tecnico";
 export type MaintenanceItemStatus = "pendente" | "selecionada";
@@ -125,6 +126,7 @@ export interface BreakfastTable {
   id: string;
   label: string;
   shape: TableShape;
+  size: TableSize;
   seats: number;
   pos_x: number;
   pos_y: number;

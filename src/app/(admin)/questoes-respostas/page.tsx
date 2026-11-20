@@ -294,6 +294,12 @@ export default function QuestoesRespostasPage() {
                 sobrar lugar em nenhuma delas.
               </P>
               <P>
+                Cada mesa tem um <strong>tamanho</strong> (pequeno, médio ou grande, cada um 50% maior que o anterior), escolhido
+                ao criar a mesa em Listas operacionais, Layout &amp; mesas, ao lado da quantidade de hóspedes. Nas mesas já criadas,
+                o lápis do card permite mudar a quantidade de hóspedes e o tamanho; o desenho se ajusta na hora. As mesas redondas e
+                quadradas começam pequenas e a retangular (Mesa 7), grande.
+              </P>
+              <P>
                 Igual às outras telas com Hoje/Amanhã, essa aqui também abre sempre em “Hoje” — use o
                 botão “Amanhã” pra organizar o café do dia seguinte com antecedência. Clique em
                 qualquer mesa do desenho pra abrir uma janela com as suítes alocadas ali: adicione,

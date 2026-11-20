@@ -123,6 +123,8 @@ create table breakfast_tables (
   pos_y numeric not null default 0,
   width numeric not null default 80,
   height numeric not null default 80,
+  -- Tamanho (pequeno/medio/grande): cada um 50% maior que o anterior; width/height guardam as dimensões do tamanho.
+  size text not null default 'pequeno' check (size in ('pequeno', 'medio', 'grande')),
   active boolean not null default true,
   created_at timestamptz not null default now()
 );

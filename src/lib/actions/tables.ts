@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { getStaysReservationsIncluding } from "@/lib/stays/client";
 import { addDaysKey } from "@/lib/date";
+import { defaultTableSize, isTableSize, tableDimensions } from "@/lib/table-size";
 
 export async function createBreakfastTable(formData: FormData) {
   const label = String(formData.get("label") ?? "").trim();
@@ -11,14 +12,16 @@ export async function createBreakfastTable(formData: FormData) {
   const seats = Number(formData.get("seats") ?? 2);
   if (!label) return { error: "Informe o nome da mesa." };
 
-  // Quadrada usa o mesmo tamanho fixo da redonda (lado = diâmetro): só o
-  // retângulo tem uma altura diferente da largura.
-  const { width, height } = shape === "rect" ? { width: 70, height: 200 } : { width: 70, height: 70 };
+  // Tamanho escolhido (pequeno, médio ou grande); sem escolha, redonda e quadrada começam pequenas e a retangular, grande.
+  const sizeIn = String(formData.get("size") ?? "");
+  const size = isTableSize(sizeIn) ? sizeIn : defaultTableSize(shape);
+  const { width, height } = tableDimensions(shape, size);
 
   const supabase = await createClient();
   const { error } = await supabase.from("breakfast_tables").insert({
     label,
     shape,
+    size,
     seats,
     pos_x: 40,
     pos_y: 40,
@@ -26,6 +29,24 @@ export async function createBreakfastTable(formData: FormData) {
     height,
   });
 
+  if (error) return { error: error.message };
+  revalidatePath("/checklists/mesas");
+  revalidatePath("/mesas/gerenciar");
+  revalidatePath("/mesas");
+  return { success: true };
+}
+
+// Muda a quantidade de hóspedes (lugares) e o tamanho de uma mesa já criada; as dimensões são recalculadas.
+export async function updateTableSeatsAndSize(id: string, seats: number, size: string) {
+  if (!Number.isFinite(seats) || seats < 1) return { error: "Informe a quantidade de hóspedes (1 ou mais)." };
+  if (!isTableSize(size)) return { error: "Tamanho inválido." };
+
+  const supabase = await createClient();
+  const { data: table, error: readError } = await supabase.from("breakfast_tables").select("shape").eq("id", id).single();
+  if (readError || !table) return { error: readError?.message ?? "Mesa não encontrada." };
+
+  const { width, height } = tableDimensions(table.shape as "round" | "rect" | "square", size);
+  const { error } = await supabase.from("breakfast_tables").update({ seats: Math.round(seats), size, width, height }).eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/checklists/mesas");
   revalidatePath("/mesas/gerenciar");
