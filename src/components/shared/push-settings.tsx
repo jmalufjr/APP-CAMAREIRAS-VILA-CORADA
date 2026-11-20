@@ -17,10 +17,38 @@ function urlBase64ToUint8Array(base64: string) {
 
 type State = "loading" | "unsupported" | "denied" | "off" | "on";
 
+type TestDetail = { host: string; result: string; code?: number; reason?: string };
+
 // Avisos de nova ocorrência de manutenção neste aparelho (notificação push): ativar, desativar e testar.
 export function PushSettings() {
   const [state, setState] = useState<State>("loading");
   const [isPending, startTransition] = useTransition();
+  const [diag, setDiag] = useState<string[]>([]);
+  const [lastTest, setLastTest] = useState<TestDetail[] | null>(null);
+
+  // Informações técnicas para descobrir por que um aviso não aparece.
+  async function collectDiagnostics() {
+    const lines: string[] = [];
+    lines.push(`Endereço do site: ${location.origin}`);
+    lines.push(`Aberto como: ${window.matchMedia("(display-mode: standalone)").matches ? "app instalado (tela inteira)" : "página do navegador"}`);
+    lines.push(`Permissão de notificação: ${"Notification" in window ? Notification.permission : "indisponível"}`);
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      lines.push(`Service worker: ${reg ? (reg.active ? "ativo" : "registrado, ainda não ativo") : "nenhum"}`);
+      const sub = await reg?.pushManager.getSubscription();
+      let host = "";
+      try {
+        host = sub ? new URL(sub.endpoint).hostname : "";
+      } catch {
+        /* sem host */
+      }
+      lines.push(`Inscrição neste aparelho: ${sub ? `sim (${host})` : "não"}`);
+    } catch (e) {
+      lines.push(`Erro ao ler o service worker: ${e instanceof Error ? e.message : "?"}`);
+    }
+    lines.push(`Navegador: ${navigator.userAgent}`);
+    setDiag(lines);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -31,8 +59,22 @@ export function PushSettings() {
       }
       try {
         const reg = await navigator.serviceWorker.register("/sw.js");
-        const existing = await reg.pushManager.getSubscription();
+        let existing = await reg.pushManager.getSubscription();
+        // Permissão já dada mas sem inscrição (o navegador a descartou): inscreve de novo sem pedir nada.
+        if (!existing && Notification.permission === "granted") {
+          try {
+            const key = await getVapidPublicKey();
+            await navigator.serviceWorker.ready;
+            if (key) {
+              existing = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) });
+              await savePushSubscription(existing.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } }, navigator.userAgent);
+            }
+          } catch {
+            existing = null;
+          }
+        }
         if (cancelled) return;
+        void collectDiagnostics();
         if (existing && Notification.permission === "granted") setState("on");
         else if (Notification.permission === "denied") setState("denied");
         else setState("off");
@@ -98,8 +140,10 @@ export function PushSettings() {
   function test() {
     startTransition(async () => {
       const result = await sendTestPush();
+      setLastTest((result as { details?: TestDetail[] })?.details ?? null);
+      void collectDiagnostics();
       if (result?.error) toast.error(result.error);
-      else toast.success("Aviso de teste enviado. Ele deve aparecer em instantes.");
+      else toast.success("Aviso de teste entregue ao serviço de notificações. Ele deve aparecer em instantes.");
     });
   }
 
@@ -154,6 +198,22 @@ export function PushSettings() {
             </>
           )}
         </div>
+        <details className="basis-full text-xs text-muted-foreground">
+          <summary className="cursor-pointer font-medium" onClick={() => void collectDiagnostics()}>
+            Diagnóstico (para o suporte)
+          </summary>
+          <div className="mt-2 space-y-1 break-words">
+            {diag.map((l) => (
+              <p key={l}>{l}</p>
+            ))}
+            {lastTest && (
+              <p>
+                Último teste:{" "}
+                {lastTest.map((d) => `${d.host} → ${d.result}${d.code ? ` (código ${d.code})` : ""}${d.reason && d.result !== "ok" ? ` — ${d.reason}` : ""}`).join(" | ")}
+              </p>
+            )}
+          </div>
+        </details>
       </CardContent>
     </Card>
   );

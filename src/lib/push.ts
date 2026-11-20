@@ -35,20 +35,42 @@ export interface SubscriptionRow {
   auth: string;
 }
 
-// "ok", "gone" (aparelho não existe mais: apagar) ou "error".
-export async function sendToSubscription(sub: SubscriptionRow, payload: PushPayload): Promise<"ok" | "gone" | "error"> {
+export interface SendDetail {
+  result: "ok" | "gone" | "error";
+  // Código de resposta do serviço de push do navegador (201 = aceito) e, se falhou, um motivo curto de uma lista fixa
+  // (a mensagem original do serviço fica só no registro do servidor, nunca vai para a tela).
+  code?: number;
+  reason?: string;
+}
+
+function reasonFor(status?: number): string {
+  if (status === 400) return "pedido recusado pelo serviço de push";
+  if (status === 401 || status === 403) return "chaves de envio recusadas pelo serviço de push";
+  if (status === 404 || status === 410) return "aparelho não está mais inscrito";
+  if (status === 413) return "mensagem grande demais";
+  if (status === 429) return "muitos pedidos";
+  if (status && status >= 500) return "serviço de push indisponível";
+  return "falha ao contatar o serviço de push";
+}
+
+export async function sendDetailed(sub: SubscriptionRow, payload: PushPayload): Promise<SendDetail> {
   try {
-    await sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify(payload), {
+    const res = await sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify(payload), {
       TTL: 6 * 60 * 60,
       urgency: "high",
     });
-    return "ok";
+    return { result: "ok", code: res.statusCode };
   } catch (e) {
     const status = (e as { statusCode?: number })?.statusCode;
-    if (status === 404 || status === 410) return "gone";
-    console.error("[push]", status, (e as Error)?.message);
-    return "error";
+    console.error("[push]", status, String((e as { body?: string })?.body ?? (e as Error)?.message ?? "").slice(0, 300));
+    if (status === 404 || status === 410) return { result: "gone", code: status, reason: reasonFor(status) };
+    return { result: "error", code: status, reason: reasonFor(status) };
   }
+}
+
+// "ok", "gone" (aparelho não existe mais: apagar) ou "error".
+export async function sendToSubscription(sub: SubscriptionRow, payload: PushPayload): Promise<"ok" | "gone" | "error"> {
+  return (await sendDetailed(sub, payload)).result;
 }
 
 type OccurrenceInfo = {
@@ -139,12 +161,15 @@ export async function sendReminders(): Promise<{ reminded: number }> {
   const { data } = await admin
     .from("push_alerts")
     .select(
-      `id, send_count, push_subscriptions(id, endpoint, p256dh, auth, profiles(role)), daily_room_task_occurrences!inner(${OCCURRENCE_SELECT})`
+      `id, send_count, push_subscriptions!inner(id, endpoint, p256dh, auth, profiles!inner(role, active)), daily_room_task_occurrences!inner(${OCCURRENCE_SELECT})`
     )
     .is("acknowledged_at", null)
     .lt("send_count", MAX_SENDS)
     .lt("last_sent_at", before)
     .eq("daily_room_task_occurrences.status", "pendente")
+    // Só aparelhos de quem ainda é destinatário (usuário ativo e com papel de manutenção ou administrador).
+    .in("push_subscriptions.profiles.role", RECIPIENT_ROLES)
+    .eq("push_subscriptions.profiles.active", true)
     .limit(100);
 
   type Row = {

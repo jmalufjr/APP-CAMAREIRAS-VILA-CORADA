@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
-import { Mail, KeyRound, ChevronRight } from "lucide-react";
+import { Mail, KeyRound, ChevronRight, BellRing } from "lucide-react";
 
 const menuItems = [
   { href: "/integracao/email-envio", label: "Cadastrar e-mail de envio", icon: Mail },
   { href: "/integracao/api-tokens", label: "Chaves de acesso — API de consumos", icon: KeyRound },
+  { href: "/integracao/avisos-celular", label: "Avisos de ocorrência no celular", icon: BellRing },
 ];
 
 export default function IntegracaoPage() {
